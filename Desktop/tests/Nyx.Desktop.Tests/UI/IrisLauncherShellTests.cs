@@ -1050,7 +1050,9 @@ public sealed class IrisLauncherShellTests
         Assert.DoesNotContain("CurrentBannerNameBacking", strip, StringComparison.Ordinal);
         Assert.DoesNotContain("UpcomingBannerNameBacking", strip, StringComparison.Ordinal);
         Assert.Contains("CornerRadius=\"20\"", SliceElement(strip, "x:Name=\"CurrentBannerPortraitBacking\""), StringComparison.Ordinal);
-        Assert.Contains("CornerRadius=\"20\"", SliceElement(strip, "x:Name=\"UpcomingBannerPortraitBacking\""), StringComparison.Ordinal);
+        Assert.Contains("CornerRadius=\"17\"", SliceElement(strip, "x:Name=\"UpcomingBannerPortraitBacking\""), StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"UpcomingBannerPhaseSlot\"", strip, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"UpcomingPhaseDivider\"", strip, StringComparison.Ordinal);
         Assert.DoesNotContain("CurrentBannerTimingBacking", strip, StringComparison.Ordinal);
         Assert.DoesNotContain("UpcomingBannerHeaderBacking", strip, StringComparison.Ordinal);
         Assert.DoesNotContain("UpcomingBannerTimingBacking", strip, StringComparison.Ordinal);

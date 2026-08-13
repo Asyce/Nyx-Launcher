@@ -6075,7 +6075,7 @@ public sealed partial class MainPage : Page
                 && (live.End is null || now < live.End)
                 ? live
                 : null;
-            var upcoming = launcherGame.UpcomingForDisplayAt(now, 3);
+            var upcoming = launcherGame.UpcomingForDisplayAt(now, 2);
             RenderBannerRows(selected.Id, current, now);
             RenderUpcomingBannerGroups(selected.Id, upcoming, now);
             RenderBannerCategories(selected.Id, launcherGame);
@@ -6112,6 +6112,7 @@ public sealed partial class MainPage : Page
 
         CurrentBannerSection.Visibility = hasCurrent ? Visibility.Visible : Visibility.Collapsed;
         UpcomingBannerList.Visibility = hasUpcoming ? Visibility.Visible : Visibility.Collapsed;
+        UpcomingPhaseDivider.Visibility = hasUpcoming ? Visibility.Visible : Visibility.Collapsed;
         BannerCollectionList.Visibility = Visibility.Collapsed;
         CurrentBannerColumn.Width = hasCurrent
             ? new GridLength(1, GridUnitType.Star)
@@ -6174,15 +6175,12 @@ public sealed partial class MainPage : Page
         IReadOnlyList<LauncherBannersUpcomingPhase> upcoming,
         DateTimeOffset now)
     {
-        var remainingRows = MaximumDisplayedBannerRows;
         var projected = upcoming
             .Where(static phase => phase.Characters.Count > 0)
-            .Take(1)
-            .TakeWhile(_ => remainingRows > 0)
+            .Take(2)
             .Select((phase, index) =>
             {
-                var displayedCharacters = phase.Characters.Take(remainingRows).ToArray();
-                remainingRows -= displayedCharacters.Length;
+                var displayedCharacters = phase.Characters.Take(2).ToArray();
                 return new UpcomingBannerGroupItem(
                     phase.Announced ? $"announced:{index}" : phase.Start!.Value.ToUniversalTime().ToString("O"),
                     phase.Announced

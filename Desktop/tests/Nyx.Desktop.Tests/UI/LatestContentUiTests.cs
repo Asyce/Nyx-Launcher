@@ -14,7 +14,7 @@ public sealed class BannerCycleUiTests
         Assert.Contains("AutomationProperties.SetName(\n                BannerCycleRegion", render, StringComparison.Ordinal);
         Assert.Contains("RenderBannerRows(selected.Id, current, now)", render, StringComparison.Ordinal);
         Assert.Contains("RenderUpcomingBannerGroups(selected.Id, upcoming, now)", render, StringComparison.Ordinal);
-        Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 3)", render, StringComparison.Ordinal);
+        Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 2)", render, StringComparison.Ordinal);
         Assert.DoesNotContain("phase.Start > now", render, StringComparison.Ordinal);
         Assert.Contains("FormatCurrentBannerTiming(current, now)", render, StringComparison.Ordinal);
         Assert.DoesNotContain("SetBannerCard", render, StringComparison.Ordinal);
@@ -111,7 +111,8 @@ public sealed class BannerCycleUiTests
         Assert.Contains("CornerRadius=\"10\"", bannerRegion, StringComparison.Ordinal);
         Assert.Contains("Margin=\"14,0,14,12\"", columns, StringComparison.Ordinal);
         Assert.Contains("ColumnSpacing=\"24\"", columns, StringComparison.Ordinal);
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(columns, "<ColumnDefinition Width=\"44\" />\\s*<ColumnDefinition Width=\"\\*\" />").Count);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(columns, "<ColumnDefinition Width=\"44\" />\\s*<ColumnDefinition Width=\"\\*\" />"));
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(columns, "<ColumnDefinition Width=\"38\" />\\s*<ColumnDefinition Width=\"\\*\" />"));
         Assert.Contains("x:Name=\"CurrentBannerColumn\" Width=\"*\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"UpcomingBannerColumn\" Width=\"*\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"BannerCharacterList\"", xaml, StringComparison.Ordinal);
@@ -125,12 +126,12 @@ public sealed class BannerCycleUiTests
         Assert.Contains("Width=\"36\"", currentPortrait, StringComparison.Ordinal);
         Assert.Contains("Height=\"36\"", currentPortrait, StringComparison.Ordinal);
         Assert.Contains("CornerRadius=\"18\"", currentPortrait, StringComparison.Ordinal);
-        Assert.Contains("Width=\"40\"", upcomingBacking, StringComparison.Ordinal);
-        Assert.Contains("Height=\"40\"", upcomingBacking, StringComparison.Ordinal);
-        Assert.Contains("CornerRadius=\"20\"", upcomingBacking, StringComparison.Ordinal);
-        Assert.Contains("Width=\"36\"", upcomingPortrait, StringComparison.Ordinal);
-        Assert.Contains("Height=\"36\"", upcomingPortrait, StringComparison.Ordinal);
-        Assert.Contains("CornerRadius=\"18\"", upcomingPortrait, StringComparison.Ordinal);
+        Assert.Contains("Width=\"34\"", upcomingBacking, StringComparison.Ordinal);
+        Assert.Contains("Height=\"34\"", upcomingBacking, StringComparison.Ordinal);
+        Assert.Contains("CornerRadius=\"17\"", upcomingBacking, StringComparison.Ordinal);
+        Assert.Contains("Width=\"30\"", upcomingPortrait, StringComparison.Ordinal);
+        Assert.Contains("Height=\"30\"", upcomingPortrait, StringComparison.Ordinal);
+        Assert.Contains("CornerRadius=\"15\"", upcomingPortrait, StringComparison.Ordinal);
         Assert.Contains("Source=\"{Binding PortraitSource}\"", currentPortrait, StringComparison.Ordinal);
         Assert.Contains("Stretch=\"UniformToFill\"", currentPortrait, StringComparison.Ordinal);
         Assert.Contains("Source=\"{Binding PortraitSource}\"", upcomingPortrait, StringComparison.Ordinal);
@@ -156,12 +157,14 @@ public sealed class BannerCycleUiTests
         Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(columns, "MaxLines=\\\"1\\\"").Count);
         Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(columns, "TextTrimming=\\\"CharacterEllipsis\\\"").Count);
         Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(columns, "HorizontalContentAlignment=\\\"Stretch\\\"").Count);
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(columns, "<ColumnDefinition Width=\\\"44\\\" />").Count);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(columns, "<ColumnDefinition Width=\\\"44\\\" />"));
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(columns, "<ColumnDefinition Width=\\\"38\\\" />"));
         Assert.DoesNotContain("<ColumnDefinition Width=\"136\" />", columns, StringComparison.Ordinal);
         Assert.Contains("private const int MaximumDisplayedBannerRows = 4", code, StringComparison.Ordinal);
-        Assert.Contains("phase.Characters.Take(remainingRows)", code, StringComparison.Ordinal);
+        Assert.Contains("phase.Characters.Take(2)", code, StringComparison.Ordinal);
         Assert.Contains(".Take(MaximumDisplayedBannerRows)", code, StringComparison.Ordinal);
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(columns, "Margin=\"0,0,0,6\"").Count);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(columns, "Margin=\"0,0,0,6\""));
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(columns, "Margin=\"0,0,0,4\""));
         Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(
             columns,
             System.Text.RegularExpressions.Regex.Escape("FontSize=\"{Binding DisplayFontSize}\"")).Count);
@@ -173,14 +176,17 @@ public sealed class BannerCycleUiTests
         Assert.DoesNotContain("ProgressBar", xaml, StringComparison.Ordinal);
         Assert.Contains("RenderUpcomingBannerGroups(selected.Id, upcoming, now)", code, StringComparison.Ordinal);
         Assert.DoesNotContain("current.Characters.Take(5)", code, StringComparison.Ordinal);
-        Assert.Contains(".Take(1)", code, StringComparison.Ordinal);
+        Assert.Contains(".Take(2)", code, StringComparison.Ordinal);
         Assert.Contains("existing.Update(portrait, timing, isActive, isPinned", code, StringComparison.Ordinal);
         Assert.Contains("character.Icon is null", code, StringComparison.Ordinal);
         Assert.Contains("ResolveImageSource(portraitPath)", code, StringComparison.Ordinal);
         Assert.Contains("if (portraitChanged) Notify(nameof(PortraitSource))", code, StringComparison.Ordinal);
         Assert.DoesNotContain("PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty))", code, StringComparison.Ordinal);
         Assert.DoesNotContain("GetBannerRotationProgress", code, StringComparison.Ordinal);
-        Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 3)", code, StringComparison.Ordinal);
+        Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 2)", code, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"UpcomingBannerPhaseSlot\" Height=\"110\"", columns, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"UpcomingPhaseDivider\"", columns, StringComparison.Ordinal);
+        Assert.Contains("Margin=\"0,110,0,0\"", columns, StringComparison.Ordinal);
         Assert.DoesNotContain(".Where(phase => phase.Start > now)", code, StringComparison.Ordinal);
         foreach (var obsolete in new[]
         {

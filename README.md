@@ -47,6 +47,10 @@ If restore assets are missing, a real start can explicitly allow the normal .NET
 
 You can also double-click `Desktop\Start Nyx.cmd`. The wrapper calls only the fixed repository-relative start script and forwards no command text.
 
+## Live launcher content
+
+On every run, Nyx checks the official HoYo, Kuro, and GRYPHLINK launcher sources for the current game backgrounds. Verified files are cached locally so the last good background still works offline. Banners and redemption codes refresh automatically from the Pengo feed.
+
 ## Package configuration check
 
 This separate read-only gate explains whether the repository contains one explicit, internally consistent x64 MSIX configuration that could be tested later by a separate build/sign/install process:

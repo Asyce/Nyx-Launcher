@@ -457,6 +457,9 @@ public sealed class LauncherBannersContentTests
         Assert.Equal(
             ["NEXT", "LATER", "ANNOUNCED"],
             game.UpcomingForDisplayAt(now, 3).Select(phase => phase.Phase));
+        Assert.Equal(
+            ["NEXT", "LATER"],
+            game.UpcomingForDisplayAt(now, 2).Select(phase => phase.Phase));
     }
 
     [Fact]

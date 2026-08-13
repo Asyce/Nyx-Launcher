@@ -401,18 +401,28 @@
                                     HorizontalContentAlignment="Stretch"
                                     AutomationProperties.Name="Upcoming banner groups"
                                     ItemsSource="{x:Bind UpcomingBannerGroups, Mode=OneWay}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Vertical" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <StackPanel x:Name="UpcomingBannerGroupLayout" Margin="0,0,0,12" Spacing="7">
+                                            <Grid x:Name="UpcomingBannerPhaseSlot" Height="110" RowSpacing="4">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="*" />
+                                                </Grid.RowDefinitions>
                                                 <TextBlock
                                                     x:Name="UpcomingBannerTiming"
-                                                    Margin="0,0,0,2"
+                                                    Margin="0,0,0,1"
                                                     FontFamily="{StaticResource NyxDataFont}"
                                                     FontSize="18"
                                                     FontWeight="Bold"
                                                     Foreground="{ThemeResource IrisBrush}"
                                                     Text="{Binding Timing}" />
                                                 <ItemsControl
+                                                    Grid.Row="1"
                                                     HorizontalContentAlignment="Stretch"
                                                     ItemsSource="{Binding Characters}">
                                                     <ItemsControl.ItemsPanel>
@@ -423,28 +433,28 @@
                                                     <ItemsControl.ItemTemplate>
                                                         <DataTemplate>
                                                             <Grid
-                                                                Height="40"
-                                                                Margin="0,0,0,6"
+                                                                Height="36"
+                                                                Margin="0,0,0,4"
                                                                 HorizontalAlignment="Stretch"
                                                                 ColumnSpacing="6">
                                                                 <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="44" />
+                                                                    <ColumnDefinition Width="38" />
                                                                     <ColumnDefinition Width="*" />
                                                                 </Grid.ColumnDefinitions>
                                                                 <Border
                                                                     x:Name="UpcomingBannerPortraitBacking"
-                                                                    Width="40"
-                                                                    Height="40"
+                                                                    Width="34"
+                                                                    Height="34"
                                                                     Background="{ThemeResource QuietSurfaceBrush}"
                                                                     BorderBrush="{ThemeResource IrisBrush}"
                                                                     BorderThickness="2"
-                                                                    CornerRadius="20"
+                                                                    CornerRadius="17"
                                                                     IsHitTestVisible="False" />
                                                                 <Border
                                                                     x:Name="UpcomingBannerPortrait"
-                                                                    Width="36"
-                                                                    Height="36"
-                                                                    CornerRadius="18"
+                                                                    Width="30"
+                                                                    Height="30"
+                                                                    CornerRadius="15"
                                                                     IsHitTestVisible="False"
                                                                     AutomationProperties.Name="{Binding Name}">
                                                                     <Image
@@ -485,10 +495,18 @@
                                                         </DataTemplate>
                                                     </ItemsControl.ItemTemplate>
                                                 </ItemsControl>
-                                            </StackPanel>
+                                            </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
+                                <Border
+                                    x:Name="UpcomingPhaseDivider"
+                                    Grid.Column="1"
+                                    Height="1"
+                                    Margin="0,110,0,0"
+                                    VerticalAlignment="Top"
+                                    Background="{ThemeResource HairlineBrush}"
+                                    IsHitTestVisible="False" />
 
                                 <ItemsControl
                                     x:Name="BannerCollectionList"
