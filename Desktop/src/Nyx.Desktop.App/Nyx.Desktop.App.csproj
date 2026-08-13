@@ -1,0 +1,211 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.22621.0</TargetPlatformMinVersion>
+    <RootNamespace>Nyx_Desktop_App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <WinUISDKReferences>false</WinUISDKReferences>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <WindowsAppSdkUndockedRegFreeWinRTInitialize>true</WindowsAppSdkUndockedRegFreeWinRTInitialize>
+    <SelfContained>true</SelfContained>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AchievementHelperSha256 Condition="'$(AchievementHelperSha256)' == ''">0000000000000000000000000000000000000000000000000000000000000000</AchievementHelperSha256>
+    <Genshin120HelperSha256 Condition="'$(Genshin120HelperSha256)' == ''">0000000000000000000000000000000000000000000000000000000000000000</Genshin120HelperSha256>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="PengoAchievementHelperSha256" Value="$(AchievementHelperSha256)" />
+    <AssemblyMetadata Include="PengoGenshin120HelperSha256" Value="$(Genshin120HelperSha256)" />
+    <Using Include="Nyx.Desktop.Infrastructure.Exports" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Nyx.Desktop.Core\Nyx.Desktop.Core.csproj" />
+    <ProjectReference Include="..\Nyx.Desktop.Infrastructure\Nyx.Desktop.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\Catalog\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Iris\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Fonts\Manrope-Variable.ttf" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Fonts\Manrope-OFL.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Content\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\..\Database\GameData\gi\assets\items\UI_ItemIcon_201.webp">
+      <Link>Assets\Currency\gi.webp</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\Database\GameData\hsr\assets\items\900001.webp">
+      <Link>Assets\Currency\hsr.webp</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\Database\GameData\zzz\assets\items\IconCurrency.webp">
+      <Link>Assets\Currency\zzz.webp</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\Database\GameData\ww\assets\items\UIResources\Common\Image\IconA\T_IconA_zcpq_UI.webp">
+      <Link>Assets\Currency\wuwa.webp</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\Database\EndfieldWiki\endfield\material-icons\Oroberyl.png">
+      <Link>Assets\Currency\ae.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\Site\assets\icon\kofi-logo.png">
+      <Link>Assets\Brand\kofi-logo.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\Site\assets\icon\eye_ball.png">
+      <Link>Assets\Brand\eye_ball.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\Site\assets\icon\eye_lid.png">
+      <Link>Assets\Brand\eye_lid.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\Site\assets\icon\eye_drips.png">
+      <Link>Assets\Brand\eye_drips.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\Site\src\data\generated\launcher-banners-v1.json">
+      <Link>Assets\Content\launcher-banners-v1.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\Database\Achievements\hsr\catalog.json">
+      <Link>Assets\Content\Achievements\hsr\catalog.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(AchievementHelperSource)"
+             Condition="'$(AchievementHelperSource)' != '' AND Exists('$(AchievementHelperSource)')"
+             CopyToOutputDirectory="PreserveNewest">
+      <Link>Assets\Tools\pengo-achievements-launcher.exe</Link>
+    </Content>
+    <Content Include="$(Genshin120HelperSource)"
+             Condition="'$(Genshin120HelperSource)' != '' AND Exists('$(Genshin120HelperSource)')"
+             CopyToOutputDirectory="PreserveNewest">
+      <Link>Assets\Tools\Nyx.Genshin120.Helper.exe</Link>
+    </Content>
+    <Content Include="$(Genshin120LicenseSource)"
+             Condition="'$(Genshin120LicenseSource)' != '' AND Exists('$(Genshin120LicenseSource)')"
+             CopyToOutputDirectory="PreserveNewest">
+      <Link>Assets\ThirdParty\genshin-fps-unlock\LICENSE.txt</Link>
+    </Content>
+    <Content Include="$(Genshin120ProvenanceSource)"
+             Condition="'$(Genshin120ProvenanceSource)' != '' AND Exists('$(Genshin120ProvenanceSource)')"
+             CopyToOutputDirectory="PreserveNewest">
+      <Link>Assets\ThirdParty\genshin-fps-unlock\PROVENANCE.md</Link>
+    </Content>
+  </ItemGroup>
+
+  <!--
+    Local Debug builds carry all generated feed art so visual QA works before the
+    matching feed is deployed. Release/publish builds keep launcher art remote and
+    download and cache it from pengo.gg.
+  -->
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <Content Include="..\..\..\Site\src\data\generated\launcher-art\**\*">
+      <Link>Assets\Content\launcher-art\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="ValidateAchievementHelperPackageInput" BeforeTargets="PrepareForBuild"
+          Condition="'$(AchievementHelperSource)' != ''">
+    <Error Condition="!Exists('$(AchievementHelperSource)')" Text="The packaging-built achievement launcher helper is missing." />
+    <Error Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(AchievementHelperSha256)', '^[0-9a-f]{64}$')) != 'True'"
+           Text="AchievementHelperSha256 must be the lowercase SHA-256 of AchievementHelperSource." />
+  </Target>
+
+  <Target Name="ValidateGenshin120HelperPackageInput" BeforeTargets="PrepareForBuild"
+          Condition="'$(Genshin120HelperSource)' != '' OR '$(Genshin120LicenseSource)' != '' OR '$(Genshin120ProvenanceSource)' != ''">
+    <Error Condition="'$(Genshin120HelperSource)' == '' OR !Exists('$(Genshin120HelperSource)')"
+           Text="The packaging-built Genshin 120 FPS helper is missing." />
+    <Error Condition="$([System.IO.Path]::IsPathFullyQualified('$(Genshin120HelperSource)')) != 'True'"
+           Text="Genshin120HelperSource must be an absolute path." />
+    <Error Condition="$([System.IO.Path]::GetFileName('$(Genshin120HelperSource)')) != 'Nyx.Genshin120.Helper.exe'"
+           Text="Genshin120HelperSource must be named Nyx.Genshin120.Helper.exe." />
+    <Error Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(Genshin120HelperSha256)', '^[0-9a-f]{64}$')) != 'True'"
+           Text="Genshin120HelperSha256 must be the lowercase SHA-256 of Genshin120HelperSource." />
+    <Error Condition="'$(Genshin120LicenseSource)' == '' OR !Exists('$(Genshin120LicenseSource)')"
+           Text="The Genshin FPS upstream MIT licence is missing." />
+    <Error Condition="'$(Genshin120ProvenanceSource)' == '' OR !Exists('$(Genshin120ProvenanceSource)')"
+           Text="The Genshin FPS helper provenance record is missing." />
+    <GetFileHash Files="$(Genshin120HelperSource)" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="_Genshin120HelperHashedFile" />
+    </GetFileHash>
+    <Error Condition="$([System.String]::Copy('%(_Genshin120HelperHashedFile.FileHash)').ToLowerInvariant()) != '$(Genshin120HelperSha256)'"
+           Text="Genshin120HelperSha256 does not match Genshin120HelperSource." />
+  </Target>
+
+  <ItemGroup>
+    <Content Include="Assets\SplashScreen.scale-200.png" />
+    <Content Include="Assets\LockScreenLogo.scale-200.png" />
+    <Content Include="Assets\Square150x150Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.scale-200.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
+    <Content Include="Assets\Square44x44Logo.targetsize-48_altform-lightunplated.png" />
+    <Content Include="Assets\StoreLogo.png" />
+    <Content Include="Assets\AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <!--
+    Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
+    Tools extension to be activated for this project even if the Windows App SDK Nuget
+    package has not yet been restored.
+  -->
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2270" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.2.1" />
+  </ItemGroup>
+
+  <!--
+    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
+    Explorer "Package and Publish" context menu entry to be enabled for this project even if
+    the Windows App SDK Nuget package has not yet been restored.
+  -->
+  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
+  </PropertyGroup>
+
+  <!-- Publish Properties -->
+  <PropertyGroup>
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
+    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
+    <PublishTrimmed>False</PublishTrimmed>
+  </PropertyGroup>
+
+  <Target Name="CopyApplicationPriToPublishDirectory" AfterTargets="Publish">
+    <Error Condition="!Exists('$(TargetDir)$(AssemblyName).pri')"
+           Text="The WinUI application PRI file is missing from the build output." />
+    <Copy SourceFiles="$(TargetDir)$(AssemblyName).pri"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="ExcludeOptionalPublishDiagnostics" AfterTargets="ComputeFilesToPublish"
+          Condition="'$(Configuration)' == 'Release'">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(ResolvedFileToPublish.Filename)%(ResolvedFileToPublish.Extension)', '(?i)^(createdump\.exe|mscordaccore(?:_.*)?\.dll|mscordbi\.dll|Microsoft\.DiaSymReader\.Native\.amd64\.dll)$'))" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(ResolvedFileToPublish.RelativePath)', '(?i)^(?!en-us\\)[a-z]{2,3}(?:-[a-z0-9]{2,8})*\\(?:Microsoft\.ui\.xaml\.dll\.mui|Microsoft\.UI\.Xaml\.Phone\.dll\.mui)$'))" />
+    </ItemGroup>
+  </Target>
+</Project>

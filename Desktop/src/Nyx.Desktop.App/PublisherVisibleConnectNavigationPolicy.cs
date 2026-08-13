@@ -1,0 +1,71 @@
+using Nyx.Desktop.Core.AccountStatus;
+
+namespace Nyx_Desktop_App;
+
+internal static class PublisherVisibleConnectNavigationPolicy
+{
+    internal static Uri HoyoLabHomeUri { get; } =
+        new("https://www.hoyolab.com/home");
+
+    public static Uri GetInitialUri(PublisherAccountCatalogEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return entry.Provider == "HoYoLAB"
+            ? HoyoLabHomeUri
+            : entry.ResourceUri ?? entry.CheckInUri
+                ?? throw new InvalidOperationException("No official account page is configured.");
+    }
+
+    public static bool IsAllowedInitial(
+        string provider,
+        PublisherSessionPurpose purpose,
+        string gameId,
+        Uri target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        return PublisherAccountCatalog.IsAllowedTopLevelNavigation(
+                provider,
+                purpose,
+                gameId,
+                target)
+            || purpose == PublisherSessionPurpose.Connect
+                && provider == "HoYoLAB"
+                && gameId is ("gi" or "hsr" or "zzz")
+                && target.IsAbsoluteUri
+                && string.Equals(
+                    target.OriginalString,
+                    HoyoLabHomeUri.AbsoluteUri,
+                    StringComparison.Ordinal);
+    }
+
+    public static bool IsAllowed(
+        string provider,
+        string gameId,
+        Uri target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        if (!target.IsAbsoluteUri
+            || !string.Equals(
+                target.Scheme,
+                Uri.UriSchemeHttps,
+                StringComparison.OrdinalIgnoreCase)
+            || !target.IsDefaultPort
+            || !string.IsNullOrEmpty(target.UserInfo))
+            return false;
+
+        if (provider == "HoYoLAB")
+        {
+            var host = target.Host;
+            return host.Equals("hoyolab.com", StringComparison.OrdinalIgnoreCase)
+                || host.EndsWith(".hoyolab.com", StringComparison.OrdinalIgnoreCase)
+                || host.Equals("hoyoverse.com", StringComparison.OrdinalIgnoreCase)
+                || host.EndsWith(".hoyoverse.com", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return PublisherAccountCatalog.IsAllowedTopLevelNavigation(
+            provider,
+            PublisherSessionPurpose.Connect,
+            gameId,
+            target);
+    }
+}

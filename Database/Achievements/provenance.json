@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "Scraper/achievements/build.mjs",
+  "runtimeHotlinks": false,
+  "categoryAssetPolicy": "Small released category and reward UI icons are mirrored locally as content-addressed files; Pengo-generated monograms remain the fallback. See asset-provenance.json.",
+  "sources": {
+    "gi": {
+      "name": "Paimon.moe achievement data",
+      "repository": "https://github.com/MadeBaruna/paimon-moe",
+      "path": "src/data/achievement/en.json",
+      "license": "MIT",
+      "licenseUrl": "https://github.com/MadeBaruna/paimon-moe/blob/main/LICENSE"
+    },
+    "hsr": {
+      "name": "starrail-data achievement data",
+      "repository": "https://github.com/theBowja/starrail-data",
+      "path": "data/EN/achievements.json",
+      "license": "MIT",
+      "licenseUrl": "https://github.com/theBowja/starrail-data/blob/main/LICENSE"
+    }
+  },
+  "rightsNote": "Upstream code and site licenses do not transfer ownership of game content. Game names, achievement text, and icons remain the property of HoYoverse / COGNOSPHERE / miHoYo. Pengo is an unofficial fan-made tool and is not affiliated with them."
+}

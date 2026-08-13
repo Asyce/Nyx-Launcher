@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-27T07:39:08.911Z",
+  "publishable": false,
+  "games": [
+    {
+      "game": "ae",
+      "status": "blocked",
+      "publishable": false,
+      "categoryCount": 8,
+      "achievementCount": 140,
+      "capabilities": {
+        "stableIds": true,
+        "englishText": true,
+        "categories": true,
+        "rewards": true,
+        "hiddenRules": true,
+        "icons": true,
+        "multiState": true,
+        "releasedVersionProven": false
+      },
+      "blockers": [
+        "A real complete-account payload must prove how medal level, condition progress, plating, rare effects, and timestamps map to the profile medal IDs.",
+        "The client schedule marks 4 medals as future content; they must remain outside a released catalog until their open dates and in-game visibility are verified."
+      ],
+      "release": null,
+      "sourceRevision": "c9d2b01405e67ca50ae567c9b3621079791af58c333efa28eaf8b33c01da32a0",
+      "sourceSnapshotSha256": "c9d2b01405e67ca50ae567c9b3621079791af58c333efa28eaf8b33c01da32a0"
+    },
+    {
+      "game": "wuwa",
+      "status": "blocked",
+      "publishable": false,
+      "categoryCount": 4,
+      "achievementCount": 1172,
+      "capabilities": {
+        "stableIds": true,
+        "englishText": true,
+        "categories": true,
+        "rewards": true,
+        "hiddenRules": true,
+        "icons": true,
+        "multiState": false,
+        "releasedVersionProven": false
+      },
+      "blockers": [
+        "The complete-account import source is still unproven.",
+        "The reviewed 3.5.10 pages expose 1170 stable IDs; 2 candidate-only and 0 reference-only IDs must be reconciled in-game."
+      ],
+      "release": null,
+      "sourceRevision": "dae29691c04ef0f48d0810b5d244fb0b37288c60",
+      "sourceSnapshotSha256": "4881d94415af95bf39d8ec455f923929b486754c4d086c2ceeef1b641f74b2b6"
+    },
+    {
+      "game": "zzz",
+      "status": "blocked",
+      "publishable": false,
+      "categoryCount": 24,
+      "achievementCount": 894,
+      "capabilities": {
+        "stableIds": true,
+        "englishText": true,
+        "categories": true,
+        "rewards": true,
+        "hiddenRules": true,
+        "icons": false,
+        "multiState": false,
+        "releasedVersionProven": true
+      },
+      "blockers": [
+        "Category icons and their reviewed local provenance are missing.",
+        "The complete 894-row snapshot still needs an in-game total and stable-ID reconciliation before publication.",
+        "The complete-account import source is still unproven."
+      ],
+      "release": {
+        "version": "3.0",
+        "officialUrl": "https://www.hoyolab.com/article/45488578",
+        "verifiedAt": "2026-07-27T07:39:08.911Z"
+      },
+      "sourceRevision": "d8323c5a4b04f063484a6615a44e69b059e1dc5eca424dd4d763728f8a33fc21",
+      "sourceSnapshotSha256": "d8323c5a4b04f063484a6615a44e69b059e1dc5eca424dd4d763728f8a33fc21"
+    }
+  ]
+}

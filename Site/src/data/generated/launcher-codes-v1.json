@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-11T07:19:03.071Z",
+  "games": {
+    "gi": [
+      {
+        "code": "LEGEDILJKSGM",
+        "added": "2026-08-11",
+        "amount": 60,
+        "currency": "Primogems"
+      },
+      {
+        "code": "2BJ64QRZ7RT8",
+        "added": "2026-08-07",
+        "amount": 60,
+        "currency": "Primogems"
+      },
+      {
+        "code": "Everwinter",
+        "added": "2026-07-31",
+        "amount": 100,
+        "currency": "Primogems"
+      },
+      {
+        "code": "OntoSnezhnaya",
+        "added": "2026-07-31",
+        "amount": 100,
+        "currency": "Primogems"
+      },
+      {
+        "code": "Odettte0812",
+        "added": "2026-07-31",
+        "amount": 100,
+        "currency": "Primogems"
+      }
+    ],
+    "hsr": [
+      {
+        "code": "5S6ZHRWTDNJB",
+        "added": "2026-08-11",
+        "amount": 60,
+        "currency": "Stellar Jade"
+      },
+      {
+        "code": "4TKSX77Y58QK",
+        "added": "2026-08-11",
+        "amount": 30,
+        "currency": "Stellar Jade"
+      },
+      {
+        "code": "CREATIONNYMPH",
+        "added": "2026-08-11",
+        "amount": 60,
+        "currency": "Stellar Jade"
+      },
+      {
+        "code": "FAREWELL",
+        "added": "2026-08-11",
+        "amount": 60,
+        "currency": "Stellar Jade"
+      },
+      {
+        "code": "IFYOUAREREADINGTHIS",
+        "added": "2026-08-11",
+        "amount": 60,
+        "currency": "Stellar Jade"
+      }
+    ],
+    "zzz": [
+      {
+        "code": "ZENLESSGIFT",
+        "added": "2026-08-11",
+        "amount": 50,
+        "currency": "Polychrome"
+      },
+      {
+        "code": "ZZZ2YEAR",
+        "added": "2026-07-23",
+        "amount": 50,
+        "currency": "Polychrome"
+      },
+      {
+        "code": "ZZZ31REMIELLE",
+        "added": "2026-07-23",
+        "amount": 60,
+        "currency": "Polychrome"
+      }
+    ],
+    "wuwa": [
+      {
+        "code": "ETERNALFLAME",
+        "added": "2026-08-07",
+        "amount": 100,
+        "currency": "Astrite"
+      },
+      {
+        "code": "HEARTOFSWORD",
+        "added": "2026-08-07",
+        "amount": 100,
+        "currency": "Astrite"
+      },
+      {
+        "code": "THEANSWER",
+        "added": "2026-08-07",
+        "amount": 100,
+        "currency": "Astrite"
+      }
+    ],
+    "ae": [
+      {
+        "code": "ENDFIELDGIFT",
+        "added": "2026-05-03",
+        "amount": 150,
+        "currency": "Oroberyl"
+      }
+    ]
+  },
+  "revision": "70e0b530973232b06c775f3cb8f695ce912505da2763b647b770110cddd1c1cc"
+}

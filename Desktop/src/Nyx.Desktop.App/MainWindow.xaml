@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Nyx_Desktop_App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Nyx - Pengo">
+    <Grid Background="#05030B">
+        <Viewbox
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            Stretch="Uniform">
+            <Grid
+                x:Name="FixedDesignSurface"
+                Width="1280"
+                Height="720"
+                Background="#05030B">
+            <Frame x:Name="RootFrame" />
+
+            <Grid
+                x:Name="AppTitleBar"
+                Height="36"
+                VerticalAlignment="Top"
+                AutomationProperties.Name="Window drag region"
+                Background="Transparent">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid
+                    x:Name="DragRegion"
+                    Grid.Column="0"
+                    Background="Transparent" />
+                <StackPanel
+                    Grid.Column="1"
+                    Margin="0,0,4,0"
+                    HorizontalAlignment="Right"
+                    Orientation="Horizontal">
+                    <Grid Width="42" Height="36">
+                    <Button
+                        x:Name="AnimationButton"
+                        Width="42"
+                        Height="36"
+                        MinWidth="42"
+                        MinHeight="36"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        AutomationProperties.Name="Pause background animation"
+                        Click="AnimationButton_Click"
+                        Foreground="White"
+                        Style="{StaticResource NyxTitleBarActionStyle}">
+                        <ToolTipService.ToolTip>
+                            <ToolTip Content="Pause background animation" />
+                        </ToolTipService.ToolTip>
+                    </Button>
+                    <FontIcon x:Name="AnimationIcon" IsHitTestVisible="False" AutomationProperties.Name="Pause background animation icon" FontFamily="Segoe Fluent Icons" FontSize="20" Glyph="&#xE769;" />
+                    </Grid>
+                    <Grid Width="42" Height="36">
+                    <Button
+                        x:Name="SettingsButton"
+                        Width="42"
+                        Height="36"
+                        MinWidth="42"
+                        MinHeight="36"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        AutomationProperties.Name="Settings"
+                        Click="SettingsButton_Click"
+                        Foreground="White"
+                        Style="{StaticResource NyxTitleBarActionStyle}">
+                        <ToolTipService.ToolTip>
+                            <ToolTip Content="Settings" />
+                        </ToolTipService.ToolTip>
+                    </Button>
+                    <FontIcon x:Name="SettingsIcon" IsHitTestVisible="False" AutomationProperties.Name="Settings icon" FontFamily="Segoe Fluent Icons" FontSize="22" Glyph="&#xE713;" />
+                    </Grid>
+                    <Grid Width="42" Height="36">
+                    <Button
+                        x:Name="MinimizeButton"
+                        Width="42"
+                        Height="36"
+                        MinWidth="42"
+                        MinHeight="36"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        AutomationProperties.Name="Minimize"
+                        Click="MinimizeButton_Click"
+                        Foreground="White"
+                        Style="{StaticResource NyxTitleBarActionStyle}">
+                        <ToolTipService.ToolTip>
+                            <ToolTip Content="Minimize" />
+                        </ToolTipService.ToolTip>
+                    </Button>
+                    <FontIcon x:Name="MinimizeIcon" IsHitTestVisible="False" AutomationProperties.Name="Minimize icon" FontFamily="Segoe Fluent Icons" FontSize="20" Glyph="&#xE921;" />
+                    </Grid>
+                    <Grid Width="42" Height="36">
+                    <Button
+                        x:Name="CloseButton"
+                        Width="42"
+                        Height="36"
+                        MinWidth="42"
+                        MinHeight="36"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        AutomationProperties.Name="Close"
+                        Click="CloseButton_Click"
+                        Foreground="White"
+                        Style="{StaticResource NyxTitleBarActionStyle}">
+                        <ToolTipService.ToolTip>
+                            <ToolTip Content="Close" />
+                        </ToolTipService.ToolTip>
+                    </Button>
+                    <FontIcon x:Name="CloseIcon" IsHitTestVisible="False" AutomationProperties.Name="Close icon" FontFamily="Segoe Fluent Icons" FontSize="20" Glyph="&#xE8BB;" />
+                    </Grid>
+                </StackPanel>
+            </Grid>
+            </Grid>
+        </Viewbox>
+    </Grid>
+</Window>

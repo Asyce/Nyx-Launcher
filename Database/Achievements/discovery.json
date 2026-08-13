@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-07-27T05:48:03.000Z",
+  "games": [
+    {
+      "game": "zzz",
+      "status": "research",
+      "progressModel": "boolean",
+      "publishable": false,
+      "blocker": "An unpublished 894-row stable-ID catalog candidate exists, but its released-list reconciliation, category icons, and complete-account import source are not proven; installed files expose only generic web caches by filename.",
+      "probes": [
+        {
+          "id": "zzz-official-page",
+          "kind": "official-page-metadata",
+          "state": "not-run",
+          "recordsPayloads": false,
+          "recordsCredentials": false
+        },
+        {
+          "id": "zzz-local-files",
+          "kind": "local-file-metadata",
+          "state": "rejected",
+          "recordsPayloads": false,
+          "recordsCredentials": false
+        },
+        {
+          "id": "zzz-network-shapes",
+          "kind": "network-message-metadata",
+          "state": "not-run",
+          "recordsPayloads": false,
+          "recordsCredentials": false
+        },
+        {
+          "id": "zzz-screen-scan",
+          "kind": "screen-scan",
+          "state": "not-run",
+          "recordsPayloads": false,
+          "recordsCredentials": false
+        }
+      ]
+    },
+    {
+      "game": "wuwa",
+      "status": "research",
+      "progressModel": "boolean",
+      "publishable": false,
+      "blocker": "An unpublished 1,172-row standard-trophy candidate now has English text, category names, hidden rules, icons paths, and concrete Astrite rewards from one pinned 3.5 revision. It remains blocked because the reviewed 3.5.10 list reports 1,163 trophies, the 9-row difference is not reconciled in-game, and no complete-account source is proven; installed files expose only launcher and generic caches by filename.",
+      "probes": [
+        {
+          "id": "wuwa-official-page",
+          "kind": "official-page-metadata",
+          "state": "not-run",
+          "recordsPayloads": false,
+          "recordsCredentials": false
+        },
+        {
+          "id": "wuwa-local-files",
+          "kind": "local-file-metadata",
+          "state": "rejected",
+          "recordsPayloads": false,
+          "recordsCredentials": false
+        },
+        {
+          "id": "wuwa-network-shapes",
+          "kind": "network-message-metadata",
+          "state": "not-run",
+          "recordsPayloads": false,
+          "recordsCredentials": false
+        },
+        {
+          "id": "wuwa-screen-scan",
+          "kind": "screen-scan",
+          "state": "not-run",
+          "recordsPayloads": false,
+          "recordsCredentials": false
+        }
+      ]
+    },
+    {
+      "game": "ae",
+      "status": "research",
+      "progressModel": "multi-state-unresolved",
+      "publishable": false,
+      "blocker": "An unpublished current 140-medal candidate now maps all 140 stable client IDs to English text, 182 level states, no-reward semantics, Enka profile medal IDs, and per-level icon paths. It remains blocked because 10 rows are time-gated or potentially future content and a real complete-account payload has not proven level, condition, plating, rare-effect, or timestamp field meanings; generic MMKV protocol/login caches must not be treated as an achievement source.",
+      "probes": [
+        {
+          "id": "ae-official-page",
+          "kind": "official-page-metadata",
+          "state": "not-run",
+          "recordsPayloads": false,
+          "recordsCredentials": false
+        },
+        {
+          "id": "ae-local-files",
+          "kind": "local-file-metadata",
+          "state": "rejected",
+          "recordsPayloads": false,
+          "recordsCredentials": false
+        },
+        {
+          "id": "ae-network-shapes",
+          "kind": "network-message-metadata",
+          "state": "not-run",
+          "recordsPayloads": false,
+          "recordsCredentials": false
+        },
+        {
+          "id": "ae-screen-scan",
+          "kind": "screen-scan",
+          "state": "not-run",
+          "recordsPayloads": false,
+          "recordsCredentials": false
+        }
+      ]
+    }
+  ]
+}

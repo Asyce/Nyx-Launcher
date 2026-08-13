@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Nyx.Desktop.App (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Nyx.Desktop.App (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

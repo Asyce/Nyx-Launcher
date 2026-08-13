@@ -1,0 +1,55 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Nyx.Desktop.Core\Nyx.Desktop.Core.csproj" />
+    <ProjectReference Include="..\..\src\Nyx.Desktop.Infrastructure\Nyx.Desktop.Infrastructure.csproj" />
+    <ProjectReference Include="..\Nyx.Desktop.StateWorker\Nyx.Desktop.StateWorker.csproj"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\Nyx.Desktop.App\EndfieldFolderSelectionPolicy.cs"
+             Link="UI\Production\EndfieldFolderSelectionPolicy.cs" />
+    <Compile Include="..\..\src\Nyx.Desktop.App\EndfieldSiblingDiscoveryPolicy.cs"
+             Link="UI\Production\EndfieldSiblingDiscoveryPolicy.cs" />
+    <Compile Include="..\..\src\Nyx.Desktop.App\ViewModels\LauncherLayoutState.cs"
+             Link="UI\Production\LauncherLayoutState.cs" />
+    <Compile Include="..\..\src\Nyx.Desktop.App\ViewModels\PrimaryGameStatusProjector.cs"
+             Link="UI\Production\PrimaryGameStatusProjector.cs" />
+    <Compile Include="..\..\src\Nyx.Desktop.App\PublisherVisibleConnectNavigationPolicy.cs"
+             Link="UI\Production\PublisherVisibleConnectNavigationPolicy.cs" />
+    <Compile Include="..\..\src\Nyx.Desktop.App\PublisherNavigationCompletionCorrelation.cs"
+             Link="UI\Production\PublisherNavigationCompletionCorrelation.cs" />
+    <Compile Include="..\..\src\Nyx.Desktop.App\PublisherNavigationHandlerCleanup.cs"
+             Link="UI\Production\PublisherNavigationHandlerCleanup.cs" />
+    <Compile Include="..\..\src\Nyx.Desktop.App\HoyoLabExportUiReservation.cs"
+             Link="UI\Production\HoyoLabExportUiReservation.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\..\contracts\pengo-achievements-v1.fixture.json"
+          Link="Contracts\pengo-achievements-v1.fixture.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\Database\Achievements\hsr\catalog.json"
+          Link="Catalog\hsr-catalog.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

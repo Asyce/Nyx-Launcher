@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "icons": {
+    "original-resin": {
+      "file": "original-resin.webp",
+      "sha256": "fd63ab52b8646134853ae04dba16ba018bc80dc33b4fba2ecb80eb0f317472b0",
+      "source": "https://assets.pengo.gg/objects/sha256/fd/fd63ab52b8646134853ae04dba16ba018bc80dc33b4fba2ecb80eb0f317472b0.webp"
+    },
+    "trailblaze-power": {
+      "file": "trailblaze-power.webp",
+      "sha256": "56b4f641fc107cf0fbcb280c5b5766f8fba2f1b3e181c0bb519e1c9409318a9f",
+      "source": "https://assets.pengo.gg/objects/sha256/56/56b4f641fc107cf0fbcb280c5b5766f8fba2f1b3e181c0bb519e1c9409318a9f.webp",
+      "upstream": "https://static.wikia.nocookie.net/houkai-star-rail/images/7/7a/Item_Trailblaze_Power.png/revision/latest?cb=20230428035051"
+    },
+    "reserved-trailblaze-power": {
+      "file": "reserved-trailblaze-power.webp",
+      "sha256": "793337ed5dc72b3b61c3084f937046369300c93f7463a7c604f58954cdd9bf88",
+      "source": "https://static.wikia.nocookie.net/houkai-star-rail/images/a/ab/Item_Reserved_Trailblaze_Power.png/revision/latest?cb=20230830024604",
+      "upstream": "https://static.wikia.nocookie.net/houkai-star-rail/images/a/ab/Item_Reserved_Trailblaze_Power.png/revision/latest?cb=20230830024604"
+    },
+    "battery-charge": {
+      "file": "battery-charge.webp",
+      "sha256": "102fa085204b461e3d9d7b40e5ec5623820a6dc97120541115621a3195f5afee",
+      "source": "https://assets.pengo.gg/objects/sha256/10/102fa085204b461e3d9d7b40e5ec5623820a6dc97120541115621a3195f5afee.webp"
+    },
+    "backup-energy": {
+      "file": "backup-energy.webp",
+      "sha256": "b6c88c97b37e0497beab94da8c8799d58523e703d983dd7a62c526c688c9e900",
+      "source": "https://assets.pengo.gg/objects/sha256/b6/b6c88c97b37e0497beab94da8c8799d58523e703d983dd7a62c526c688c9e900.webp"
+    },
+    "waveplate": {
+      "file": "waveplate.webp",
+      "sha256": "3434adc405327e4465ac5d59fa38c6bb3bbc6d35d61d4767563bcb955de36791",
+      "source": "https://assets.pengo.gg/objects/sha256/34/3434adc405327e4465ac5d59fa38c6bb3bbc6d35d61d4767563bcb955de36791.webp"
+    },
+    "waveplate-crystal": {
+      "file": "waveplate-crystal.webp",
+      "sha256": "e40291f7b29d83df1c8b5e2500cc45df434718cb2dd8de24af64d9a89a3edc41",
+      "source": "https://assets.pengo.gg/objects/sha256/e4/e40291f7b29d83df1c8b5e2500cc45df434718cb2dd8de24af64d9a89a3edc41.webp"
+    }
+  }
+}

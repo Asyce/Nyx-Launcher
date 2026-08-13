@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "stayVisibleAfterLaunch": true,
+  "exportPullsArmed": false,
+  "exportAchievementsArmed": false,
+  "automaticArt": true,
+  "retainUserDataOnUninstall": true
+}

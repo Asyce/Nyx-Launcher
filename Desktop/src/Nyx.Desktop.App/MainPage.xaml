@@ -1,0 +1,1778 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Nyx_Desktop_App.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Background="{ThemeResource VoidBrush}"
+    mc:Ignorable="d">
+
+    <Grid x:Name="RootShell" Background="{ThemeResource VoidBrush}">
+        <Image
+            x:Name="BackgroundArtwork"
+            IsHitTestVisible="False"
+            Opacity="{ThemeResource DecorativeArtOpacity}"
+            Stretch="UniformToFill"
+            AutomationProperties.AccessibilityView="Raw" />
+
+        <Image
+            x:Name="BackgroundArtworkNext"
+            IsHitTestVisible="False"
+            Opacity="0"
+            Stretch="UniformToFill"
+            AutomationProperties.AccessibilityView="Raw" />
+
+        <MediaPlayerElement
+            x:Name="LauncherMotionBackground"
+            AreTransportControlsEnabled="False"
+            AutoPlay="True"
+            IsHitTestVisible="False"
+            Opacity="0"
+            Stretch="UniformToFill"
+            AutomationProperties.AccessibilityView="Raw" />
+
+        <MediaPlayerElement
+            x:Name="LauncherMotionBackgroundNext"
+            AreTransportControlsEnabled="False"
+            AutoPlay="True"
+            IsHitTestVisible="False"
+            Opacity="0"
+            Stretch="UniformToFill"
+            AutomationProperties.AccessibilityView="Raw" />
+
+        <Rectangle
+            x:Name="HighContrastBackdrop"
+            IsHitTestVisible="False"
+            Fill="{ThemeResource HighContrastBackdropBrush}"
+            Opacity="{ThemeResource HighContrastBackdropOpacity}"
+            AutomationProperties.AccessibilityView="Raw" />
+
+        <Grid x:Name="LayoutGrid" Margin="0">
+            <Grid.RowDefinitions>
+                <RowDefinition x:Name="RailRow" Height="0" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="RailColumn" Width="132" />
+                <ColumnDefinition x:Name="ContentColumn" Width="620" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border
+                x:Name="RailSurface"
+                Grid.RowSpan="2"
+                Grid.Column="0"
+                BorderBrush="{ThemeResource HairlineBrush}"
+                BorderThickness="0,0,1,0"
+                Background="{ThemeResource RailSurfaceBrush}"
+                PointerEntered="RailSurface_PointerEntered"
+                PointerExited="RailSurface_PointerExited">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition x:Name="RailBrandRow" Height="104" />
+                        <RowDefinition x:Name="RailContentRow" Height="Auto" />
+                        <RowDefinition x:Name="RailAddRow" Height="Auto" />
+                        <RowDefinition x:Name="RailSpacerRow" Height="*" />
+                        <RowDefinition x:Name="RailFooterRow" Height="66" />
+                    </Grid.RowDefinitions>
+
+                    <Grid
+                        Width="124"
+                        Height="104"
+                        Margin="4,0,4,0"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Top">
+                    <Button
+                        x:Name="BrandLockup"
+                        Padding="0"
+                        AutomationProperties.Name="Open the Nyx website"
+                        Click="BrandLockup_Click"
+                        Style="{StaticResource NyxBrandButtonStyle}" />
+                        <Grid
+                            x:Name="BrandLogo"
+                            Width="120"
+                            Height="96"
+                            Margin="0,3,0,0"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Top"
+                            IsHitTestVisible="False"
+                            AutomationProperties.Name="Nyx logo"
+                            AutomationProperties.AccessibilityView="Raw">
+                            <Image
+                                x:Name="BrandEyeBall"
+                                Source="ms-appx:///Assets/Brand/eye_ball.png"
+                                Stretch="Uniform">
+                                <Image.RenderTransform>
+                                    <TranslateTransform x:Name="BrandEyeBallTranslate" />
+                                </Image.RenderTransform>
+                            </Image>
+                            <Image
+                                Source="ms-appx:///Assets/Brand/eye_lid.png"
+                                Stretch="Uniform" />
+                            <Image
+                                Source="ms-appx:///Assets/Brand/eye_drips.png"
+                                Stretch="Uniform" />
+                        </Grid>
+                    </Grid>
+
+                    <ListView
+                        x:Name="GameSelector"
+                        Grid.Row="1"
+                        Width="132"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        AutomationProperties.Name="Games"
+                        ContainerContentChanging="GameSelector_ContainerContentChanging"
+                        CanDragItems="True"
+                        CanReorderItems="True"
+                        AllowDrop="True"
+                        ReorderMode="Enabled"
+                        DragItemsCompleted="GameSelector_DragItemsCompleted"
+                        IsItemClickEnabled="True"
+                        ItemContainerStyle="{StaticResource NyxGameItemStyle}"
+                        ItemsSource="{x:Bind Games}"
+                        SelectedIndex="0"
+                        SelectionMode="Single"
+                        ScrollViewer.HorizontalScrollBarVisibility="Hidden"
+                        ScrollViewer.HorizontalScrollMode="Disabled"
+                        ScrollViewer.VerticalScrollBarVisibility="Auto"
+                        ScrollViewer.VerticalScrollMode="Enabled">
+                        <ListView.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <ItemsStackPanel Orientation="Vertical" />
+                            </ItemsPanelTemplate>
+                        </ListView.ItemsPanel>
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid
+                                    x:Name="GameRailItemLayout"
+                                    Width="{Binding ItemExtent}"
+                                    Height="{Binding ItemExtent}"
+                                    AutomationProperties.Name="{Binding AccessibilityName}">
+                                    <Border
+                                        x:Name="GameRailItemBacking"
+                                        Background="Transparent"
+                                        CornerRadius="8"
+                                        IsHitTestVisible="False" />
+                                    <Image
+                                        x:Name="GameRailItemIcon"
+                                        Width="{Binding IconSize}"
+                                        Height="{Binding IconSize}"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Source="{Binding IconPath}"
+                                        Stretch="Uniform"
+                                        AutomationProperties.Name="{Binding DisplayName}"
+                                        AutomationProperties.AccessibilityView="Raw" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+
+                    <Button
+                        x:Name="AddGameButton"
+                        Grid.Row="2"
+                        Width="96"
+                        Height="96"
+                        Margin="0"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Top"
+                        Opacity="0.08"
+                        AutomationProperties.Name="Add a custom game"
+                        Click="AddGameButton_Click"
+                        GotFocus="AddGameButton_GotFocus"
+                        LostFocus="AddGameButton_LostFocus"
+                        Style="{StaticResource NyxRailActionStyle}">
+                        <FontIcon
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="36"
+                            Glyph="&#xE710;" />
+                    </Button>
+
+                    <Button
+                        x:Name="KofiButton"
+                        Grid.Row="4"
+                        Width="110"
+                        Height="38"
+                        Margin="10,0,10,6"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Bottom"
+                        AutomationProperties.Name="Support Pengo on Ko-fi"
+                        Click="KofiButton_Click"
+                        Style="{StaticResource NyxBrandButtonStyle}">
+                        <Image
+                            Width="90"
+                            MaxHeight="29"
+                            Source="ms-appx:///Assets/Brand/kofi-logo.png"
+                            Stretch="Uniform" />
+                    </Button>
+                </Grid>
+            </Border>
+
+            <Grid
+                x:Name="BannerContentRegion"
+                Grid.RowSpan="2"
+                Grid.Column="1"
+                Width="620"
+                Margin="52,72,20,390"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Stretch">
+                <StackPanel x:Name="ContentPanel" MaxWidth="620" Spacing="0">
+                    <Border
+                        x:Name="BannerCycleRegion"
+                        Width="560"
+                        Height="292"
+                        Padding="0"
+                        AutomationProperties.Name="Current and next character banners"
+                        Background="{ThemeResource LauncherInfoSurfaceBrush}"
+                        BorderBrush="{ThemeResource DeckBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="10">
+                        <Grid
+                            x:Name="BannerCycleStack"
+                            RowSpacing="10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel
+                                x:Name="BannerCycleHeader"
+                                HorizontalAlignment="Stretch"
+                                Margin="12,8,12,0"
+                                Spacing="5">
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock
+                                    x:Name="BannerCycleHeading"
+                                    HorizontalAlignment="Left"
+                                    Style="{StaticResource NyxEyebrowTextStyle}"
+                                    Foreground="{ThemeResource IrisBrush}"
+                                    FontSize="18"
+                                    Text="BANNERS" />
+                                    <Button
+                                        x:Name="BannerCollapseButton"
+                                        Grid.Column="1"
+                                        Width="28"
+                                        Height="28"
+                                        MinWidth="28"
+                                        MinHeight="28"
+                                        Padding="0"
+                                        AutomationProperties.Name="Collapse Banners"
+                                        Click="SectionCollapseButton_Click"
+                                        Content="&#xE70D;"
+                                        FontFamily="Segoe Fluent Icons"
+                                        Style="{StaticResource NyxQuietActionStyle}"
+                                        Tag="banners"
+                                        ToolTipService.ToolTip="Collapse Banners" />
+                                </Grid>
+                                <Border
+                                    x:Name="BannerCycleHeaderDivider"
+                                    Height="1"
+                                    Background="{ThemeResource HairlineBrush}"
+                                    IsHitTestVisible="False" />
+                            </StackPanel>
+
+                            <Grid Grid.Row="1">
+                                 <Grid
+                                     x:Name="BannerCycleColumns"
+                                     Margin="14,0,14,12"
+                                     ColumnSpacing="24">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition x:Name="CurrentBannerColumn" Width="*" />
+                                         <ColumnDefinition x:Name="UpcomingBannerColumn" Width="*" />
+                                     </Grid.ColumnDefinitions>
+                                    <Border
+                                        x:Name="BannerColumnDivider"
+                                        Grid.Column="0"
+                                        Width="1"
+                                        Margin="0,0,8,0"
+                                        HorizontalAlignment="Right"
+                                        Background="{ThemeResource HairlineBrush}"
+                                        IsHitTestVisible="False" />
+                                <Border
+                                    x:Name="CurrentBannerSection"
+                                    Grid.Column="0"
+                                    Margin="6,0,0,0"
+                                    Padding="0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    CornerRadius="0">
+                                    <Grid RowSpacing="8">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <TextBlock
+                                            x:Name="BannerCycleTiming"
+                                            Margin="0,0,0,2"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Center"
+                                            FontFamily="{StaticResource NyxDataFont}"
+                                            FontSize="18"
+                                            FontWeight="Bold"
+                                            Foreground="{ThemeResource IrisBrush}" />
+                                        <ItemsControl
+                                            x:Name="BannerCharacterList"
+                                            Grid.Row="1"
+                                            HorizontalContentAlignment="Stretch"
+                                            AutomationProperties.Name="Current banner characters"
+                                            ItemsSource="{x:Bind BannerCharacterRows, Mode=OneWay}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Vertical" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                     <Grid
+                                                         Height="40"
+                                                         Margin="0,0,0,6"
+                                                         HorizontalAlignment="Stretch"
+                                                         ColumnSpacing="6"
+                                                         Opacity="{Binding RowOpacity}">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="44" />
+                                                             <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border
+                                                            x:Name="CurrentBannerPortraitBacking"
+                                                            Width="40"
+                                                            Height="40"
+                                                            Background="{ThemeResource QuietSurfaceBrush}"
+                                                            BorderBrush="{ThemeResource IrisBrush}"
+                                                            BorderThickness="{Binding ActiveBorderThickness}"
+                                                            CornerRadius="20"
+                                                            IsHitTestVisible="False" />
+                                                        <Border
+                                                            x:Name="CurrentBannerPortrait"
+                                                            Width="36"
+                                                            Height="36"
+                                                            CornerRadius="18"
+                                                            IsHitTestVisible="False"
+                                                            AutomationProperties.Name="{Binding Name}">
+                                                            <Image
+                                                                Source="{Binding PortraitSource}"
+                                                                Stretch="UniformToFill" />
+                                                        </Border>
+                                                         <TextBlock
+                                                             x:Name="CurrentBannerNameLabel"
+                                                             Grid.Column="1"
+                                                             Margin="4,0"
+                                                            VerticalAlignment="Center"
+                                                            FontFamily="{StaticResource NyxBodyFont}"
+                                                             FontSize="{Binding DisplayFontSize}"
+                                                            Foreground="{ThemeResource MoonBrush}"
+                                                             IsHitTestVisible="False"
+                                                            MaxLines="1"
+                                                            Text="{Binding Name}"
+                                                             TextTrimming="CharacterEllipsis"
+                                                             TextWrapping="NoWrap"
+                                                             ToolTipService.ToolTip="{Binding Name}" />
+                                                        <Button
+                                                            x:Name="CurrentBannerNameButton"
+                                                            Grid.Column="1"
+                                                            Margin="0"
+                                                            Padding="0"
+                                                            HorizontalAlignment="Stretch"
+                                                            VerticalAlignment="Stretch"
+                                                            AutomationProperties.Name="{Binding CharacterLinkAccessibilityName}"
+                                                             Background="Transparent"
+                                                             BorderThickness="0"
+                                                              Click="CharacterLink_Click"
+                                                              CommandParameter="{Binding CharacterUrl}"
+                                                              IsEnabled="{Binding CanOpen}"
+                                                              Style="{StaticResource NyxCodeCopyButtonStyle}"
+                                                              Tag="{Binding Name}"
+                                                              ToolTipService.ToolTip="{Binding Name}" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Grid>
+                                </Border>
+
+                                <ItemsControl
+                                    x:Name="UpcomingBannerList"
+                                    Grid.Column="1"
+                                    HorizontalContentAlignment="Stretch"
+                                    AutomationProperties.Name="Upcoming banner groups"
+                                    ItemsSource="{x:Bind UpcomingBannerGroups, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel x:Name="UpcomingBannerGroupLayout" Margin="0,0,0,12" Spacing="7">
+                                                <TextBlock
+                                                    x:Name="UpcomingBannerTiming"
+                                                    Margin="0,0,0,2"
+                                                    FontFamily="{StaticResource NyxDataFont}"
+                                                    FontSize="18"
+                                                    FontWeight="Bold"
+                                                    Foreground="{ThemeResource IrisBrush}"
+                                                    Text="{Binding Timing}" />
+                                                <ItemsControl
+                                                    HorizontalContentAlignment="Stretch"
+                                                    ItemsSource="{Binding Characters}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <StackPanel Orientation="Vertical" />
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid
+                                                                Height="40"
+                                                                Margin="0,0,0,6"
+                                                                HorizontalAlignment="Stretch"
+                                                                ColumnSpacing="6">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="44" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <Border
+                                                                    x:Name="UpcomingBannerPortraitBacking"
+                                                                    Width="40"
+                                                                    Height="40"
+                                                                    Background="{ThemeResource QuietSurfaceBrush}"
+                                                                    BorderBrush="{ThemeResource IrisBrush}"
+                                                                    BorderThickness="2"
+                                                                    CornerRadius="20"
+                                                                    IsHitTestVisible="False" />
+                                                                <Border
+                                                                    x:Name="UpcomingBannerPortrait"
+                                                                    Width="36"
+                                                                    Height="36"
+                                                                    CornerRadius="18"
+                                                                    IsHitTestVisible="False"
+                                                                    AutomationProperties.Name="{Binding Name}">
+                                                                    <Image
+                                                                        Source="{Binding PortraitSource}"
+                                                                        Stretch="UniformToFill" />
+                                                                </Border>
+                                                                <TextBlock
+                                                                    x:Name="UpcomingBannerNameLabel"
+                                                                    Grid.Column="1"
+                                                                    Margin="4,0"
+                                                                    VerticalAlignment="Center"
+                                                                    FontFamily="{StaticResource NyxBodyFont}"
+                                                                    FontSize="{Binding DisplayFontSize}"
+                                                                    Foreground="{ThemeResource MoonBrush}"
+                                                                    IsHitTestVisible="False"
+                                                                     MaxLines="1"
+                                                                     Text="{Binding Name}"
+                                                                     TextTrimming="CharacterEllipsis"
+                                                                     TextWrapping="NoWrap"
+                                                                     ToolTipService.ToolTip="{Binding Name}" />
+                                                                <Button
+                                                                    x:Name="UpcomingBannerNameButton"
+                                                                    Grid.Column="1"
+                                                                    Margin="0"
+                                                                    Padding="0"
+                                                                    HorizontalAlignment="Stretch"
+                                                                    VerticalAlignment="Stretch"
+                                                                    AutomationProperties.Name="{Binding AccessibilityName}"
+                                                                    Background="Transparent"
+                                                                    BorderThickness="0"
+                                                                     Click="CharacterLink_Click"
+                                                                     CommandParameter="{Binding CharacterUrl}"
+                                                                     IsEnabled="{Binding CanOpen}"
+                                                                     Style="{StaticResource NyxCodeCopyButtonStyle}"
+                                                                     Tag="{Binding Name}"
+                                                                     ToolTipService.ToolTip="{Binding Name}" />
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <ItemsControl
+                                    x:Name="BannerCollectionList"
+                                    Margin="0,2,0,0"
+                                    AutomationProperties.Name="Banner character collection"
+                                    ItemsSource="{x:Bind BannerCollectionRows, Mode=OneWay}"
+                                    Visibility="Collapsed">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <ItemsWrapGrid Orientation="Vertical" MaximumRowsOrColumns="5" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Width="196" Margin="0,0,8,8" ColumnSpacing="10">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="46" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Border
+                                                    Width="44"
+                                                    Height="44"
+                                                    Background="{ThemeResource QuietSurfaceBrush}"
+                                                    BorderBrush="{ThemeResource HairlineBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="22">
+                                                    <Image
+                                                        Width="44"
+                                                        Height="44"
+                                                        Source="{Binding PortraitSource}"
+                                                        Stretch="UniformToFill" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                    <Button
+                                                        Margin="0"
+                                                        Padding="0"
+                                                        HorizontalAlignment="Left"
+                                                        AutomationProperties.Name="{Binding AccessibilityName}"
+                                                        Background="Transparent"
+                                                        BorderThickness="0"
+                                                        Click="CharacterLink_Click"
+                                                        CommandParameter="{Binding CharacterUrl}"
+                                                        IsEnabled="{Binding CanOpen}"
+                                                        Tag="{Binding Name}">
+                                                        <TextBlock
+                                                            FontFamily="{StaticResource NyxBodyFont}"
+                                                            FontSize="15"
+                                                            Foreground="{ThemeResource MoonBrush}"
+                                                            Text="{Binding Name}" />
+                                                    </Button>
+                                                    <TextBlock
+                                                        FontFamily="{StaticResource NyxDataFont}"
+                                                        FontSize="10"
+                                                        Foreground="{ThemeResource MistBrush}"
+                                                        Text="{Binding Availability}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <StackPanel
+                                    x:Name="BannerCategoryTabs"
+                                    Margin="0,2,0,0"
+                                    Orientation="Horizontal"
+                                    Spacing="6"
+                                    Visibility="Collapsed">
+                                    <Button
+                                        x:Name="CurrentBannerCategoryButton"
+                                        Height="30"
+                                        MinHeight="30"
+                                        Padding="12,0"
+                                        AutomationProperties.Name="Show current banners"
+                                        Click="BannerCategoryButton_Click"
+                                        CommandParameter="current"
+                                        Content="CURRENT"
+                                        Style="{StaticResource NyxOfficialLauncherStyle}" />
+                                    <Button
+                                        x:Name="UpcomingBannerCategoryButton"
+                                        Height="30"
+                                        MinHeight="30"
+                                        Padding="12,0"
+                                        AutomationProperties.Name="Show upcoming banners"
+                                        Click="BannerCategoryButton_Click"
+                                        CommandParameter="upcoming"
+                                        Content="UPCOMING"
+                                        Style="{StaticResource NyxOfficialLauncherStyle}" />
+                                    <Button
+                                        x:Name="CollabBannerCategoryButton"
+                                        Height="30"
+                                        MinHeight="30"
+                                        Padding="12,0"
+                                        AutomationProperties.Name="Show Fate collaboration banners"
+                                        Click="BannerCategoryButton_Click"
+                                        CommandParameter="collab"
+                                        Content="FATE COLLAB"
+                                        Style="{StaticResource NyxOfficialLauncherStyle}" />
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Grid>
+                    </Border>
+                </StackPanel>
+            </Grid>
+
+            <Border
+                x:Name="LowerActionRegion"
+                Grid.RowSpan="2"
+                Grid.Column="1"
+                Grid.ColumnSpan="2"
+                Height="378"
+                Margin="0"
+                Padding="26,10"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Bottom"
+                Background="Transparent"
+                BorderThickness="0"
+                CornerRadius="0">
+                <Grid x:Name="LowerActionGrid" ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="280" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="405" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border
+                        x:Name="CombinedStatusPanel"
+                        Grid.Column="0"
+                        Margin="0,8,0,0"
+                        VerticalAlignment="Top"
+                        Padding="16,10,12,10"
+                        Background="{ThemeResource LauncherInfoSurfaceBrush}"
+                        BorderBrush="{ThemeResource DeckBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="10">
+                        <Grid x:Name="CombinedStatusGrid" ColumnSpacing="22" RowSpacing="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="1" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition x:Name="CombinedBannerColumn" Width="220" />
+                            </Grid.ColumnDefinitions>
+                            <Grid
+                                x:Name="CodesHeaderGrid"
+                                Grid.Row="0"
+                                Grid.Column="0"
+                                ColumnSpacing="4">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock
+                                    x:Name="PremiumCodesLabel"
+                                    Style="{StaticResource NyxEyebrowTextStyle}"
+                                    CharacterSpacing="0"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource IrisBrush}"
+                                    Text="REDEMPTION CODES" />
+                                <TextBlock
+                                    x:Name="CodeRefreshStatusText"
+                                    Grid.Row="1"
+                                    Grid.ColumnSpan="4"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    FontFamily="{StaticResource NyxDataFont}"
+                                    FontSize="8"
+                                    Foreground="{ThemeResource MistBrush}"
+                                    Text=""
+                                    AutomationProperties.LiveSetting="Polite" />
+                                <Button
+                                    x:Name="RefreshCodesButton"
+                                    Grid.Column="2"
+                                    Width="28"
+                                    Height="28"
+                                    MinWidth="28"
+                                    MinHeight="28"
+                                    Padding="0"
+                                    AutomationProperties.Name="Refresh redemption codes"
+                                    Click="RefreshCodesButton_Click"
+                                    Style="{StaticResource NyxQuietActionStyle}"
+                                    ToolTipService.ToolTip="Refresh redemption codes">
+                                    <FontIcon
+                                        FontFamily="Segoe Fluent Icons"
+                                        FontSize="14"
+                                        Glyph="&#xE72C;" />
+                                </Button>
+                                <Button
+                                    x:Name="CodesCollapseButton"
+                                    Grid.Column="3"
+                                    Width="28"
+                                    Height="28"
+                                    MinWidth="28"
+                                    MinHeight="28"
+                                    Padding="0"
+                                    AutomationProperties.Name="Collapse Codes"
+                                    Click="SectionCollapseButton_Click"
+                                    Content="&#xE70D;"
+                                    FontFamily="Segoe Fluent Icons"
+                                    Style="{StaticResource NyxQuietActionStyle}"
+                                    Tag="codes"
+                                    ToolTipService.ToolTip="Collapse Codes" />
+                            </Grid>
+                            <Border
+                                x:Name="CodesHeaderDivider"
+                                Grid.Row="1"
+                                Height="1"
+                                Background="{ThemeResource HairlineBrush}"
+                                IsHitTestVisible="False" />
+                    <Border
+                        x:Name="SignalPanel"
+                        Grid.Row="2"
+                        Grid.Column="0"
+                        MinWidth="190"
+                        VerticalAlignment="Stretch"
+                        Padding="0"
+                        Background="Transparent">
+                                <ItemsControl
+                                    x:Name="RedemptionCodeList"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    AutomationProperties.Name="Five most recent premium currency redemption codes"
+                                    ItemsSource="{x:Bind RedemptionCodeRows, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid
+                                                x:Name="RedemptionCodeRowLayout"
+                                                Height="{Binding RowHeight}"
+                                                MinHeight="{Binding RowHeight}"
+                                                HorizontalAlignment="Stretch"
+                                                ColumnSpacing="3">
+                                                 <Grid.ColumnDefinitions>
+                                                     <ColumnDefinition Width="*" />
+                                                     <ColumnDefinition Width="60" />
+                                                     <ColumnDefinition Width="32" />
+                                                 </Grid.ColumnDefinitions>
+                                                <Border
+                                                    x:Name="RedemptionCodeRowBacking"
+                                                     Grid.ColumnSpan="3"
+                                                    Background="Transparent"
+                                                    IsHitTestVisible="False" />
+                                                <TextBlock
+                                                    x:Name="RedemptionCodeText"
+                                                    Grid.Column="0"
+                                                    Grid.ColumnSpan="{Binding CodeColumnSpan}"
+                                                    HorizontalAlignment="Left"
+                                                    VerticalAlignment="Center"
+                                                    IsHitTestVisible="False"
+                                                    FontFamily="{StaticResource NyxDataFont}"
+                                                    FontSize="{Binding FontSize}"
+                                                    Foreground="{ThemeResource MoonBrush}"
+                                                     MaxLines="1"
+                                                     Opacity="{Binding CodeOpacity}"
+                                                     Text="{Binding Code}" />
+                                                <Button
+                                                    x:Name="RedemptionCodeOpenButton"
+                                                    Grid.Column="0"
+                                                    Grid.ColumnSpan="2"
+                                                    Margin="0"
+                                                    Padding="0"
+                                                    HorizontalContentAlignment="Stretch"
+                                                    AutomationProperties.Name="{Binding RedemptionAccessibilityName}"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Click="RedemptionCode_Click"
+                                                    CommandParameter="{Binding Code}"
+                                                    IsEnabled="{Binding CanRedeem}"
+                                                    ToolTipService.ToolTip="Open the official redemption page" />
+                                                  <StackPanel
+                                                      x:Name="RedemptionCodeReward"
+                                                      Grid.Column="1"
+                                                      Width="60"
+                                                      HorizontalAlignment="Right"
+                                                      IsHitTestVisible="False"
+                                                      VerticalAlignment="Center"
+                                                      Orientation="Horizontal"
+                                                      Spacing="2"
+                                                      ToolTipService.ToolTip="{Binding CurrencyName}">
+                                                      <Image
+                                                          x:Name="RedemptionCodeRewardIcon"
+                                                          Width="20"
+                                                          Height="20"
+                                                          VerticalAlignment="Center"
+                                                          Source="{Binding CurrencyIconSource}"
+                                                          AutomationProperties.Name="{Binding CurrencyName}"
+                                                          Stretch="Uniform"
+                                                          Visibility="{Binding CurrencyVisibility}" />
+                                                      <TextBlock
+                                                          x:Name="RedemptionCodeRewardValue"
+                                                          VerticalAlignment="Center"
+                                                          FontFamily="{StaticResource NyxDataFont}"
+                                                          FontSize="12"
+                                                          Foreground="{ThemeResource MoonBrush}"
+                                                          Text="{Binding CurrencyAmountLabel}"
+                                                          Visibility="{Binding CurrencyVisibility}" />
+                                                  </StackPanel>
+                                                  <Button
+                                                      x:Name="RedemptionCodeCopyButton"
+                                                      Grid.Column="2"
+                                                      Width="32"
+                                                      Height="30"
+                                                      MinWidth="32"
+                                                      MinHeight="28"
+                                                      Padding="0"
+                                                      AutomationProperties.Name="{Binding CopyAccessibilityName}"
+                                                      Click="RedemptionCodeCopy_Click"
+                                                      CommandParameter="{Binding Code}"
+                                                      IsEnabled="{Binding IsCopyable}"
+                                                      Style="{StaticResource NyxCodeCopyButtonStyle}"
+                                                      Visibility="{Binding CopyVisibility}"
+                                                      ToolTipService.ToolTip="Copy redemption code">
+                                                     <FontIcon
+                                                         FontFamily="Segoe Fluent Icons"
+                                                         FontSize="13"
+                                                         Glyph="{Binding CopyGlyph}" />
+                                                 </Button>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                    </Border>
+
+                        </Grid>
+                    </Border>
+
+                    <Grid
+                        x:Name="NyxToolsPanel"
+                        Grid.Column="1"
+                        VerticalAlignment="Bottom"
+                        AutomationProperties.Name="Legacy Nyx exports for the selected game"
+                        Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid
+                            x:Name="WuWaAccountStatusStrip"
+                            Grid.Row="0"
+                            Height="58"
+                            Padding="10,5"
+                            AutomationProperties.Name="Publisher account status"
+                            Background="#B0100C1C"
+                            Visibility="Collapsed">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Grid x:Name="PublisherAccountHeaderGrid" Grid.Row="0" ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock
+                                        x:Name="AccountProviderText"
+                                        VerticalAlignment="Center"
+                                        Style="{StaticResource NyxEyebrowTextStyle}"
+                                        Foreground="{ThemeResource IrisBrush}"
+                                        Text="ACCOUNT" />
+                                    <TextBlock
+                                        x:Name="WuWaAccountFreshnessText"
+                                        Grid.Column="1"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Center"
+                                        FontFamily="{StaticResource NyxDataFont}"
+                                        FontSize="9"
+                                        Foreground="{ThemeResource MistBrush}"
+                                        Text="OPT IN"
+                                        TextTrimming="CharacterEllipsis"
+                                        AutomationProperties.LiveSetting="Polite" />
+                                    <Border
+                                        x:Name="RenderingModePanel"
+                                        Grid.Column="2"
+                                        Width="82"
+                                        Height="22"
+                                        Padding="1"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Center"
+                                        Background="#D0100C1C"
+                                        BorderBrush="{ThemeResource LavenderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="6"
+                                        Visibility="Collapsed">
+                                        <Grid>
+                                            <Button
+                                                x:Name="RenderingModeButton"
+                                                Height="20"
+                                                MinHeight="20"
+                                                Padding="5,0"
+                                                AutomationProperties.Name="Change game rendering mode"
+                                                Click="RenderingModeButton_Click"
+                                                Content="DX12 OFF"
+                                                Style="{StaticResource NyxOfficialLauncherStyle}" />
+                                            <Button
+                                                x:Name="RenderingModeResetButton"
+                                                Width="1"
+                                                Height="1"
+                                                AutomationProperties.Name="Reset rendering mode to publisher default"
+                                                Click="RenderingModeResetButton_Click"
+                                                Visibility="Collapsed" />
+                                        </Grid>
+                                    </Border>
+                                    <ToggleButton
+                                        x:Name="WuWaAccountStatusToggle"
+                                        Grid.Column="3"
+                                        Width="64"
+                                        MinWidth="64"
+                                        Height="24"
+                                        MinHeight="24"
+                                        Padding="8,0"
+                                        AutomationProperties.Name="Enable Wuthering Waves account status"
+                                        Click="WuWaAccountStatusToggle_Click"
+                                        Content="START"
+                                        Style="{StaticResource NyxExportToggleStyle}" />
+                                </Grid>
+                                <TextBlock
+                                    x:Name="AccountConnectionWarningText"
+                                    VerticalAlignment="Center"
+                                    FontFamily="{StaticResource NyxDataFont}"
+                                    FontSize="8"
+                                    Foreground="{ThemeResource MistBrush}"
+                                    Text="Unofficial local connection · may stop working."
+                                    TextWrapping="Wrap"
+                                    MaxLines="2"
+                                    Visibility="Collapsed" />
+                                <Grid x:Name="PublisherAccountActionGrid" Grid.Row="1" ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid
+                                        x:Name="PublisherResourceMetricGrid"
+                                        Grid.Column="0"
+                                        ColumnSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock
+                                            x:Name="WuWaAccountMetricsText"
+                                            VerticalAlignment="Center"
+                                            FontFamily="{StaticResource NyxDataFont}"
+                                            FontSize="9"
+                                            Foreground="{ThemeResource MoonBrush}"
+                                            Text="Account status is off"
+                                            TextTrimming="CharacterEllipsis" />
+                                        <TextBlock
+                                            x:Name="WuWaAccountResourceValueText"
+                                            Grid.Column="1"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Center"
+                                            FontFamily="{StaticResource NyxDataFont}"
+                                            FontSize="9"
+                                            Foreground="{ThemeResource MoonBrush}"
+                                            Text=""
+                                            TextTrimming="None"
+                                            TextWrapping="NoWrap" />
+                                    </Grid>
+                                    <Button
+                                        x:Name="PublisherAccountConnectButton"
+                                        Grid.Column="1"
+                                        Width="82"
+                                        Height="24"
+                                        MinHeight="24"
+                                        Padding="6,0"
+                                        AutomationProperties.Name="Connect the selected publisher account"
+                                        Click="PublisherAccountConnectButton_Click"
+                                        Content="CONNECT"
+                                        Style="{StaticResource NyxOfficialLauncherStyle}"
+                                        Visibility="Collapsed" />
+                                    <Button
+                                        x:Name="WuWaAccountStatusRefreshButton"
+                                        Grid.Column="2"
+                                        Width="28"
+                                        Height="24"
+                                        MinHeight="24"
+                                        Padding="0"
+                                        AutomationProperties.Name="Refresh Wuthering Waves account status"
+                                        Click="WuWaAccountStatusRefreshButton_Click"
+                                        Content="&#xE72C;"
+                                        FontFamily="Segoe Fluent Icons"
+                                        Style="{StaticResource NyxQuietActionStyle}"
+                                        Visibility="Collapsed" />
+                                    <Button
+                                        x:Name="DailyCheckInButton"
+                                        Grid.Column="3"
+                                        Width="72"
+                                        Height="24"
+                                        MinHeight="24"
+                                        Padding="6,0"
+                                        AutomationProperties.Name="Check in all connected publisher accounts"
+                                        Click="DailyCheckInButton_Click"
+                                        Content="DAILY"
+                                        Style="{StaticResource NyxOfficialLauncherStyle}"
+                                        Visibility="Collapsed" />
+                                </Grid>
+                            </Grid>
+                        </Grid>
+                        <TextBlock
+                            x:Name="PengoToolsLabel"
+                            Visibility="Collapsed"
+                            Style="{StaticResource NyxEyebrowTextStyle}"
+                            Foreground="{ThemeResource IrisBrush}"
+                            Text="LAUNCH TOOLS" />
+                        <StackPanel
+                            x:Name="PengoToolButtons"
+                            Grid.Row="1"
+                            Margin="0"
+                            HorizontalAlignment="Center"
+                            Orientation="Horizontal"
+                            Spacing="6">
+                            <CheckBox
+                                x:Name="PullExportToggle"
+                                Width="104"
+                                Height="34"
+                                MinHeight="34"
+                                Padding="4,0"
+                                VerticalContentAlignment="Center"
+                                AutomationProperties.Name="Export pulls on the next Genshin Impact launch"
+                                Click="ExportToggle_Click"
+                                Content="Pull tracker"
+                                FontFamily="{StaticResource NyxBodyFont}"
+                                FontSize="12"
+                                Foreground="{ThemeResource MoonBrush}" />
+                            <StackPanel
+                                x:Name="AchievementExportPanel"
+                                Width="142"
+                                Height="48"
+                                Spacing="2">
+                                <Button
+                                    x:Name="AchievementSourceButton"
+                                    Height="18"
+                                    MinHeight="18"
+                                    Padding="5,0"
+                                    AutomationProperties.Name="Choose the Star Rail achievement source"
+                                    Content="HOYOLAB &#x25BE;"
+                                    FontFamily="{StaticResource NyxDataFont}"
+                                    FontSize="8"
+                                    Style="{StaticResource NyxQuietActionStyle}"
+                                    Visibility="Collapsed">
+                                    <Button.Flyout>
+                                        <MenuFlyout>
+                                            <MenuFlyoutItem
+                                                Click="AchievementSource_Click"
+                                                Tag="hoyolab"
+                                                Text="HoYoLAB — export now, without opening the game" />
+                                            <MenuFlyoutItem
+                                                Click="AchievementSource_Click"
+                                                Tag="game"
+                                                Text="Game — capture after entering the world" />
+                                        </MenuFlyout>
+                                    </Button.Flyout>
+                                </Button>
+                                <CheckBox
+                                    x:Name="AchievementExportToggle"
+                                    Height="28"
+                                    MinHeight="28"
+                                    MinWidth="142"
+                                    Padding="4,0"
+                                    VerticalContentAlignment="Center"
+                                    AutomationProperties.Name="Export achievements on the next Genshin Impact launch"
+                                    Click="ExportToggle_Click"
+                                    FontFamily="{StaticResource NyxBodyFont}"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource MoonBrush}">
+                                    <TextBlock
+                                        x:Name="AchievementExportLabel"
+                                        Text="Achievements" />
+                                </CheckBox>
+                            </StackPanel>
+                            <Button
+                                x:Name="OpenUpdaterButton"
+                                Height="46"
+                                MinHeight="46"
+                                MinWidth="146"
+                                Padding="4,0"
+                                AutomationProperties.Name="Open the official launcher"
+                                Click="OpenUpdaterButton_Click"
+                                Content="Official Launcher"
+                                IsEnabled="False"
+                                Style="{StaticResource NyxOfficialLauncherStyle}" />
+                            <Button
+                                x:Name="CancelExportButton"
+                                Height="42"
+                                MinHeight="42"
+                                Padding="8,0"
+                                AutomationProperties.Name="Cancel the active export"
+                                Click="CancelExportButton_Click"
+                                Content="CANCEL"
+                                Style="{StaticResource NyxQuietActionStyle}"
+                                Visibility="Collapsed" />
+                            <Button
+                                x:Name="OpenExportsButton"
+                                Height="42"
+                                MinHeight="42"
+                                Padding="8,0"
+                                AutomationProperties.Name="Open the fixed Pengo Exports folder"
+                                Click="OpenExportsButton_Click"
+                                Content="OPEN FOLDER"
+                                Style="{StaticResource NyxQuietActionStyle}"
+                                Visibility="Collapsed" />
+                        </StackPanel>
+                        <TextBlock
+                            x:Name="NyxToolsStatusText"
+                            Grid.Row="3"
+                            Margin="0,5,0,0"
+                            FontFamily="{StaticResource NyxBodyFont}"
+                            FontSize="10"
+                            Foreground="{ThemeResource MistBrush}"
+                            MaxLines="1"
+                            Text=""
+                            TextTrimming="CharacterEllipsis"
+                            TextWrapping="Wrap"
+                            AutomationProperties.LiveSetting="Polite" />
+                    </Grid>
+
+                    <Grid
+                        x:Name="AccountAndToolsPanel"
+                        Grid.Column="1"
+                        Margin="0,8,0,0"
+                        VerticalAlignment="Stretch"
+                        RowSpacing="3"
+                        AutomationProperties.Name="Account and export controls">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Border
+                            x:Name="AccountToolsBacking"
+                            Grid.RowSpan="2"
+                            Margin="0"
+                            IsHitTestVisible="False"
+                            Background="{ThemeResource LauncherInfoSurfaceBrush}"
+                            BorderBrush="{ThemeResource DeckBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="10" />
+
+                        <Grid x:Name="AccountHeaderGrid" Margin="12,2,12,0" ColumnSpacing="7" RowSpacing="2">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0" Grid.ColumnSpan="4" ColumnSpacing="7">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock
+                                    x:Name="AccountAndToolsProviderText"
+                                    VerticalAlignment="Center"
+                                    Style="{StaticResource NyxEyebrowTextStyle}"
+                                    CharacterSpacing="100"
+                                    FontSize="14"
+                                    Foreground="{ThemeResource IrisBrush}"
+                                    Text="HOYOLAB" />
+                                <Button
+                                    x:Name="AccountConnectionButton"
+                                    Grid.Column="1"
+                                    Height="28"
+                                    MinHeight="28"
+                                    Padding="8,0"
+                                    AutomationProperties.Name="Connect or review the selected publisher account"
+                                    Click="AccountConnectionButton_Click"
+                                    Content="Disconnected"
+                                    Style="{StaticResource NyxOfficialLauncherStyle}" />
+                                <Button
+                                    x:Name="ChangePublisherAccountButton"
+                                    Grid.Column="2"
+                                    Height="28"
+                                    MinHeight="28"
+                                    HorizontalAlignment="Right"
+                                    Padding="8,0"
+                                    AutomationProperties.Name="Change region or account"
+                                    Click="ChangePublisherAccountButton_Click"
+                                    Content="Accounts"
+                                    FontFamily="{StaticResource NyxBodyFont}"
+                                    FontSize="9"
+                                    Style="{StaticResource NyxQuietActionStyle}" />
+                                <Button
+                                    x:Name="AccountCollapseButton"
+                                    Grid.Column="3"
+                                    Width="28"
+                                    Height="28"
+                                    MinWidth="28"
+                                    MinHeight="28"
+                                    Padding="0"
+                                    AutomationProperties.Name="Collapse Account"
+                                    Click="SectionCollapseButton_Click"
+                                    Content="&#xE70D;"
+                                    FontFamily="Segoe Fluent Icons"
+                                    Style="{StaticResource NyxQuietActionStyle}"
+                                    Tag="account"
+                                    ToolTipService.ToolTip="Collapse Account" />
+                            </Grid>
+                            <TextBlock
+                                x:Name="AccountAndToolsIdentityText"
+                                Grid.Row="1"
+                                Grid.ColumnSpan="4"
+                                FontFamily="{StaticResource NyxDataFont}"
+                                FontSize="9"
+                                Foreground="{ThemeResource MistBrush}"
+                                MaxLines="1"
+                                Text="Choose Region"
+                                TextTrimming="CharacterEllipsis"
+                                AutomationProperties.Name="HoYoLAB character identity"
+                                AutomationProperties.LiveSetting="Polite" />
+                        </Grid>
+
+                        <Grid
+                            x:Name="AccountSectionContent"
+                            Grid.Row="1"
+                            RowSpacing="3">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                        <StackPanel x:Name="OnLaunchPanel" Grid.Row="0" Margin="12,0" Spacing="2">
+                            <Border
+                                x:Name="OnLaunchDivider"
+                                Height="1"
+                                Background="{ThemeResource HairlineBrush}"
+                                IsHitTestVisible="False" />
+                            <TextBlock
+                                x:Name="OnLaunchHeading"
+                                Style="{StaticResource NyxEyebrowTextStyle}"
+                                CharacterSpacing="140"
+                                FontSize="10"
+                                Foreground="{ThemeResource IrisBrush}"
+                                Text="ON LAUNCH" />
+                            <CheckBox
+                                x:Name="AutomaticDailyCheckInToggle"
+                                HorizontalAlignment="Left"
+                                AutomationProperties.Name="Automatically complete the daily web check-in when this game launches"
+                                Click="AutomaticDailyCheckInToggle_Click"
+                                Content="Daily Web check-in"
+                                FontFamily="{StaticResource NyxBodyFont}"
+                                FontSize="10"
+                                Foreground="{ThemeResource MoonBrush}" />
+                            <CheckBox
+                                x:Name="Fps120Toggle"
+                                Height="28"
+                                MinHeight="28"
+                                AutomationProperties.Name="Set 120 FPS on launch"
+                                Click="Fps120Toggle_Click"
+                                Content="Set 120 FPS"
+                                FontFamily="{StaticResource NyxBodyFont}"
+                                FontSize="10"
+                                Foreground="{ThemeResource MoonBrush}"
+                                VerticalContentAlignment="Center"
+                                ToolTipService.ToolTip="Set the selected game to 120 FPS before launch. Genshin Impact and Star Rail use separate saved settings."
+                                Visibility="Collapsed" />
+                        </StackPanel>
+
+                        <Grid x:Name="ExportHeaderGrid" Grid.Row="1" Margin="12,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="1" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Border
+                                x:Name="ExportDivider"
+                                Height="1"
+                                Background="{ThemeResource HairlineBrush}"
+                                IsHitTestVisible="False" />
+                            <TextBlock
+                                x:Name="StableExportHeading"
+                                Grid.Row="1"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource NyxEyebrowTextStyle}"
+                                CharacterSpacing="140"
+                                FontSize="10"
+                                Foreground="{ThemeResource IrisBrush}"
+                                Text="EXPORT"
+                                AutomationProperties.Name="Export" />
+                            <Button
+                                x:Name="PermanentOpenExportsButton"
+                                Grid.Row="1"
+                                HorizontalAlignment="Right"
+                                Height="28"
+                                MinHeight="28"
+                                Padding="8,0"
+                                AutomationProperties.Name="Open the fixed Pengo Exports folder"
+                                Click="OpenExportsButton_Click"
+                                Content="Open Export Folder"
+                                FontFamily="{StaticResource NyxBodyFont}"
+                                FontSize="9"
+                                Style="{StaticResource NyxQuietActionStyle}" />
+                        </Grid>
+
+                        <Grid x:Name="ExportOptionsGrid" Grid.Row="2" Margin="12,0" ColumnSpacing="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid
+                                x:Name="AchievementExportCard"
+                                Grid.Column="1">
+                                <Border
+                                    x:Name="AchievementCardBacking"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    IsHitTestVisible="False" />
+                                <Grid Margin="8,0">
+                                    <Grid ColumnSpacing="3">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox
+                                            x:Name="StableAchievementExportToggle"
+                                            MinHeight="25"
+                                            Padding="4,0"
+                                            VerticalContentAlignment="Center"
+                                            Click="StableAchievementExportToggle_Click"
+                                            Content="Achievements"
+                                            FontFamily="{StaticResource NyxBodyFont}"
+                                            FontSize="11"
+                                            Foreground="{ThemeResource MoonBrush}" />
+                                        <Button
+                                            x:Name="AchievementExportHelpButton"
+                                            Grid.Column="1"
+                                            AutomationProperties.Name="Explain achievement export"
+                                            Click="AchievementExportHelpButton_Click"
+                                            Content="?"
+                                            Style="{StaticResource NyxHelpButtonStyle}"
+                                            ToolTipService.ToolTip="Explain achievement export" />
+                                    </Grid>
+                                </Grid>
+                            </Grid>
+                            <Grid x:Name="PullExportCard">
+                                <Border
+                                    x:Name="PullCardBacking"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    IsHitTestVisible="False" />
+                                <Grid Margin="8,0">
+                                    <Grid ColumnSpacing="3">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox
+                                            x:Name="StablePullExportToggle"
+                                            MinHeight="25"
+                                            Padding="4,0"
+                                            VerticalContentAlignment="Center"
+                                            Click="StablePullExportToggle_Click"
+                                            Content="Pull History"
+                                            FontFamily="{StaticResource NyxBodyFont}"
+                                            FontSize="11"
+                                            Foreground="{ThemeResource MoonBrush}" />
+                                        <Button
+                                            x:Name="PullExportHelpButton"
+                                            Grid.Column="1"
+                                             AutomationProperties.Name="Explain pull history export"
+                                             Click="PullExportHelpButton_Click"
+                                             Content="?"
+                                             Style="{StaticResource NyxHelpButtonStyle}"
+                                             ToolTipService.ToolTip="Explain pull history export" />
+                                    </Grid>
+                                </Grid>
+                            </Grid>
+                            <Grid
+                                x:Name="AchievementSourceOptionsPanel"
+                                Grid.Row="1"
+                                Grid.ColumnSpan="2"
+                                Margin="8,0"
+                                HorizontalAlignment="Stretch"
+                                ColumnSpacing="4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock
+                                    x:Name="AchievementSourcePrefix"
+                                    VerticalAlignment="Center"
+                                    FontFamily="{StaticResource NyxDataFont}"
+                                    FontSize="8"
+                                    Foreground="{ThemeResource MistBrush}"
+                                    Text="Export from:" />
+                                <RadioButton
+                                    x:Name="GameAchievementSourceRadio"
+                                    Grid.Column="1"
+                                    MinHeight="28"
+                                    Padding="4,0"
+                                    VerticalContentAlignment="Center"
+                                    GroupName="AchievementSource"
+                                    Click="StableAchievementSourceRadio_Click"
+                                    Content="Game"
+                                    FontFamily="{StaticResource NyxDataFont}"
+                                    FontSize="8"
+                                    Tag="game" />
+                                <RadioButton
+                                    x:Name="HoyoLabAchievementSourceRadio"
+                                    Grid.Column="2"
+                                    MinHeight="28"
+                                    Padding="4,0"
+                                    VerticalContentAlignment="Center"
+                                    GroupName="AchievementSource"
+                                    Click="StableAchievementSourceRadio_Click"
+                                    Content="HoYoLAB"
+                                    FontFamily="{StaticResource NyxDataFont}"
+                                    FontSize="8"
+                                    Tag="hoyolab" />
+                            </Grid>
+                        </Grid>
+
+                        <TextBlock
+                            x:Name="StableExportStatusText"
+                            Grid.Row="3"
+                            Margin="12,0"
+                            AutomationProperties.LiveSetting="Polite"
+                            FontFamily="{StaticResource NyxBodyFont}"
+                            FontSize="9"
+                            Foreground="{ThemeResource MistBrush}"
+                            MaxLines="2"
+                            Text=""
+                            TextWrapping="Wrap"
+                            Visibility="Collapsed" />
+                        </Grid>
+                    </Grid>
+
+                    <Grid
+                        x:Name="LaunchStack"
+                        Grid.Column="2"
+                        Width="405"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Bottom"
+                        RowSpacing="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Button
+                            x:Name="PrimaryGameStatusButton"
+                            Grid.Row="0"
+                            MinHeight="24"
+                            Padding="4,0"
+                            Margin="12,6,12,0"
+                            HorizontalAlignment="Center"
+                            HorizontalContentAlignment="Center"
+                            AutomationProperties.Name="Game status"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Click="PrimaryGameStatusButton_Click"
+                            IsTabStop="False"
+                            Visibility="Collapsed" />
+                        <TextBlock
+                            x:Name="HeroDescription"
+                            Grid.Row="0"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            IsHitTestVisible="False"
+                            FontFamily="{StaticResource NyxDataFont}"
+                            FontSize="11"
+                            Foreground="{ThemeResource LavenderBrush}"
+                            MaxLines="1"
+                            Text="Official files verified."
+                            TextWrapping="NoWrap"
+                            TextTrimming="CharacterEllipsis"
+                            Visibility="Collapsed"
+                            AutomationProperties.LiveSetting="Polite" />
+                        <Border
+                            Grid.Row="1"
+                            Padding="4,2"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Background="{ThemeResource LauncherUiBackdropBrush}"
+                            BorderBrush="{ThemeResource DeckBorderBrush}"
+                            BorderThickness="1">
+                            <Grid
+                                x:Name="LaunchResourceMetricsPanel"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="24" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel
+                                x:Name="LaunchPrimaryResourceItem"
+                                Grid.Column="0"
+                                Orientation="Horizontal"
+                                Spacing="4"
+                                ToolTipService.ToolTip="Current resource">
+                                <Image
+                                    x:Name="LaunchPrimaryResourceIcon"
+                                    Width="28"
+                                    Height="28"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="Primary account resource"
+                                    Stretch="Uniform" />
+                                <TextBlock
+                                    x:Name="LaunchPrimaryResourceValueText"
+                                    VerticalAlignment="Center"
+                                    FontFamily="{StaticResource NyxDataFont}"
+                                    FontSize="11"
+                                    Foreground="{ThemeResource MoonBrush}"
+                                    Text="67/300" />
+                            </StackPanel>
+                            <StackPanel
+                                x:Name="LaunchReserveResourceItem"
+                                Grid.Column="1"
+                                Orientation="Horizontal"
+                                Spacing="4"
+                                ToolTipService.ToolTip="Stored resource">
+                                <Image
+                                    x:Name="LaunchReserveResourceIcon"
+                                    Width="28"
+                                    Height="28"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="Stored account resource"
+                                    Stretch="Uniform" />
+                                <TextBlock
+                                    x:Name="LaunchReserveResourceValueText"
+                                    VerticalAlignment="Center"
+                                    FontFamily="{StaticResource NyxDataFont}"
+                                    FontSize="11"
+                                    Foreground="{ThemeResource MoonBrush}"
+                                    Text="86" />
+                            </StackPanel>
+                            <StackPanel
+                                x:Name="LaunchRecoveryResourceItem"
+                                Grid.Column="2"
+                                Orientation="Horizontal"
+                                Spacing="4"
+                                ToolTipService.ToolTip="Time until full">
+                                <FontIcon
+                                    x:Name="LaunchRecoveryResourceIcon"
+                                    Width="22"
+                                    VerticalAlignment="Center"
+                                    FontFamily="Segoe Fluent Icons"
+                                    FontSize="18"
+                                    Foreground="{ThemeResource IrisBrush}"
+                                    AutomationProperties.Name="Time until resource is full"
+                                    Glyph="&#xE823;" />
+                                <TextBlock
+                                    x:Name="LaunchRecoveryResourceValueText"
+                                    VerticalAlignment="Center"
+                                    FontFamily="{StaticResource NyxDataFont}"
+                                    FontSize="11"
+                                    Foreground="{ThemeResource MoonBrush}"
+                                    Text="23H 12M" />
+                            </StackPanel>
+                            <StackPanel
+                                x:Name="LaunchDailyResourceItem"
+                                Grid.Column="3"
+                                Orientation="Horizontal"
+                                Spacing="4"
+                                ToolTipService.ToolTip="Daily activity">
+                                <FontIcon
+                                    x:Name="LaunchDailyResourceIcon"
+                                    Width="22"
+                                    VerticalAlignment="Center"
+                                    FontFamily="Segoe Fluent Icons"
+                                    FontSize="18"
+                                    Foreground="{ThemeResource IrisBrush}"
+                                    AutomationProperties.Name="Daily activity"
+                                    Glyph="&#xE73E;" />
+                                <TextBlock
+                                    x:Name="LaunchDailyResourceValueText"
+                                    VerticalAlignment="Center"
+                                    FontFamily="{StaticResource NyxDataFont}"
+                                    FontSize="11"
+                                    Foreground="{ThemeResource MoonBrush}"
+                                    Text="100/100" />
+                            </StackPanel>
+                            <TextBlock
+                                x:Name="LaunchResourceStatusText"
+                                Grid.Column="0"
+                                Grid.ColumnSpan="4"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontFamily="{StaticResource NyxDataFont}"
+                                FontSize="11"
+                                Foreground="{ThemeResource LavenderBrush}"
+                                Text="CHECKING"
+                                Visibility="Collapsed" />
+                            <Button
+                                x:Name="LaunchResourceRefreshButton"
+                                Grid.Column="4"
+                                Width="28"
+                                Height="28"
+                                MinWidth="28"
+                                MinHeight="28"
+                                Padding="0"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="Refresh account resources"
+                                Click="WuWaAccountStatusRefreshButton_Click"
+                                Content="&#xE72C;"
+                                FontFamily="Segoe Fluent Icons"
+                                Style="{StaticResource NyxQuietActionStyle}"
+                                ToolTipService.ToolTip="Refresh account resources" />
+                            </Grid>
+                        </Border>
+                         <Button
+                             x:Name="LaunchButton"
+                             Grid.Row="2"
+                             Width="381"
+                             Margin="12,0,12,0"
+                            HorizontalAlignment="Stretch"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Launch Genshin Impact"
+                            Click="LaunchButton_Click"
+                            IsEnabled="False"
+                            PointerEntered="LaunchButton_PointerEntered"
+                            PointerExited="LaunchButton_PointerExited"
+                            Style="{StaticResource NyxLaunchButtonStyle}">
+                            <Grid x:Name="LaunchButtonVisual">
+                                <Border
+                                    x:Name="LaunchOuterGlow"
+                                    Margin="1"
+                                    BorderBrush="#4DA998ED"
+                                    BorderThickness="4"
+                                    CornerRadius="11"
+                                    Opacity="0.55" />
+                                <Border
+                                    x:Name="LaunchOuterFrame"
+                                    Margin="5"
+                                    BorderBrush="#A998ED"
+                                    BorderThickness="2"
+                                    CornerRadius="9">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                            <GradientStop Color="#FF160F33" Offset="0" />
+                                            <GradientStop Color="#FF181338" Offset="0.47" />
+                                            <GradientStop Color="#FF241F44" Offset="1" />
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                    <Grid>
+                                        <Ellipse
+                                            x:Name="LaunchNebulaLeft"
+                                            Width="182"
+                                            Height="100"
+                                            Margin="-34,-32,0,0"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Top"
+                                            Fill="#2E8570CC"
+                                            Opacity="0.34" />
+                                        <Ellipse
+                                            x:Name="LaunchNebulaRight"
+                                            Width="164"
+                                            Height="88"
+                                            Margin="0,8,-32,0"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Center"
+                                            Fill="#2445436D"
+                                            Opacity="0.52" />
+                                        <Canvas
+                                            x:Name="LaunchStarCanvas"
+                                            Width="367"
+                                            Height="82"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            IsHitTestVisible="False">
+                                            <Canvas.Clip>
+                                                <RectangleGeometry Rect="0,0,367,82" />
+                                            </Canvas.Clip>
+                                        </Canvas>
+                                        <Canvas
+                                            Width="367"
+                                            Height="82"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            IsHitTestVisible="False"
+                                            Opacity="0.22">
+                                            <Line X1="12" Y1="66" X2="108" Y2="21" Stroke="#8570CC" StrokeThickness="1" />
+                                            <Line X1="26" Y1="73" X2="143" Y2="28" Stroke="#45436D" StrokeThickness="1" />
+                                            <Line X1="264" Y1="14" X2="356" Y2="47" Stroke="#7669B1" StrokeThickness="1" />
+                                            <Line X1="289" Y1="8" X2="358" Y2="31" Stroke="#45436D" StrokeThickness="1" />
+                                        </Canvas>
+                                        <Border
+                                            x:Name="LaunchInnerFrame"
+                                            Margin="8"
+                                            BorderBrush="#8570CC"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            Opacity="0.92">
+                                            <TextBlock
+                                                x:Name="LaunchDetail"
+                                                Height="18"
+                                                Margin="12,0,12,4"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Bottom"
+                                                AutomationProperties.LiveSetting="Polite"
+                                                FontFamily="{StaticResource NyxBodyFont}"
+                                                FontSize="11"
+                                                Foreground="{ThemeResource LaunchActionForegroundBrush}"
+                                                MaxLines="1"
+                                                Text="Verifying local files"
+                                                TextTrimming="CharacterEllipsis"
+                                                TextWrapping="NoWrap" />
+                                        </Border>
+                                         <Border
+                                             x:Name="LaunchInnerHighlight"
+                                            Margin="10"
+                                            BorderBrush="#349790C9"
+                                             BorderThickness="1"
+                                             CornerRadius="5"
+                                             Opacity="0.55" />
+                                        <TextBlock
+                                            x:Name="LaunchTitle"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            FontFamily="Segoe UI Variable Display"
+                                            FontSize="34"
+                                            FontWeight="Normal"
+                                            CharacterSpacing="115"
+                                            Foreground="{ThemeResource LaunchActionForegroundBrush}"
+                                            Text="CHECKING"
+                                            TextTrimming="CharacterEllipsis" />
+                                     </Grid>
+                                 </Border>
+                             </Grid>
+                         </Button>
+                         <Grid
+                             x:Name="LaunchUtilityButtons"
+                             Grid.Row="3"
+                             Margin="12,0,12,0"
+                             HorizontalAlignment="Stretch"
+                             ColumnSpacing="8">
+                             <Grid.ColumnDefinitions>
+                                 <ColumnDefinition Width="*" />
+                                 <ColumnDefinition Width="*" />
+                             </Grid.ColumnDefinitions>
+                             <Button
+                                 x:Name="StableOpenUpdaterButton"
+                                 Grid.Column="0"
+                                 Height="28"
+                                 MinHeight="28"
+                                 HorizontalAlignment="Stretch"
+                                 AutomationProperties.Name="Open the selected game's official launcher"
+                                 Click="OpenUpdaterButton_Click"
+                                 Content="Official Launcher"
+                                 IsEnabled="False"
+                                 Style="{StaticResource NyxOfficialLauncherStyle}" />
+                             <Button
+                                 x:Name="StableOpenScreenshotFolderButton"
+                                 Grid.Column="1"
+                                 Height="28"
+                                 MinHeight="28"
+                                 HorizontalAlignment="Stretch"
+                                 AutomationProperties.Name="Open the selected game's screenshot folder"
+                                 Click="OpenScreenshotFolderButton_Click"
+                                 Content="Screenshots"
+                                 IsEnabled="False"
+                                 Style="{StaticResource NyxOfficialLauncherStyle}" />
+                         </Grid>
+                    </Grid>
+                </Grid>
+            </Border>
+
+        </Grid>
+    </Grid>
+</Page>

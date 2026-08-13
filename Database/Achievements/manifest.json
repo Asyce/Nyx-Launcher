@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-27T04:06:34.090Z",
+  "games": [
+    {
+      "game": "gi",
+      "catalogVersion": "6.7",
+      "releasedVersion": "6.7",
+      "categoryCount": 69,
+      "achievementCount": 1759,
+      "catalogSha256": "e99309fa313aaadb590762ae36b6bdaefb69323c3a4ef3530be31e184fcb1a23",
+      "sourceCommit": "8719a58b04ae5c8dfca6484d2b6c66db3f06549c",
+      "dataTimestamp": "2026-07-01T07:39:21.000Z"
+    },
+    {
+      "game": "hsr",
+      "catalogVersion": "4.4",
+      "releasedVersion": "4.4",
+      "categoryCount": 9,
+      "achievementCount": 1869,
+      "catalogSha256": "1686a1deb2a03e758e1047684acc9e760d5c793b2e2717bb4d1bc9eeb7c60502",
+      "sourceCommit": "a19b55763591fc35a72179dfd204f33fc4ac8964",
+      "dataTimestamp": "2026-07-21T19:00:05.000Z"
+    }
+  ]
+}

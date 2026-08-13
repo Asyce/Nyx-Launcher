@@ -1,0 +1,17 @@
+{
+  "kind": "pengo-achievements",
+  "version": 1,
+  "game": "gi",
+  "catalogVersion": "gi-6.7",
+  "exportedAt": "2026-07-26T12:00:00Z",
+  "achievements": [
+    {
+      "id": 81001,
+      "status": "complete"
+    },
+    {
+      "id": 81002,
+      "status": "complete"
+    }
+  ]
+}

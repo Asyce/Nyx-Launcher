@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Nyx.Desktop.App/Nyx.Desktop.App.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="src/Nyx.Desktop.Core/Nyx.Desktop.Core.csproj" />
+    <Project Path="src/Nyx.Desktop.Infrastructure/Nyx.Desktop.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Nyx.Desktop.Packaging.Tests/Nyx.Desktop.Packaging.Tests.csproj" />
+    <Project Path="tests/Nyx.Desktop.StateWorker/Nyx.Desktop.StateWorker.csproj" />
+    <Project Path="tests/Nyx.Desktop.Tests/Nyx.Desktop.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Nyx.Desktop.Update/Nyx.Desktop.Update.csproj" />
+  </Folder>
+</Solution>
