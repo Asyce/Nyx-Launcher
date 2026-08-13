@@ -23,11 +23,108 @@ public sealed class PublisherVisibleConnectRecoveryTests
     }
 
     [Fact]
-    public void Non_HoYoLAB_connect_keeps_its_catalog_page()
+    public void Endfield_connect_starts_at_the_normal_sign_in_page()
     {
         var entry = PublisherAccountCatalog.Get("ae");
 
-        Assert.Same(entry.ResourceUri, PublisherVisibleConnectNavigationPolicy.GetInitialUri(entry));
+        Assert.Same(entry.CheckInUri, PublisherVisibleConnectNavigationPolicy.GetInitialUri(entry));
+    }
+
+    [Fact]
+    public void Endfield_connect_hides_only_the_SKPORT_download_banner()
+    {
+        var source = ReadAppFile("PublisherSessionWindow.xaml.cs");
+        var initialization = Slice(
+            source,
+            "var core = await InitializeBrowserProfileAsync",
+            "core.NavigationStarting += Core_NavigationStarting");
+
+        Assert.Contains("visible", initialization, StringComparison.Ordinal);
+        Assert.Contains("purpose == PublisherSessionPurpose.Connect", initialization, StringComparison.Ordinal);
+        Assert.Contains("provider == \"SKPORT\"", initialization, StringComparison.Ordinal);
+        Assert.Contains("gameId == \"ae\"", initialization, StringComparison.Ordinal);
+        Assert.Contains("AddScriptToExecuteOnDocumentCreatedAsync", initialization, StringComparison.Ordinal);
+        Assert.Contains("img.mobile-logo", initialization, StringComparison.Ordinal);
+        Assert.DoesNotContain("input", initialization, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("form", initialization, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("SKPORT", PublisherSessionPurpose.Connect, "ae", "about:blank", true, true)]
+    [InlineData("SKPORT", PublisherSessionPurpose.Connect, "ae", "about:blank", false, false)]
+    [InlineData("SKPORT", PublisherSessionPurpose.Connect, "ae", "https://accounts.google.com/", true, false)]
+    [InlineData("SKPORT", PublisherSessionPurpose.Connect, "hsr", "about:blank", true, false)]
+    [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "ae", "about:blank", true, false)]
+    [InlineData("SKPORT", PublisherSessionPurpose.CheckIn, "ae", "about:blank", true, false)]
+    public void Only_the_user_clicked_Endfield_social_login_popup_is_released_to_WebView2(
+        string provider,
+        PublisherSessionPurpose purpose,
+        string gameId,
+        string target,
+        bool isUserInitiated,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            PublisherVisibleConnectNavigationPolicy.IsAllowedPopup(
+                provider,
+                purpose,
+                gameId,
+                target,
+                isUserInitiated));
+    }
+
+    [Fact]
+    public void Endfield_social_login_popup_stays_in_the_owned_profile_and_under_host_guards()
+    {
+        var source = ReadAppFile("PublisherSessionWindow.xaml.cs");
+        var popup = Slice(
+            source,
+            "private async void Core_NewWindowRequested",
+            "private bool IsAllowedConnectTopLevel");
+
+        Assert.DoesNotContain("args.Handled = false", popup, StringComparison.Ordinal);
+        Assert.Contains("args.Handled = true", popup, StringComparison.Ordinal);
+        Assert.Contains("using var deferral = args.GetDeferral()", popup, StringComparison.Ordinal);
+        Assert.Contains("OpenSocialLoginWindowAsync(sender.Environment, args)", popup, StringComparison.Ordinal);
+        Assert.Contains("popupBrowser.EnsureCoreWebView2Async(environment)", popup, StringComparison.Ordinal);
+        Assert.Contains("args.NewWindow = core", popup, StringComparison.Ordinal);
+        Assert.Contains("core.NavigationStarting += Core_SocialLoginNavigationStarting", popup, StringComparison.Ordinal);
+        Assert.Contains("CoreWebView2WebResourceContext.Document", popup, StringComparison.Ordinal);
+        Assert.Contains("core.WebResourceRequested += Core_SocialLoginWebResourceRequested", popup, StringComparison.Ordinal);
+        Assert.Contains("TryBlockWebResourceRequest(sender, args)", popup, StringComparison.Ordinal);
+        Assert.Contains("core.NewWindowRequested += Core_SocialLoginNewWindowRequested", popup, StringComparison.Ordinal);
+        Assert.Contains("core.DownloadStarting += Core_DownloadStarting", popup, StringComparison.Ordinal);
+        Assert.Contains("core.PermissionRequested += Core_PermissionRequested", popup, StringComparison.Ordinal);
+        Assert.Contains("accounts.google.com", popup, StringComparison.Ordinal);
+        Assert.Contains("/third_party/v1/google_callback", popup, StringComparison.Ordinal);
+        Assert.Contains("/endfield/sign-in", popup, StringComparison.Ordinal);
+        Assert.Contains("StringComparison.OrdinalIgnoreCase", popup, StringComparison.Ordinal);
+        Assert.True(
+            popup.IndexOf("core.NavigationStarting +=", StringComparison.Ordinal)
+            < popup.IndexOf("args.NewWindow = core", StringComparison.Ordinal));
+        Assert.True(
+            popup.IndexOf("args.NewWindow = core", StringComparison.Ordinal)
+            < popup.IndexOf("core.WebResourceRequested +=", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Visible_connect_monitor_establishes_authentication_baseline_before_auto_completion()
+    {
+        var source = ReadAppFile("PublisherSessionWindow.xaml.cs");
+        var monitor = Slice(
+            source,
+            "private async Task MonitorVisibleConnectAsync",
+            "public Task<PublisherVisibleConnectCompletion> WaitForConnectCompletionAsync");
+
+        var baseline = monitor.IndexOf("var baselineEstablished = false", StringComparison.Ordinal);
+        var transition = monitor.IndexOf(
+            "baselineEstablished && !wasAuthenticated && authenticated",
+            StringComparison.Ordinal);
+        var update = monitor.IndexOf("wasAuthenticated = authenticated", StringComparison.Ordinal);
+        Assert.True(baseline >= 0 && baseline < transition && transition < update);
+        Assert.Contains("baselineEstablished = true", monitor, StringComparison.Ordinal);
+        Assert.DoesNotContain("ReviewedEndfieldIdentity", monitor, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -171,11 +268,12 @@ public sealed class PublisherVisibleConnectRecoveryTests
         var attempt = Slice(
             source,
             "private async Task AttemptVisibleConnectPageAsync",
-            "private string ConnectPrivacyStatusText");
+            "public Task<PublisherVisibleConnectCompletion> WaitForConnectCompletionAsync");
 
         Assert.Contains("PublisherVisibleConnectFlow.AttemptPageAsync(", attempt, StringComparison.Ordinal);
         Assert.Contains("NavigateWithOutcomeAsync(uri, operationCancellation)", attempt, StringComparison.Ordinal);
-        Assert.Contains("$\"{ConnectPrivacyStatusText()} {presentation.Guidance}\"", attempt, StringComparison.Ordinal);
+        Assert.Contains("? presentation.Guidance ?? string.Empty", attempt, StringComparison.Ordinal);
+        Assert.DoesNotContain("The official page and WebView2 handle sign-in directly.", source, StringComparison.Ordinal);
         Assert.DoesNotContain("TryOpenHoyoLabLoginDialogAsync", source, StringComparison.Ordinal);
         Assert.DoesNotContain("PublisherLoginTriggerOutcome", source, StringComparison.Ordinal);
         Assert.DoesNotContain("GetSessionProofAsync", attempt, StringComparison.Ordinal);

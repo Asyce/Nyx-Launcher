@@ -1,4 +1,6 @@
 **/bin/
+!Extractor/Achievements/src/bin/
+!Extractor/Achievements/src/bin/pengo-achievements-launcher.rs
 **/obj/
 **/target/
 TestResults/

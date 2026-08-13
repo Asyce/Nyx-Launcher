@@ -333,7 +333,7 @@ public sealed class IrisLauncherShellTests
 
         Assert.Contains("CombinedStatusPanel.Height = double.NaN", code, StringComparison.Ordinal);
         Assert.Contains("CombinedStatusPanel.VerticalAlignment = SignalPanel.Visibility is Visibility.Collapsed", code, StringComparison.Ordinal);
-        Assert.Contains("? VerticalAlignment.Top", code, StringComparison.Ordinal);
+        Assert.Contains("? VerticalAlignment.Bottom", code, StringComparison.Ordinal);
         Assert.Contains(": VerticalAlignment.Stretch", code, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"CombinedStatusPanel\"", xaml, StringComparison.Ordinal);
         Assert.Matches(@"x:Name=""NyxToolsPanel""\s+Grid\.Column=""1""", xaml);
@@ -995,8 +995,8 @@ public sealed class IrisLauncherShellTests
         Assert.DoesNotContain("BannerCharacterRow_Click", code, StringComparison.Ordinal);
         Assert.DoesNotContain("CurrentBannerPortraitButton", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Artwork currently displayed", code, StringComparison.Ordinal);
-        Assert.Contains("const bool isActive = true", code, StringComparison.Ordinal);
-        Assert.Contains("existing.Update(portrait, timing, isActive, isPinned, 100)", code, StringComparison.Ordinal);
+        Assert.Contains("OrderBannerCharacters(current.Characters, current.SelectedCharacterId)", code, StringComparison.Ordinal);
+        Assert.Contains("BannerCharacterRowItem.CreateOverflow", code, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1052,7 +1052,7 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("CornerRadius=\"20\"", SliceElement(strip, "x:Name=\"CurrentBannerPortraitBacking\""), StringComparison.Ordinal);
         Assert.Contains("CornerRadius=\"17\"", SliceElement(strip, "x:Name=\"UpcomingBannerPortraitBacking\""), StringComparison.Ordinal);
         Assert.Contains("x:Name=\"UpcomingBannerPhaseSlot\"", strip, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"UpcomingPhaseDivider\"", strip, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Name=\"UpcomingPhaseDivider\"", strip, StringComparison.Ordinal);
         Assert.DoesNotContain("CurrentBannerTimingBacking", strip, StringComparison.Ordinal);
         Assert.DoesNotContain("UpcomingBannerHeaderBacking", strip, StringComparison.Ordinal);
         Assert.DoesNotContain("UpcomingBannerTimingBacking", strip, StringComparison.Ordinal);
@@ -1108,7 +1108,7 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("MoveBrandEye();", code, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"CurrentBannerSection\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Margin=\"6,0,0,0\"", SliceElement(xaml, "x:Name=\"CurrentBannerSection\""), StringComparison.Ordinal);
-        Assert.Contains("Width=\"20\"", SliceElement(xaml, "x:Name=\"RedemptionCodeRewardIcon\""), StringComparison.Ordinal);
+        Assert.Contains("Width=\"24\"", SliceElement(xaml, "x:Name=\"RedemptionCodeRewardIcon\""), StringComparison.Ordinal);
         Assert.Contains("x:Name=\"LaunchDetail\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Height=\"18\"", SliceElement(xaml, "x:Name=\"LaunchDetail\""), StringComparison.Ordinal);
         Assert.Contains("Background = (Brush)Application.Current.Resources[\"SettingsSurfaceBrush\"]", manager, StringComparison.Ordinal);

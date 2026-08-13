@@ -27,6 +27,7 @@ public sealed class PublisherAccountService : IAsyncDisposable
                 ["gi"] = new(),
                 ["hsr"] = new(),
                 ["zzz"] = new(),
+                ["ae"] = new(),
             });
     private readonly IReadOnlyDictionary<string, PublisherSingleFlight<PublisherResourceSnapshot?>> resourceSingleFlights =
         new ReadOnlyDictionary<string, PublisherSingleFlight<PublisherResourceSnapshot?>>(
@@ -1265,7 +1266,7 @@ public sealed class PublisherAccountService : IAsyncDisposable
                         operation,
                         cancellationToken);
                     if (role.State == PublisherDailyRoleResolutionState.Resolved
-                        && role.Binding is not null)
+                        && (role.Binding is not null || entry.GameId == "ae"))
                     {
                         if (!CanPublish(provider, operation)) return;
                         await using var window = CreateWindow(provider, operation);
@@ -1348,6 +1349,17 @@ public sealed class PublisherAccountService : IAsyncDisposable
         PublisherOperation operation,
         CancellationToken cancellationToken)
     {
+        if (entry.GameId == "ae" && entry.Provider == "SKPORT")
+        {
+            return new(
+                PublisherDailyRoleResolutionState.Resolved,
+                null,
+                Array.Empty<PublisherRoleChoice>(),
+                AccountWideStatusAllowed: true,
+                StoredBindingStillMatches: false,
+                StoredBindingWasProvenMissing: false);
+        }
+
         if (entry.Provider != "HoYoLAB"
             || entry.GameId is not ("gi" or "hsr" or "zzz")
             || entry.ResourceUri is null
@@ -1699,18 +1711,11 @@ public sealed class PublisherAccountService : IAsyncDisposable
                 identity = window.ReviewedEndfieldIdentity;
             }
 
-            var state = await PublisherVisibleConnectFlow.CompleteAsync(
-                completion,
-                operationCancellation => ProbeConnectionCoreAsync(
-                    entry,
-                    operation,
-                    operationCancellation),
-                cancellationToken);
-            if (state == PublisherConnectionState.Connected
+            if (completion == PublisherVisibleConnectCompletion.Done
                 && identity is not null
                 && TryPublishEndfieldReview(identity, operation))
             {
-                return new(state, identity);
+                return new(PublisherConnectionState.Connected, identity);
             }
 
             TrySetConnection(entry.Provider, PublisherConnectionState.NeedsReview, operation);

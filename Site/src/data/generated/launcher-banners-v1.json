@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "revision": "86fb4d0a46fee4a89ec43381a8651da7ac97d635e7ed51e9cbe29665234ba90f",
-  "generatedAt": "2026-08-11T16:55:02.753Z",
+  "revision": "72738a4be1c0d6c50e32b433ada640568ede2ddfbbc0633f385e5252e55224ae",
+  "generatedAt": "2026-08-13T22:39:20.233Z",
   "health": {
     "status": "ok",
     "games": {
@@ -35,35 +35,35 @@
   "games": {
     "gi": {
       "game": "gi",
-      "region": "america",
+      "region": "asia",
       "current": {
-        "phase": "6.7 Phase 2",
-        "start": "2026-07-21T23:00:00.000Z",
-        "end": "2026-08-11T19:59:00.000Z",
+        "phase": "7.0 Phase 1",
+        "start": "2026-08-12T03:00:00.000Z",
+        "end": "2026-09-01T09:59:59.000Z",
         "remaining": {
-          "startsAt": "2026-07-21T23:00:00.000Z",
-          "endsAt": "2026-08-11T19:59:00.000Z",
-          "durationSeconds": 11037
+          "startsAt": "2026-08-12T03:00:00.000Z",
+          "endsAt": "2026-09-01T09:59:59.000Z",
+          "durationSeconds": 1596038
         },
         "characters": [
           {
-            "id": "10000052",
-            "name": "Raiden Shogun",
+            "id": "10000150",
+            "name": "Odette",
             "rarity": 5,
             "limited": true,
-            "debut": "2021-08-31T22:00:00.000Z",
+            "debut": "2026-08-10T22:00:00.000Z",
             "icon": {
-              "id": "10000052-icon",
+              "id": "10000150-icon",
               "source": "character-icon",
-              "path": "/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Shougun_Circle.webp",
-              "url": "https://assets.pengo.gg/legacy/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Shougun_Circle.webp",
+              "path": "/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Odette_Circle.webp",
+              "url": "https://assets.pengo.gg/legacy/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Odette_Circle.webp",
               "mime": "image/webp",
-              "size": 23042,
+              "size": 33386,
               "dimensions": {
                 "width": 256,
                 "height": 256
               },
-              "sha256": "918c2ecb5687063a585deefc306ab8943071c42261d27ffa7831f881ecdb16bd",
+              "sha256": "881665bc8d02fd1deeaf3866d5270f0e5594ffe9ee8939c0ce115b85f137ab35",
               "transparentBounds": {
                 "left": 0,
                 "top": 0,
@@ -79,22 +79,22 @@
             },
             "variants": [
               {
-                "id": "10000052-splash",
+                "id": "10000150-splash",
                 "source": "splash",
-                "path": "/launcher-art/a57e2495d9ff9b625a1b09c86635d53b73136e7a519243e0f851ff52338be760.webp",
-                "url": "https://pengo.gg/dist/launcher-art/a57e2495d9ff9b625a1b09c86635d53b73136e7a519243e0f851ff52338be760.webp",
+                "path": "/launcher-art/7ffc2b77dfa5a6833a8352647a99161fe3141c501eb363c6a369a980dbae78e1.webp",
+                "url": "https://pengo.gg/dist/launcher-art/7ffc2b77dfa5a6833a8352647a99161fe3141c501eb363c6a369a980dbae78e1.webp",
                 "mime": "image/webp",
-                "size": 242288,
+                "size": 555194,
                 "dimensions": {
-                  "width": 1116,
-                  "height": 1011
+                  "width": 1708,
+                  "height": 1024
                 },
-                "sha256": "a57e2495d9ff9b625a1b09c86635d53b73136e7a519243e0f851ff52338be760",
+                "sha256": "7ffc2b77dfa5a6833a8352647a99161fe3141c501eb363c6a369a980dbae78e1",
                 "transparentBounds": {
                   "left": 0,
                   "top": 0,
-                  "right": 1116,
-                  "bottom": 1011
+                  "right": 1708,
+                  "bottom": 1024
                 },
                 "placement": {
                   "anchor": "center",
@@ -106,23 +106,23 @@
             ]
           },
           {
-            "id": "10000125",
-            "name": "Columbina",
+            "id": "10000096",
+            "name": "Arlecchino",
             "rarity": 5,
             "limited": true,
-            "debut": "2026-01-12T23:00:00.000Z",
+            "debut": "2024-04-22T22:00:00.000Z",
             "icon": {
-              "id": "10000125-icon",
+              "id": "10000096-icon",
               "source": "character-icon",
-              "path": "/Database/GameData/gi/assets/characters/icons/UI_AvatarIcon_Columbina.webp",
-              "url": "https://assets.pengo.gg/legacy/Database/GameData/gi/assets/characters/icons/UI_AvatarIcon_Columbina.webp",
+              "path": "/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Arlecchino_Circle.webp",
+              "url": "https://assets.pengo.gg/legacy/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Arlecchino_Circle.webp",
               "mime": "image/webp",
-              "size": 31120,
+              "size": 27322,
               "dimensions": {
                 "width": 256,
                 "height": 256
               },
-              "sha256": "621a1b1771202c429b5e6a84b22b4d6f922b510e40b1fe5be92ad3f4217230b1",
+              "sha256": "4b025fa8c180ae45ecb9e0b347f6231dd0cfaeb5cd5e08c7f0e82b76f7dc5ef3",
               "transparentBounds": {
                 "left": 0,
                 "top": 0,
@@ -138,21 +138,21 @@
             },
             "variants": [
               {
-                "id": "10000125-splash",
+                "id": "10000096-splash",
                 "source": "splash",
-                "path": "/launcher-art/4022103b4fdf0e9be81be313c87a841aa4db9a642ab1637369a747c27d41b739.webp",
-                "url": "https://pengo.gg/dist/launcher-art/4022103b4fdf0e9be81be313c87a841aa4db9a642ab1637369a747c27d41b739.webp",
+                "path": "/launcher-art/65d45cac8b63f24e9ff0605254dd5a2a450fea984df698f1957065d2e4409db2.webp",
+                "url": "https://pengo.gg/dist/launcher-art/65d45cac8b63f24e9ff0605254dd5a2a450fea984df698f1957065d2e4409db2.webp",
                 "mime": "image/webp",
-                "size": 649424,
+                "size": 416452,
                 "dimensions": {
-                  "width": 2048,
+                  "width": 1449,
                   "height": 1024
                 },
-                "sha256": "4022103b4fdf0e9be81be313c87a841aa4db9a642ab1637369a747c27d41b739",
+                "sha256": "65d45cac8b63f24e9ff0605254dd5a2a450fea984df698f1957065d2e4409db2",
                 "transparentBounds": {
                   "left": 0,
                   "top": 0,
-                  "right": 2048,
+                  "right": 1449,
                   "bottom": 1024
                 },
                 "placement": {
@@ -166,23 +166,23 @@
           }
         ],
         "selectedCharacter": {
-          "id": "10000125",
-          "name": "Columbina",
+          "id": "10000150",
+          "name": "Odette",
           "rarity": 5,
           "limited": true,
-          "debut": "2026-01-12T23:00:00.000Z",
+          "debut": "2026-08-10T22:00:00.000Z",
           "icon": {
-            "id": "10000125-icon",
+            "id": "10000150-icon",
             "source": "character-icon",
-            "path": "/Database/GameData/gi/assets/characters/icons/UI_AvatarIcon_Columbina.webp",
-            "url": "https://assets.pengo.gg/legacy/Database/GameData/gi/assets/characters/icons/UI_AvatarIcon_Columbina.webp",
+            "path": "/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Odette_Circle.webp",
+            "url": "https://assets.pengo.gg/legacy/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Odette_Circle.webp",
             "mime": "image/webp",
-            "size": 31120,
+            "size": 33386,
             "dimensions": {
               "width": 256,
               "height": 256
             },
-            "sha256": "621a1b1771202c429b5e6a84b22b4d6f922b510e40b1fe5be92ad3f4217230b1",
+            "sha256": "881665bc8d02fd1deeaf3866d5270f0e5594ffe9ee8939c0ce115b85f137ab35",
             "transparentBounds": {
               "left": 0,
               "top": 0,
@@ -198,21 +198,21 @@
           },
           "variants": [
             {
-              "id": "10000125-splash",
+              "id": "10000150-splash",
               "source": "splash",
-              "path": "/launcher-art/4022103b4fdf0e9be81be313c87a841aa4db9a642ab1637369a747c27d41b739.webp",
-              "url": "https://pengo.gg/dist/launcher-art/4022103b4fdf0e9be81be313c87a841aa4db9a642ab1637369a747c27d41b739.webp",
+              "path": "/launcher-art/7ffc2b77dfa5a6833a8352647a99161fe3141c501eb363c6a369a980dbae78e1.webp",
+              "url": "https://pengo.gg/dist/launcher-art/7ffc2b77dfa5a6833a8352647a99161fe3141c501eb363c6a369a980dbae78e1.webp",
               "mime": "image/webp",
-              "size": 649424,
+              "size": 555194,
               "dimensions": {
-                "width": 2048,
+                "width": 1708,
                 "height": 1024
               },
-              "sha256": "4022103b4fdf0e9be81be313c87a841aa4db9a642ab1637369a747c27d41b739",
+              "sha256": "7ffc2b77dfa5a6833a8352647a99161fe3141c501eb363c6a369a980dbae78e1",
               "transparentBounds": {
                 "left": 0,
                 "top": 0,
-                "right": 2048,
+                "right": 1708,
                 "bottom": 1024
               },
               "placement": {
@@ -224,26 +224,26 @@
             }
           ]
         },
-        "selectedCharacterId": "10000125",
+        "selectedCharacterId": "10000150",
         "selectionReason": "newer-limited-debut",
         "variants": [
           {
-            "id": "10000052-splash",
+            "id": "10000150-splash",
             "source": "splash",
-            "path": "/launcher-art/a57e2495d9ff9b625a1b09c86635d53b73136e7a519243e0f851ff52338be760.webp",
-            "url": "https://pengo.gg/dist/launcher-art/a57e2495d9ff9b625a1b09c86635d53b73136e7a519243e0f851ff52338be760.webp",
+            "path": "/launcher-art/7ffc2b77dfa5a6833a8352647a99161fe3141c501eb363c6a369a980dbae78e1.webp",
+            "url": "https://pengo.gg/dist/launcher-art/7ffc2b77dfa5a6833a8352647a99161fe3141c501eb363c6a369a980dbae78e1.webp",
             "mime": "image/webp",
-            "size": 242288,
+            "size": 555194,
             "dimensions": {
-              "width": 1116,
-              "height": 1011
+              "width": 1708,
+              "height": 1024
             },
-            "sha256": "a57e2495d9ff9b625a1b09c86635d53b73136e7a519243e0f851ff52338be760",
+            "sha256": "7ffc2b77dfa5a6833a8352647a99161fe3141c501eb363c6a369a980dbae78e1",
             "transparentBounds": {
               "left": 0,
               "top": 0,
-              "right": 1116,
-              "bottom": 1011
+              "right": 1708,
+              "bottom": 1024
             },
             "placement": {
               "anchor": "center",
@@ -253,21 +253,21 @@
             }
           },
           {
-            "id": "10000125-splash",
+            "id": "10000096-splash",
             "source": "splash",
-            "path": "/launcher-art/4022103b4fdf0e9be81be313c87a841aa4db9a642ab1637369a747c27d41b739.webp",
-            "url": "https://pengo.gg/dist/launcher-art/4022103b4fdf0e9be81be313c87a841aa4db9a642ab1637369a747c27d41b739.webp",
+            "path": "/launcher-art/65d45cac8b63f24e9ff0605254dd5a2a450fea984df698f1957065d2e4409db2.webp",
+            "url": "https://pengo.gg/dist/launcher-art/65d45cac8b63f24e9ff0605254dd5a2a450fea984df698f1957065d2e4409db2.webp",
             "mime": "image/webp",
-            "size": 649424,
+            "size": 416452,
             "dimensions": {
-              "width": 2048,
+              "width": 1449,
               "height": 1024
             },
-            "sha256": "4022103b4fdf0e9be81be313c87a841aa4db9a642ab1637369a747c27d41b739",
+            "sha256": "65d45cac8b63f24e9ff0605254dd5a2a450fea984df698f1957065d2e4409db2",
             "transparentBounds": {
               "left": 0,
               "top": 0,
-              "right": 2048,
+              "right": 1449,
               "bottom": 1024
             },
             "placement": {
@@ -281,33 +281,34 @@
       },
       "upcoming": [
         {
-          "phase": "7.0 Phase 1",
-          "start": "2026-08-12T03:00:00.000Z",
-          "end": "2026-09-01T10:00:00.000Z",
+          "phase": null,
+          "announced": true,
+          "start": null,
+          "end": null,
           "characters": [
             {
-              "id": "10000150",
-              "name": "Odette",
+              "id": "10000143",
+              "name": "Vesna",
               "rarity": 5,
-              "limited": true,
-              "debut": "2026-08-10T22:00:00.000Z",
+              "limited": false,
+              "debut": "1969-12-31T23:00:00.000Z",
               "icon": {
-                "id": "10000150-icon",
+                "id": "10000143-icon",
                 "source": "character-icon",
-                "path": "/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Odette_Circle.webp",
-                "url": "https://assets.pengo.gg/legacy/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Odette_Circle.webp",
+                "path": "/launcher-art/485c0f72cb062a5e2e07425a22e6302962b28488dfcc341e0cfa9bf33da27d96.webp",
+                "url": "https://pengo.gg/dist/launcher-art/485c0f72cb062a5e2e07425a22e6302962b28488dfcc341e0cfa9bf33da27d96.webp",
                 "mime": "image/webp",
-                "size": 33386,
+                "size": 59658,
                 "dimensions": {
-                  "width": 256,
-                  "height": 256
+                  "width": 483,
+                  "height": 488
                 },
-                "sha256": "881665bc8d02fd1deeaf3866d5270f0e5594ffe9ee8939c0ce115b85f137ab35",
+                "sha256": "485c0f72cb062a5e2e07425a22e6302962b28488dfcc341e0cfa9bf33da27d96",
                 "transparentBounds": {
                   "left": 0,
                   "top": 0,
-                  "right": 256,
-                  "bottom": 256
+                  "right": 483,
+                  "bottom": 488
                 },
                 "placement": {
                   "anchor": "center",
@@ -319,28 +320,28 @@
               "variants": []
             },
             {
-              "id": "10000096",
-              "name": "Arlecchino",
+              "id": "10000140",
+              "name": "Vodyanitsa",
               "rarity": 5,
-              "limited": true,
-              "debut": "2024-04-22T22:00:00.000Z",
+              "limited": false,
+              "debut": "1969-12-31T23:00:00.000Z",
               "icon": {
-                "id": "10000096-icon",
+                "id": "10000140-icon",
                 "source": "character-icon",
-                "path": "/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Arlecchino_Circle.webp",
-                "url": "https://assets.pengo.gg/legacy/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Arlecchino_Circle.webp",
+                "path": "/launcher-art/10df840704487b06f5f80028debb239d5b072e719a187f19347a6a10baf6b614.webp",
+                "url": "https://pengo.gg/dist/launcher-art/10df840704487b06f5f80028debb239d5b072e719a187f19347a6a10baf6b614.webp",
                 "mime": "image/webp",
-                "size": 27322,
+                "size": 4550,
                 "dimensions": {
-                  "width": 256,
-                  "height": 256
+                  "width": 102,
+                  "height": 103
                 },
-                "sha256": "4b025fa8c180ae45ecb9e0b347f6231dd0cfaeb5cd5e08c7f0e82b76f7dc5ef3",
+                "sha256": "10df840704487b06f5f80028debb239d5b072e719a187f19347a6a10baf6b614",
                 "transparentBounds": {
                   "left": 0,
                   "top": 0,
-                  "right": 256,
-                  "bottom": 256
+                  "right": 102,
+                  "bottom": 103
                 },
                 "placement": {
                   "anchor": "center",
@@ -463,7 +464,7 @@
         "remaining": {
           "startsAt": "2026-08-05T11:00:00.000Z",
           "endsAt": "2026-08-25T14:00:00.000Z",
-          "durationSeconds": 1199097
+          "durationSeconds": 1005639
         },
         "characters": [
           {
@@ -790,28 +791,102 @@
           "end": "2026-09-16T16:00:00.000Z",
           "characters": [
             {
-              "id": "robin-summeretto",
+              "id": "1512",
               "name": "Robin • Summeretto",
               "rarity": 5,
               "limited": true,
               "debut": "2024-05-08T03:00:00.000Z",
               "icon": {
-                "id": "robin-summeretto-icon",
+                "id": "1512-icon",
                 "source": "character-icon",
-                "path": "/Database/Prydwen/hsr/assets/characters/robin-summeretto-50f73fbdd44b.webp",
-                "url": "https://assets.pengo.gg/legacy/Database/Prydwen/hsr/assets/characters/robin-summeretto-50f73fbdd44b.webp",
+                "path": "/Database/GameData/hsr/assets/characters/round/1512.webp",
+                "url": "https://assets.pengo.gg/legacy/Database/GameData/hsr/assets/characters/round/1512.webp",
                 "mime": "image/webp",
-                "size": 68268,
+                "size": 11340,
                 "dimensions": {
-                  "width": 374,
-                  "height": 512
+                  "width": 128,
+                  "height": 128
                 },
-                "sha256": "48d08735b480c53e77da105db6b0c2c6681d1184b49ae8de8e0b1c75d2675d80",
+                "sha256": "b48bc5c377bb8ec11811c71b150aba783a79a88d663fe990f22ea2d49a7a90b7",
                 "transparentBounds": {
                   "left": 0,
                   "top": 0,
-                  "right": 374,
-                  "bottom": 512
+                  "right": 128,
+                  "bottom": 128
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            }
+          ]
+        },
+        {
+          "phase": null,
+          "announced": true,
+          "start": null,
+          "end": null,
+          "characters": [
+            {
+              "id": "pearl",
+              "name": "Pearl",
+              "rarity": null,
+              "limited": false,
+              "debut": null,
+              "icon": {
+                "id": "pearl-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/8c28a2288e2452f49e8c87e0e85177b001c1ab093b7f19d236cdf0101834b16c.webp",
+                "url": "https://pengo.gg/dist/launcher-art/8c28a2288e2452f49e8c87e0e85177b001c1ab093b7f19d236cdf0101834b16c.webp",
+                "mime": "image/webp",
+                "size": 32130,
+                "dimensions": {
+                  "width": 420,
+                  "height": 424
+                },
+                "sha256": "8c28a2288e2452f49e8c87e0e85177b001c1ab093b7f19d236cdf0101834b16c",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 420,
+                  "bottom": 424
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            },
+            {
+              "id": "nihilux",
+              "name": "Nihilux",
+              "rarity": null,
+              "limited": false,
+              "debut": null,
+              "icon": {
+                "id": "nihilux-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/fc2a6dfabf71d9f1dda1fe855ee3e28774fc2df8e729ca438866b59bc3695825.webp",
+                "url": "https://pengo.gg/dist/launcher-art/fc2a6dfabf71d9f1dda1fe855ee3e28774fc2df8e729ca438866b59bc3695825.webp",
+                "mime": "image/webp",
+                "size": 64240,
+                "dimensions": {
+                  "width": 420,
+                  "height": 424
+                },
+                "sha256": "fc2a6dfabf71d9f1dda1fe855ee3e28774fc2df8e729ca438866b59bc3695825",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 420,
+                  "bottom": 424
                 },
                 "placement": {
                   "anchor": "center",
@@ -934,7 +1009,7 @@
         "remaining": {
           "startsAt": "2026-07-29T03:00:00.000Z",
           "endsAt": "2026-08-19T03:59:59.000Z",
-          "durationSeconds": 644696
+          "durationSeconds": 451238
         },
         "characters": [
           {
@@ -1309,6 +1384,179 @@
               "variants": []
             }
           ]
+        },
+        {
+          "phase": null,
+          "announced": true,
+          "start": null,
+          "end": null,
+          "characters": [
+            {
+              "id": "claret",
+              "name": "Claret",
+              "rarity": null,
+              "limited": false,
+              "debut": null,
+              "icon": {
+                "id": "claret-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/0923838922fe114abc44127776c2163f2d24be791b903446f7fe4ac637797ebd.webp",
+                "url": "https://pengo.gg/dist/launcher-art/0923838922fe114abc44127776c2163f2d24be791b903446f7fe4ac637797ebd.webp",
+                "mime": "image/webp",
+                "size": 72658,
+                "dimensions": {
+                  "width": 728,
+                  "height": 410
+                },
+                "sha256": "0923838922fe114abc44127776c2163f2d24be791b903446f7fe4ac637797ebd",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 728,
+                  "bottom": 410
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            },
+            {
+              "id": "roxy",
+              "name": "Roxy",
+              "rarity": null,
+              "limited": false,
+              "debut": null,
+              "icon": {
+                "id": "roxy-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/7429b2b5e1eda1507e6e00bcf28537ffb2c17b2202baa27490bd1440494eb4c0.webp",
+                "url": "https://pengo.gg/dist/launcher-art/7429b2b5e1eda1507e6e00bcf28537ffb2c17b2202baa27490bd1440494eb4c0.webp",
+                "mime": "image/webp",
+                "size": 67752,
+                "dimensions": {
+                  "width": 728,
+                  "height": 410
+                },
+                "sha256": "7429b2b5e1eda1507e6e00bcf28537ffb2c17b2202baa27490bd1440494eb4c0",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 728,
+                  "bottom": 410
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            },
+            {
+              "id": "sunbringer",
+              "name": "Sunbringer",
+              "rarity": null,
+              "limited": false,
+              "debut": null,
+              "icon": {
+                "id": "sunbringer-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/bc038d3e177c45f546004c2ddea8010e68ac7381b14133616bec335db771d0aa.webp",
+                "url": "https://pengo.gg/dist/launcher-art/bc038d3e177c45f546004c2ddea8010e68ac7381b14133616bec335db771d0aa.webp",
+                "mime": "image/webp",
+                "size": 33486,
+                "dimensions": {
+                  "width": 437,
+                  "height": 436
+                },
+                "sha256": "bc038d3e177c45f546004c2ddea8010e68ac7381b14133616bec335db771d0aa",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 437,
+                  "bottom": 436
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            },
+            {
+              "id": "phoenix",
+              "name": "Phoenix",
+              "rarity": null,
+              "limited": false,
+              "debut": null,
+              "icon": {
+                "id": "phoenix-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/4b62fab59665a7122fbe4ab4f68341bcc1acc6ac8af69d6643ad57d2aaabfc40.webp",
+                "url": "https://pengo.gg/dist/launcher-art/4b62fab59665a7122fbe4ab4f68341bcc1acc6ac8af69d6643ad57d2aaabfc40.webp",
+                "mime": "image/webp",
+                "size": 49088,
+                "dimensions": {
+                  "width": 437,
+                  "height": 436
+                },
+                "sha256": "4b62fab59665a7122fbe4ab4f68341bcc1acc6ac8af69d6643ad57d2aaabfc40",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 437,
+                  "bottom": 436
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            },
+            {
+              "id": "the-storyteller",
+              "name": "The Storyteller",
+              "rarity": null,
+              "limited": false,
+              "debut": null,
+              "icon": {
+                "id": "the-storyteller-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/b3dad4f67b327af9223971637f92bd33c5e36caf9206b8838ae1b0005018e5c9.webp",
+                "url": "https://pengo.gg/dist/launcher-art/b3dad4f67b327af9223971637f92bd33c5e36caf9206b8838ae1b0005018e5c9.webp",
+                "mime": "image/webp",
+                "size": 50382,
+                "dimensions": {
+                  "width": 437,
+                  "height": 436
+                },
+                "sha256": "b3dad4f67b327af9223971637f92bd33c5e36caf9206b8838ae1b0005018e5c9",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 437,
+                  "bottom": 436
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            }
+          ]
         }
       ],
       "news": [
@@ -1408,7 +1656,7 @@
         "remaining": {
           "startsAt": "2026-07-30T09:00:00.000Z",
           "endsAt": "2026-08-19T10:59:00.000Z",
-          "durationSeconds": 669837
+          "durationSeconds": 476379
         },
         "characters": [
           {
@@ -1717,6 +1965,113 @@
               "variants": []
             }
           ]
+        },
+        {
+          "phase": null,
+          "announced": true,
+          "start": null,
+          "end": null,
+          "characters": [
+            {
+              "id": "jingran",
+              "name": "Jingran",
+              "rarity": 5,
+              "limited": false,
+              "debut": null,
+              "icon": {
+                "id": "jingran-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/d1112777b970d08c543967d66b9af394aa8774cd95420f59e1cf02b904c477ed.webp",
+                "url": "https://pengo.gg/dist/launcher-art/d1112777b970d08c543967d66b9af394aa8774cd95420f59e1cf02b904c477ed.webp",
+                "mime": "image/webp",
+                "size": 67778,
+                "dimensions": {
+                  "width": 494,
+                  "height": 500
+                },
+                "sha256": "d1112777b970d08c543967d66b9af394aa8774cd95420f59e1cf02b904c477ed",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 494,
+                  "bottom": 500
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            },
+            {
+              "id": "suoming",
+              "name": "Suoming",
+              "rarity": 5,
+              "limited": false,
+              "debut": null,
+              "icon": {
+                "id": "suoming-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/ffb229ff6258670b0fd18034056e5cc2ee937097603070dbcb731e663b96b839.webp",
+                "url": "https://pengo.gg/dist/launcher-art/ffb229ff6258670b0fd18034056e5cc2ee937097603070dbcb731e663b96b839.webp",
+                "mime": "image/webp",
+                "size": 67708,
+                "dimensions": {
+                  "width": 494,
+                  "height": 500
+                },
+                "sha256": "ffb229ff6258670b0fd18034056e5cc2ee937097603070dbcb731e663b96b839",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 494,
+                  "bottom": 500
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            },
+            {
+              "id": "hsin",
+              "name": "Hsin",
+              "rarity": 5,
+              "limited": false,
+              "debut": null,
+              "icon": {
+                "id": "hsin-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/695d840dde345ac41f3045b1cc18836e1f48e44ecc2500e469c677d947d66334.webp",
+                "url": "https://pengo.gg/dist/launcher-art/695d840dde345ac41f3045b1cc18836e1f48e44ecc2500e469c677d947d66334.webp",
+                "mime": "image/webp",
+                "size": 67604,
+                "dimensions": {
+                  "width": 494,
+                  "height": 500
+                },
+                "sha256": "695d840dde345ac41f3045b1cc18836e1f48e44ecc2500e469c677d947d66334",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 494,
+                  "bottom": 500
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            }
+          ]
         }
       ],
       "news": [
@@ -1816,7 +2171,7 @@
         "remaining": {
           "startsAt": "2026-08-09T04:00:00.000Z",
           "endsAt": "2026-09-01T21:59:59.000Z",
-          "durationSeconds": 1832696
+          "durationSeconds": 1639238
         },
         "characters": [
           {
@@ -2152,12 +2507,8 @@
               "icon": {
                 "id": "siferanmutproxy-icon",
                 "source": "character-icon",
-                "placement": {
-                  "anchor": "center",
-                  "fit": "cover",
-                  "x": 0.5,
-                  "y": 0.5
-                },
+                "path": "/launcher-art/0e647732c61f675910cd0192a261940f900042db7558af42fe89755877672971.webp",
+                "url": "https://pengo.gg/dist/launcher-art/0e647732c61f675910cd0192a261940f900042db7558af42fe89755877672971.webp",
                 "mime": "image/webp",
                 "size": 105560,
                 "dimensions": {
@@ -2171,8 +2522,12 @@
                   "right": 728,
                   "bottom": 410
                 },
-                "path": "/launcher-art/0e647732c61f675910cd0192a261940f900042db7558af42fe89755877672971.webp",
-                "url": "https://pengo.gg/dist/launcher-art/0e647732c61f675910cd0192a261940f900042db7558af42fe89755877672971.webp"
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
               },
               "variants": []
             },
@@ -2185,12 +2540,8 @@
               "icon": {
                 "id": "hongshanimperialguard-icon",
                 "source": "character-icon",
-                "placement": {
-                  "anchor": "center",
-                  "fit": "cover",
-                  "x": 0.5,
-                  "y": 0.5
-                },
+                "path": "/launcher-art/bb68faf93beca6c589fe7fdb09849ee877afe77b08c514cd022454575354b96c.webp",
+                "url": "https://pengo.gg/dist/launcher-art/bb68faf93beca6c589fe7fdb09849ee877afe77b08c514cd022454575354b96c.webp",
                 "mime": "image/webp",
                 "size": 95354,
                 "dimensions": {
@@ -2204,8 +2555,12 @@
                   "right": 728,
                   "bottom": 410
                 },
-                "path": "/launcher-art/bb68faf93beca6c589fe7fdb09849ee877afe77b08c514cd022454575354b96c.webp",
-                "url": "https://pengo.gg/dist/launcher-art/bb68faf93beca6c589fe7fdb09849ee877afe77b08c514cd022454575354b96c.webp"
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
               },
               "variants": []
             },
@@ -2218,12 +2573,8 @@
               "icon": {
                 "id": "sarkazarcher-icon",
                 "source": "character-icon",
-                "placement": {
-                  "anchor": "center",
-                  "fit": "cover",
-                  "x": 0.5,
-                  "y": 0.5
-                },
+                "path": "/launcher-art/1108937a98ad62dfd0d9d1d2aa887a224b5b5adf1dcce15615f13aa4f861bd5a.webp",
+                "url": "https://pengo.gg/dist/launcher-art/1108937a98ad62dfd0d9d1d2aa887a224b5b5adf1dcce15615f13aa4f861bd5a.webp",
                 "mime": "image/webp",
                 "size": 113140,
                 "dimensions": {
@@ -2237,8 +2588,12 @@
                   "right": 728,
                   "bottom": 410
                 },
-                "path": "/launcher-art/1108937a98ad62dfd0d9d1d2aa887a224b5b5adf1dcce15615f13aa4f861bd5a.webp",
-                "url": "https://pengo.gg/dist/launcher-art/1108937a98ad62dfd0d9d1d2aa887a224b5b5adf1dcce15615f13aa4f861bd5a.webp"
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
               },
               "variants": []
             }

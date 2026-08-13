@@ -285,7 +285,10 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("[entry.GameId]", checkInOperation, StringComparison.Ordinal);
         Assert.DoesNotContain("[\"gi\", \"hsr\", \"zzz\"]", checkInOperation, StringComparison.Ordinal);
         Assert.DoesNotContain("[\"ae\"]", checkInOperation, StringComparison.Ordinal);
-        Assert.Contains("entry.SupportsDailyCheckIn", page, StringComparison.Ordinal);
+        Assert.Contains(
+            "var dailySupported = PublisherAccountCatalog.Get(selected.Id).SupportsDailyCheckIn;",
+            page,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -573,6 +576,11 @@ public sealed class HoyoLiveSessionUiTests
         Assert.DoesNotContain("Use the official launcher for updates and pre-loads", xaml, StringComparison.Ordinal);
         Assert.Contains("HoyoLabAchievementSourceRadio.Visibility = selected.Id == \"hsr\"", page, StringComparison.Ordinal);
         Assert.Contains("AchievementSourceOptionsPanel.Visibility = selected.Id == \"hsr\"", page, StringComparison.Ordinal);
+        Assert.Contains("var sourceLocked = armed.PullsArmed || armed.AchievementsArmed", page, StringComparison.Ordinal);
+        Assert.Contains("GameAchievementSourceRadio.IsEnabled = achievementsSupported", page, StringComparison.Ordinal);
+        Assert.Contains("&& !sourceLocked", Slice(page, "GameAchievementSourceRadio.IsEnabled", "AchievementExportToggle.Height"), StringComparison.Ordinal);
+        Assert.Contains("HoyoLabAchievementSourceRadio.Visibility = selected.Id == \"hsr\" && !armed.PullsArmed", page, StringComparison.Ordinal);
+        Assert.Contains("if (existing.PullsArmed || existing.AchievementsArmed)", page, StringComparison.Ordinal);
         Assert.Contains("var pullsOffered = selected.Id is \"gi\" or \"hsr\" or \"zzz\" or \"wuwa\"", page, StringComparison.Ordinal);
         Assert.Contains("var achievementsOffered = selected.Id is \"gi\" or \"hsr\" or \"zzz\"", page, StringComparison.Ordinal);
         var achievementCard = Slice(xaml, "x:Name=\"AchievementExportCard\"", "x:Name=\"StableAchievementExportToggle\"");

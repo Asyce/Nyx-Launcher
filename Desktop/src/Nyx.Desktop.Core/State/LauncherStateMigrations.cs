@@ -545,7 +545,7 @@ public static class LauncherStateMigrations
 
     private static IReadOnlyList<string> NormalizeAutomaticDailyCheckInGames(string[]? values) =>
         Array.AsReadOnly((values ?? [])
-            .Where(static gameId => gameId is "gi" or "hsr" or "zzz")
+            .Where(static gameId => gameId is "ae" or "gi" or "hsr" or "zzz")
             .Distinct(StringComparer.Ordinal)
             .OrderBy(static gameId => gameId, StringComparer.Ordinal)
             .ToArray());

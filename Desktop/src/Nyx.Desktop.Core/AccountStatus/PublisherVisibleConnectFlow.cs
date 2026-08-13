@@ -22,7 +22,7 @@ public sealed record PublisherVisibleConnectPresentation(
     string? Guidance)
 {
     public static PublisherVisibleConnectPresentation ReadyToSignIn { get; } =
-        new(true, false, "Sign in on the official page, then choose Done.");
+        new(true, false, "Sign in on the official page. Nyx will finish automatically; choose Done if needed.");
 
     public static PublisherVisibleConnectPresentation NavigationFailed { get; } =
         new(

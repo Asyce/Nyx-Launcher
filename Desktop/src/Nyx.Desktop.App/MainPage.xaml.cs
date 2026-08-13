@@ -884,6 +884,7 @@ public sealed partial class MainPage : Page
 
         _ = DispatcherQueue.TryEnqueue(() =>
         {
+            StartLauncherVisualPreload(lease.CancellationToken);
             _ = RefreshHoyoMaintenanceAsync(lease, refreshSessions: false);
             if (WuWaMaintenanceInteractionPolicy.AllowsActivationRefresh(wuwaActionInFlight))
             {
@@ -954,6 +955,7 @@ public sealed partial class MainPage : Page
             await launcherBanners.RefreshOnReactivationAsync(lease.CancellationToken);
             launcherVisualRequestedGameId = null;
             RenderSelection();
+            StartLauncherVisualPreload(lease.CancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -4252,7 +4254,11 @@ public sealed partial class MainPage : Page
         {
             return;
         }
-        var achievementSource = GetAchievementSource(selected.Id);
+        var achievementSource = ReferenceEquals(sender, PullExportToggle)
+            && selected.Id == "hsr"
+            && PullExportToggle.IsChecked == true
+                ? AchievementExportSources.Game
+                : GetAchievementSource(selected.Id);
         var capability = ExportProviderCatalog.GetEnabled(
             selected.Id,
             launcherState.Snapshot.Preferences.FeatureFlags,
@@ -4360,7 +4366,7 @@ public sealed partial class MainPage : Page
                 CodesHeaderDivider.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
                 CombinedStatusPanel.VerticalAlignment = expanded
                     ? VerticalAlignment.Stretch
-                    : VerticalAlignment.Top;
+                    : VerticalAlignment.Bottom;
                 label = "Codes";
                 break;
             case "account":
@@ -4377,7 +4383,7 @@ public sealed partial class MainPage : Page
                 }
                 AccountAndToolsPanel.VerticalAlignment = expanded
                     ? VerticalAlignment.Stretch
-                    : VerticalAlignment.Top;
+                    : VerticalAlignment.Bottom;
                 label = "Account";
                 break;
             default:
@@ -4405,6 +4411,14 @@ public sealed partial class MainPage : Page
         }
 
         var source = AchievementExportSources.Normalize("hsr", requested);
+        var existing = launcherState.Snapshot.Export.Games.TryGetValue("hsr", out var configuredArming)
+            ? configuredArming
+            : new Nyx.Desktop.Core.State.ExportGameArming();
+        if (existing.PullsArmed || existing.AchievementsArmed)
+        {
+            RenderSelection();
+            return;
+        }
         var saved = launcherState.TryUpdate(state =>
         {
             var games = state.Export.Games.ToDictionary(
@@ -4416,9 +4430,6 @@ public sealed partial class MainPage : Page
                 : new Nyx.Desktop.Core.State.ExportGameArming();
             games["hsr"] = current with
             {
-                // Changing source is a deliberate mode switch. Do not leave a
-                // hidden next-launch capture armed from the other mode.
-                AchievementsArmed = false,
                 AchievementSource = source,
             };
             return state with { Export = state.Export with { Games = games } };
@@ -4963,7 +4974,7 @@ public sealed partial class MainPage : Page
         CombinedStatusPanel.Margin = new Thickness(0, 8, 0, 0);
         CombinedStatusPanel.Padding = new Thickness(16, 10, 12, 10);
         CombinedStatusPanel.VerticalAlignment = SignalPanel.Visibility is Visibility.Collapsed
-            ? VerticalAlignment.Top
+            ? VerticalAlignment.Bottom
             : VerticalAlignment.Stretch;
         CombinedStatusPanel.CornerRadius = new CornerRadius(10);
         CombinedBannerColumn.Width = new GridLength(1, GridUnitType.Star);
@@ -5150,6 +5161,7 @@ public sealed partial class MainPage : Page
         {
             LaunchResourceMetricsPanel.Visibility = Visibility.Collapsed;
             AccountAndToolsIdentityText.Visibility = Visibility.Collapsed;
+            OnLaunchPanel.Visibility = Visibility.Collapsed;
             Fps120Toggle.Visibility = Visibility.Collapsed;
             StableOpenScreenshotFolderButton.IsEnabled = false;
             return;
@@ -5205,8 +5217,7 @@ public sealed partial class MainPage : Page
             StableOpenScreenshotFolderButton,
             $"Open {selected.DisplayName} screenshot folder");
 
-        var dailySupported = selected.Id is "gi" or "hsr" or "zzz"
-            && PublisherAccountCatalog.Get(selected.Id).SupportsDailyCheckIn;
+        var dailySupported = PublisherAccountCatalog.Get(selected.Id).SupportsDailyCheckIn;
         AutomaticDailyCheckInToggle.Visibility = dailySupported
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -5214,6 +5225,10 @@ public sealed partial class MainPage : Page
             && launcherState.Snapshot.Preferences.AutomaticDailyCheckInGames.Contains(
                 selected.Id,
                 StringComparer.Ordinal);
+        OnLaunchPanel.Visibility = selected.Id != "wuwa"
+            && (dailySupported || selected.Id is "gi" or "hsr")
+                ? Visibility.Visible
+                : Visibility.Collapsed;
 
         if (selected.Id == "wuwa")
         {
@@ -5509,9 +5524,8 @@ public sealed partial class MainPage : Page
             if (preloadedLauncherVisuals.TryGetValue(gameId, out var preloaded))
             {
                 ApplyLauncherVisual(preloaded, generation);
-                return;
             }
-            if (launcherVisuals.TryLoadLastGood(gameId) is { } cached)
+            else if (launcherVisuals.TryLoadLastGood(gameId) is { } cached)
             {
                 preloadedLauncherVisuals[gameId] = cached;
                 ApplyLauncherVisual(cached, generation);
@@ -5813,6 +5827,10 @@ public sealed partial class MainPage : Page
         var achievementSource = AchievementExportSources.Normalize(
             selected.Id,
             armed.AchievementSource);
+        if (selected.Id == "hsr" && armed.PullsArmed)
+        {
+            achievementSource = AchievementExportSources.Game;
+        }
         var capability = ExportProviderCatalog.GetEnabled(
             selected.Id,
             launcherState.Snapshot.Preferences.FeatureFlags,
@@ -5830,6 +5848,7 @@ public sealed partial class MainPage : Page
             && !exports.GetSnapshot(activeJobId).IsFinished;
         var hasHoyoLabExportPreparation = selected.Id == "hsr"
             && hoyoLabExportReservation.IsHeld;
+        var sourceLocked = armed.PullsArmed || armed.AchievementsArmed;
         PullExportToggle.IsChecked = pullsAvailable && armed.PullsArmed;
         AchievementExportToggle.IsChecked = !usesHoyoLab
             && achievementsAvailable
@@ -5848,6 +5867,7 @@ public sealed partial class MainPage : Page
             ? Visibility.Visible
             : Visibility.Collapsed;
         AchievementSourceButton.IsEnabled = selected.Id == "hsr"
+            && !sourceLocked
             && !gameActionsInFlight.Contains(selected.Id)
             && !hasHoyoLabExportPreparation
             && !hasActiveJob;
@@ -5868,14 +5888,17 @@ public sealed partial class MainPage : Page
         Grid.SetColumn(GameAchievementSourceRadio, 1);
         Grid.SetColumn(HoyoLabAchievementSourceRadio, 2);
         Grid.SetColumnSpan(HoyoLabAchievementSourceRadio, 1);
-        HoyoLabAchievementSourceRadio.Visibility = selected.Id == "hsr"
+        HoyoLabAchievementSourceRadio.Visibility = selected.Id == "hsr" && !armed.PullsArmed
             ? Visibility.Visible
             : Visibility.Collapsed;
         GameAchievementSourceRadio.IsEnabled = achievementsSupported
+            && !sourceLocked
             && !gameActionsInFlight.Contains(selected.Id)
             && !hasHoyoLabExportPreparation
             && !hasActiveJob;
-        HoyoLabAchievementSourceRadio.IsEnabled = selected.Id == "hsr" && AchievementSourceButton.IsEnabled;
+        HoyoLabAchievementSourceRadio.IsEnabled = selected.Id == "hsr"
+            && !sourceLocked
+            && AchievementSourceButton.IsEnabled;
         AchievementExportToggle.Height = selected.Id == "hsr" ? 28 : 34;
         AchievementExportToggle.MinHeight = selected.Id == "hsr" ? 28 : 34;
         AchievementExportLabel.Text = usesHoyoLab ? "Export now" : "Achievements";
@@ -6112,7 +6135,6 @@ public sealed partial class MainPage : Page
 
         CurrentBannerSection.Visibility = hasCurrent ? Visibility.Visible : Visibility.Collapsed;
         UpcomingBannerList.Visibility = hasUpcoming ? Visibility.Visible : Visibility.Collapsed;
-        UpcomingPhaseDivider.Visibility = hasUpcoming ? Visibility.Visible : Visibility.Collapsed;
         BannerCollectionList.Visibility = Visibility.Collapsed;
         CurrentBannerColumn.Width = hasCurrent
             ? new GridLength(1, GridUnitType.Star)
@@ -6180,26 +6202,21 @@ public sealed partial class MainPage : Page
             .Take(2)
             .Select((phase, index) =>
             {
-                var displayedCharacters = phase.Characters.Take(2).ToArray();
+                var orderedCharacters = OrderBannerCharacters(phase.Characters).ToArray();
+                var displayedCharacters = orderedCharacters.Length <= 2
+                    ? orderedCharacters.Select(CreateUpcomingBannerCharacter).ToArray()
+                    :
+                    [
+                        CreateUpcomingBannerCharacter(orderedCharacters[0]),
+                        UpcomingBannerCharacterItem.CreateOverflow(
+                            orderedCharacters.Skip(1).Select(CreateBannerPortrait).ToArray()),
+                    ];
                 return new UpcomingBannerGroupItem(
                     phase.Announced ? $"announced:{index}" : phase.Start!.Value.ToUniversalTime().ToString("O"),
                     phase.Announced
                         ? "ANNOUNCED"
                         : $"Starts in {BannerTimingFormatter.FormatRemaining(phase.Start!.Value - now)}",
-                    displayedCharacters.Select(character =>
-                    {
-                        var portraitPath = character.Icon is null
-                            ? null
-                            : launcherBanners.TryResolveManagedAsset(character.Icon);
-                        portraitPath ??= character.Variants
-                            .Select(launcherBanners.TryResolveManagedAsset)
-                            .FirstOrDefault(path => path is not null);
-                        return new UpcomingBannerCharacterItem(
-                            character.Id,
-                            character.Name,
-                            ResolveImageSource(portraitPath),
-                            character.CharacterUrl);
-                    }).ToArray());
+                    displayedCharacters);
             })
             .ToArray();
 
@@ -6402,69 +6419,56 @@ public sealed partial class MainPage : Page
             return;
         }
 
-        var characters = current.Characters
-            .OrderBy(character => string.Equals(
-                character.Id,
-                current.SelectedCharacterId,
-                StringComparison.Ordinal)
-                    ? 0
-                    : 1)
-            .Take(MaximumDisplayedBannerRows)
-            .ToArray();
+        var characters = OrderBannerCharacters(current.Characters, current.SelectedCharacterId).ToArray();
         var timing = FormatCurrentBannerTiming(current, now);
-        for (var index = 0; index < characters.Length; index++)
+        var phaseStableKey = current.Start.ToUniversalTime().ToString("O");
+        BannerCharacterRows.Clear();
+        var namedCount = characters.Length <= MaximumDisplayedBannerRows
+            ? characters.Length
+            : MaximumDisplayedBannerRows - 1;
+        foreach (var character in characters.Take(namedCount))
         {
-            var character = characters[index];
-            var portraitPath = character.Icon is null
-                ? null
-                : launcherBanners.TryResolveManagedAsset(character.Icon);
-            portraitPath ??= character.Variants
-                .Select(launcherBanners.TryResolveManagedAsset)
-                .FirstOrDefault(path => path is not null);
-            var portrait = ResolveImageSource(portraitPath);
-            const bool isActive = true;
-            var isPinned = false;
-            var phaseStableKey = current.Start.ToUniversalTime().ToString("O");
-            var existing = index < BannerCharacterRows.Count ? BannerCharacterRows[index] : null;
-            if (existing is null
-                || !string.Equals(existing.CharacterId, character.Id, StringComparison.Ordinal)
-                || !string.Equals(existing.PhaseStableKey, phaseStableKey, StringComparison.Ordinal)
-                || !Equals(existing.CharacterUrl, character.CharacterUrl))
-            {
-                if (index < BannerCharacterRows.Count)
-                {
-                    BannerCharacterRows[index] = new BannerCharacterRowItem(
-                        character,
-                        phaseStableKey,
-                        portrait,
-                        timing,
-                        isActive,
-                        isPinned,
-                        100);
-                }
-                else
-                {
-                    BannerCharacterRows.Add(new BannerCharacterRowItem(
-                        character,
-                        phaseStableKey,
-                        portrait,
-                        timing,
-                        isActive,
-                        isPinned,
-                        100));
-                }
-            }
-            else
-            {
-                existing.Update(portrait, timing, isActive, isPinned, 100);
-            }
+            BannerCharacterRows.Add(new BannerCharacterRowItem(
+                character,
+                phaseStableKey,
+                ResolveBannerPortrait(character),
+                timing,
+                true,
+                false,
+                100));
         }
 
-        while (BannerCharacterRows.Count > characters.Length)
+        if (characters.Length > MaximumDisplayedBannerRows)
         {
-            BannerCharacterRows.RemoveAt(BannerCharacterRows.Count - 1);
+            BannerCharacterRows.Add(BannerCharacterRowItem.CreateOverflow(
+                phaseStableKey,
+                timing,
+                characters.Skip(namedCount).Select(CreateBannerPortrait).ToArray()));
         }
     }
+
+    private static IOrderedEnumerable<LauncherBannersCharacter> OrderBannerCharacters(
+        IEnumerable<LauncherBannersCharacter> characters,
+        string? selectedCharacterId = null) =>
+        characters
+            .OrderBy(character => string.Equals(character.Id, selectedCharacterId, StringComparison.Ordinal) ? 0 : 1)
+            .ThenByDescending(character => character.Debut ?? DateTimeOffset.MinValue)
+            .ThenBy(character => character.Name, StringComparer.Ordinal);
+
+    private ImageSource? ResolveBannerPortrait(LauncherBannersCharacter character)
+    {
+        var path = character.Icon is null ? null : launcherBanners.TryResolveManagedAsset(character.Icon);
+        path ??= character.Variants
+            .Select(launcherBanners.TryResolveManagedAsset)
+            .FirstOrDefault(static candidate => candidate is not null);
+        return ResolveImageSource(path);
+    }
+
+    private BannerPortraitItem CreateBannerPortrait(LauncherBannersCharacter character) =>
+        new(character.Name, ResolveBannerPortrait(character));
+
+    private UpcomingBannerCharacterItem CreateUpcomingBannerCharacter(LauncherBannersCharacter character) =>
+        new(character.Id, character.Name, ResolveBannerPortrait(character), character.CharacterUrl);
 
     private void RenderGenshin()
     {
@@ -7198,18 +7202,32 @@ public sealed partial class MainPage : Page
     }
 }
 
+public sealed record BannerPortraitItem(string Name, ImageSource? PortraitSource);
+
 public sealed record UpcomingBannerCharacterItem(
     string SourceCharacterId,
     string Name,
     ImageSource? PortraitSource,
-    Uri? CharacterUrl)
+    Uri? CharacterUrl,
+    IReadOnlyList<BannerPortraitItem>? OverflowPortraits = null)
 {
     public UpcomingBannerCharacterItem(string sourceCharacterId, string name, ImageSource? portraitSource)
         : this(sourceCharacterId, name, portraitSource, null)
     {
     }
 
-    public bool CanOpen => CharacterUrl is not null;
+    public static UpcomingBannerCharacterItem CreateOverflow(IReadOnlyList<BannerPortraitItem> portraits) =>
+        new(
+            $"overflow:{string.Join('|', portraits.Select(static portrait => portrait.Name))}",
+            string.Join(", ", portraits.Select(static portrait => portrait.Name)),
+            null,
+            null,
+            portraits);
+
+    public bool IsOverflow => OverflowPortraits is { Count: > 0 };
+    public Visibility PrimaryVisibility => IsOverflow ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility OverflowVisibility => IsOverflow ? Visibility.Visible : Visibility.Collapsed;
+    public bool CanOpen => !IsOverflow && CharacterUrl is not null;
     public double DisplayFontSize => Name.Length > 18 ? 12 : Name.Length > 14 ? 13.5 : 15;
     public string AccessibilityName => CanOpen
         ? $"Open Pengo page for {Name}"
@@ -7273,7 +7291,8 @@ public sealed class UpcomingBannerGroupItem : INotifyPropertyChanged
             string.Equals(pair.First.SourceCharacterId, pair.Second.SourceCharacterId, StringComparison.Ordinal)
             && string.Equals(pair.First.Name, pair.Second.Name, StringComparison.Ordinal)
             && Equals(pair.First.PortraitSource, pair.Second.PortraitSource)
-            && Equals(pair.First.CharacterUrl, pair.Second.CharacterUrl));
+            && Equals(pair.First.CharacterUrl, pair.Second.CharacterUrl)
+            && (pair.First.OverflowPortraits ?? []).SequenceEqual(pair.Second.OverflowPortraits ?? []));
 
     public void UpdateTiming(string timing)
     {
@@ -7299,8 +7318,29 @@ public sealed class BannerCharacterRowItem : INotifyPropertyChanged
         Name = character.Name;
         CharacterUrl = character.CharacterUrl;
         Detail = timing;
+        OverflowPortraits = [];
         Update(portraitSource, timing, isActive, isPinned, progress);
     }
+
+    private BannerCharacterRowItem(
+        string phaseStableKey,
+        string timing,
+        IReadOnlyList<BannerPortraitItem> overflowPortraits)
+    {
+        CharacterId = $"overflow:{string.Join('|', overflowPortraits.Select(static portrait => portrait.Name))}";
+        PhaseStableKey = phaseStableKey;
+        Name = string.Join(", ", overflowPortraits.Select(static portrait => portrait.Name));
+        Detail = timing;
+        IsActive = true;
+        Progress = 100;
+        OverflowPortraits = overflowPortraits;
+    }
+
+    public static BannerCharacterRowItem CreateOverflow(
+        string phaseStableKey,
+        string timing,
+        IReadOnlyList<BannerPortraitItem> portraits) =>
+        new(phaseStableKey, timing, portraits);
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -7309,6 +7349,14 @@ public sealed class BannerCharacterRowItem : INotifyPropertyChanged
     public string PhaseStableKey { get; }
 
     public string Name { get; }
+
+    public IReadOnlyList<BannerPortraitItem> OverflowPortraits { get; }
+
+    public bool IsOverflow => OverflowPortraits.Count > 0;
+
+    public Visibility PrimaryVisibility => IsOverflow ? Visibility.Collapsed : Visibility.Visible;
+
+    public Visibility OverflowVisibility => IsOverflow ? Visibility.Visible : Visibility.Collapsed;
 
     public double DisplayFontSize => Name.Length > 18 ? 12 : Name.Length > 14 ? 13.5 : 15;
 

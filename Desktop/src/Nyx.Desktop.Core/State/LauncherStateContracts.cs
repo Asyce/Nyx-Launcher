@@ -122,7 +122,7 @@ public sealed record LauncherGlobalPreferences
     {
         Hsr120FpsOnLaunch = true,
         Genshin120FpsOnLaunch = true,
-        AutomaticDailyCheckInGames = Array.AsReadOnly(["gi", "hsr", "zzz"]),
+        AutomaticDailyCheckInGames = Array.AsReadOnly(["ae", "gi", "hsr", "zzz"]),
     };
 }
 

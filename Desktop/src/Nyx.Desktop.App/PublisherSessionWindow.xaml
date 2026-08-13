@@ -45,8 +45,7 @@
                 VerticalAlignment="Center"
                 FontFamily="{StaticResource NyxBodyFont}"
                 FontSize="12"
-                Foreground="#FFC9C1D9"
-                Text="The official page and WebView2 handle sign-in directly. Nyx does not inspect sign-in request contents or log credentials." />
+                Foreground="#FFC9C1D9" />
             <Button
                 x:Name="RetryButton"
                 Grid.Column="1"

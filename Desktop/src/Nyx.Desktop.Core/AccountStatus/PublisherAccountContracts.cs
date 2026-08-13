@@ -92,7 +92,7 @@ public sealed record PublisherAccountCatalogEntry(
 
 public sealed record PublisherEndfieldAccountIdentity(string Uid, string Region)
 {
-    public string DisplayText => $"{Uid} · {Region}";
+    public string DisplayText => string.IsNullOrEmpty(Uid) ? Region : $"{Uid} · {Region}";
 
     public override string ToString() => nameof(PublisherEndfieldAccountIdentity);
 }
@@ -103,40 +103,88 @@ public sealed record PublisherEndfieldAccountReviewResult(
 
 public static class PublisherEndfieldAccountIdentityParser
 {
-    public const int MaximumPayloadCharacters = 256;
+    public static bool TryCreateRegionOnly(
+        string? region,
+        out PublisherEndfieldAccountIdentity? identity)
+    {
+        identity = region switch
+        {
+            "Asia" or "Americas / Europe" => new(string.Empty, region),
+            _ => null,
+        };
+        return identity is not null;
+    }
 
-    public static bool TryParse(string raw, out PublisherEndfieldAccountIdentity? identity)
+    public static bool TryParseBindingResponse(
+        ReadOnlyMemory<byte> utf8Json,
+        out PublisherEndfieldAccountIdentity? identity)
     {
         identity = null;
-        if (string.IsNullOrEmpty(raw) || raw.Length > MaximumPayloadCharacters)
+        if (utf8Json.IsEmpty || utf8Json.Length > PublisherAccountCatalog.MaximumResourceResponseBytes)
             return false;
         try
         {
-            using var document = JsonDocument.Parse(raw, new JsonDocumentOptions
+            using var document = JsonDocument.Parse(utf8Json, new JsonDocumentOptions
             {
                 AllowTrailingCommas = false,
                 CommentHandling = JsonCommentHandling.Disallow,
-                MaxDepth = 3,
+                MaxDepth = 10,
             });
             var root = document.RootElement;
-            if (!HasExactProperties(root, "state", "identity")
-                || !root.TryGetProperty("state", out var stateProperty)
-                || stateProperty.ValueKind != JsonValueKind.String
-                || !root.TryGetProperty("identity", out var identityProperty))
+            if (!TryGetUniqueProperty(root, "code", out var codeProperty)
+                || codeProperty.ValueKind != JsonValueKind.Number
+                || !codeProperty.TryGetInt32(out var code)
+                || code != 0
+                || !TryGetUniqueProperty(root, "data", out var data)
+                || data.ValueKind != JsonValueKind.Object)
                 return false;
-            var state = stateProperty.GetString();
-            if (state != "done")
-                return state is "login" or "no-binding" or "invalid" or "timed-out" or "canceled"
-                    && identityProperty.ValueKind == JsonValueKind.Null;
-            if (!HasExactProperties(identityProperty, "uid", "region")
-                || !TryGetString(identityProperty, "uid", out var uid)
-                || !TryGetString(identityProperty, "region", out var region)
-                || uid.Length is <= 0 or > 20
-                || !uid.All(char.IsAsciiDigit)
-                || !IsAsciiIdentifier(region, 32))
+
+            PublisherEndfieldAccountIdentity? resolved = null;
+            var found = false;
+            if (!TryGetServerDefaultRole(data, out var preferredUid, out var preferredRoleId))
                 return false;
-            identity = new(uid, region);
-            return true;
+            if (!TryGetOptionalUniqueProperty(data, "list", out var games, out var hasGames))
+                return false;
+            if (hasGames)
+            {
+                if (games.ValueKind != JsonValueKind.Array
+                    || games.GetArrayLength() is < 1 or > 8)
+                    return false;
+                var matches = games.EnumerateArray()
+                    .Where(static game => game.ValueKind == JsonValueKind.Object
+                        && TryGetUniqueString(game, "appCode", out var appCode)
+                        && appCode == "endfield")
+                    .ToArray();
+                if (matches.Length != 1
+                    || !TryParseGameEntry(matches[0], preferredUid, preferredRoleId, out resolved))
+                    return false;
+                found = true;
+            }
+
+            if (!TryGetOptionalUniqueProperty(data, "gameMap", out var gameMap, out var hasGameMap))
+                return false;
+            if (hasGameMap)
+            {
+                if (gameMap.ValueKind != JsonValueKind.Object)
+                    return false;
+                if (!TryGetOptionalUniqueProperty(
+                        gameMap,
+                        "endfield",
+                        out var endfield,
+                        out var hasEndfield))
+                    return false;
+                if (hasEndfield)
+                {
+                    if (!TryParseGameEntry(endfield, preferredUid, preferredRoleId, out var mapped)
+                        || (resolved is not null && resolved != mapped))
+                        return false;
+                    resolved = mapped;
+                    found = true;
+                }
+            }
+
+            identity = resolved;
+            return found && identity is not null;
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException)
         {
@@ -144,23 +192,175 @@ public static class PublisherEndfieldAccountIdentityParser
         }
     }
 
-    private static bool HasExactProperties(JsonElement element, params string[] expected)
+    private static bool TryParseGameEntry(
+        JsonElement game,
+        string? preferredUid,
+        string? preferredRoleId,
+        out PublisherEndfieldAccountIdentity? identity)
     {
-        if (element.ValueKind != JsonValueKind.Object) return false;
-        var names = new HashSet<string>(expected, StringComparer.Ordinal);
-        var count = 0;
-        foreach (var property in element.EnumerateObject())
+        identity = null;
+        if (game.ValueKind != JsonValueKind.Object
+            || !TryGetUniqueProperty(game, "bindingList", out var bindingsProperty)
+            || bindingsProperty.ValueKind != JsonValueKind.Array
+            || bindingsProperty.GetArrayLength() is < 1 or > 8)
+            return false;
+        var bindings = bindingsProperty.EnumerateArray().ToArray();
+        var selected = default(JsonElement);
+        if (preferredUid is not null)
         {
-            count++;
-            if (!names.Remove(property.Name)) return false;
+            var preferredBindings = bindings.Where(binding =>
+                binding.ValueKind == JsonValueKind.Object
+                && TryGetUniqueString(binding, "uid", out var uid)
+                && uid == preferredUid).ToArray();
+            if (preferredBindings.Length != 1) return false;
+            selected = preferredBindings[0];
         }
-        return count == expected.Length && names.Count == 0;
+        if (selected.ValueKind == JsonValueKind.Undefined)
+        {
+            selected = bindings[0];
+            if (!HasTrue(selected, "isDefault"))
+            {
+                selected = bindings.FirstOrDefault(static binding => HasTrue(binding, "isDefault"));
+                if (selected.ValueKind == JsonValueKind.Undefined)
+                    selected = bindings.FirstOrDefault(static binding => HasTrue(binding, "isOfficial"));
+                if (selected.ValueKind == JsonValueKind.Undefined)
+                    selected = bindings.FirstOrDefault(HasBoundedRoles);
+            }
+        }
+        if (!HasBoundedRoles(selected)
+            || !TryGetUniqueProperty(selected, "roles", out var roles))
+            return false;
+        JsonElement selectedRole;
+        if (preferredRoleId is not null)
+        {
+            var preferredRoles = roles.EnumerateArray().Where(role =>
+                role.ValueKind == JsonValueKind.Object
+                && TryGetUniqueString(role, "roleId", out var roleId)
+                && roleId == preferredRoleId).ToArray();
+            if (preferredRoles.Length != 1) return false;
+            selectedRole = preferredRoles[0];
+        }
+        else if (!TryGetUniqueProperty(selected, "defaultRole", out selectedRole)
+            || selectedRole.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+        if (!TryGetUniqueString(selectedRole, "roleId", out var roleId)
+            || !TryGetUniqueString(selectedRole, "serverId", out var serverId)
+            || roleId.Length is <= 0 or > 20
+            || !roleId.All(char.IsAsciiDigit)
+            || !IsAsciiIdentifier(serverId, 32))
+            return false;
+        var matchingRoles = roles.EnumerateArray().Count(role =>
+            role.ValueKind == JsonValueKind.Object
+            && TryGetUniqueString(role, "roleId", out var candidateRoleId)
+            && TryGetUniqueString(role, "serverId", out var candidateServerId)
+            && candidateRoleId == roleId
+            && candidateServerId == serverId);
+        if (matchingRoles != 1) return false;
+        identity = new(roleId, serverId);
+        return true;
     }
 
-    private static bool TryGetString(JsonElement element, string name, out string value)
+    private static bool TryGetServerDefaultRole(
+        JsonElement data,
+        out string? preferredUid,
+        out string? preferredRoleId)
+    {
+        preferredUid = null;
+        preferredRoleId = null;
+        if (!TryGetOptionalUniqueProperty(
+                data,
+                "serverDefaultBinding",
+                out var defaults,
+                out var hasDefaults))
+            return false;
+        if (!hasDefaults)
+            return true;
+        JsonElement endfieldDefault = default;
+        if (defaults.ValueKind == JsonValueKind.Object)
+        {
+            if (!TryGetOptionalUniqueProperty(
+                    defaults,
+                    "3",
+                    out endfieldDefault,
+                    out _))
+                return false;
+        }
+        else if (defaults.ValueKind == JsonValueKind.Array)
+        {
+            if (defaults.GetArrayLength() > 8) return false;
+            if (defaults.GetArrayLength() > 3) endfieldDefault = defaults[3];
+        }
+        else
+            return false;
+        if (endfieldDefault.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+            return true;
+        if (endfieldDefault.ValueKind != JsonValueKind.Object
+            || !TryGetUniqueString(endfieldDefault, "uid", out var uid)
+            || !TryGetUniqueString(endfieldDefault, "roleId", out var roleId)
+            || uid.Length > 64
+            || !uid.All(static character => char.IsAsciiLetterOrDigit(character)
+                || character is '-' or '_')
+            || roleId.Length > 20
+            || !roleId.All(char.IsAsciiDigit))
+            return false;
+        preferredUid = uid;
+        preferredRoleId = roleId;
+        return true;
+    }
+
+    private static bool HasBoundedRoles(JsonElement binding) =>
+        binding.ValueKind == JsonValueKind.Object
+        && TryGetUniqueProperty(binding, "roles", out var roles)
+        && roles.ValueKind == JsonValueKind.Array
+        && roles.GetArrayLength() is > 0 and <= 8;
+
+    private static bool HasTrue(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object
+        && TryGetUniqueProperty(element, name, out var property)
+        && property.ValueKind == JsonValueKind.True;
+
+    private static bool TryGetUniqueProperty(
+        JsonElement parent,
+        string propertyName,
+        out JsonElement value)
+    {
+        value = default;
+        if (parent.ValueKind != JsonValueKind.Object) return false;
+        var count = 0;
+        foreach (var property in parent.EnumerateObject())
+        {
+            if (!property.NameEquals(propertyName)) continue;
+            if (++count > 1) return false;
+            value = property.Value;
+        }
+        return count == 1;
+    }
+
+    private static bool TryGetOptionalUniqueProperty(
+        JsonElement parent,
+        string propertyName,
+        out JsonElement value,
+        out bool present)
+    {
+        value = default;
+        present = false;
+        if (parent.ValueKind != JsonValueKind.Object) return false;
+        foreach (var property in parent.EnumerateObject())
+        {
+            if (!property.NameEquals(propertyName)) continue;
+            if (present) return false;
+            present = true;
+            value = property.Value;
+        }
+        return true;
+    }
+
+    private static bool TryGetUniqueString(JsonElement element, string name, out string value)
     {
         value = string.Empty;
-        if (!element.TryGetProperty(name, out var property)
+        if (!TryGetUniqueProperty(element, name, out var property)
             || property.ValueKind != JsonValueKind.String)
             return false;
         value = property.GetString() ?? string.Empty;
@@ -1552,7 +1752,7 @@ public static class PublisherAccountCatalog
                 ["ae"] = new("ae", "SKPORT",
                     new Uri("https://game.skport.com/endfield/sign-in"),
                     new Uri("https://game.skport.com/endfield/game-data?header=0"),
-                    "Sanity", false, false),
+                    "Sanity", true, false),
             });
 
     public static IReadOnlyCollection<PublisherAccountCatalogEntry> All => Entries.Values.ToArray();
@@ -1601,7 +1801,26 @@ public static class PublisherAccountCatalog
             ? contract
             : throw new ArgumentOutOfRangeException(nameof(gameId));
 
-    public static Uri GetEndfieldAccountIdentityUri() => EndfieldAccountIdentityUri;
+    public static bool IsExactEndfieldAccountIdentityRequest(Uri uri, string method)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        if (method != "GET"
+            || !uri.IsAbsoluteUri
+            || !string.IsNullOrEmpty(uri.UserInfo)
+            || !uri.IsDefaultPort
+            || !string.IsNullOrEmpty(uri.Fragment)
+            || !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(uri.Host, EndfieldAccountIdentityUri.Host, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(uri.AbsolutePath, EndfieldAccountIdentityUri.AbsolutePath, StringComparison.Ordinal))
+            return false;
+        var query = ParseBoundedQuery(uri.Query, "uid");
+        return query is not null
+            && query.Count == 1
+            && query.TryGetValue("uid", out var uid)
+            && uid.Length is > 0 and <= 64
+            && uid.All(static character => char.IsAsciiLetterOrDigit(character)
+                || character is '-' or '_');
+    }
 
     public static Uri GetCheckInClaimRequestUri(string gameId) =>
         CheckInResponseEndpoints.TryGetValue(gameId, out var endpoint)
@@ -1974,10 +2193,7 @@ public static class PublisherAccountCatalog
             && IsExactCheckInResponseUri(gameId, uri, method))
             return claimWriteAuthority?.TryConsume(gameId) == true;
 
-        if (string.Equals(uri.Host, EndfieldAccountIdentityUri.Host, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(uri.AbsolutePath, EndfieldAccountIdentityUri.AbsolutePath, StringComparison.Ordinal)
-            && string.IsNullOrEmpty(uri.Query)
-            && method == "GET")
+        if (IsExactEndfieldAccountIdentityRequest(uri, method))
             return true;
 
         if (IsReviewedSkportBindingListRequest(uri, method))

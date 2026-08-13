@@ -24,18 +24,87 @@ public sealed class PublisherAccountHardeningTests
     }
 
     [Fact]
-    public void Endfield_identity_parser_accepts_only_the_exact_bounded_projection()
+    public void Endfield_identity_parser_accepts_a_bounded_official_response()
     {
-        Assert.True(PublisherEndfieldAccountIdentityParser.TryParse(
-            """{"state":"done","identity":{"uid":"123456789","region":"prod-eu"}}""",
+        Assert.True(PublisherEndfieldAccountIdentityParser.TryParseBindingResponse(
+            Encoding.UTF8.GetBytes(
+                """{"code":0,"data":{"list":[{"appCode":"endfield","bindingList":[{"isDefault":true,"roles":[{"roleId":"123456789","serverId":"prod-eu"}],"defaultRole":{"roleId":"123456789","serverId":"prod-eu"}}]}]}}"""),
             out var identity));
         Assert.NotNull(identity);
         Assert.Equal("123456789 · prod-eu", identity.DisplayText);
 
-        Assert.True(PublisherEndfieldAccountIdentityParser.TryParse(
-            """{"state":"login","identity":null}""",
+        Assert.False(PublisherEndfieldAccountIdentityParser.TryParseBindingResponse(
+            Encoding.UTF8.GetBytes("""{"state":"login","identity":null}"""),
             out var loginIdentity));
         Assert.Null(loginIdentity);
+    }
+
+    [Fact]
+    public void Endfield_identity_parser_accepts_the_current_official_binding_shapes()
+    {
+        var list = Encoding.UTF8.GetBytes(
+            """{"code":0,"data":{"serverDefaultBinding":{"3":{"uid":"game-1","roleId":"123456789"}},"list":[{"appCode":"endfield","bindingList":[{"uid":"game-1","roles":[{"roleId":"123456789","serverId":"3"}]}]}]}}""");
+        var gameMap = Encoding.UTF8.GetBytes(
+            """{"code":0,"data":{"gameMap":{"endfield":{"bindingList":[{"isOfficial":true,"roles":[{"roleId":"987654321","serverId":"prod-eu"}],"defaultRole":{"roleId":"987654321","serverId":"prod-eu"}}]}}}}""");
+
+        Assert.True(PublisherEndfieldAccountIdentityParser.TryParseBindingResponse(list, out var fromList));
+        Assert.Equal(new PublisherEndfieldAccountIdentity("123456789", "3"), fromList);
+        Assert.True(PublisherEndfieldAccountIdentityParser.TryParseBindingResponse(gameMap, out var fromMap));
+        Assert.Equal(new PublisherEndfieldAccountIdentity("987654321", "prod-eu"), fromMap);
+    }
+
+    [Theory]
+    [InlineData("Asia", true)]
+    [InlineData("Americas / Europe", true)]
+    [InlineData("Europe", false)]
+    [InlineData(" Americas / Europe ", false)]
+    [InlineData("", false)]
+    public void Endfield_region_only_fallback_accepts_only_the_two_official_regions(
+        string region,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            PublisherEndfieldAccountIdentityParser.TryCreateRegionOnly(region, out var identity));
+        if (expected)
+        {
+            Assert.NotNull(identity);
+            Assert.Empty(identity.Uid);
+            Assert.Equal(region, identity.DisplayText);
+        }
+        else
+        {
+            Assert.Null(identity);
+        }
+    }
+
+    [Theory]
+    [InlineData("{\"code\":0,\"data\":{\"list\":[]}}")]
+    [InlineData("{\"code\":0,\"data\":{\"list\":[{\"appCode\":\"endfield\",\"bindingList\":[{\"isDefault\":true,\"roles\":[{\"roleId\":\"123\",\"serverId\":\"3\"}],\"defaultRole\":{\"roleId\":\"123\",\"serverId\":\"3\"}}]}],\"list\":[]}}")]
+    [InlineData("{\"code\":0,\"data\":{\"list\":[{\"appCode\":\"endfield\",\"bindingList\":[{\"isDefault\":true,\"roles\":[{\"roleId\":\"123\",\"serverId\":\"3\"}],\"defaultRole\":{\"roleId\":\"999\",\"serverId\":\"3\"}}]}]}}")]
+    [InlineData("{\"code\":0,\"data\":{\"list\":[{\"appCode\":\"endfield\",\"bindingList\":[{\"isDefault\":true,\"roles\":[{\"roleId\":\"123\",\"serverId\":\"3\"}],\"defaultRole\":{\"roleId\":\"123\",\"serverId\":\"3\"}}]}],\"gameMap\":{\"endfield\":{\"bindingList\":[{\"isDefault\":true,\"roles\":[{\"roleId\":\"456\",\"serverId\":\"3\"}],\"defaultRole\":{\"roleId\":\"456\",\"serverId\":\"3\"}}]}}}}")]
+    public void Endfield_identity_parser_rejects_incomplete_or_ambiguous_binding_data(string raw)
+    {
+        Assert.False(PublisherEndfieldAccountIdentityParser.TryParseBindingResponse(
+            Encoding.UTF8.GetBytes(raw),
+            out var identity));
+        Assert.Null(identity);
+    }
+
+    [Theory]
+    [InlineData("https://zonai.skport.com/api/v1/game/player/binding?uid=123456789", "GET", true)]
+    [InlineData("https://zonai.skport.com/api/v1/game/player/binding", "GET", false)]
+    [InlineData("https://zonai.skport.com/api/v1/game/player/binding?uid=123&extra=1", "GET", false)]
+    [InlineData("https://zonai.skport.com/api/v1/game/player/binding?uid=123456789", "POST", false)]
+    [InlineData("https://zonai.skport.com/api/v1/game/player/other?uid=123456789", "GET", false)]
+    public void Endfield_identity_capture_accepts_only_the_exact_official_request(
+        string rawUri,
+        string method,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            PublisherAccountCatalog.IsExactEndfieldAccountIdentityRequest(new Uri(rawUri), method));
     }
 
     [Theory]
@@ -50,16 +119,20 @@ public sealed class PublisherAccountHardeningTests
     [InlineData("{\"state\":\"future\",\"identity\":null}")]
     public void Endfield_identity_parser_rejects_ambiguous_unreviewed_or_unsafe_data(string raw)
     {
-        Assert.False(PublisherEndfieldAccountIdentityParser.TryParse(raw, out var identity));
+        Assert.False(PublisherEndfieldAccountIdentityParser.TryParseBindingResponse(
+            Encoding.UTF8.GetBytes(raw),
+            out var identity));
         Assert.Null(identity);
     }
 
     [Fact]
     public void Endfield_identity_parser_rejects_oversized_data_before_parsing()
     {
-        var raw = new string('x', PublisherEndfieldAccountIdentityParser.MaximumPayloadCharacters + 1);
+        var raw = Encoding.UTF8.GetBytes(new string(
+            'x',
+            PublisherAccountCatalog.MaximumResourceResponseBytes + 1));
 
-        Assert.False(PublisherEndfieldAccountIdentityParser.TryParse(raw, out var identity));
+        Assert.False(PublisherEndfieldAccountIdentityParser.TryParseBindingResponse(raw, out var identity));
         Assert.Null(identity);
     }
 
@@ -77,10 +150,26 @@ public sealed class PublisherAccountHardeningTests
             service,
             "public async Task<PublisherEndfieldAccountReviewResult> ReviewEndfieldAccountAsync",
             "private async Task<bool> ClearAllHoyoSavedPasswordsAsync");
-        var script = Slice(
+        var identityReview = Slice(
             browser,
-            "private static string BuildEndfieldAccountIdentityScript",
-            "private async Task AbortEndfieldAccountIdentityReviewAsync");
+            "private async Task<PublisherEndfieldAccountIdentity?> ReviewEndfieldAccountIdentityAsync",
+            "private async Task<PublisherEndfieldAccountIdentity?> TryReadEndfieldRegionAsync");
+        var regionReview = Slice(
+            browser,
+            "private async Task<PublisherEndfieldAccountIdentity?> TryReadEndfieldRegionAsync",
+            "public async Task<PublisherSessionProof> GetSessionProofAsync");
+        var doneHandler = Slice(
+            browser,
+            "private async void DoneButton_Click",
+            "private async void RetryButton_Click");
+        var responseHandler = Slice(
+            browser,
+            "private void Core_WebResourceResponseReceived",
+            "private static async Task CompleteSessionProbeAsync");
+        var identityCapture = Slice(
+            browser,
+            "private async Task CompleteEndfieldIdentityCaptureAsync",
+            "private static async Task CompleteCheckInCaptureAsync");
 
         Assert.True(
             connect.IndexOf("ReviewEndfieldAccountAsync(cancellationToken)", StringComparison.Ordinal)
@@ -95,25 +184,50 @@ public sealed class PublisherAccountHardeningTests
         Assert.DoesNotContain("ClearProviderState", review, StringComparison.Ordinal);
         Assert.DoesNotContain("roleBindings", review, StringComparison.Ordinal);
         Assert.DoesNotContain("resourceSnapshots", review, StringComparison.Ordinal);
+        Assert.Contains(
+            "completion == PublisherVisibleConnectCompletion.Done",
+            review,
+            StringComparison.Ordinal);
+        Assert.Contains("identity is not null", review, StringComparison.Ordinal);
+        Assert.Contains("TryPublishEndfieldReview(identity, operation)", review, StringComparison.Ordinal);
+        Assert.DoesNotContain("PublisherVisibleConnectFlow.CompleteAsync", review, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProbeConnectionCoreAsync", review, StringComparison.Ordinal);
 
-        Assert.Contains("GetEndfieldAccountIdentityUri().AbsoluteUri", script, StringComparison.Ordinal);
-        Assert.Contains("credentials: 'include'", script, StringComparison.Ordinal);
-        Assert.Contains("PublisherAccountCatalog.MaximumResourceResponseBytes", script, StringComparison.Ordinal);
-        Assert.Contains("new TextDecoder('utf-8', { fatal: true })", script, StringComparison.Ordinal);
-        Assert.Contains("binding.defaultRole", script, StringComparison.Ordinal);
-        Assert.Contains("matchingRoles.length !== 1", script, StringComparison.Ordinal);
-        Assert.Contains("{ uid: selected.roleId, region: selected.serverId }", script, StringComparison.Ordinal);
-        Assert.DoesNotContain("nickname", script, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("localStorage", script, StringComparison.Ordinal);
-        Assert.DoesNotContain("console.", script, StringComparison.Ordinal);
-        Assert.Contains("controller.abort()", browser, StringComparison.Ordinal);
-        Assert.Contains("delete window[key]", browser, StringComparison.Ordinal);
+        Assert.Contains("var observedIdentity = ReviewedEndfieldIdentity", identityReview, StringComparison.Ordinal);
+        Assert.True(
+            identityReview.IndexOf("var observedIdentity = ReviewedEndfieldIdentity", StringComparison.Ordinal)
+            < identityReview.IndexOf("Browser.CoreWebView2!.Reload()", StringComparison.Ordinal));
+        Assert.Contains("pendingEndfieldIdentityCapture", identityReview, StringComparison.Ordinal);
+        Assert.Contains("Browser.CoreWebView2!.Reload()", identityReview, StringComparison.Ordinal);
+        Assert.Contains("ResourceCaptureTimeoutSeconds", identityReview, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExecuteScriptAsync", identityReview, StringComparison.Ordinal);
+        Assert.DoesNotContain("localStorage", identityReview, StringComparison.Ordinal);
+        Assert.DoesNotContain("credentials", identityReview, StringComparison.Ordinal);
+        Assert.Contains("PublisherAccountCatalog.IsExactCheckInUri(\"ae\", currentPage)", regionReview, StringComparison.Ordinal);
+        Assert.Contains("'Asia', 'Americas / Europe'", regionReview, StringComparison.Ordinal);
+        Assert.Contains("document.querySelectorAll('body *')", regionReview, StringComparison.Ordinal);
+        Assert.Contains("TryCreateRegionOnly", regionReview, StringComparison.Ordinal);
+        Assert.DoesNotContain("email", regionReview, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Log Out", regionReview, StringComparison.Ordinal);
+        Assert.True(
+            doneHandler.IndexOf("TryReadEndfieldRegionAsync", StringComparison.Ordinal)
+            < doneHandler.IndexOf("GetSessionProofAsync", StringComparison.Ordinal));
+        Assert.Contains("PublisherEndfieldAccountIdentity? endfieldIdentity", doneHandler, StringComparison.Ordinal);
+        Assert.DoesNotContain("did not prove an Endfield UID", doneHandler, StringComparison.Ordinal);
+        Assert.Contains("purpose == PublisherSessionPurpose.Connect", responseHandler, StringComparison.Ordinal);
+        Assert.Contains("provider == \"SKPORT\"", responseHandler, StringComparison.Ordinal);
+        Assert.Contains("authorizedGameId == \"ae\"", responseHandler, StringComparison.Ordinal);
+        Assert.Contains("IsExactEndfieldAccountIdentityRequest", responseHandler, StringComparison.Ordinal);
+        Assert.Contains("CompleteEndfieldIdentityCaptureAsync(args, null)", responseHandler, StringComparison.Ordinal);
+        Assert.Contains("TryParseBindingResponse", identityCapture, StringComparison.Ordinal);
+        Assert.Contains("Volatile.Write(ref reviewedEndfieldIdentity, identity)", identityCapture, StringComparison.Ordinal);
+        Assert.Contains("Array.Clear(body)", identityCapture, StringComparison.Ordinal);
 
         Assert.Contains(
             "new Uri(\"https://game.skport.com/endfield/game-data?header=0\")",
             contracts,
             StringComparison.Ordinal);
-        Assert.Contains("\"Sanity\", false, false", contracts, StringComparison.Ordinal);
+        Assert.Contains("\"Sanity\", true, false", contracts, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -3876,6 +3990,8 @@ public sealed class PublisherAccountHardeningTests
         Assert.Contains("SaveRoleRecord(", resolver, StringComparison.Ordinal);
         Assert.True(CountOccurrences(resolver, "if (!CanPublish(entry.Provider, operation))") >= 3);
         Assert.Contains("ChoosePublisherRoleAsync,", page, StringComparison.Ordinal);
+        Assert.Contains("entry.GameId == \"ae\" && entry.Provider == \"SKPORT\"", resolver, StringComparison.Ordinal);
+        Assert.Contains("AccountWideStatusAllowed: true", resolver, StringComparison.Ordinal);
 
         var preClaimProof = checkIn.IndexOf("var before = await CaptureCheckInProofAsync", StringComparison.Ordinal);
         var exactPage = checkIn.IndexOf("PublisherAccountCatalog.IsExactCheckInUri", StringComparison.Ordinal);
@@ -3884,6 +4000,7 @@ public sealed class PublisherAccountHardeningTests
         Assert.True(preClaimProof >= 0 && preClaimProof < exactPage && exactPage < arm && arm < click);
         Assert.Contains("expectedBinding", checkIn, StringComparison.Ordinal);
         Assert.Contains("allowAccountWideStatus", checkIn, StringComparison.Ordinal);
+        Assert.Contains("expectedBinding is not null || !allowAccountWideStatus", checkIn, StringComparison.Ordinal);
         Assert.Contains("checkInCapture.ExpectedBinding", browser, StringComparison.Ordinal);
         Assert.Contains("checkInCapture.AllowAccountWideStatus", browser, StringComparison.Ordinal);
         Assert.Contains("return proof;", browser, StringComparison.Ordinal);
@@ -4018,19 +4135,15 @@ public sealed class PublisherAccountHardeningTests
             "Disconnecting the publisher account also deletes its private profile.",
             settings,
             StringComparison.Ordinal);
-        Assert.Contains(
+        Assert.DoesNotContain(
             "The official page and WebView2 handle sign-in directly.",
-            browserMarkup,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "Nyx does not inspect sign-in request contents or log credentials.",
             browserMarkup,
             StringComparison.Ordinal);
         Assert.Contains(
             "Keeps your publisher login saved on this PC. Turning it off removes saved passwords.",
             settings,
             StringComparison.Ordinal);
-        Assert.Contains(
+        Assert.DoesNotContain(
             "WebView2 may save and autofill passwords in this private profile.",
             browser,
             StringComparison.Ordinal);
@@ -4048,7 +4161,7 @@ public sealed class PublisherAccountHardeningTests
     }
 
     [Fact]
-    public void Visible_connect_completion_wires_close_away_from_hidden_probe()
+    public void Visible_connect_completion_uses_the_same_strict_proof_for_auto_and_manual_finish()
     {
         var service = ReadAppFile("PublisherAccountService.cs");
         var page = ReadAppFile("MainPage.xaml.cs");
@@ -4061,6 +4174,10 @@ public sealed class PublisherAccountHardeningTests
             browser,
             "private async void DoneButton_Click",
             "private async void RetryButton_Click");
+        var monitor = Slice(
+            browser,
+            "private async Task MonitorVisibleConnectAsync",
+            "public Task<PublisherVisibleConnectCompletion> WaitForConnectCompletionAsync");
 
         var completion = connect.IndexOf(
             "completion = await window.WaitForConnectCompletionAsync",
@@ -4093,7 +4210,7 @@ public sealed class PublisherAccountHardeningTests
             done,
             StringComparison.Ordinal);
         Assert.Contains(
-            "Interlocked.Exchange(ref visibleConnectOperationInFlight, 1)",
+            "Interlocked.CompareExchange(ref visibleConnectOperationInFlight, 1, 0)",
             done,
             StringComparison.Ordinal);
         Assert.True(
@@ -4103,10 +4220,11 @@ public sealed class PublisherAccountHardeningTests
                 StringComparison.Ordinal));
         Assert.DoesNotContain("visibleConnectAttemptInFlight", browser, StringComparison.Ordinal);
         Assert.DoesNotContain("visibleConnectVerificationInFlight", browser, StringComparison.Ordinal);
-        Assert.True(
-            CountOccurrences(
-                browser,
-                "Interlocked.Exchange(ref visibleConnectOperationInFlight, 1)") >= 3);
+        Assert.Contains("GetHoyoSessionProofOnceAsync(lifetime.Token)", monitor, StringComparison.Ordinal);
+        Assert.Contains("TryReadEndfieldRegionAsync(lifetime.Token)", monitor, StringComparison.Ordinal);
+        Assert.Contains("TryCompleteVisibleConnectAsync(", monitor, StringComparison.Ordinal);
+        Assert.Contains("reportFailure: false", monitor, StringComparison.Ordinal);
+        Assert.Contains("Done remains available", monitor, StringComparison.Ordinal);
         Assert.Contains("DoneButton.IsEnabled = false;", browser, StringComparison.Ordinal);
     }
 
@@ -4437,7 +4555,7 @@ public sealed class PublisherAccountHardeningTests
     }
 
     [Fact]
-    public void Visible_connect_navigates_only_and_leaves_official_sign_in_to_the_user()
+    public void Visible_connect_leaves_sign_in_to_the_user_and_only_auto_finishes_from_strict_proof()
     {
         var browser = ReadAppFile("PublisherSessionWindow.xaml.cs");
         var flow = ReadCoreAccountFile("PublisherVisibleConnectFlow.cs");
@@ -4449,6 +4567,10 @@ public sealed class PublisherAccountHardeningTests
         var visibleConnect = Slice(
             browser,
             "private async Task AttemptVisibleConnectPageAsync",
+            "private async Task MonitorVisibleConnectAsync");
+        var monitor = Slice(
+            browser,
+            "private async Task MonitorVisibleConnectAsync",
             "public Task<PublisherVisibleConnectCompletion> WaitForConnectCompletionAsync");
 
         Assert.Contains("if (visible", initialization, StringComparison.Ordinal);
@@ -4463,14 +4585,14 @@ public sealed class PublisherAccountHardeningTests
             visibleConnect,
             StringComparison.Ordinal);
         Assert.Contains(
-            "$\"{ConnectPrivacyStatusText()} {presentation.Guidance}\"",
+            "? presentation.Guidance ?? string.Empty",
             visibleConnect,
             StringComparison.Ordinal);
         Assert.DoesNotContain("TryOpenHoyoLabLoginDialogAsync", browser, StringComparison.Ordinal);
         Assert.DoesNotContain("PublisherLoginTriggerOutcome", string.Concat(browser, flow), StringComparison.Ordinal);
         Assert.DoesNotContain("ForLoginTrigger", flow, StringComparison.Ordinal);
         Assert.Contains(
-            "Sign in on the official page, then choose Done.",
+            "Sign in on the official page. Nyx will finish automatically; choose Done if needed.",
             flow,
             StringComparison.Ordinal);
         var navigate = flow.IndexOf(
@@ -4485,11 +4607,7 @@ public sealed class PublisherAccountHardeningTests
             rejectNavigation,
             StringComparison.Ordinal);
         Assert.True(navigate >= 0 && navigate < rejectNavigation && rejectNavigation < ready);
-        Assert.Contains("The official page and WebView2 handle sign-in directly.", browser, StringComparison.Ordinal);
-        Assert.Contains(
-            "Nyx does not inspect sign-in request contents or log credentials.",
-            browser,
-            StringComparison.Ordinal);
+        Assert.DoesNotContain("The official page and WebView2 handle sign-in directly.", browser, StringComparison.Ordinal);
 
         var lowered = visibleConnect.ToLowerInvariant();
         Assert.DoesNotContain("getsessionproofasync", lowered, StringComparison.Ordinal);
@@ -4507,6 +4625,10 @@ public sealed class PublisherAccountHardeningTests
         Assert.DoesNotContain("outerhtml", lowered, StringComparison.Ordinal);
         Assert.DoesNotContain("placeholder", lowered, StringComparison.Ordinal);
         Assert.DoesNotContain("getattribute", lowered, StringComparison.Ordinal);
+        Assert.Contains("GetHoyoSessionProofOnceAsync", monitor, StringComparison.Ordinal);
+        Assert.Contains("TryReadEndfieldRegionAsync", monitor, StringComparison.Ordinal);
+        Assert.Contains("TryCompleteVisibleConnectAsync", monitor, StringComparison.Ordinal);
+        Assert.DoesNotContain("executescriptasync", monitor.ToLowerInvariant(), StringComparison.Ordinal);
 
         var closeHandler = Slice(
             browser,

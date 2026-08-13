@@ -126,25 +126,25 @@ public sealed class PublisherAccountCatalogTests
     }
 
     [Fact]
-    public void Endfield_keeps_the_official_protocol_terminal_but_denies_Daily()
+    public void Endfield_uses_the_official_daily_page_without_exposing_numeric_resource_reads()
     {
         var entry = PublisherAccountCatalog.Get("ae");
 
         Assert.Equal("https://game.skport.com/endfield/game-data?header=0", entry.ResourceUri?.AbsoluteUri);
-        Assert.False(entry.SupportsDailyCheckIn);
+        Assert.True(entry.SupportsDailyCheckIn);
         Assert.False(entry.SupportsNumericResource);
         Assert.Equal("https://game.skport.com/endfield/sign-in", entry.CheckInUri?.AbsoluteUri);
     }
 
     [Fact]
-    public void Daily_is_supported_only_for_the_three_selected_HoYo_games()
+    public void Daily_is_supported_for_the_reviewed_HoYo_and_Endfield_pages()
     {
         var supported = PublisherAccountCatalog.All
             .Where(static entry => entry.SupportsDailyCheckIn)
             .Select(static entry => entry.GameId)
             .Order(StringComparer.Ordinal);
 
-        Assert.Equal(["gi", "hsr", "zzz"], supported);
+        Assert.Equal(["ae", "gi", "hsr", "zzz"], supported);
     }
 
     [Fact]

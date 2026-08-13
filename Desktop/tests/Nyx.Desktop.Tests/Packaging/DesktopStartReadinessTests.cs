@@ -35,6 +35,15 @@ public sealed class DesktopStartReadinessTests
         Assert.Contains("PublishTrimmed", script);
         Assert.Contains("Test-UnpackagedOutput", script);
         Assert.Contains("Nyx.Desktop.App.pri", script);
+        Assert.Contains("pengo-achievements-launcher.exe", script);
+        Assert.Contains("verify_release.py", script);
+        Assert.Contains("-p:AchievementHelperSource=$builtAchievementHelper", script);
+        Assert.Contains("-p:AchievementHelperSha256=$achievementHelperSha256", script);
+        Assert.Contains("verify-release.ps1", script);
+        Assert.Contains("https://github.com/34736384/genshin-fps-unlock.git", script);
+        Assert.Contains("2b85d61dd06f6e11ad86fdd6bd90339f9abc58eb", script);
+        Assert.Contains("-p:Genshin120HelperSource=$genshin120Helper", script);
+        Assert.Contains("-p:Genshin120HelperSha256=$genshin120HelperSha256", script);
         Assert.Contains("if ($isAdministrator)", script);
         Assert.True(
             script.IndexOf("if ($isAdministrator)", StringComparison.Ordinal) <
@@ -49,7 +58,11 @@ public sealed class DesktopStartReadinessTests
         Assert.DoesNotContain("AppX\\Nyx.Desktop.App.exe", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Invoke-WebRequest", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("http://", script, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("https://", script, StringComparison.OrdinalIgnoreCase);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(
+            script,
+            "https://",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+        Assert.Contains("https://github.com/34736384/genshin-fps-unlock.git", script, StringComparison.Ordinal);
     }
 
     [Fact]

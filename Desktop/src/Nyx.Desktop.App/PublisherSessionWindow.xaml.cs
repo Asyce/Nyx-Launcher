@@ -33,6 +33,7 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
     private Uri? approvedTopLevelUri;
     private Uri? visibleConnectUri;
     private SessionProbeCapture? pendingSessionProbe;
+    private EndfieldIdentityCapture? pendingEndfieldIdentityCapture;
     private CheckInCapture? pendingCheckInCapture;
     private PendingResourceCapture? pendingResourceCapture;
     private PublisherRoleBinding? expectedHsrAchievementRole;
@@ -40,6 +41,7 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
     private PublisherProfileMutationJournal? profileMutationJournal;
     private PublisherEndfieldAccountIdentity? reviewedEndfieldIdentity;
     private long sessionProbeGeneration;
+    private long endfieldIdentityGeneration;
     private long checkInGeneration;
     private long resourceGeneration;
     private PublisherSessionPurpose purpose;
@@ -56,6 +58,8 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
     private CoreWebView2Environment? browserProcessExitEnvironment;
     private TypedEventHandler<CoreWebView2Environment, CoreWebView2BrowserProcessExitedEventArgs>?
         browserProcessExitedHandler;
+    private Window? socialLoginWindow;
+    private Microsoft.UI.Xaml.Controls.WebView2? socialLoginBrowser;
 
     public PublisherSessionWindow(
         string profileDirectory,
@@ -77,6 +81,7 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         {
             windowClosed = true;
             lifetime.Cancel();
+            CloseSocialLoginWindow();
             CloseBrowserOnce();
             connectCompletion.TrySetResult(PublisherVisibleConnectCompletion.Canceled);
             closed.TrySetResult();
@@ -142,6 +147,20 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.IsZoomControlEnabled = visible;
         core.Settings.AreHostObjectsAllowed = false;
+        if (visible
+            && purpose == PublisherSessionPurpose.Connect
+            && provider == "SKPORT"
+            && gameId == "ae")
+        {
+            _ = await core.AddScriptToExecuteOnDocumentCreatedAsync(
+                """
+                document.addEventListener('DOMContentLoaded', () => {
+                    const style = document.createElement('style');
+                    style.textContent = 'div:has(> div > img.mobile-logo) { display: none !important; }';
+                    document.head.appendChild(style);
+                }, { once: true });
+                """);
+        }
         core.NavigationStarting += Core_NavigationStarting;
         // Visible sign-in and daily check-in otherwise behave like the
         // publisher's own page in a normal browser. The daily page keeps one
@@ -223,6 +242,9 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
                 // Closing the publisher window ends initialization immediately.
             }
         }
+
+        if (visible && purpose == PublisherSessionPurpose.Connect && !windowClosed)
+            _ = MonitorVisibleConnectAsync();
     }
 
     public async Task ClearSavedPasswordsAsync(CancellationToken cancellationToken = default)
@@ -268,8 +290,6 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
             core.Settings.IsGeneralAutofillEnabled = false;
             core.Settings.IsPasswordAutosaveEnabled = passwordSavingEnabled;
 
-            if (visible)
-                StatusText.Text = ConnectPrivacyStatusText();
             return core;
         }
         catch
@@ -350,14 +370,47 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
             ? Visibility.Visible
             : Visibility.Collapsed;
         StatusText.Text = presentation.Ready
-            ? $"{ConnectPrivacyStatusText()} {presentation.Guidance}"
+            ? presentation.Guidance ?? string.Empty
             : presentation.Guidance
                 ?? "The official sign-in page needs review. Choose Retry or close this window.";
     }
 
-    private string ConnectPrivacyStatusText() => passwordSavingEnabled
-        ? "The official page and WebView2 handle sign-in directly. WebView2 may save and autofill passwords in this private profile. Nyx does not inspect sign-in request contents or log credentials."
-        : "The official page and WebView2 handle sign-in directly. Password saving is off. Nyx does not inspect sign-in request contents or log credentials.";
+    private async Task MonitorVisibleConnectAsync()
+    {
+        try
+        {
+            var baselineEstablished = false;
+            var wasAuthenticated = false;
+            while (!windowClosed && !connectCompletion.Task.IsCompleted)
+            {
+                PublisherEndfieldAccountIdentity? endfieldIdentity = null;
+                var authenticated = provider == "HoYoLAB"
+                    ? await GetHoyoSessionProofOnceAsync(lifetime.Token)
+                        == PublisherSessionProof.Authenticated
+                    : provider == "SKPORT"
+                        && (endfieldIdentity = await TryReadEndfieldRegionAsync(lifetime.Token)) is not null;
+                if (baselineEstablished && !wasAuthenticated && authenticated)
+                {
+                    await TryCompleteVisibleConnectAsync(
+                        reportFailure: false,
+                        endfieldIdentity: endfieldIdentity,
+                        cancellationToken: lifetime.Token);
+                    return;
+                }
+
+                wasAuthenticated = authenticated;
+                baselineEstablished = true;
+                await Task.Delay(TimeSpan.FromSeconds(1), lifetime.Token);
+            }
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+        {
+        }
+        catch
+        {
+            // Done remains available when automatic detection cannot complete.
+        }
+    }
 
     public Task<PublisherVisibleConnectCompletion> WaitForConnectCompletionAsync(
         CancellationToken cancellationToken) =>
@@ -374,165 +427,78 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
             || authorizedGameId != "ae")
             throw new InvalidOperationException("This publisher session cannot review an Endfield account.");
 
-        var controllerKey = "__pengoNyxEndfieldIdentity_" + Guid.NewGuid().ToString("N");
-        var script = BuildEndfieldAccountIdentityScript(controllerKey);
+        var observedIdentity = ReviewedEndfieldIdentity;
+        if (observedIdentity is not null)
+            return observedIdentity;
+
+        var generation = Interlocked.Increment(ref endfieldIdentityGeneration);
+        var capture = new EndfieldIdentityCapture(generation, cancellationToken);
+        if (Interlocked.CompareExchange(ref pendingEndfieldIdentityCapture, capture, null) is not null)
+            throw new InvalidOperationException("An Endfield account review is already running.");
         try
         {
-            var raw = await Browser.CoreWebView2!
-                .ExecuteScriptAsync(script)
-                .AsTask(cancellationToken)
-                .WaitAsync(TimeSpan.FromSeconds(ResourceCaptureTimeoutSeconds + 2), cancellationToken);
-            return PublisherEndfieldAccountIdentityParser.TryParse(raw, out var identity)
-                ? identity
-                : null;
+            Browser.CoreWebView2!.Reload();
+            return await capture.Completion.Task.WaitAsync(
+                TimeSpan.FromSeconds(ResourceCaptureTimeoutSeconds),
+                cancellationToken);
+        }
+        catch (TimeoutException)
+        {
+            return null;
         }
         finally
         {
-            await AbortEndfieldAccountIdentityReviewAsync(controllerKey);
+            if (Interlocked.CompareExchange(ref pendingEndfieldIdentityCapture, null, capture) == capture)
+                capture.Cancel();
         }
     }
 
-    private static string BuildEndfieldAccountIdentityScript(string controllerKey)
+    private async Task<PublisherEndfieldAccountIdentity?> TryReadEndfieldRegionAsync(
+        CancellationToken cancellationToken)
     {
-        var serializedKey = JsonSerializer.Serialize(controllerKey);
-        var serializedEndpoint = JsonSerializer.Serialize(
-            PublisherAccountCatalog.GetEndfieldAccountIdentityUri().AbsoluteUri);
-        return $$"""
-            (async () => {
-              const key = {{serializedKey}};
-              const endpoint = {{serializedEndpoint}};
-              const controller = new AbortController();
-              window[key] = controller;
-              const timeout = setTimeout(() => controller.abort(), {{ResourceCaptureTimeoutSeconds * 1000}});
-              const result = (state, identity = null) => ({ state, identity });
-              const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
-              const uid = value => typeof value === 'string'
-                && value.length > 0
-                && value.length <= 20
-                && /^[0-9]+$/.test(value);
-              const region = value => typeof value === 'string'
-                && value.length > 0
-                && value.length <= 32
-                && /^[A-Za-z0-9_.-]+$/.test(value);
-              try {
-                const response = await fetch(endpoint, {
-                  method: 'GET',
-                  credentials: 'include',
-                  headers: { Accept: 'application/json' },
-                  signal: controller.signal,
-                });
-                if (response.status === 401 || response.status === 403)
-                  return result('login');
-                const mediaType = (response.headers.get('content-type') || '')
-                  .split(';', 1)[0]
-                  .trim()
-                  .toLowerCase();
-                if (response.status !== 200
-                    || (mediaType !== 'application/json' && !mediaType.endsWith('+json')))
-                  return result('invalid');
-                if (!response.body) return result('invalid');
-                const reader = response.body.getReader();
-                const chunks = [];
-                let total = 0;
-                try {
-                  while (true) {
-                    const next = await reader.read();
-                    if (next.done) break;
-                    total += next.value.byteLength;
-                    if (total > {{PublisherAccountCatalog.MaximumResourceResponseBytes}}) {
-                      controller.abort();
-                      return result('invalid');
-                    }
-                    chunks.push(next.value);
-                  }
-                } finally {
-                  reader.releaseLock();
-                }
-                const bytes = new Uint8Array(total);
-                let offset = 0;
-                for (const chunk of chunks) {
-                  bytes.set(chunk, offset);
-                  offset += chunk.byteLength;
-                }
-                let envelope;
-                try {
-                  envelope = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-                } finally {
-                  bytes.fill(0);
-                  chunks.length = 0;
-                }
-                if (!object(envelope) || !Number.isInteger(envelope.code))
-                  return result('invalid');
-                if (envelope.code === 10001) return result('login');
-                if (envelope.code !== 0 || !object(envelope.data))
-                  return result('invalid');
-
-                const games = envelope.data.list;
-                if (!Array.isArray(games) || games.length < 1 || games.length > 8)
-                  return result('invalid');
-                const endfield = games.filter(game => object(game) && game.appCode === 'endfield');
-                if (endfield.length !== 1) return result('no-binding');
-                const bindings = endfield[0].bindingList;
-                if (!Array.isArray(bindings) || bindings.length < 1 || bindings.length > 8)
-                  return result('no-binding');
-
-                let binding = bindings[0];
-                if (!object(binding) || binding.isDefault !== true) {
-                  binding = bindings.find(item => object(item) && item.isDefault === true)
-                    || bindings.find(item => object(item) && item.isOfficial === true)
-                    || binding;
-                }
-                if (!object(binding)
-                    || !Array.isArray(binding.roles)
-                    || binding.roles.length < 1
-                    || binding.roles.length > 8) {
-                  binding = bindings.find(item => object(item)
-                    && Array.isArray(item.roles)
-                    && item.roles.length > 0
-                    && item.roles.length <= 8);
-                }
-                if (!object(binding)
-                    || !Array.isArray(binding.roles)
-                    || !object(binding.defaultRole))
-                  return result('no-binding');
-
-                const selected = binding.defaultRole;
-                if (!uid(selected.roleId) || !region(selected.serverId))
-                  return result('invalid');
-                const matchingRoles = binding.roles.filter(role => object(role)
-                  && role.roleId === selected.roleId
-                  && role.serverId === selected.serverId);
-                if (matchingRoles.length !== 1) return result('invalid');
-                return result('done', { uid: selected.roleId, region: selected.serverId });
-              } catch (error) {
-                return result(error?.name === 'AbortError' ? 'timed-out' : 'invalid');
-              } finally {
-                clearTimeout(timeout);
-                if (window[key] === controller) delete window[key];
-              }
-            })()
-            """;
-    }
-
-    private async Task AbortEndfieldAccountIdentityReviewAsync(string controllerKey)
-    {
+        if (purpose != PublisherSessionPurpose.Connect
+            || provider != "SKPORT"
+            || authorizedGameId != "ae"
+            || Browser.Source is not Uri currentPage
+            || !PublisherAccountCatalog.IsExactCheckInUri("ae", currentPage))
+            return null;
         try
         {
-            await Browser.CoreWebView2!
+            var raw = await Browser.CoreWebView2!
                 .ExecuteScriptAsync(
-                    $$"""
+                    """
                     (() => {
-                      const key = {{JsonSerializer.Serialize(controllerKey)}};
-                      const controller = window[key];
-                      if (controller && typeof controller.abort === 'function') controller.abort();
-                      delete window[key];
+                      const allowed = new Set(['Asia', 'Americas / Europe']);
+                      const matches = new Set();
+                      for (const element of document.querySelectorAll('body *')) {
+                        const style = getComputedStyle(element);
+                        const bounds = element.getBoundingClientRect();
+                        if (style.display === 'none'
+                            || style.visibility === 'hidden'
+                            || Number.parseFloat(style.opacity || '1') === 0
+                            || bounds.width <= 0
+                            || bounds.height <= 0) continue;
+                        const text = (element.textContent || '').trim().replace(/\s+/g, ' ');
+                        if (allowed.has(text)) matches.add(text);
+                      }
+                      return matches.size === 1 ? [...matches][0] : null;
                     })()
                     """)
-                .AsTask()
-                .WaitAsync(TimeSpan.FromSeconds(2));
+                .AsTask(cancellationToken)
+                .WaitAsync(TimeSpan.FromSeconds(3), cancellationToken);
+            return PublisherEndfieldAccountIdentityParser.TryCreateRegionOnly(
+                ReadScriptString(raw),
+                out var identity)
+                    ? identity
+                    : null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception)
         {
+            return null;
         }
     }
 
@@ -542,19 +508,7 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         if (provider == "HoYoLAB")
         {
             return await PublisherSessionProofRetryPolicy.RunAsync(
-                async operationCancellation =>
-                {
-                    var cookies = await core.CookieManager
-                        .GetCookiesAsync("https://sg-public-api.hoyolab.com/")
-                        .AsTask(operationCancellation);
-                    var names = cookies
-                        .Select(static cookie => cookie.Name)
-                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                    return names.Contains("ltoken_v2")
-                        && (names.Contains("ltuid_v2") || names.Contains("account_id_v2"))
-                        ? PublisherSessionProof.Authenticated
-                        : PublisherSessionProof.LoginRequired;
-                },
+                GetHoyoSessionProofOnceAsync,
                 static (delay, operationCancellation) =>
                     Task.Delay(delay, operationCancellation),
                 cancellationToken);
@@ -578,6 +532,23 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
             if (Interlocked.CompareExchange(ref pendingSessionProbe, null, capture) == capture)
                 capture.Cancel();
         }
+    }
+
+    private async Task<PublisherSessionProof> GetHoyoSessionProofOnceAsync(
+        CancellationToken cancellationToken)
+    {
+        var core = Browser.CoreWebView2
+            ?? throw new InvalidOperationException("Publisher browser is not initialized.");
+        var cookies = await core.CookieManager
+            .GetCookiesAsync("https://sg-public-api.hoyolab.com/")
+            .AsTask(cancellationToken);
+        var names = cookies
+            .Select(static cookie => cookie.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return names.Contains("ltoken_v2")
+            && (names.Contains("ltuid_v2") || names.Contains("account_id_v2"))
+            ? PublisherSessionProof.Authenticated
+            : PublisherSessionProof.LoginRequired;
     }
 
     public async Task<HoyoLabHsrAchievementResult> ReadHsrAchievementsAsync(
@@ -707,7 +678,7 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
 
     public async Task<DailyCheckInResult> RunCheckInAsync(
         PublisherAccountCatalogEntry entry,
-        PublisherRoleBinding expectedBinding,
+        PublisherRoleBinding? expectedBinding,
         bool allowAccountWideStatus,
         CancellationToken cancellationToken)
     {
@@ -716,7 +687,10 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
             throw new InvalidOperationException("This publisher session cannot perform that check-in.");
         if (entry.CheckInUri is null || !entry.SupportsDailyCheckIn)
             return new(entry.GameId, DailyCheckInState.Unavailable, "No official daily check-in is available.", DateTimeOffset.UtcNow);
-        if (!PublisherAccountCatalog.IsValidRoleBinding(entry.GameId, expectedBinding))
+        if ((entry.GameId == "ae" && (expectedBinding is not null || !allowAccountWideStatus))
+            || (entry.GameId != "ae"
+                && (expectedBinding is null
+                    || !PublisherAccountCatalog.IsValidRoleBinding(entry.GameId, expectedBinding))))
             return new(entry.GameId, DailyCheckInState.CouldNotCheck, "The selected character could not be proven.", DateTimeOffset.UtcNow);
 
         var operationTime = timeProvider.GetLocalNow();
@@ -881,7 +855,7 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         string method,
         DateOnly expectedDate,
         DateTimeOffset expectedInstant,
-        PublisherRoleBinding expectedBinding,
+        PublisherRoleBinding? expectedBinding,
         bool allowAccountWideStatus,
         bool navigate,
         CancellationToken cancellationToken)
@@ -926,7 +900,7 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         string method,
         DateOnly expectedDate,
         DateTimeOffset expectedInstant,
-        PublisherRoleBinding expectedBinding,
+        PublisherRoleBinding? expectedBinding,
         bool allowAccountWideStatus,
         CancellationToken cancellationToken)
     {
@@ -2394,6 +2368,27 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
             return;
         }
 
+        if (purpose == PublisherSessionPurpose.Connect
+            && provider == "SKPORT"
+            && authorizedGameId == "ae"
+            && Uri.TryCreate(args.Request.Uri, UriKind.Absolute, out var identityUri)
+            && PublisherAccountCatalog.IsExactEndfieldAccountIdentityRequest(
+                identityUri,
+                args.Request.Method))
+        {
+            var endfieldIdentity = Volatile.Read(ref pendingEndfieldIdentityCapture);
+            if (endfieldIdentity is null
+                || endfieldIdentity.Generation != Interlocked.Read(ref endfieldIdentityGeneration))
+            {
+                _ = CompleteEndfieldIdentityCaptureAsync(args, null);
+            }
+            else if (endfieldIdentity.TryBegin())
+            {
+                _ = CompleteEndfieldIdentityCaptureAsync(args, endfieldIdentity);
+            }
+            return;
+        }
+
         var checkInCapture = Volatile.Read(ref pendingCheckInCapture);
         if (checkInCapture is not null
             && checkInCapture.Generation == Interlocked.Read(ref checkInGeneration)
@@ -2488,6 +2483,52 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         catch (Exception)
         {
             capture.TryComplete(PublisherSessionProof.NeedsReview);
+        }
+        finally
+        {
+            if (body is not null) Array.Clear(body);
+        }
+    }
+
+    private async Task CompleteEndfieldIdentityCaptureAsync(
+        CoreWebView2WebResourceResponseReceivedEventArgs args,
+        EndfieldIdentityCapture? capture)
+    {
+        byte[]? body = null;
+        var cancellationToken = capture?.CancellationToken ?? lifetime.Token;
+        try
+        {
+            var response = args.Response;
+            if (response.StatusCode != 200
+                || !HasJsonContentType(response.Headers.GetHeader("Content-Type")))
+            {
+                capture?.TryComplete(null);
+                return;
+            }
+            using var content = await response.GetContentAsync().AsTask(cancellationToken);
+            using var stream = content.AsStreamForRead();
+            body = await ReadBoundedAsync(
+                stream,
+                PublisherAccountCatalog.MaximumResourceResponseBytes,
+                cancellationToken);
+            if (body is not null
+                && PublisherEndfieldAccountIdentityParser.TryParseBindingResponse(body, out var identity))
+            {
+                Volatile.Write(ref reviewedEndfieldIdentity, identity);
+                capture?.TryComplete(identity);
+            }
+            else
+            {
+                capture?.TryComplete(null);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            capture?.Cancel();
+        }
+        catch (Exception)
+        {
+            capture?.TryComplete(null);
         }
         finally
         {
@@ -2696,14 +2737,174 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         }
     }
 
-    private void Core_NewWindowRequested(CoreWebView2 sender, CoreWebView2NewWindowRequestedEventArgs args)
+    private async void Core_NewWindowRequested(
+        CoreWebView2 sender,
+        CoreWebView2NewWindowRequestedEventArgs args)
     {
         args.Handled = true;
+        if (authorizedGameId is not null
+            && PublisherVisibleConnectNavigationPolicy.IsAllowedPopup(
+                provider,
+                purpose,
+                authorizedGameId,
+                args.Uri,
+                args.IsUserInitiated))
+        {
+            using var deferral = args.GetDeferral();
+            try
+            {
+                await OpenSocialLoginWindowAsync(sender.Environment, args);
+            }
+            catch
+            {
+                CloseSocialLoginWindow();
+            }
+            return;
+        }
+
         if (purpose != PublisherSessionPurpose.Connect
             || !Uri.TryCreate(args.Uri, UriKind.Absolute, out var target))
             return;
         if (IsAllowedConnectTopLevel(target))
             sender.Navigate(target.AbsoluteUri);
+    }
+
+    private async Task OpenSocialLoginWindowAsync(
+        CoreWebView2Environment environment,
+        CoreWebView2NewWindowRequestedEventArgs args)
+    {
+        CloseSocialLoginWindow();
+        var popupWindow = new Window { Title = "Sign in to SKPORT" };
+        var popupBrowser = new Microsoft.UI.Xaml.Controls.WebView2();
+        popupWindow.Content = popupBrowser;
+        popupWindow.AppWindow.Resize(new SizeInt32(700, 700));
+        await popupBrowser.EnsureCoreWebView2Async(environment);
+        if (windowClosed || lifetime.IsCancellationRequested)
+        {
+            popupBrowser.Close();
+            popupWindow.Close();
+            return;
+        }
+        var core = popupBrowser.CoreWebView2
+            ?? throw new InvalidOperationException("Social sign-in browser did not initialize.");
+
+        core.Settings.AreDevToolsEnabled = false;
+        core.Settings.AreDefaultContextMenusEnabled = false;
+        core.Settings.IsStatusBarEnabled = false;
+        core.Settings.IsZoomControlEnabled = true;
+        core.Settings.AreHostObjectsAllowed = false;
+        core.Settings.IsGeneralAutofillEnabled = false;
+        core.Settings.IsPasswordAutosaveEnabled = passwordSavingEnabled;
+        core.NavigationStarting += Core_SocialLoginNavigationStarting;
+        core.NewWindowRequested += Core_SocialLoginNewWindowRequested;
+        core.DownloadStarting += Core_DownloadStarting;
+        core.PermissionRequested += Core_PermissionRequested;
+        core.WindowCloseRequested += Core_SocialLoginWindowCloseRequested;
+        popupWindow.Closed += SocialLoginWindow_Closed;
+
+        socialLoginWindow = popupWindow;
+        socialLoginBrowser = popupBrowser;
+        args.NewWindow = core;
+        core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.Document);
+        core.WebResourceRequested += Core_SocialLoginWebResourceRequested;
+        popupWindow.Activate();
+    }
+
+    private void Core_SocialLoginNavigationStarting(
+        CoreWebView2 sender,
+        CoreWebView2NavigationStartingEventArgs args)
+    {
+        if (!Uri.TryCreate(args.Uri, UriKind.Absolute, out var target)
+            || !IsAllowedSocialLoginTopLevel(target))
+            args.Cancel = true;
+    }
+
+    private void Core_SocialLoginWebResourceRequested(
+        CoreWebView2 sender,
+        CoreWebView2WebResourceRequestedEventArgs args)
+    {
+        if (args.Request.Method is not ("GET" or "POST")
+            || !Uri.TryCreate(args.Request.Uri, UriKind.Absolute, out var target)
+            || !IsAllowedSocialLoginTopLevel(target))
+            TryBlockWebResourceRequest(sender, args);
+    }
+
+    private static bool IsAllowedSocialLoginTopLevel(Uri target)
+    {
+        if (string.Equals(target.OriginalString, "about:blank", StringComparison.Ordinal))
+            return true;
+        if (!target.IsAbsoluteUri
+            || target.Scheme != Uri.UriSchemeHttps
+            || !target.IsDefaultPort
+            || !string.IsNullOrEmpty(target.UserInfo)
+            || !string.IsNullOrEmpty(target.Fragment)
+            || target.Query.Length > 2048)
+            return false;
+
+        var host = target.Host;
+        if (host.Equals("accounts.google.com", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("facebook.com", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("www.facebook.com", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("m.facebook.com", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("appleid.apple.com", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (host.Equals("as.gryphline.com", StringComparison.OrdinalIgnoreCase))
+            return target.AbsolutePath is "/third_party/v1/google_callback"
+                or "/third_party/v1/facebook_callback"
+                or "/third_party/v1/apple_callback";
+        return host.Equals("game.skport.com", StringComparison.OrdinalIgnoreCase)
+            && target.AbsolutePath == "/endfield/sign-in"
+            && IsAllowedSocialLoginReturnQuery(target.Query);
+    }
+
+    private static bool IsAllowedSocialLoginReturnQuery(string query)
+    {
+        if (query.Length <= 1) return false;
+        foreach (var parameter in query[1..].Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = parameter.IndexOf('=');
+            var key = separator < 0 ? parameter : parameter[..separator];
+            if (key is not ("tpa_action" or "tpa_channelId" or "tpa_channelToken" or "tpa_state"))
+                return false;
+        }
+        return true;
+    }
+
+    private static void Core_SocialLoginNewWindowRequested(
+        CoreWebView2 sender,
+        CoreWebView2NewWindowRequestedEventArgs args) =>
+        args.Handled = true;
+
+    private void Core_SocialLoginWindowCloseRequested(object? sender, object args) =>
+        socialLoginWindow?.Close();
+
+    private void SocialLoginWindow_Closed(object sender, WindowEventArgs args) =>
+        CloseSocialLoginWindow(closeWindow: false);
+
+    private void CloseSocialLoginWindow(bool closeWindow = true)
+    {
+        var popupWindow = socialLoginWindow;
+        var popupBrowser = socialLoginBrowser;
+        socialLoginWindow = null;
+        socialLoginBrowser = null;
+        if (popupWindow is not null)
+            popupWindow.Closed -= SocialLoginWindow_Closed;
+        var core = popupBrowser?.CoreWebView2;
+        if (core is not null)
+        {
+            core.NavigationStarting -= Core_SocialLoginNavigationStarting;
+            core.WebResourceRequested -= Core_SocialLoginWebResourceRequested;
+            core.NewWindowRequested -= Core_SocialLoginNewWindowRequested;
+            core.DownloadStarting -= Core_DownloadStarting;
+            core.PermissionRequested -= Core_PermissionRequested;
+            core.WindowCloseRequested -= Core_SocialLoginWindowCloseRequested;
+            try { core.Stop(); } catch (Exception) { }
+        }
+        try { popupBrowser?.Close(); } catch (Exception) { }
+        if (closeWindow)
+        {
+            try { popupWindow?.Close(); } catch (Exception) { }
+        }
     }
 
     private bool IsAllowedConnectTopLevel(Uri target) =>
@@ -2748,51 +2949,70 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         Close();
     }
 
-    private async void DoneButton_Click(object sender, RoutedEventArgs e)
+    private async void DoneButton_Click(object sender, RoutedEventArgs e) =>
+        await TryCompleteVisibleConnectAsync(
+            reportFailure: true,
+            endfieldIdentity: null,
+            cancellationToken: lifetime.Token);
+
+    private async Task<bool> TryCompleteVisibleConnectAsync(
+        bool reportFailure,
+        PublisherEndfieldAccountIdentity? endfieldIdentity,
+        CancellationToken cancellationToken)
     {
         if (windowClosed
             || purpose != PublisherSessionPurpose.Connect
-            || Interlocked.Exchange(ref visibleConnectOperationInFlight, 1) != 0)
-            return;
+            || Interlocked.CompareExchange(ref visibleConnectOperationInFlight, 1, 0) != 0)
+            return false;
 
         DoneButton.IsEnabled = false;
         RetryButton.IsEnabled = false;
         StatusText.Text = "Checking whether the official page finished signing in…";
         try
         {
-            var proof = await GetSessionProofAsync(lifetime.Token)
-                .WaitAsync(TimeSpan.FromSeconds(ResourceCaptureTimeoutSeconds + 3), lifetime.Token);
+            endfieldIdentity ??= provider == "SKPORT"
+                ? ReviewedEndfieldIdentity ?? await TryReadEndfieldRegionAsync(cancellationToken)
+                : null;
+            var proof = await GetSessionProofAsync(cancellationToken)
+                .WaitAsync(TimeSpan.FromSeconds(ResourceCaptureTimeoutSeconds + 3), cancellationToken);
             if (proof == PublisherSessionProof.Authenticated)
             {
                 if (provider == "SKPORT")
                 {
-                    var identity = await ReviewEndfieldAccountIdentityAsync(lifetime.Token);
+                    var identity = endfieldIdentity
+                        ?? await ReviewEndfieldAccountIdentityAsync(cancellationToken);
                     if (identity is null)
                     {
-                        StatusText.Text = "Login was confirmed, but the official page did not prove an Endfield UID and region. Keep this window open and try Done again.";
-                        return;
+                        if (reportFailure)
+                            StatusText.Text = "Login was confirmed, but the official page did not prove an Endfield region. Keep this window open and try Done again.";
+                        return false;
                     }
                     Volatile.Write(ref reviewedEndfieldIdentity, identity);
                 }
                 connectCompletion.TrySetResult(PublisherVisibleConnectCompletion.Done);
                 Close();
-                return;
+                return true;
             }
 
-            StatusText.Text = proof == PublisherSessionProof.LoginRequired
-                ? "Login was not detected. Finish signing in on the official page, then choose Done again."
-                : "Nyx could not confirm the login. Keep this window open and try Done again, or close it and choose Review.";
+            if (reportFailure)
+            {
+                StatusText.Text = proof == PublisherSessionProof.LoginRequired
+                    ? "Login was not detected. Finish signing in on the official page, then choose Done again."
+                    : "Nyx could not confirm the login. Keep this window open and try Done again, or close it and choose Review.";
+            }
         }
-        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
         catch (TimeoutException)
         {
-            StatusText.Text = "The official page did not confirm the login in time. Try Done again.";
+            if (reportFailure)
+                StatusText.Text = "The official page did not confirm the login in time. Try Done again.";
         }
         catch
         {
-            StatusText.Text = "Nyx could not confirm the login. Keep this window open and try Done again.";
+            if (reportFailure)
+                StatusText.Text = "Nyx could not confirm the login. Keep this window open and try Done again.";
         }
         finally
         {
@@ -2803,6 +3023,8 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
                 RetryButton.IsEnabled = true;
             }
         }
+
+        return false;
     }
 
     private async void RetryButton_Click(object sender, RoutedEventArgs e)
@@ -2862,11 +3084,14 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         disposed = true;
         lifetime.Cancel();
         Interlocked.Increment(ref sessionProbeGeneration);
+        Interlocked.Increment(ref endfieldIdentityGeneration);
         Interlocked.Increment(ref checkInGeneration);
         Interlocked.Increment(ref resourceGeneration);
         Interlocked.Exchange(ref pendingSessionProbe, null)?.Cancel();
+        Interlocked.Exchange(ref pendingEndfieldIdentityCapture, null)?.Cancel();
         Interlocked.Exchange(ref pendingCheckInCapture, null)?.Cancel();
         Interlocked.Exchange(ref pendingResourceCapture, null)?.Cancel();
+        CloseSocialLoginWindow();
         var core = Volatile.Read(ref browserCloseStarted) == 0
             ? Browser.CoreWebView2
             : null;
@@ -2981,12 +3206,29 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         public void Cancel() => Completion.TrySetCanceled(CancellationToken);
     }
 
+    private sealed class EndfieldIdentityCapture(long generation, CancellationToken cancellationToken)
+    {
+        private int began;
+
+        public long Generation { get; } = generation;
+        public CancellationToken CancellationToken { get; } = cancellationToken;
+        public TaskCompletionSource<PublisherEndfieldAccountIdentity?> Completion { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool TryBegin() => Interlocked.CompareExchange(ref began, 1, 0) == 0;
+
+        public void TryComplete(PublisherEndfieldAccountIdentity? identity) =>
+            Completion.TrySetResult(identity);
+
+        public void Cancel() => Completion.TrySetCanceled(CancellationToken);
+    }
+
     private sealed class CheckInCapture(
         string gameId,
         string method,
         DateOnly expectedDate,
         DateTimeOffset expectedInstant,
-        PublisherRoleBinding expectedBinding,
+        PublisherRoleBinding? expectedBinding,
         bool allowAccountWideStatus,
         long generation,
         CancellationToken cancellationToken)
@@ -2997,7 +3239,7 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         public string Method { get; } = method;
         public DateOnly ExpectedDate { get; } = expectedDate;
         public DateTimeOffset ExpectedInstant { get; } = expectedInstant;
-        public PublisherRoleBinding ExpectedBinding { get; } = expectedBinding;
+        public PublisherRoleBinding? ExpectedBinding { get; } = expectedBinding;
         public bool AllowAccountWideStatus { get; } = allowAccountWideStatus;
         public long Generation { get; } = generation;
         public CancellationToken CancellationToken { get; } = cancellationToken;

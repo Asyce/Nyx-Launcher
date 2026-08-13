@@ -66,11 +66,11 @@ public sealed class LauncherStateTests
     public void Automatic_daily_check_in_games_are_validated_and_round_trip()
     {
         var result = LauncherStateMigrations.Read(
-            """{"version":3,"preferences":{"automaticDailyCheckInGames":["zzz","gi","bad","gi"]}}""");
+            """{"version":3,"preferences":{"automaticDailyCheckInGames":["zzz","ae","gi","bad","gi"]}}""");
 
-        Assert.Equal(["gi", "zzz"], result.State!.Preferences.AutomaticDailyCheckInGames);
+        Assert.Equal(["ae", "gi", "zzz"], result.State!.Preferences.AutomaticDailyCheckInGames);
         var roundTrip = LauncherStateMigrations.Read(LauncherStateMigrations.Write(result.State));
-        Assert.Equal(["gi", "zzz"], roundTrip.State!.Preferences.AutomaticDailyCheckInGames);
+        Assert.Equal(["ae", "gi", "zzz"], roundTrip.State!.Preferences.AutomaticDailyCheckInGames);
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public sealed class LauncherStateTests
 
         Assert.True(fresh.Preferences.Genshin120FpsOnLaunch);
         Assert.True(fresh.Preferences.Hsr120FpsOnLaunch);
-        Assert.Equal(["gi", "hsr", "zzz"], fresh.Preferences.AutomaticDailyCheckInGames);
+        Assert.Equal(["ae", "gi", "hsr", "zzz"], fresh.Preferences.AutomaticDailyCheckInGames);
         Assert.False(oldV4.State!.Preferences.Genshin120FpsOnLaunch);
         Assert.False(oldV4.State.Preferences.Hsr120FpsOnLaunch);
         Assert.Empty(oldV4.State.Preferences.AutomaticDailyCheckInGames);

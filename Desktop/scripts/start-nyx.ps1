@@ -216,6 +216,7 @@ if (-not $assetsReady) {
 
 $outputRoot = Join-Path $desktopRoot "src\Nyx.Desktop.App\bin\x64\Release\$targetFramework\win-x64"
 $executablePath = Join-Path $outputRoot 'Nyx.Desktop.App.exe'
+$achievementHelperOutput = Join-Path $outputRoot 'Assets\Tools\pengo-achievements-launcher.exe'
 $requiredOutputPaths = @(
     $executablePath,
     (Join-Path $outputRoot 'Nyx.Desktop.App.pri'),
@@ -223,7 +224,8 @@ $requiredOutputPaths = @(
     (Join-Path $outputRoot 'Assets\Catalog\giicon.png'),
     (Join-Path $outputRoot 'Assets\Iris\nyx-logo.png'),
     (Join-Path $outputRoot 'Assets\Brand\kofi-logo.png'),
-    (Join-Path $outputRoot 'Assets\Content\launcher-banners-v1.json')
+    (Join-Path $outputRoot 'Assets\Content\launcher-banners-v1.json'),
+    $achievementHelperOutput
 )
 
 function Test-UnpackagedOutput {
@@ -248,6 +250,66 @@ if ($CheckOnly) {
 }
 
 Write-Host 'Building the reviewed unpackaged x64 Nyx app...'
+$cargo = @(Get-Command 'cargo.exe' -CommandType Application -ErrorAction SilentlyContinue)[0]
+$python = @(Get-Command 'python.exe' -CommandType Application -ErrorAction SilentlyContinue)[0]
+if ($null -eq $cargo -or $null -eq $python) {
+    Stop-NyxStart -Code $script:ExitRunSupport -Message 'Install Rust and Python so Nyx can build and verify the achievement helper.'
+}
+$repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $desktopRoot '..'))
+$achievementHelperRoot = Join-Path $repositoryRoot 'Extractor\Achievements'
+$achievementHelperBuildRoot = Join-Path $desktopRoot '.verification-build\achievement-helper'
+$genshin120HelperRoot = Join-Path $desktopRoot 'tools\Nyx.Genshin120.NativeHelper'
+$genshin120UpstreamRoot = Join-Path $repositoryRoot '.verification-build\upstream-genshin-fps-v3.5.0'
+$genshin120ReleaseRoot = Join-Path $repositoryRoot '.verification-build\genshin120-native-helper\release'
+$genshin120Helper = Join-Path $genshin120ReleaseRoot 'Nyx.Genshin120.Helper.exe'
+$genshin120License = Join-Path $genshin120HelperRoot 'LICENSE-THIRD-PARTY.txt'
+$genshin120Provenance = Join-Path $genshin120HelperRoot 'PROVENANCE.md'
+$oldCargoTarget = $env:CARGO_TARGET_DIR
+$oldRustFlags = $env:RUSTFLAGS
+try {
+    $env:CARGO_TARGET_DIR = $achievementHelperBuildRoot
+    $env:RUSTFLAGS = '-C target-feature=+crt-static'
+    Push-Location -LiteralPath $achievementHelperRoot
+    try {
+        & $cargo.Source build --locked --release --target x86_64-pc-windows-msvc --bin pengo-achievements-launcher
+        if ($LASTEXITCODE -ne 0) {
+            Stop-NyxStart -Code $script:ExitRun -Message 'The achievement helper build failed.'
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}
+finally {
+    $env:CARGO_TARGET_DIR = $oldCargoTarget
+    $env:RUSTFLAGS = $oldRustFlags
+}
+$builtAchievementHelper = Join-Path $achievementHelperBuildRoot 'x86_64-pc-windows-msvc\release\pengo-achievements-launcher.exe'
+& $python.Source (Join-Path $achievementHelperRoot 'tools\verify_release.py') $builtAchievementHelper
+if ($LASTEXITCODE -ne 0) {
+    Stop-NyxStart -Code $script:ExitRun -Message 'The achievement helper did not pass verification.'
+}
+$achievementHelperSha256 = (Get-FileHash -LiteralPath $builtAchievementHelper -Algorithm SHA256).Hash.ToLowerInvariant()
+if (-not (Test-Path -LiteralPath $genshin120UpstreamRoot -PathType Container)) {
+    $git = @(Get-Command 'git.exe' -CommandType Application -ErrorAction SilentlyContinue)[0]
+    if ($null -eq $git) {
+        Stop-NyxStart -Code $script:ExitRunSupport -Message 'Install Git so Nyx can verify the pinned Genshin 120 FPS helper source.'
+    }
+    [void] (New-Item -ItemType Directory -Path (Split-Path -Parent $genshin120UpstreamRoot) -Force)
+    & $git.Source clone --quiet --depth 1 --branch v3.5.0 https://github.com/34736384/genshin-fps-unlock.git $genshin120UpstreamRoot
+    if ($LASTEXITCODE -ne 0) {
+        Stop-NyxStart -Code $script:ExitRun -Message 'The pinned Genshin 120 FPS source could not be retrieved.'
+    }
+}
+$genshin120Commit = (& git -C $genshin120UpstreamRoot rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or $genshin120Commit -cne '2b85d61dd06f6e11ad86fdd6bd90339f9abc58eb') {
+    Stop-NyxStart -Code $script:ExitRun -Message 'The pinned Genshin 120 FPS source changed.'
+}
+& (Join-Path $genshin120HelperRoot 'verify-release.ps1')
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $genshin120Helper -PathType Leaf)) {
+    Stop-NyxStart -Code $script:ExitRun -Message 'The Genshin 120 FPS helper did not pass verification.'
+}
+$genshin120HelperSha256 = (Get-FileHash -LiteralPath $genshin120Helper -Algorithm SHA256).Hash.ToLowerInvariant()
 Push-Location -LiteralPath $desktopRoot
 try {
     $buildArguments = @(
@@ -256,6 +318,12 @@ try {
         '-c', 'Release',
         '-r', 'win-x64',
         '-p:Platform=x64',
+        "-p:AchievementHelperSource=$builtAchievementHelper",
+        "-p:AchievementHelperSha256=$achievementHelperSha256",
+        "-p:Genshin120HelperSource=$genshin120Helper",
+        "-p:Genshin120HelperSha256=$genshin120HelperSha256",
+        "-p:Genshin120LicenseSource=$genshin120License",
+        "-p:Genshin120ProvenanceSource=$genshin120Provenance",
         '--no-restore'
     )
     & $dotnet.Source @buildArguments

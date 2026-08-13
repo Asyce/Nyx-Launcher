@@ -12,7 +12,7 @@ internal static class PublisherVisibleConnectNavigationPolicy
         ArgumentNullException.ThrowIfNull(entry);
         return entry.Provider == "HoYoLAB"
             ? HoyoLabHomeUri
-            : entry.ResourceUri ?? entry.CheckInUri
+            : entry.CheckInUri ?? entry.ResourceUri
                 ?? throw new InvalidOperationException("No official account page is configured.");
     }
 
@@ -68,4 +68,16 @@ internal static class PublisherVisibleConnectNavigationPolicy
             gameId,
             target);
     }
+
+    public static bool IsAllowedPopup(
+        string provider,
+        PublisherSessionPurpose purpose,
+        string gameId,
+        string target,
+        bool isUserInitiated) =>
+        isUserInitiated
+        && purpose == PublisherSessionPurpose.Connect
+        && provider == "SKPORT"
+        && gameId == "ae"
+        && string.Equals(target, "about:blank", StringComparison.Ordinal);
 }

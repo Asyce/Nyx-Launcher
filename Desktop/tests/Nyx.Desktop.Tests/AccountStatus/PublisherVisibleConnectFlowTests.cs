@@ -66,7 +66,7 @@ public sealed class PublisherVisibleConnectFlowTests
         Assert.True(presentation.Ready);
         Assert.False(presentation.ShowRetry);
         Assert.Equal(
-            "Sign in on the official page, then choose Done.",
+            "Sign in on the official page. Nyx will finish automatically; choose Done if needed.",
             presentation.Guidance);
     }
 
