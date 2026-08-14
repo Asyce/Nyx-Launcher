@@ -218,6 +218,40 @@ public sealed class HoyoLiveSessionUiTests
     }
 
     [Fact]
+    public void Signed_out_games_hide_the_resource_strip_without_placeholder_text()
+    {
+        var xaml = ReadAppFile("MainPage.xaml");
+        var page = ReadAppFile("MainPage.xaml.cs");
+        var render = Slice(
+            page,
+            "private void RenderLaunchResourceMetrics(",
+            "private void RenderRenderingMode");
+
+        Assert.Contains("if (metrics is null", render, StringComparison.Ordinal);
+        Assert.Contains("LaunchResourceMetricsPanel.Visibility = Visibility.Collapsed", render, StringComparison.Ordinal);
+        Assert.DoesNotContain("unavailableText", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("LaunchResourceStatusText", xaml + page, StringComparison.Ordinal);
+        Assert.DoesNotContain("Â", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("â", page, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Login_required_hides_a_retained_resource_snapshot()
+    {
+        var page = ReadAppFile("MainPage.xaml.cs");
+        var render = Slice(
+            page,
+            "var resource = summary.Resources.TryGetValue(selected.Id, out var capturedResource)",
+            "LaunchResourceRefreshButton.Visibility");
+
+        Assert.Contains("consentEnabled", render, StringComparison.Ordinal);
+        Assert.Contains("connection == PublisherConnectionState.Connected", render, StringComparison.Ordinal);
+        Assert.Contains("&& resource is not null", render, StringComparison.Ordinal);
+        Assert.Contains(": null);", render, StringComparison.Ordinal);
+        Assert.Contains("PublisherConnectionState.LoginRequired => \"Sign In\"", page, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Endfield_uses_separate_connect_lifecycle_and_keeps_numeric_data_in_protocol_terminal()
     {
         var page = ReadAppFile("MainPage.xaml.cs");
@@ -542,7 +576,8 @@ public sealed class HoyoLiveSessionUiTests
         var page = ReadAppFile("MainPage.xaml.cs");
         var launchStart = xaml.IndexOf("x:Name=\"LaunchResourceMetricsPanel\"", StringComparison.Ordinal);
         var launchSurfaceStart = xaml.LastIndexOf("<Border", launchStart, StringComparison.Ordinal);
-        var launchSurface = xaml[launchSurfaceStart..launchStart];
+        var launchSurfaceEnd = xaml.IndexOf('>', launchStart);
+        var launchSurface = xaml[launchSurfaceStart..(launchSurfaceEnd + 1)];
         var launch = Slice(xaml, "x:Name=\"LaunchResourceMetricsPanel\"", "x:Name=\"LaunchButton\"");
         var achievementToggle = Slice(xaml, "x:Name=\"StableAchievementExportToggle\"", "/>");
         var pullToggle = Slice(xaml, "x:Name=\"StablePullExportToggle\"", "/>");

@@ -105,12 +105,7 @@
     </Content>
   </ItemGroup>
 
-  <!--
-    Local Debug builds carry all generated feed art so visual QA works before the
-    matching feed is deployed. Release/publish builds keep launcher art remote and
-    download and cache it from pengo.gg.
-  -->
-  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+  <ItemGroup>
     <Content Include="..\..\..\Site\src\data\generated\launcher-art\**\*">
       <Link>Assets\Content\launcher-art\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

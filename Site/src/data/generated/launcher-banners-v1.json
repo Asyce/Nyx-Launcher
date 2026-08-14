@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "revision": "72738a4be1c0d6c50e32b433ada640568ede2ddfbbc0633f385e5252e55224ae",
-  "generatedAt": "2026-08-13T22:39:20.233Z",
+  "revision": "0826d13ca56342b1291ff8eb885ca84ab1804df399d93afb68027db999d89e33",
+  "generatedAt": "2026-08-14T04:21:43.682Z",
   "health": {
     "status": "ok",
     "games": {
@@ -43,7 +43,7 @@
         "remaining": {
           "startsAt": "2026-08-12T03:00:00.000Z",
           "endsAt": "2026-09-01T09:59:59.000Z",
-          "durationSeconds": 1596038
+          "durationSeconds": 1575495
         },
         "characters": [
           {
@@ -51,23 +51,23 @@
             "name": "Odette",
             "rarity": 5,
             "limited": true,
-            "debut": "2026-08-10T22:00:00.000Z",
+            "debut": "2026-08-11T00:00:00.000Z",
             "icon": {
               "id": "10000150-icon",
               "source": "character-icon",
-              "path": "/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Odette_Circle.webp",
-              "url": "https://assets.pengo.gg/legacy/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Odette_Circle.webp",
+              "path": "/launcher-art/8cca0588750807d41b3ff8e482f650aeb114ee2a36255d9fd585ffb749849e5a.webp",
+              "url": "https://pengo.gg/dist/launcher-art/8cca0588750807d41b3ff8e482f650aeb114ee2a36255d9fd585ffb749849e5a.webp",
               "mime": "image/webp",
-              "size": 33386,
+              "size": 29300,
               "dimensions": {
-                "width": 256,
+                "width": 248,
                 "height": 256
               },
-              "sha256": "881665bc8d02fd1deeaf3866d5270f0e5594ffe9ee8939c0ce115b85f137ab35",
+              "sha256": "8cca0588750807d41b3ff8e482f650aeb114ee2a36255d9fd585ffb749849e5a",
               "transparentBounds": {
                 "left": 0,
                 "top": 0,
-                "right": 256,
+                "right": 248,
                 "bottom": 256
               },
               "placement": {
@@ -110,24 +110,24 @@
             "name": "Arlecchino",
             "rarity": 5,
             "limited": true,
-            "debut": "2024-04-22T22:00:00.000Z",
+            "debut": "2024-04-23T00:00:00.000Z",
             "icon": {
               "id": "10000096-icon",
               "source": "character-icon",
-              "path": "/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Arlecchino_Circle.webp",
-              "url": "https://assets.pengo.gg/legacy/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Arlecchino_Circle.webp",
+              "path": "/launcher-art/eeb480dd889ba272267f2a1b1ff03ca14b1b9bc31c2aacc61c60a436136617c9.webp",
+              "url": "https://pengo.gg/dist/launcher-art/eeb480dd889ba272267f2a1b1ff03ca14b1b9bc31c2aacc61c60a436136617c9.webp",
               "mime": "image/webp",
-              "size": 27322,
+              "size": 24260,
               "dimensions": {
-                "width": 256,
-                "height": 256
+                "width": 241,
+                "height": 255
               },
-              "sha256": "4b025fa8c180ae45ecb9e0b347f6231dd0cfaeb5cd5e08c7f0e82b76f7dc5ef3",
+              "sha256": "eeb480dd889ba272267f2a1b1ff03ca14b1b9bc31c2aacc61c60a436136617c9",
               "transparentBounds": {
                 "left": 0,
                 "top": 0,
-                "right": 256,
-                "bottom": 256
+                "right": 241,
+                "bottom": 255
               },
               "placement": {
                 "anchor": "center",
@@ -170,23 +170,23 @@
           "name": "Odette",
           "rarity": 5,
           "limited": true,
-          "debut": "2026-08-10T22:00:00.000Z",
+          "debut": "2026-08-11T00:00:00.000Z",
           "icon": {
             "id": "10000150-icon",
             "source": "character-icon",
-            "path": "/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Odette_Circle.webp",
-            "url": "https://assets.pengo.gg/legacy/Database/GameData/gi/assets/characters/circles/UI_AvatarIcon_Odette_Circle.webp",
+            "path": "/launcher-art/8cca0588750807d41b3ff8e482f650aeb114ee2a36255d9fd585ffb749849e5a.webp",
+            "url": "https://pengo.gg/dist/launcher-art/8cca0588750807d41b3ff8e482f650aeb114ee2a36255d9fd585ffb749849e5a.webp",
             "mime": "image/webp",
-            "size": 33386,
+            "size": 29300,
             "dimensions": {
-              "width": 256,
+              "width": 248,
               "height": 256
             },
-            "sha256": "881665bc8d02fd1deeaf3866d5270f0e5594ffe9ee8939c0ce115b85f137ab35",
+            "sha256": "8cca0588750807d41b3ff8e482f650aeb114ee2a36255d9fd585ffb749849e5a",
             "transparentBounds": {
               "left": 0,
               "top": 0,
-              "right": 256,
+              "right": 248,
               "bottom": 256
             },
             "placement": {
@@ -282,6 +282,79 @@
       "upcoming": [
         {
           "phase": null,
+          "start": "2026-09-01T10:00:00.000Z",
+          "end": "2026-09-22T10:00:00.000Z",
+          "characters": [
+            {
+              "id": "10000116",
+              "name": "Ineffa",
+              "rarity": 5,
+              "limited": null,
+              "debut": "2025-07-29T00:00:00.000Z",
+              "icon": {
+                "id": "10000116-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/a55e2c9777d9fd309bc01fc92ac47747a40f3fa8fe5a5f3af000a7ea70576dac.webp",
+                "url": "https://pengo.gg/dist/launcher-art/a55e2c9777d9fd309bc01fc92ac47747a40f3fa8fe5a5f3af000a7ea70576dac.webp",
+                "mime": "image/webp",
+                "size": 26188,
+                "dimensions": {
+                  "width": 250,
+                  "height": 255
+                },
+                "sha256": "a55e2c9777d9fd309bc01fc92ac47747a40f3fa8fe5a5f3af000a7ea70576dac",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 250,
+                  "bottom": 255
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            },
+            {
+              "id": "10000120",
+              "name": "Flins",
+              "rarity": 5,
+              "limited": null,
+              "debut": "2025-09-30T18:00:00.000Z",
+              "icon": {
+                "id": "10000120-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/abcc0a566087a331ab45b1991c180eeafa75187c8aa499948de8d3b249b6cd6c.webp",
+                "url": "https://pengo.gg/dist/launcher-art/abcc0a566087a331ab45b1991c180eeafa75187c8aa499948de8d3b249b6cd6c.webp",
+                "mime": "image/webp",
+                "size": 23898,
+                "dimensions": {
+                  "width": 253,
+                  "height": 254
+                },
+                "sha256": "abcc0a566087a331ab45b1991c180eeafa75187c8aa499948de8d3b249b6cd6c",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 253,
+                  "bottom": 254
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            }
+          ]
+        },
+        {
+          "phase": null,
           "announced": true,
           "start": null,
           "end": null,
@@ -290,25 +363,25 @@
               "id": "10000143",
               "name": "Vesna",
               "rarity": 5,
-              "limited": false,
-              "debut": "1969-12-31T23:00:00.000Z",
+              "limited": null,
+              "debut": null,
               "icon": {
                 "id": "10000143-icon",
                 "source": "character-icon",
-                "path": "/launcher-art/485c0f72cb062a5e2e07425a22e6302962b28488dfcc341e0cfa9bf33da27d96.webp",
-                "url": "https://pengo.gg/dist/launcher-art/485c0f72cb062a5e2e07425a22e6302962b28488dfcc341e0cfa9bf33da27d96.webp",
+                "path": "/launcher-art/83d40c1b174b2f4d06903bfbb7635e07a5ad14d2ac9491326e08b856f050e0cd.webp",
+                "url": "https://pengo.gg/dist/launcher-art/83d40c1b174b2f4d06903bfbb7635e07a5ad14d2ac9491326e08b856f050e0cd.webp",
                 "mime": "image/webp",
-                "size": 59658,
+                "size": 27112,
                 "dimensions": {
-                  "width": 483,
-                  "height": 488
+                  "width": 256,
+                  "height": 256
                 },
-                "sha256": "485c0f72cb062a5e2e07425a22e6302962b28488dfcc341e0cfa9bf33da27d96",
+                "sha256": "83d40c1b174b2f4d06903bfbb7635e07a5ad14d2ac9491326e08b856f050e0cd",
                 "transparentBounds": {
                   "left": 0,
                   "top": 0,
-                  "right": 483,
-                  "bottom": 488
+                  "right": 256,
+                  "bottom": 256
                 },
                 "placement": {
                   "anchor": "center",
@@ -323,25 +396,25 @@
               "id": "10000140",
               "name": "Vodyanitsa",
               "rarity": 5,
-              "limited": false,
-              "debut": "1969-12-31T23:00:00.000Z",
+              "limited": null,
+              "debut": null,
               "icon": {
                 "id": "10000140-icon",
                 "source": "character-icon",
-                "path": "/launcher-art/10df840704487b06f5f80028debb239d5b072e719a187f19347a6a10baf6b614.webp",
-                "url": "https://pengo.gg/dist/launcher-art/10df840704487b06f5f80028debb239d5b072e719a187f19347a6a10baf6b614.webp",
+                "path": "/launcher-art/99ae40058dd1df8ea65826292a8bf6650ca6bcfb4fe07cb424d58d75f21ca51a.webp",
+                "url": "https://pengo.gg/dist/launcher-art/99ae40058dd1df8ea65826292a8bf6650ca6bcfb4fe07cb424d58d75f21ca51a.webp",
                 "mime": "image/webp",
-                "size": 4550,
+                "size": 25612,
                 "dimensions": {
-                  "width": 102,
-                  "height": 103
+                  "width": 256,
+                  "height": 256
                 },
-                "sha256": "10df840704487b06f5f80028debb239d5b072e719a187f19347a6a10baf6b614",
+                "sha256": "99ae40058dd1df8ea65826292a8bf6650ca6bcfb4fe07cb424d58d75f21ca51a",
                 "transparentBounds": {
                   "left": 0,
                   "top": 0,
-                  "right": 102,
-                  "bottom": 103
+                  "right": 256,
+                  "bottom": 256
                 },
                 "placement": {
                   "anchor": "center",
@@ -357,71 +430,77 @@
       ],
       "news": [
         {
-          "id": "gi-hoyo-ann-7b9c2d416fd2",
-          "title": "\"To Temper Thyself and Journey Far\": Rewards of Dedication",
+          "id": "gi-hoyo-ann-03ff7c741c30",
+          "title": "\"The Godforsaken Frostlands\" Event: Complete Exploration Missions Within the Specified Duration to Obtain an Additional Primogems ×400",
           "type": "event",
-          "start": "2026-08-10T03:00:00.000Z",
-          "end": "2026-11-02T02:59:00.000Z",
-          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=21761"
+          "start": "2026-08-12T03:00:00.000Z",
+          "end": "2026-11-03T13:59:00.000Z",
+          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=21811"
         },
         {
-          "id": "gi-hoyo-ann-092fe78454ec",
-          "title": "\"Ley Line Overflow\" Event - Double Drops From Blossoms of Wealth and Blossoms of Revelation!",
-          "type": "event",
-          "start": "2026-08-03T03:00:00.000Z",
-          "end": "2026-08-10T02:59:00.000Z",
-          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=3364"
+          "id": "gi-hoyo-ann-362c7b658c03",
+          "title": "Event Wish \"Epitome Invocation\" - Boosted Drop Rates for Whitelake Frostfeather (Sword) and Crimson Moon's Semblance (Polearm)!",
+          "type": "banner",
+          "start": "2026-08-12T03:00:00.000Z",
+          "end": "2026-09-01T16:59:00.000Z",
+          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=21807"
         },
         {
-          "id": "gi-hoyo-ann-b73309f9d348",
-          "title": "Participate in \"Starlight Voyage: Splendor Aglow\" to Obtain Prismatic Crystals, the Token for the Colorful Surprise Box",
+          "id": "gi-hoyo-ann-63830df76aca",
+          "title": "\"Mutual Aid in Bloom: Into the Frostlands\" Event: Snezhnaya Expedition Operation",
           "type": "event",
-          "start": "2026-07-27T09:00:00.000Z",
-          "end": "2026-08-10T02:59:00.000Z",
-          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=21764"
+          "start": "2026-08-12T03:00:00.000Z",
+          "end": "2026-08-24T02:59:00.000Z",
+          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=21814"
         },
         {
-          "id": "gi-hoyo-ann-264753e69913",
-          "title": "\"Dance Dance Easy-Breezy Disco\" Event: Co-Op Dance Challenge",
-          "type": "event",
-          "start": "2026-07-24T09:00:00.000Z",
-          "end": "2026-08-03T02:59:00.000Z",
-          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=21760"
+          "id": "gi-hoyo-ann-6796a55db605",
+          "title": "Event Wish \"The Hearth's Ashen Shadow\" - Boosted Drop Rate for \"Dire Balemoon\" Arlecchino (Pyro)!",
+          "type": "banner",
+          "start": "2026-08-12T03:00:00.000Z",
+          "end": "2026-09-01T16:59:00.000Z",
+          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=21804"
         },
         {
-          "id": "gi-hoyo-ann-d0488121c15e",
-          "title": "\"Genius Invokation TCG\" Heated Battle Mode: Automatic Artistry",
+          "id": "gi-hoyo-ann-7d9e9eeb5111",
+          "title": "Complete the Archon Quest \"Everwinter Without Mercy\" Within the Specified Duration to Obtain Additional Primogems, Character Ascension Materials, and Other Rewards",
           "type": "event",
-          "start": "2026-07-18T09:00:00.000Z",
-          "end": "2026-08-03T02:59:00.000Z",
-          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=21368"
+          "start": "2026-08-12T03:00:00.000Z",
+          "end": "2026-09-22T13:59:00.000Z",
+          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=21809"
         },
         {
-          "id": "gi-hoyo-ann-d2a6bcc311cd",
-          "title": "\"Final Long-Range Sightlines\" Event: Shooting Strategy Challenge",
-          "type": "event",
-          "start": "2026-07-17T09:00:00.000Z",
-          "end": "2026-07-27T02:59:00.000Z",
-          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=21756"
+          "id": "gi-hoyo-ann-821ceb44ea6d",
+          "title": "Event Wish \"Swan's Shadow in Silken Ice\" - Boosted Drop Rate for \"Swirling Snow\" Odette (Cryo)!",
+          "type": "banner",
+          "start": "2026-08-12T03:00:00.000Z",
+          "end": "2026-09-01T16:59:00.000Z",
+          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=21803"
         },
         {
-          "id": "gi-hoyo-ann-5e481c62dc26",
-          "title": "Stygian Onslaught Event: Disturbance-affected Ley Line challenges",
-          "type": "challenge",
-          "start": "2026-07-08T09:00:00.000Z",
-          "end": "2026-08-11T02:59:00.000Z",
-          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=21168"
+          "id": "gi-hoyo-ann-97d85a301135",
+          "title": "\"Wonderland Treasures: Phantasmagoric Discourse\": New Manekin Cosmetics Now Available",
+          "type": "event",
+          "start": "2026-08-12T03:00:00.000Z",
+          "end": "2026-09-21T02:59:00.000Z",
+          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=21828"
         },
         {
-          "id": "gi-hoyo-ann-82ebf8a67d40",
-          "title": "\"Sunny Summer Fontinalia\" Event: Participate to Obtain Charlotte's Outfit and Invite \"Lens of Verity\" Charlotte (Cryo)",
+          "id": "gi-hoyo-ann-d9fdacc2d761",
+          "title": "\"Frostfarer\" Event Details",
           "type": "event",
-          "start": "2026-07-01T03:00:00.000Z",
-          "end": "2026-08-11T02:59:00.000Z",
-          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=21749"
+          "start": "2026-08-12T03:00:00.000Z",
+          "end": "2026-09-21T02:59:00.000Z",
+          "url": "https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=en&ann_id=21818"
         }
       ],
       "codes": [
+        {
+          "code": "MYSNEZHNAYACAREER",
+          "added": "2026-08-13",
+          "amount": 160,
+          "currency": "Primogems"
+        },
         {
           "code": "LEGEDILJKSGM",
           "added": "2026-08-11",
@@ -445,12 +524,6 @@
           "added": "2026-07-31",
           "amount": 100,
           "currency": "Primogems"
-        },
-        {
-          "code": "Odettte0812",
-          "added": "2026-07-31",
-          "amount": 100,
-          "currency": "Primogems"
         }
       ]
     },
@@ -464,7 +537,7 @@
         "remaining": {
           "startsAt": "2026-08-05T11:00:00.000Z",
           "endsAt": "2026-08-25T14:00:00.000Z",
-          "durationSeconds": 1005639
+          "durationSeconds": 985096
         },
         "characters": [
           {
@@ -476,20 +549,20 @@
             "icon": {
               "id": "1412-icon",
               "source": "character-icon",
-              "path": "/Database/GameData/hsr/assets/characters/round/1412.webp",
-              "url": "https://assets.pengo.gg/legacy/Database/GameData/hsr/assets/characters/round/1412.webp",
+              "path": "/launcher-art/c80c3e76ceef02ba54f3e0b64066a67f15b65e2a962bc17ed0d24cb5ff7fca25.webp",
+              "url": "https://pengo.gg/dist/launcher-art/c80c3e76ceef02ba54f3e0b64066a67f15b65e2a962bc17ed0d24cb5ff7fca25.webp",
               "mime": "image/webp",
-              "size": 10508,
+              "size": 9346,
               "dimensions": {
                 "width": 128,
-                "height": 128
+                "height": 125
               },
-              "sha256": "4981464ab4615b0197244496fb26eabdf433a2e8d1a4edaf6d78b6eb23b1e1c4",
+              "sha256": "c80c3e76ceef02ba54f3e0b64066a67f15b65e2a962bc17ed0d24cb5ff7fca25",
               "transparentBounds": {
                 "left": 0,
                 "top": 0,
                 "right": 128,
-                "bottom": 128
+                "bottom": 125
               },
               "placement": {
                 "anchor": "center",
@@ -535,19 +608,19 @@
             "icon": {
               "id": "1405-icon",
               "source": "character-icon",
-              "path": "/Database/GameData/hsr/assets/characters/round/1405.webp",
-              "url": "https://assets.pengo.gg/legacy/Database/GameData/hsr/assets/characters/round/1405.webp",
+              "path": "/launcher-art/a1e70bd3706d0cdfe5958ab21ccfd71ff992744014048ecc8c07688375c8c9b7.webp",
+              "url": "https://pengo.gg/dist/launcher-art/a1e70bd3706d0cdfe5958ab21ccfd71ff992744014048ecc8c07688375c8c9b7.webp",
               "mime": "image/webp",
-              "size": 10218,
+              "size": 9216,
               "dimensions": {
-                "width": 128,
+                "width": 123,
                 "height": 128
               },
-              "sha256": "1a5e62c6084655ec0d213a1a1ddb6024b191d69d75992447637e14fe479d3b0e",
+              "sha256": "a1e70bd3706d0cdfe5958ab21ccfd71ff992744014048ecc8c07688375c8c9b7",
               "transparentBounds": {
                 "left": 0,
                 "top": 0,
-                "right": 128,
+                "right": 123,
                 "bottom": 128
               },
               "placement": {
@@ -594,20 +667,20 @@
             "icon": {
               "id": "1304-icon",
               "source": "character-icon",
-              "path": "/Database/GameData/hsr/assets/characters/round/1304.webp",
-              "url": "https://assets.pengo.gg/legacy/Database/GameData/hsr/assets/characters/round/1304.webp",
+              "path": "/launcher-art/07832772668a30a308b08cd64df0f36df3a882664b17b97d4177fe95c008b03c.webp",
+              "url": "https://pengo.gg/dist/launcher-art/07832772668a30a308b08cd64df0f36df3a882664b17b97d4177fe95c008b03c.webp",
               "mime": "image/webp",
-              "size": 9470,
+              "size": 8614,
               "dimensions": {
-                "width": 128,
-                "height": 128
+                "width": 124,
+                "height": 125
               },
-              "sha256": "96d201696227ed7aefd561265622f777c1d46633ca6d7b77b25d8a073be6e5a6",
+              "sha256": "07832772668a30a308b08cd64df0f36df3a882664b17b97d4177fe95c008b03c",
               "transparentBounds": {
                 "left": 0,
                 "top": 0,
-                "right": 128,
-                "bottom": 128
+                "right": 124,
+                "bottom": 125
               },
               "placement": {
                 "anchor": "center",
@@ -654,20 +727,20 @@
           "icon": {
             "id": "1412-icon",
             "source": "character-icon",
-            "path": "/Database/GameData/hsr/assets/characters/round/1412.webp",
-            "url": "https://assets.pengo.gg/legacy/Database/GameData/hsr/assets/characters/round/1412.webp",
+            "path": "/launcher-art/c80c3e76ceef02ba54f3e0b64066a67f15b65e2a962bc17ed0d24cb5ff7fca25.webp",
+            "url": "https://pengo.gg/dist/launcher-art/c80c3e76ceef02ba54f3e0b64066a67f15b65e2a962bc17ed0d24cb5ff7fca25.webp",
             "mime": "image/webp",
-            "size": 10508,
+            "size": 9346,
             "dimensions": {
               "width": 128,
-              "height": 128
+              "height": 125
             },
-            "sha256": "4981464ab4615b0197244496fb26eabdf433a2e8d1a4edaf6d78b6eb23b1e1c4",
+            "sha256": "c80c3e76ceef02ba54f3e0b64066a67f15b65e2a962bc17ed0d24cb5ff7fca25",
             "transparentBounds": {
               "left": 0,
               "top": 0,
               "right": 128,
-              "bottom": 128
+              "bottom": 125
             },
             "placement": {
               "anchor": "center",
@@ -794,25 +867,65 @@
               "id": "1512",
               "name": "Robin • Summeretto",
               "rarity": 5,
-              "limited": true,
-              "debut": "2024-05-08T03:00:00.000Z",
+              "limited": null,
+              "debut": null,
               "icon": {
                 "id": "1512-icon",
                 "source": "character-icon",
-                "path": "/Database/GameData/hsr/assets/characters/round/1512.webp",
-                "url": "https://assets.pengo.gg/legacy/Database/GameData/hsr/assets/characters/round/1512.webp",
+                "path": "/launcher-art/ec3a7f736c593c99860de239f40eee28423dd3a11147b122d3391c9feee181fc.webp",
+                "url": "https://pengo.gg/dist/launcher-art/ec3a7f736c593c99860de239f40eee28423dd3a11147b122d3391c9feee181fc.webp",
                 "mime": "image/webp",
-                "size": 11340,
+                "size": 10366,
                 "dimensions": {
-                  "width": 128,
-                  "height": 128
+                  "width": 125,
+                  "height": 126
                 },
-                "sha256": "b48bc5c377bb8ec11811c71b150aba783a79a88d663fe990f22ea2d49a7a90b7",
+                "sha256": "ec3a7f736c593c99860de239f40eee28423dd3a11147b122d3391c9feee181fc",
                 "transparentBounds": {
                   "left": 0,
                   "top": 0,
-                  "right": 128,
-                  "bottom": 128
+                  "right": 125,
+                  "bottom": 126
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            }
+          ]
+        },
+        {
+          "phase": null,
+          "start": "2026-09-16T16:00:00.000Z",
+          "end": "2026-10-06T16:00:00.000Z",
+          "characters": [
+            {
+              "id": "1513",
+              "name": "Aventurine • Waveflair",
+              "rarity": 5,
+              "limited": null,
+              "debut": null,
+              "icon": {
+                "id": "1513-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/a0e8b7e5e254e2c65f7c45ad950e9c34fe25ec701a93fac42d81d40fb7406d9f.webp",
+                "url": "https://pengo.gg/dist/launcher-art/a0e8b7e5e254e2c65f7c45ad950e9c34fe25ec701a93fac42d81d40fb7406d9f.webp",
+                "mime": "image/webp",
+                "size": 9458,
+                "dimensions": {
+                  "width": 114,
+                  "height": 125
+                },
+                "sha256": "a0e8b7e5e254e2c65f7c45ad950e9c34fe25ec701a93fac42d81d40fb7406d9f",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 114,
+                  "bottom": 125
                 },
                 "placement": {
                   "anchor": "center",
@@ -835,7 +948,7 @@
               "id": "pearl",
               "name": "Pearl",
               "rarity": null,
-              "limited": false,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "pearl-icon",
@@ -868,7 +981,7 @@
               "id": "nihilux",
               "name": "Nihilux",
               "rarity": null,
-              "limited": false,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "nihilux-icon",
@@ -901,6 +1014,14 @@
         }
       ],
       "news": [
+        {
+          "id": "hsr-hoyo-ann-093f57d0dc07",
+          "title": "Fate[UBW] Collaboration Warp Details",
+          "type": "banner",
+          "start": "2026-08-14T03:00:00.000Z",
+          "end": "2026-08-24T02:59:00.000Z",
+          "url": "https://sg-hkrpg-api.hoyoverse.com/common/hkrpg_global/announcement/api/getAnnContent?game=hkrpg&game_biz=hkrpg_global&lang=en&ann_id=1339"
+        },
         {
           "id": "hsr-hoyo-ann-59582dfb96bb",
           "title": "Version 4.4 Event Warp: Phase II",
@@ -948,14 +1069,6 @@
           "start": "2026-07-03T07:00:00.000Z",
           "end": "2026-08-25T16:00:00.000Z",
           "url": "https://sg-hkrpg-api.hoyoverse.com/common/hkrpg_global/announcement/api/getAnnContent?game=hkrpg&game_biz=hkrpg_global&lang=en&ann_id=1299"
-        },
-        {
-          "id": "hsr-hoyo-ann-093f57d0dc07",
-          "title": "Fate[UBW] Collaboration Warp Details",
-          "type": "banner",
-          "start": "2026-07-03T06:55:00.000Z",
-          "end": null,
-          "url": "https://sg-hkrpg-api.hoyoverse.com/common/hkrpg_global/announcement/api/getAnnContent?game=hkrpg&game_biz=hkrpg_global&lang=en&ann_id=1339"
         },
         {
           "id": "hsr-hoyo-ann-df1a5352d767",
@@ -1009,7 +1122,7 @@
         "remaining": {
           "startsAt": "2026-07-29T03:00:00.000Z",
           "endsAt": "2026-08-19T03:59:59.000Z",
-          "durationSeconds": 451238
+          "durationSeconds": 430695
         },
         "characters": [
           {
@@ -1021,15 +1134,15 @@
             "icon": {
               "id": "1501-icon",
               "source": "character-icon",
-              "path": "/Database/GameData/zzz/assets/agents/partner-icons/IconRoleCircle57.webp",
-              "url": "https://assets.pengo.gg/legacy/Database/GameData/zzz/assets/agents/partner-icons/IconRoleCircle57.webp",
+              "path": "/launcher-art/535effcd8f6f07d6461e360add5397bce60e0dbb65c1184e67d8a9393d6f8148.webp",
+              "url": "https://pengo.gg/dist/launcher-art/535effcd8f6f07d6461e360add5397bce60e0dbb65c1184e67d8a9393d6f8148.webp",
               "mime": "image/webp",
-              "size": 9578,
+              "size": 8306,
               "dimensions": {
                 "width": 142,
                 "height": 142
               },
-              "sha256": "54f655b75153f7e43d0aec6afe9fd689000ad8e9746ed893bf8fd2134189285d",
+              "sha256": "535effcd8f6f07d6461e360add5397bce60e0dbb65c1184e67d8a9393d6f8148",
               "transparentBounds": {
                 "left": 0,
                 "top": 0,
@@ -1080,15 +1193,15 @@
             "icon": {
               "id": "1581-icon",
               "source": "character-icon",
-              "path": "/Database/GameData/zzz/assets/agents/partner-icons/IconRoleCircle67.webp",
-              "url": "https://assets.pengo.gg/legacy/Database/GameData/zzz/assets/agents/partner-icons/IconRoleCircle67.webp",
+              "path": "/launcher-art/16e3038786bd9f094cc2bc7ea2b1eefdb71b4255b316203bda9c2d138a2e773b.webp",
+              "url": "https://pengo.gg/dist/launcher-art/16e3038786bd9f094cc2bc7ea2b1eefdb71b4255b316203bda9c2d138a2e773b.webp",
               "mime": "image/webp",
-              "size": 9874,
+              "size": 8596,
               "dimensions": {
                 "width": 142,
                 "height": 142
               },
-              "sha256": "7548abd3c9fcca725fb6b1a9d29cff1757f74275bd7c7bc272064150ff0df57c",
+              "sha256": "16e3038786bd9f094cc2bc7ea2b1eefdb71b4255b316203bda9c2d138a2e773b",
               "transparentBounds": {
                 "left": 0,
                 "top": 0,
@@ -1140,15 +1253,15 @@
           "icon": {
             "id": "1581-icon",
             "source": "character-icon",
-            "path": "/Database/GameData/zzz/assets/agents/partner-icons/IconRoleCircle67.webp",
-            "url": "https://assets.pengo.gg/legacy/Database/GameData/zzz/assets/agents/partner-icons/IconRoleCircle67.webp",
+            "path": "/launcher-art/16e3038786bd9f094cc2bc7ea2b1eefdb71b4255b316203bda9c2d138a2e773b.webp",
+            "url": "https://pengo.gg/dist/launcher-art/16e3038786bd9f094cc2bc7ea2b1eefdb71b4255b316203bda9c2d138a2e773b.webp",
             "mime": "image/webp",
-            "size": 9874,
+            "size": 8596,
             "dimensions": {
               "width": 142,
               "height": 142
             },
-            "sha256": "7548abd3c9fcca725fb6b1a9d29cff1757f74275bd7c7bc272064150ff0df57c",
+            "sha256": "16e3038786bd9f094cc2bc7ea2b1eefdb71b4255b316203bda9c2d138a2e773b",
             "transparentBounds": {
               "left": 0,
               "top": 0,
@@ -1247,28 +1360,61 @@
       },
       "upcoming": [
         {
-          "phase": "3.1",
-          "start": "2026-08-19T04:00:00.000Z",
-          "end": "2026-09-08T06:59:59.000Z",
+          "phase": null,
+          "start": "2026-08-19T10:00:00.000Z",
+          "end": "2026-09-08T10:00:00.000Z",
           "characters": [
             {
-              "id": "1481",
-              "name": "Dialyn",
-              "rarity": 5,
-              "limited": true,
-              "debut": "2025-11-26T03:00:00.000Z",
+              "id": "1591",
+              "name": "Sigrid",
+              "rarity": 4,
+              "limited": null,
+              "debut": null,
               "icon": {
-                "id": "1481-icon",
+                "id": "1591-icon",
                 "source": "character-icon",
-                "path": "/Database/GameData/zzz/assets/agents/partner-icons/IconRoleCircle54.webp",
-                "url": "https://assets.pengo.gg/legacy/Database/GameData/zzz/assets/agents/partner-icons/IconRoleCircle54.webp",
+                "path": "/launcher-art/353dc56a14d8dc8135b57a017843fb869a0804016294af6d7ed687a5379d009d.webp",
+                "url": "https://pengo.gg/dist/launcher-art/353dc56a14d8dc8135b57a017843fb869a0804016294af6d7ed687a5379d009d.webp",
                 "mime": "image/webp",
-                "size": 10420,
+                "size": 8190,
                 "dimensions": {
                   "width": 142,
                   "height": 142
                 },
-                "sha256": "697a6fac5c94e44ebf2fb1f13de3c52923d610f9c56740f0ccbd5fd632166ca4",
+                "sha256": "353dc56a14d8dc8135b57a017843fb869a0804016294af6d7ed687a5379d009d",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 142,
+                  "bottom": 142
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            },
+            {
+              "id": "1481",
+              "name": "Dialyn",
+              "rarity": 4,
+              "limited": null,
+              "debut": "2025-11-26T03:00:00.000Z",
+              "icon": {
+                "id": "1481-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/fcffce6b200b3be9453fcc510097dde07af31e568be7b18813bbda91840a2682.webp",
+                "url": "https://pengo.gg/dist/launcher-art/fcffce6b200b3be9453fcc510097dde07af31e568be7b18813bbda91840a2682.webp",
+                "mime": "image/webp",
+                "size": 8758,
+                "dimensions": {
+                  "width": 142,
+                  "height": 142
+                },
+                "sha256": "fcffce6b200b3be9453fcc510097dde07af31e568be7b18813bbda91840a2682",
                 "transparentBounds": {
                   "left": 0,
                   "top": 0,
@@ -1287,21 +1433,21 @@
             {
               "id": "1411",
               "name": "Yuzuha",
-              "rarity": 5,
-              "limited": true,
+              "rarity": 4,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "1411-icon",
                 "source": "character-icon",
-                "path": "/Database/GameData/zzz/assets/agents/partner-icons/IconRoleCircle47.webp",
-                "url": "https://assets.pengo.gg/legacy/Database/GameData/zzz/assets/agents/partner-icons/IconRoleCircle47.webp",
+                "path": "/launcher-art/1c5e5d9c879eb9d75d1d3baad1e640c66bbb2b735dd5c4ddb4057945116cf57f.webp",
+                "url": "https://pengo.gg/dist/launcher-art/1c5e5d9c879eb9d75d1d3baad1e640c66bbb2b735dd5c4ddb4057945116cf57f.webp",
                 "mime": "image/webp",
-                "size": 9002,
+                "size": 7894,
                 "dimensions": {
                   "width": 142,
                   "height": 142
                 },
-                "sha256": "c5310ef6a0d567ca4bf1ffb5057c142bfdcde272bb8ebfeff9330ce0548d1b5b",
+                "sha256": "1c5e5d9c879eb9d75d1d3baad1e640c66bbb2b735dd5c4ddb4057945116cf57f",
                 "transparentBounds": {
                   "left": 0,
                   "top": 0,
@@ -1320,54 +1466,21 @@
             {
               "id": "1201",
               "name": "Harumasa",
-              "rarity": 5,
-              "limited": true,
+              "rarity": 4,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "1201-icon",
                 "source": "character-icon",
-                "path": "/Database/GameData/zzz/assets/agents/partner-icons/IconRoleCircle35.webp",
-                "url": "https://assets.pengo.gg/legacy/Database/GameData/zzz/assets/agents/partner-icons/IconRoleCircle35.webp",
+                "path": "/launcher-art/28751cf9c509a07d8b57841c0848f4e3a145c8e69bfe9dd62360b0b68e11824d.webp",
+                "url": "https://pengo.gg/dist/launcher-art/28751cf9c509a07d8b57841c0848f4e3a145c8e69bfe9dd62360b0b68e11824d.webp",
                 "mime": "image/webp",
-                "size": 9502,
+                "size": 8268,
                 "dimensions": {
                   "width": 142,
                   "height": 142
                 },
-                "sha256": "3f5c9e4866beebb608e35f50e164671e86af239dcc0479a161327767a75611c5",
-                "transparentBounds": {
-                  "left": 0,
-                  "top": 0,
-                  "right": 142,
-                  "bottom": 142
-                },
-                "placement": {
-                  "anchor": "center",
-                  "fit": "cover",
-                  "x": 0.5,
-                  "y": 0.5
-                }
-              },
-              "variants": []
-            },
-            {
-              "id": "1591",
-              "name": "Sigrid",
-              "rarity": 5,
-              "limited": true,
-              "debut": null,
-              "icon": {
-                "id": "1591-icon",
-                "source": "character-icon",
-                "path": "/Database/GameData/zzz/assets/agents/partner-icons/IconRoleCircle66.webp",
-                "url": "https://assets.pengo.gg/legacy/Database/GameData/zzz/assets/agents/partner-icons/IconRoleCircle66.webp",
-                "mime": "image/webp",
-                "size": 9640,
-                "dimensions": {
-                  "width": 142,
-                  "height": 142
-                },
-                "sha256": "06f38f58db6a859e95b08202431221559ca5dbd0fa942d399aac3e9495b8fc92",
+                "sha256": "28751cf9c509a07d8b57841c0848f4e3a145c8e69bfe9dd62360b0b68e11824d",
                 "transparentBounds": {
                   "left": 0,
                   "top": 0,
@@ -1395,7 +1508,7 @@
               "id": "claret",
               "name": "Claret",
               "rarity": null,
-              "limited": false,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "claret-icon",
@@ -1428,7 +1541,7 @@
               "id": "roxy",
               "name": "Roxy",
               "rarity": null,
-              "limited": false,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "roxy-icon",
@@ -1461,7 +1574,7 @@
               "id": "sunbringer",
               "name": "Sunbringer",
               "rarity": null,
-              "limited": false,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "sunbringer-icon",
@@ -1494,7 +1607,7 @@
               "id": "phoenix",
               "name": "Phoenix",
               "rarity": null,
-              "limited": false,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "phoenix-icon",
@@ -1527,7 +1640,7 @@
               "id": "the-storyteller",
               "name": "The Storyteller",
               "rarity": null,
-              "limited": false,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "the-storyteller-icon",
@@ -1560,6 +1673,14 @@
         }
       ],
       "news": [
+        {
+          "id": "zzz-hoyo-ann-6e42a70461e4",
+          "title": "\"Extensive Patrol: Triple Bounty\" Event Details",
+          "type": "event",
+          "start": "2026-08-12T03:00:00.000Z",
+          "end": "2026-08-17T02:59:00.000Z",
+          "url": "https://sg-announcement-api.hoyoverse.com/common/nap_global/announcement/api/getAnnContent?game=nap&game_biz=nap_global&lang=en&ann_id=1243"
+        },
         {
           "id": "zzz-hoyo-ann-e5b14140c51c",
           "title": "\"Snap! Focus Showdown!\" Event Details",
@@ -1615,14 +1736,6 @@
           "start": "2026-07-22T03:00:00.000Z",
           "end": "2026-07-27T02:59:00.000Z",
           "url": "https://sg-announcement-api.hoyoverse.com/common/nap_global/announcement/api/getAnnContent?game=nap&game_biz=nap_global&lang=en&ann_id=1227"
-        },
-        {
-          "id": "zzz-hoyo-ann-dc5ffc5377a7",
-          "title": "\"'En-Nah' Into Your Lap\" Event Details",
-          "type": "event",
-          "start": "2026-07-08T09:00:00.000Z",
-          "end": "2026-07-28T02:59:00.000Z",
-          "url": "https://sg-announcement-api.hoyoverse.com/common/nap_global/announcement/api/getAnnContent?game=nap&game_biz=nap_global&lang=en&ann_id=1226"
         }
       ],
       "codes": [
@@ -1656,7 +1769,7 @@
         "remaining": {
           "startsAt": "2026-07-30T09:00:00.000Z",
           "endsAt": "2026-08-19T10:59:00.000Z",
-          "durationSeconds": 476379
+          "durationSeconds": 455836
         },
         "characters": [
           {
@@ -1668,15 +1781,15 @@
             "icon": {
               "id": "1110-icon",
               "source": "character-icon",
-              "path": "/Database/GameData/ww/assets/characters/icons/UIResources/Common/Image/IconRoleHead256/T_IconRoleHead256_71_UI.webp",
-              "url": "https://assets.pengo.gg/legacy/Database/GameData/ww/assets/characters/icons/UIResources/Common/Image/IconRoleHead256/T_IconRoleHead256_71_UI.webp",
+              "path": "/launcher-art/8dcbbd74a08c6e5b36bc2ba9f63624a73332e8d08c882612d1deff38a720d56a.webp",
+              "url": "https://pengo.gg/dist/launcher-art/8dcbbd74a08c6e5b36bc2ba9f63624a73332e8d08c882612d1deff38a720d56a.webp",
               "mime": "image/webp",
-              "size": 34184,
+              "size": 31182,
               "dimensions": {
                 "width": 256,
                 "height": 256
               },
-              "sha256": "4b29e9420635626deb81c00a5c7f8c98eb88d5e0ac5d849570c8b7a566822c0a",
+              "sha256": "8dcbbd74a08c6e5b36bc2ba9f63624a73332e8d08c882612d1deff38a720d56a",
               "transparentBounds": {
                 "left": 0,
                 "top": 0,
@@ -1727,15 +1840,15 @@
             "icon": {
               "id": "1210-icon",
               "source": "character-icon",
-              "path": "/Database/GameData/ww/assets/characters/icons/UIResources/Common/Image/IconRoleHead256/T_IconRoleHead256_53_UI.webp",
-              "url": "https://assets.pengo.gg/legacy/Database/GameData/ww/assets/characters/icons/UIResources/Common/Image/IconRoleHead256/T_IconRoleHead256_53_UI.webp",
+              "path": "/launcher-art/472d936b939231c01199b8b855a2f3bb383c6ecb7893545b3cb0cb71bc971329.webp",
+              "url": "https://pengo.gg/dist/launcher-art/472d936b939231c01199b8b855a2f3bb383c6ecb7893545b3cb0cb71bc971329.webp",
               "mime": "image/webp",
-              "size": 39182,
+              "size": 35006,
               "dimensions": {
                 "width": 256,
                 "height": 256
               },
-              "sha256": "b86a0edf9d5f5b452f6aa094795f6898684ec0ae424adfa2ec3ca6226d34a7da",
+              "sha256": "472d936b939231c01199b8b855a2f3bb383c6ecb7893545b3cb0cb71bc971329",
               "transparentBounds": {
                 "left": 0,
                 "top": 0,
@@ -1787,15 +1900,15 @@
           "icon": {
             "id": "1110-icon",
             "source": "character-icon",
-            "path": "/Database/GameData/ww/assets/characters/icons/UIResources/Common/Image/IconRoleHead256/T_IconRoleHead256_71_UI.webp",
-            "url": "https://assets.pengo.gg/legacy/Database/GameData/ww/assets/characters/icons/UIResources/Common/Image/IconRoleHead256/T_IconRoleHead256_71_UI.webp",
+            "path": "/launcher-art/8dcbbd74a08c6e5b36bc2ba9f63624a73332e8d08c882612d1deff38a720d56a.webp",
+            "url": "https://pengo.gg/dist/launcher-art/8dcbbd74a08c6e5b36bc2ba9f63624a73332e8d08c882612d1deff38a720d56a.webp",
             "mime": "image/webp",
-            "size": 34184,
+            "size": 31182,
             "dimensions": {
               "width": 256,
               "height": 256
             },
-            "sha256": "4b29e9420635626deb81c00a5c7f8c98eb88d5e0ac5d849570c8b7a566822c0a",
+            "sha256": "8dcbbd74a08c6e5b36bc2ba9f63624a73332e8d08c882612d1deff38a720d56a",
             "transparentBounds": {
               "left": 0,
               "top": 0,
@@ -1902,24 +2015,24 @@
               "id": "qingxiao",
               "name": "Qingxiao",
               "rarity": 5,
-              "limited": true,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "qingxiao-icon",
                 "source": "character-icon",
-                "path": "/Database/Prydwen/ww/assets/characters/qingxiao-df2ddd77ec24.webp",
-                "url": "https://assets.pengo.gg/legacy/Database/Prydwen/ww/assets/characters/qingxiao-df2ddd77ec24.webp",
+                "path": "/launcher-art/2aeeb0778aa4465fda00823a8c7afbd4f8fc624aa42bbc7d15a510dae2a5c41a.webp",
+                "url": "https://pengo.gg/dist/launcher-art/2aeeb0778aa4465fda00823a8c7afbd4f8fc624aa42bbc7d15a510dae2a5c41a.webp",
                 "mime": "image/webp",
-                "size": 346546,
+                "size": 460040,
                 "dimensions": {
-                  "width": 2048,
+                  "width": 1399,
                   "height": 2048
                 },
-                "sha256": "642f1e1c544d277ede2730087660b9e5bb57fb8bd1ec20e4f8831751d68c6252",
+                "sha256": "2aeeb0778aa4465fda00823a8c7afbd4f8fc624aa42bbc7d15a510dae2a5c41a",
                 "transparentBounds": {
                   "left": 0,
                   "top": 0,
-                  "right": 2048,
+                  "right": 1399,
                   "bottom": 2048
                 },
                 "placement": {
@@ -1935,20 +2048,93 @@
               "id": "1211",
               "name": "Denia",
               "rarity": 5,
-              "limited": true,
+              "limited": null,
               "debut": "2026-05-21T02:00:00.000Z",
               "icon": {
                 "id": "1211-icon",
                 "source": "character-icon",
-                "path": "/Database/GameData/ww/assets/characters/icons/UIResources/Common/Image/IconRoleHead256/T_IconRoleHead256_64_UI.webp",
-                "url": "https://assets.pengo.gg/legacy/Database/GameData/ww/assets/characters/icons/UIResources/Common/Image/IconRoleHead256/T_IconRoleHead256_64_UI.webp",
+                "path": "/launcher-art/7176c8ddcc1dd67f7c8dabea155d870aec1aa92627d9ba30fd7f486f31effb9b.webp",
+                "url": "https://pengo.gg/dist/launcher-art/7176c8ddcc1dd67f7c8dabea155d870aec1aa92627d9ba30fd7f486f31effb9b.webp",
                 "mime": "image/webp",
-                "size": 37812,
+                "size": 34346,
                 "dimensions": {
                   "width": 256,
                   "height": 256
                 },
-                "sha256": "7df0acadf188d299ba74670f2b0e3964c502e9a089fcb6818feb2377a81baca2",
+                "sha256": "7176c8ddcc1dd67f7c8dabea155d870aec1aa92627d9ba30fd7f486f31effb9b",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 256,
+                  "bottom": 256
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            }
+          ]
+        },
+        {
+          "phase": null,
+          "start": "2026-09-10T10:00:00.000Z",
+          "end": "2026-09-30T10:00:00.000Z",
+          "characters": [
+            {
+              "id": "1209",
+              "name": "Mornye",
+              "rarity": 5,
+              "limited": null,
+              "debut": "2026-01-15T02:00:00.000Z",
+              "icon": {
+                "id": "1209-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/807eaa41a89099950080510ecf0694ce36609c3d45a2cd800ff7e429b4bd2ee9.webp",
+                "url": "https://pengo.gg/dist/launcher-art/807eaa41a89099950080510ecf0694ce36609c3d45a2cd800ff7e429b4bd2ee9.webp",
+                "mime": "image/webp",
+                "size": 33376,
+                "dimensions": {
+                  "width": 256,
+                  "height": 256
+                },
+                "sha256": "807eaa41a89099950080510ecf0694ce36609c3d45a2cd800ff7e429b4bd2ee9",
+                "transparentBounds": {
+                  "left": 0,
+                  "top": 0,
+                  "right": 256,
+                  "bottom": 256
+                },
+                "placement": {
+                  "anchor": "center",
+                  "fit": "cover",
+                  "x": 0.5,
+                  "y": 0.5
+                }
+              },
+              "variants": []
+            },
+            {
+              "id": "1108",
+              "name": "Hiyuki",
+              "rarity": 5,
+              "limited": null,
+              "debut": null,
+              "icon": {
+                "id": "1108-icon",
+                "source": "character-icon",
+                "path": "/launcher-art/10351733b59cb97f95f5b0a7f25fe05917f17d09a856439cab24fb916e37a261.webp",
+                "url": "https://pengo.gg/dist/launcher-art/10351733b59cb97f95f5b0a7f25fe05917f17d09a856439cab24fb916e37a261.webp",
+                "mime": "image/webp",
+                "size": 31554,
+                "dimensions": {
+                  "width": 256,
+                  "height": 256
+                },
+                "sha256": "10351733b59cb97f95f5b0a7f25fe05917f17d09a856439cab24fb916e37a261",
                 "transparentBounds": {
                   "left": 0,
                   "top": 0,
@@ -1976,7 +2162,7 @@
               "id": "jingran",
               "name": "Jingran",
               "rarity": 5,
-              "limited": false,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "jingran-icon",
@@ -2009,7 +2195,7 @@
               "id": "suoming",
               "name": "Suoming",
               "rarity": 5,
-              "limited": false,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "suoming-icon",
@@ -2042,7 +2228,7 @@
               "id": "hsin",
               "name": "Hsin",
               "rarity": 5,
-              "limited": false,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "hsin-icon",
@@ -2171,7 +2357,7 @@
         "remaining": {
           "startsAt": "2026-08-09T04:00:00.000Z",
           "endsAt": "2026-09-01T21:59:59.000Z",
-          "durationSeconds": 1639238
+          "durationSeconds": 1618695
         },
         "characters": [
           {
@@ -2183,15 +2369,15 @@
             "icon": {
               "id": "liino-icon",
               "source": "character-icon",
-              "path": "/Database/EndfieldWiki/endfield/assets/operators/liino/icon.png",
-              "url": "https://assets.pengo.gg/legacy/Database/EndfieldWiki/endfield/assets/operators/liino/icon.png",
-              "mime": "image/png",
-              "size": 11459,
+              "path": "/launcher-art/5d1b9c58c3e17a00d7ae3790d5298f39fbd259a5043a11c140a9fc798092da1d.webp",
+              "url": "https://pengo.gg/dist/launcher-art/5d1b9c58c3e17a00d7ae3790d5298f39fbd259a5043a11c140a9fc798092da1d.webp",
+              "mime": "image/webp",
+              "size": 10648,
               "dimensions": {
                 "width": 120,
                 "height": 120
               },
-              "sha256": "9944d8fc05b5bdc30a7cdbf92066617e23bd18786238794c12da3447f34adf8a",
+              "sha256": "5d1b9c58c3e17a00d7ae3790d5298f39fbd259a5043a11c140a9fc798092da1d",
               "transparentBounds": {
                 "left": 0,
                 "top": 0,
@@ -2242,15 +2428,15 @@
             "icon": {
               "id": "arcane-icon",
               "source": "character-icon",
-              "path": "/Database/EndfieldWiki/endfield/assets/operators/arcane/icon.png",
-              "url": "https://assets.pengo.gg/legacy/Database/EndfieldWiki/endfield/assets/operators/arcane/icon.png",
-              "mime": "image/png",
-              "size": 11822,
+              "path": "/launcher-art/30661a284e29198fb1acfe918df391735e177da07e8bfdfd1d9747ea278aa24a.webp",
+              "url": "https://pengo.gg/dist/launcher-art/30661a284e29198fb1acfe918df391735e177da07e8bfdfd1d9747ea278aa24a.webp",
+              "mime": "image/webp",
+              "size": 9500,
               "dimensions": {
                 "width": 120,
                 "height": 120
               },
-              "sha256": "a629dd333fb8e99f050fbe7976002a6fddeb06bb4f8158d4e05aa1aafc62fdb4",
+              "sha256": "30661a284e29198fb1acfe918df391735e177da07e8bfdfd1d9747ea278aa24a",
               "transparentBounds": {
                 "left": 0,
                 "top": 0,
@@ -2301,15 +2487,15 @@
             "icon": {
               "id": "camille-icon",
               "source": "character-icon",
-              "path": "/Database/EndfieldWiki/endfield/assets/operators/camille/icon.png",
-              "url": "https://assets.pengo.gg/legacy/Database/EndfieldWiki/endfield/assets/operators/camille/icon.png",
-              "mime": "image/png",
-              "size": 37435,
+              "path": "/launcher-art/fec6acbf237dc539882654155f30d8fe7f816306f42bad15473467dbae4587f5.webp",
+              "url": "https://pengo.gg/dist/launcher-art/fec6acbf237dc539882654155f30d8fe7f816306f42bad15473467dbae4587f5.webp",
+              "mime": "image/webp",
+              "size": 9178,
               "dimensions": {
                 "width": 120,
                 "height": 120
               },
-              "sha256": "901c7c291b2971a98250023df392498a05025bd341312d41e6d1a67f316adca9",
+              "sha256": "fec6acbf237dc539882654155f30d8fe7f816306f42bad15473467dbae4587f5",
               "transparentBounds": {
                 "left": 0,
                 "top": 0,
@@ -2361,15 +2547,15 @@
           "icon": {
             "id": "liino-icon",
             "source": "character-icon",
-            "path": "/Database/EndfieldWiki/endfield/assets/operators/liino/icon.png",
-            "url": "https://assets.pengo.gg/legacy/Database/EndfieldWiki/endfield/assets/operators/liino/icon.png",
-            "mime": "image/png",
-            "size": 11459,
+            "path": "/launcher-art/5d1b9c58c3e17a00d7ae3790d5298f39fbd259a5043a11c140a9fc798092da1d.webp",
+            "url": "https://pengo.gg/dist/launcher-art/5d1b9c58c3e17a00d7ae3790d5298f39fbd259a5043a11c140a9fc798092da1d.webp",
+            "mime": "image/webp",
+            "size": 10648,
             "dimensions": {
               "width": 120,
               "height": 120
             },
-            "sha256": "9944d8fc05b5bdc30a7cdbf92066617e23bd18786238794c12da3447f34adf8a",
+            "sha256": "5d1b9c58c3e17a00d7ae3790d5298f39fbd259a5043a11c140a9fc798092da1d",
             "transparentBounds": {
               "left": 0,
               "top": 0,
@@ -2502,7 +2688,7 @@
               "id": "siferanmutproxy",
               "name": "Si (Feranmut Proxy)",
               "rarity": null,
-              "limited": false,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "siferanmutproxy-icon",
@@ -2535,7 +2721,7 @@
               "id": "hongshanimperialguard",
               "name": "Hongshan Imperial Guard",
               "rarity": null,
-              "limited": false,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "hongshanimperialguard-icon",
@@ -2568,7 +2754,7 @@
               "id": "sarkazarcher",
               "name": "Sarkaz Archer",
               "rarity": null,
-              "limited": false,
+              "limited": null,
               "debut": null,
               "icon": {
                 "id": "sarkazarcher-icon",

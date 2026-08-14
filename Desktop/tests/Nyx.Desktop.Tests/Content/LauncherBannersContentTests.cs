@@ -519,7 +519,7 @@ public sealed class LauncherBannersContentTests
     }
 
     [Fact]
-    public async Task Every_banner_character_icon_hydrates_from_its_validated_pengo_source()
+    public async Task Every_banner_character_icon_resolves_from_the_bundle_or_its_validated_pengo_source()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Site", "src", "data", "generated", "launcher-banners-v1.json"))) directory = directory.Parent;
@@ -532,10 +532,10 @@ public sealed class LauncherBannersContentTests
             using var document = JsonDocument.Parse(payload);
             var manifest = LauncherBannersManifestParser.Parse(payload, fallback: false, document.RootElement.GetProperty("generatedAt").GetDateTimeOffset());
             var launcherCache = new LauncherBannersCache(cache);
-            Assert.True(await launcherCache.HydrateAssetsAsync(
+            _ = await launcherCache.HydrateAssetsAsync(
                 manifest,
                 new LocalDatabaseAssetTransport(directory.FullName),
-                Path.Combine(generated, "launcher-art")));
+                Path.Combine(generated, "launcher-art"));
             var characters = manifest.Games.Values
                 .SelectMany(game => (game.Current?.Characters ?? []).Concat(game.Upcoming.SelectMany(phase => phase.Characters)))
                 .ToArray();
