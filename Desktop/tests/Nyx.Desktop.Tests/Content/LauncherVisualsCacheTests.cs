@@ -593,7 +593,9 @@ public sealed class LauncherVisualsCacheTests
             using var http = new HttpClient(handler);
 
             Assert.Null(await new LauncherVisualsCache(root, http).RefreshAsync("ae"));
-            Assert.Single(handler.Requests);
+            Assert.Equal(
+                [OfficialEndpoint, LauncherVisualsCache.DefaultManifestUri.AbsoluteUri],
+                handler.Requests.Select(static request => request.Uri));
         });
     }
 
@@ -615,7 +617,7 @@ public sealed class LauncherVisualsCacheTests
             using var http = new HttpClient(handler);
 
             Assert.Null(await new LauncherVisualsCache(root, http).RefreshAsync("ae"));
-            Assert.Equal(redirectVideo ? 2 : 1, handler.Requests.Count);
+            Assert.Equal(redirectVideo ? 3 : 2, handler.Requests.Count);
             Assert.DoesNotContain(handler.Requests, request => request.Uri == "https://example.com/should-not-be-followed");
         });
     }
@@ -634,7 +636,9 @@ public sealed class LauncherVisualsCacheTests
             using var http = new HttpClient(handler);
 
             Assert.Null(await new LauncherVisualsCache(root, http).RefreshAsync("ae"));
-            Assert.Single(handler.Requests);
+            Assert.Equal(
+                [OfficialEndpoint, LauncherVisualsCache.DefaultManifestUri.AbsoluteUri],
+                handler.Requests.Select(static request => request.Uri));
         });
     }
 
@@ -717,11 +721,39 @@ public sealed class LauncherVisualsCacheTests
             canceled.Cancel();
             using var canceledHttp = new HttpClient(new RecordingHandler((_, cancellationToken) =>
                 Task.FromCanceled<HttpResponseMessage>(cancellationToken)));
-            Assert.Null(await new LauncherVisualsCache(root, canceledHttp).RefreshAsync("ae", canceled.Token));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                new LauncherVisualsCache(root, canceledHttp).RefreshAsync("ae", canceled.Token));
             Assert.DoesNotContain(Directory.Exists(CacheRoot(root, "ae"))
                     ? Directory.EnumerateFiles(CacheRoot(root, "ae"))
                     : [],
                 path => Path.GetFileName(path).Contains(".tmp-", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public async Task Canceled_preload_does_not_publish_a_last_good_callback()
+    {
+        await WithRoot(async root =>
+        {
+            _ = await DownloadOfficialAsync(root, Media("video/mp4", "must stay private after cancellation"));
+            var requestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var http = new HttpClient(new RecordingHandler(async (_, cancellationToken) =>
+            {
+                requestStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                throw new InvalidOperationException("Unreachable.");
+            }));
+            using var canceled = new CancellationTokenSource();
+            var callbacks = 0;
+            var preload = new LauncherVisualsCache(root, http).RefreshAllAsync(
+                _ => Interlocked.Increment(ref callbacks),
+                canceled.Token);
+
+            await requestStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            canceled.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => preload);
+            Assert.Equal(0, Volatile.Read(ref callbacks));
         });
     }
 
@@ -781,6 +813,76 @@ public sealed class LauncherVisualsCacheTests
 
             Assert.Equal("video", selections["ae"].Kind);
             Assert.DoesNotContain(handler.Requests, request => request.Uri.Contains(galleryHash, StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public async Task Endfield_first_run_uses_verified_Pengo_gallery_when_official_refresh_fails()
+    {
+        await WithRoot(async root =>
+        {
+            var gallery = Enumerable.Range(1, 3)
+                .Select(index => Media("image/webp", "fallback gallery " + index))
+                .ToArray();
+            var assets = gallery.Select(bytes => (
+                Hash: Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
+                Size: bytes.Length)).ToArray();
+            var manifest = ManifestWithEndfieldGallery(assets);
+            var handler = new RecordingHandler((request, _) => Task.FromResult(request.RequestUri!.AbsoluteUri switch
+            {
+                OfficialEndpoint => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable),
+                var url when url == LauncherVisualsCache.DefaultManifestUri.AbsoluteUri => JsonResponse(manifest),
+                var url when Array.FindIndex(assets, asset => url.EndsWith(asset.Hash + ".webp", StringComparison.Ordinal)) is var index and >= 0 =>
+                    MediaResponse(gallery[index], "image/webp"),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+            }));
+            using var http = new HttpClient(handler);
+
+            var selection = await new LauncherVisualsCache(root, http).RefreshAsync("ae");
+
+            Assert.NotNull(selection);
+            Assert.Equal("gallery", selection.Kind);
+            Assert.Equal(3, selection.Files.Count);
+            Assert.Equal(3, selection.Files.Distinct(StringComparer.Ordinal).Count());
+            Assert.Equal(
+                [OfficialEndpoint, LauncherVisualsCache.DefaultManifestUri.AbsoluteUri, .. assets.Select(asset =>
+                    $"https://assets.pengo.gg/launcher-visuals/{asset.Hash}.webp")],
+                handler.Requests.Select(static request => request.Uri));
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Endfield_both_sources_failing_returns_only_a_healthy_last_good(bool seedLastGood)
+    {
+        await WithRoot(async root =>
+        {
+            LauncherVisualSelection? expected = null;
+            if (seedLastGood)
+                expected = await DownloadOfficialAsync(root, Media("video/mp4", "healthy last good"));
+            var handler = new RecordingHandler((_, _) =>
+                Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)));
+            using var http = new HttpClient(handler);
+
+            var selection = await new LauncherVisualsCache(root, http).RefreshAsync("ae");
+
+            if (expected is null)
+            {
+                Assert.Null(selection);
+            }
+            else
+            {
+                Assert.NotNull(selection);
+                Assert.Equal(expected.GameId, selection.GameId);
+                Assert.Equal(expected.Revision, selection.Revision);
+                Assert.Equal(expected.Kind, selection.Kind);
+                Assert.Equal(expected.Character, selection.Character);
+                Assert.Equal(expected.Files, selection.Files);
+            }
+            Assert.Equal(
+                [OfficialEndpoint, LauncherVisualsCache.DefaultManifestUri.AbsoluteUri],
+                handler.Requests.Select(static request => request.Uri));
         });
     }
 
@@ -1190,7 +1292,10 @@ public sealed class LauncherVisualsCacheTests
         return [.. prefix, .. suffix];
     }
 
-    private static string ManifestWithEndfieldGallery(string hash, int size) => JsonSerializer.Serialize(new
+    private static string ManifestWithEndfieldGallery(string hash, int size) =>
+        ManifestWithEndfieldGallery([(hash, size), (hash, size), (hash, size)]);
+
+    private static string ManifestWithEndfieldGallery(params (string Hash, int Size)[] assets) => JsonSerializer.Serialize(new
     {
         schema = 1,
         revision = new string('d', 64),
@@ -1199,11 +1304,11 @@ public sealed class LauncherVisualsCacheTests
             ["ae"] = new
             {
                 kind = "gallery",
-                assets = Enumerable.Range(0, 3).Select(_ => new
+                assets = assets.Select(asset => new
                 {
-                    url = $"https://assets.pengo.gg/launcher-visuals/{hash}.webp",
-                    sha256 = hash,
-                    size,
+                    url = $"https://assets.pengo.gg/launcher-visuals/{asset.Hash}.webp",
+                    sha256 = asset.Hash,
+                    size = asset.Size,
                     mediaType = "image/webp",
                 }),
             },

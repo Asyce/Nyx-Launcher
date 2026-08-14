@@ -541,7 +541,7 @@ public sealed partial class MainPage : Page
                     game.DisplayName,
                     appearance?.IconPath ?? IconPaths[game.Id],
                     MaintenanceProviders[game.Id],
-                    "â‹¯",
+                    "⋯",
                     "Checking local status",
                     isCustom: false);
             },
@@ -558,7 +558,7 @@ public sealed partial class MainPage : Page
                     game.Name,
                     appearance?.IconPath ?? game.IconPath,
                     "CUSTOM GAME",
-                    "â—‹",
+                    "○",
                     "Ready to check",
                     isCustom: true);
             },
@@ -644,7 +644,7 @@ public sealed partial class MainPage : Page
         }
 
         RenderSelection();
-        StartLauncherVisualPreload(lease.CancellationToken);
+        StartLauncherVisualPreload(lease);
         var hoyoCheck = updaterScanFinished
             ? Task.CompletedTask
             : RefreshHoyoMaintenanceAsync(lease, refreshSessions: true);
@@ -884,7 +884,7 @@ public sealed partial class MainPage : Page
 
         _ = DispatcherQueue.TryEnqueue(() =>
         {
-            StartLauncherVisualPreload(lease.CancellationToken);
+            StartLauncherVisualPreload(lease);
             _ = RefreshHoyoMaintenanceAsync(lease, refreshSessions: false);
             if (WuWaMaintenanceInteractionPolicy.AllowsActivationRefresh(wuwaActionInFlight))
             {
@@ -955,7 +955,7 @@ public sealed partial class MainPage : Page
             await launcherBanners.RefreshOnReactivationAsync(lease.CancellationToken);
             launcherVisualRequestedGameId = null;
             RenderSelection();
-            StartLauncherVisualPreload(lease.CancellationToken);
+            StartLauncherVisualPreload(lease);
         }
         catch (OperationCanceledException)
         {
@@ -2439,7 +2439,7 @@ public sealed partial class MainPage : Page
 
         updaterActionInFlight = true;
         OpenUpdaterButton.IsEnabled = false;
-        OpenUpdaterButton.Content = "Openingâ€¦";
+        OpenUpdaterButton.Content = "Opening…";
 
         try
         {
@@ -2488,7 +2488,7 @@ public sealed partial class MainPage : Page
         var generation = endfieldMaintenanceGeneration.Next();
         endfieldMaintenanceActionInFlight = true;
         OpenUpdaterButton.IsEnabled = false;
-        OpenUpdaterButton.Content = "Openingâ€¦";
+        OpenUpdaterButton.Content = "Opening…";
 
         try
         {
@@ -2560,7 +2560,7 @@ public sealed partial class MainPage : Page
         var generation = wuwaRefreshGeneration.Next();
         wuwaActionInFlight = true;
         OpenUpdaterButton.IsEnabled = false;
-        OpenUpdaterButton.Content = "Openingâ€¦";
+        OpenUpdaterButton.Content = "Opening…";
 
         try
         {
@@ -4600,7 +4600,7 @@ public sealed partial class MainPage : Page
         if (GameSelector?.SelectedItem is GameLauncherItem selected
             && latestExportJobs.TryGetValue(selected.Id, out var jobId)
             && exports.Cancel(jobId))
-            NyxToolsStatusText.Text = "Canceling this export safelyâ€¦";
+            NyxToolsStatusText.Text = "Canceling this export safely…";
     }
 
     private async Task TrackExportJobAsync(
@@ -5247,8 +5247,7 @@ public sealed partial class MainPage : Page
                 selected.Id,
                 wuwaSnapshot is null
                     ? null
-                    : LauncherResourceMetricsProjection.FromWuWa(wuwaSnapshot),
-                wuwaAccountStatusActionInFlight ? "CHECKING" : "WAITING");
+                    : LauncherResourceMetricsProjection.FromWuWa(wuwaSnapshot));
             LaunchResourceRefreshButton.Visibility = enabled ? Visibility.Visible : Visibility.Collapsed;
             LaunchResourceRefreshButton.IsEnabled = !wuwaAccountStatusActionInFlight;
             return;
@@ -5287,23 +5286,13 @@ public sealed partial class MainPage : Page
         var resource = summary.Resources.TryGetValue(selected.Id, out var capturedResource)
             ? capturedResource
             : null;
-        var resourceState = summary.ResourceStates.TryGetValue(selected.Id, out var capturedState)
-            ? capturedState
-            : PublisherResourceState.NotStarted;
         RenderLaunchResourceMetrics(
             selected.Id,
-            resource is null
-                ? null
-                : LauncherResourceMetricsProjection.FromPublisher(resource, AccountDisplayClock()),
-            resourceState switch
-            {
-                PublisherResourceState.Checking => "CHECKING",
-                PublisherResourceState.SelectionRequired => "CHOOSE REGION",
-                PublisherResourceState.LoginRequired => "SIGN IN AGAIN",
-                PublisherResourceState.NeedsReview => "TRY AGAIN",
-                PublisherResourceState.Unavailable => "UNAVAILABLE",
-                _ => "â€”",
-            });
+            consentEnabled
+                && connection == PublisherConnectionState.Connected
+                && resource is not null
+                    ? LauncherResourceMetricsProjection.FromPublisher(resource, AccountDisplayClock())
+                    : null);
         LaunchResourceRefreshButton.Visibility = entry.SupportsNumericResource
             && consentEnabled
             && connection == PublisherConnectionState.Connected
@@ -5382,10 +5371,10 @@ public sealed partial class MainPage : Page
 
     private void RenderLaunchResourceMetrics(
         string gameId,
-        LauncherResourceMetrics? metrics,
-        string unavailableText)
+        LauncherResourceMetrics? metrics)
     {
-        if (!PrimaryResourceIconPaths.TryGetValue(gameId, out var primaryIconPath)
+        if (metrics is null
+            || !PrimaryResourceIconPaths.TryGetValue(gameId, out var primaryIconPath)
             || !ResourceMetricNames.TryGetValue(gameId, out var names))
         {
             LaunchResourceMetricsPanel.Visibility = Visibility.Collapsed;
@@ -5393,21 +5382,6 @@ public sealed partial class MainPage : Page
         }
         LaunchResourceMetricsPanel.Visibility = Visibility.Visible;
 
-        if (metrics is null)
-        {
-            LaunchPrimaryResourceItem.Visibility = Visibility.Collapsed;
-            LaunchReserveResourceItem.Visibility = Visibility.Collapsed;
-            LaunchRecoveryResourceItem.Visibility = Visibility.Collapsed;
-            LaunchDailyResourceItem.Visibility = Visibility.Collapsed;
-            LaunchResourceStatusText.Text = unavailableText;
-            LaunchResourceStatusText.Visibility = Visibility.Visible;
-            AutomationProperties.SetName(
-                LaunchResourceMetricsPanel,
-                $"{names.Primary}: {unavailableText}");
-            return;
-        }
-
-        LaunchResourceStatusText.Visibility = Visibility.Collapsed;
         var primaryIcon = ResolveImageSource(primaryIconPath);
         if (!ReferenceEquals(LaunchPrimaryResourceIcon.Source, primaryIcon))
             LaunchPrimaryResourceIcon.Source = primaryIcon;
@@ -5530,7 +5504,7 @@ public sealed partial class MainPage : Page
                 preloadedLauncherVisuals[gameId] = cached;
                 ApplyLauncherVisual(cached, generation);
             }
-            if (pageLease is { } lease) StartLauncherVisualPreload(lease.CancellationToken);
+            if (pageLease is { } lease) StartLauncherVisualPreload(lease);
             return;
         }
 
@@ -5539,19 +5513,20 @@ public sealed partial class MainPage : Page
         BackgroundArtwork.Opacity = 1;
     }
 
-    private void StartLauncherVisualPreload(CancellationToken cancellationToken)
+    private void StartLauncherVisualPreload(SessionUiLease lease)
     {
         if (launcherVisualPreloadTask is { IsCompleted: false }) return;
         launcherVisualPreloadTask = launcherVisuals.RefreshAllAsync(selection =>
         {
             _ = DispatcherQueue.TryEnqueue(() =>
-            {
-                preloadedLauncherVisuals[selection.GameId] = selection;
-                if (GameSelector?.SelectedItem is GameLauncherItem selected
-                    && selected.Id == selection.GameId)
-                    ApplyLauncherVisual(selection, launcherVisualGeneration);
-            });
-        }, cancellationToken);
+                sessionUiLifetime.TryRun(lease, () =>
+                {
+                    preloadedLauncherVisuals[selection.GameId] = selection;
+                    if (GameSelector?.SelectedItem is GameLauncherItem selected
+                        && selected.Id == selection.GameId)
+                        ApplyLauncherVisual(selection, launcherVisualGeneration);
+                }));
+        }, lease.CancellationToken);
     }
 
     private void ApplyLauncherVisual(LauncherVisualSelection selection, int generation)
@@ -6011,7 +5986,7 @@ public sealed partial class MainPage : Page
             };
         }
         if (job.State == ExportJobState.Canceled) return "Export canceled. No unfinished file was kept.";
-        if (job.State == ExportJobState.Unsupported) return "This gameâ€™s export provider is coming later.";
+        if (job.State == ExportJobState.Unsupported) return "This game’s export provider is coming later.";
         var failures = new List<string>(2);
         if (job.Pulls.State is ExportTaskState.Failed)
             failures.Add(FormatPullFailure(job.Pulls.ErrorCode));
@@ -6743,7 +6718,7 @@ public sealed partial class MainPage : Page
     {
         WuWaAccountResourceValueText.Text = string.Empty;
         AccountProviderText.Text = "ROVER";
-        AccountConnectionWarningText.Text = "Unofficial local connection Â· may stop working.";
+        AccountConnectionWarningText.Text = "Unofficial local connection · may stop working.";
         AutomationProperties.SetHelpText(
             WuWaAccountStatusStrip,
             AccountConnectionWarningText.Text);
@@ -6762,7 +6737,7 @@ public sealed partial class MainPage : Page
         {
             WuWaAccountMetricsText.Text = "ENERGY + DAILIES";
             WuWaAccountFreshnessText.Text = wuwaAccountStatusSaveFailed
-                ? "OFF Â· SETTING NOT SAVED"
+                ? "OFF · SETTING NOT SAVED"
                 : "OPT IN";
             return;
         }
@@ -6780,7 +6755,7 @@ public sealed partial class MainPage : Page
         if (result?.Snapshot is { } snapshot)
         {
             WuWaAccountMetricsText.Text =
-                $"WP {snapshot.Energy}/{snapshot.MaxEnergy}  Â·  RES {snapshot.StoreEnergy}  Â·  DAILY {snapshot.Liveness}/{snapshot.LivenessMaxCount}";
+                $"WP {snapshot.Energy}/{snapshot.MaxEnergy}  ·  RES {snapshot.StoreEnergy}  ·  DAILY {snapshot.Liveness}/{snapshot.LivenessMaxCount}";
         }
         else
         {
@@ -6809,7 +6784,7 @@ public sealed partial class MainPage : Page
             _ => "STATUS UNAVAILABLE",
         };
         WuWaAccountFreshnessText.Text = result.IsStale && age is not null
-            ? $"STALE {age} Â· {failure}"
+            ? $"STALE {age} · {failure}"
             : failure;
     }
 
@@ -6822,8 +6797,8 @@ public sealed partial class MainPage : Page
         AccountProviderText.Text = entry.Provider == "HoYoLAB" ? "HOYOLAB" : "SKPORT";
         if (gameId == "ae") AccountProviderText.Text = "GRYPHLINE";
         AccountConnectionWarningText.Text = consentEnabled
-            ? "Nyx-only private browser Â· disconnect deletes its profile."
-            : "Off by default Â· allow before Nyx opens publisher account pages.";
+            ? "Nyx-only private browser · disconnect deletes its profile."
+            : "Off by default · allow before Nyx opens publisher account pages.";
         AutomationProperties.SetHelpText(
             WuWaAccountStatusStrip,
             AccountConnectionWarningText.Text);
@@ -6891,7 +6866,7 @@ public sealed partial class MainPage : Page
             ? "WORKING"
             : !consentEnabled
                 ? publisherConsentSaveFailures.Contains(entry.Provider)
-                    ? "OFF Â· SETTING NOT SAVED"
+                    ? "OFF · SETTING NOT SAVED"
                     : publisherConsentCleanupFailures.Contains(entry.Provider)
                         || publisherAccounts.HasPendingConsentRevocation(entry.Provider)
                         ? "OFF · CLEANUP PENDING"
@@ -6907,7 +6882,7 @@ public sealed partial class MainPage : Page
                     _ => connection.ToString().ToUpperInvariant(),
                 }
                 : checkIn is not null
-                    ? $"DAY EXPIRED Â· {connection.ToString().ToUpperInvariant()}"
+                    ? $"DAY EXPIRED · {connection.ToString().ToUpperInvariant()}"
                     : connection switch
                 {
                     PublisherConnectionState.Connected => "CONNECTED",
@@ -6920,7 +6895,7 @@ public sealed partial class MainPage : Page
         if (gameId != "ae" && resource is null)
         {
             WuWaAccountMetricsText.Text = resourceGuidance is not null
-                ? $"{entry.ResourceName.ToUpperInvariant()} Â· {resourceGuidance}"
+                ? $"{entry.ResourceName.ToUpperInvariant()} · {resourceGuidance}"
                 : resourceState switch
                 {
                     PublisherResourceState.Checking => $"CHECKING {entry.ResourceName.ToUpperInvariant()}",
@@ -7161,7 +7136,7 @@ public sealed partial class MainPage : Page
     }
 
     private static string WithVersion(string state, string? version) =>
-        string.IsNullOrWhiteSpace(version) ? state : $"{state} Â· {version}";
+        string.IsNullOrWhiteSpace(version) ? state : $"{state} · {version}";
 
     private static string VersionOnly(string? version) =>
         string.IsNullOrWhiteSpace(version) ? string.Empty : version;

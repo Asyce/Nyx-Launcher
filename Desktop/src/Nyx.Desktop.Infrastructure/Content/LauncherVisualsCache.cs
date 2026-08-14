@@ -82,7 +82,7 @@ public sealed class LauncherVisualsCache
                 : (await ReadOfficialHoyoAssetsAsync(cancellationToken))[gameId];
             return await AcquireOfficialVideoSelectionAsync(gameId, asset, cancellationToken);
         }
-        catch (Exception exception) when (IsExpectedFailure(exception))
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
         {
             LastFailure = exception.GetType().Name + ": " + exception.Message;
             return await RefreshManifestFallbackAsync(gameId, cancellationToken);
@@ -104,15 +104,15 @@ public sealed class LauncherVisualsCache
 
         async Task<LauncherVisualSelection?> RefreshOneAsync(string gameId)
         {
-            if (gameId == "ae") return await RefreshOfficialEndfieldAsync(cancellationToken);
             try
             {
+                if (gameId == "ae") return await RefreshOfficialEndfieldAsync(cancellationToken);
                 var asset = gameId == "wuwa"
                     ? await ReadOfficialWuwaAssetAsync(cancellationToken)
                     : (await hoyoAssets)[gameId];
                 return await AcquireOfficialVideoSelectionAsync(gameId, asset, cancellationToken);
             }
-            catch (Exception exception) when (IsExpectedFailure(exception))
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
             {
                 LastFailure = exception.GetType().Name + ": " + exception.Message;
                 Task<Manifest?> pending;
@@ -124,7 +124,7 @@ public sealed class LauncherVisualsCache
                 if (manifest?.Games.TryGetValue(gameId, out var entry) == true)
                 {
                     try { return await AcquireSelectionAsync(gameId, manifest.Revision, entry, cancellationToken); }
-                    catch (Exception fallbackException) when (IsExpectedFailure(fallbackException))
+                    catch (Exception fallbackException) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(fallbackException))
                     {
                         LastFailure = fallbackException.GetType().Name + ": " + fallbackException.Message;
                     }
@@ -136,6 +136,7 @@ public sealed class LauncherVisualsCache
         async Task<LauncherVisualSelection?> NotifyAsync(Task<LauncherVisualSelection?> pending)
         {
             var selection = await pending;
+            cancellationToken.ThrowIfCancellationRequested();
             if (selection is not null) selectionReady?.Invoke(selection);
             return selection;
         }
@@ -151,7 +152,7 @@ public sealed class LauncherVisualsCache
         {
             return await AcquireSelectionAsync(gameId, manifest.Revision, entry, cancellationToken);
         }
-        catch (Exception exception) when (IsExpectedFailure(exception))
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
         {
             LastFailure = exception.GetType().Name + ": " + exception.Message;
             return TryLoadLastGood(gameId);
@@ -161,7 +162,7 @@ public sealed class LauncherVisualsCache
     private async Task<Manifest?> ReadManifestFallbackAsync(CancellationToken cancellationToken)
     {
         try { return await ReadManifestAsync(cancellationToken); }
-        catch (Exception exception) when (IsExpectedFailure(exception))
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
         {
             LastFailure = exception.GetType().Name + ": " + exception.Message;
             return null;
@@ -303,18 +304,10 @@ public sealed class LauncherVisualsCache
         return selection;
     }
 
-    private async Task<LauncherVisualSelection?> RefreshOfficialEndfieldAsync(CancellationToken cancellationToken)
+    private async Task<LauncherVisualSelection> RefreshOfficialEndfieldAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            var asset = await ReadOfficialEndfieldAssetAsync(cancellationToken);
-            return await AcquireOfficialVideoSelectionAsync("ae", new(asset, "video/mp4"), cancellationToken);
-        }
-        catch (Exception exception) when (IsExpectedFailure(exception))
-        {
-            LastFailure = exception.GetType().Name + ": " + exception.Message;
-            return TryLoadLastGood("ae");
-        }
+        var asset = await ReadOfficialEndfieldAssetAsync(cancellationToken);
+        return await AcquireOfficialVideoSelectionAsync("ae", new(asset, "video/mp4"), cancellationToken);
     }
 
     private async Task<Uri> ReadOfficialEndfieldAssetAsync(CancellationToken cancellationToken)

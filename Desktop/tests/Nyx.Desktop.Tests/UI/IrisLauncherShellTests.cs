@@ -642,6 +642,21 @@ public sealed class IrisLauncherShellTests
     }
 
     [Fact]
+    public void Launcher_visual_preload_applies_only_through_the_current_page_lease()
+    {
+        var code = ReadAppFile("MainPage.xaml.cs");
+        var preload = Slice(code, "private void StartLauncherVisualPreload", "private void ApplyLauncherVisual");
+
+        Assert.Contains("StartLauncherVisualPreload(SessionUiLease lease)", preload, StringComparison.Ordinal);
+        Assert.Contains("lease.CancellationToken", preload, StringComparison.Ordinal);
+        Assert.Contains("sessionUiLifetime.TryRun(lease", preload, StringComparison.Ordinal);
+        Assert.True(
+            preload.IndexOf("sessionUiLifetime.TryRun(lease", StringComparison.Ordinal)
+            < preload.IndexOf("preloadedLauncherVisuals[selection.GameId] = selection", StringComparison.Ordinal));
+        Assert.DoesNotContain("StartLauncherVisualPreload(lease.CancellationToken)", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Custom_caption_controls_are_fixed_visible_and_do_not_expose_maximize()
     {
         var code = ReadAppFile("MainWindow.xaml.cs");
@@ -932,12 +947,12 @@ public sealed class IrisLauncherShellTests
         Assert.DoesNotContain("x:Name=\"LaunchBacking\"", xaml, StringComparison.Ordinal);
         var metricsStart = xaml.IndexOf("x:Name=\"LaunchResourceMetricsPanel\"", StringComparison.Ordinal);
         var metricsSurfaceStart = xaml.LastIndexOf("<Border", metricsStart, StringComparison.Ordinal);
-        var metricsSurface = xaml[metricsSurfaceStart..metricsStart];
+        var metricsSurfaceEnd = xaml.IndexOf('>', metricsStart);
+        var metricsSurface = xaml[metricsSurfaceStart..(metricsSurfaceEnd + 1)];
         Assert.Contains("Grid.Row=\"1\"", metricsSurface, StringComparison.Ordinal);
         Assert.Contains("Padding=\"4,2\"", metricsSurface, StringComparison.Ordinal);
         Assert.DoesNotContain("Height=\"50\"", metricsSurface, StringComparison.Ordinal);
         var launchResources = SliceElement(xaml, "x:Name=\"LaunchResourceMetricsPanel\"");
-        Assert.DoesNotContain("Grid.Row", launchResources, StringComparison.Ordinal);
         Assert.DoesNotContain("MinHeight=\"50\"", launchResources, StringComparison.Ordinal);
         Assert.DoesNotContain("MinWidth=\"", launchResources, StringComparison.Ordinal);
         Assert.DoesNotContain("Margin=\"0\"", launchResources, StringComparison.Ordinal);

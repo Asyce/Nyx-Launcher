@@ -99,6 +99,7 @@ public sealed class BannerCycleUiTests
         var currentPortrait = Slice(xaml, "x:Name=\"CurrentBannerPortrait\"", "x:Name=\"CurrentBannerNameLabel\"");
         var upcomingBacking = Slice(xaml, "x:Name=\"UpcomingBannerPortraitBacking\"", "x:Name=\"UpcomingBannerPortrait\"");
         var upcomingPortrait = Slice(xaml, "x:Name=\"UpcomingBannerPortrait\"", "x:Name=\"UpcomingBannerNameLabel\"");
+        var upcomingPhaseSlot = Slice(xaml, "x:Name=\"UpcomingBannerPhaseSlot\"", ">");
         var bannerRegion = Slice(xaml, "x:Name=\"BannerCycleRegion\"", "x:Name=\"BannerCycleStack\"");
 
         Assert.Contains("x:Name=\"BannerCycleColumns\"", xaml, StringComparison.Ordinal);
@@ -184,7 +185,7 @@ public sealed class BannerCycleUiTests
         Assert.DoesNotContain("PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty))", code, StringComparison.Ordinal);
         Assert.DoesNotContain("GetBannerRotationProgress", code, StringComparison.Ordinal);
         Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 2)", code, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"UpcomingBannerPhaseSlot\" Height=\"110\"", columns, StringComparison.Ordinal);
+        Assert.DoesNotContain("Height=", upcomingPhaseSlot, StringComparison.Ordinal);
         Assert.DoesNotContain("x:Name=\"UpcomingPhaseDivider\"", columns, StringComparison.Ordinal);
         Assert.DoesNotContain(".Where(phase => phase.Start > now)", code, StringComparison.Ordinal);
         foreach (var obsolete in new[]

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace Nyx.Desktop.Packaging.Tests;
 
@@ -282,7 +283,7 @@ public sealed class PackagingScriptTests
     }
 
     [Fact]
-    public void Development_package_keeps_launcher_art_remote_and_excludes_optional_publish_diagnostics()
+    public void Release_bundle_includes_every_verified_launcher_art_asset_and_excludes_optional_publish_diagnostics()
     {
         var build = File.ReadAllText(Path.Combine(PackagingRoot, "build-development-package.ps1"));
         var project = File.ReadAllText(Path.Combine(
@@ -292,8 +293,33 @@ public sealed class PackagingScriptTests
             "Nyx.Desktop.App.csproj"));
 
         Assert.DoesNotContain("launcher-art", build, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("<ItemGroup Condition=\"'$(Configuration)' == 'Debug'\">", project, StringComparison.Ordinal);
-        Assert.Contains("Site\\src\\data\\generated\\launcher-art\\**\\*", project, StringComparison.Ordinal);
+        const string launcherArtInclude = "Site\\src\\data\\generated\\launcher-art\\**\\*";
+        var includeIndex = project.IndexOf(launcherArtInclude, StringComparison.Ordinal);
+        Assert.True(includeIndex >= 0);
+        var itemGroupStart = project.LastIndexOf("<ItemGroup", includeIndex, StringComparison.Ordinal);
+        var itemGroupEnd = project.IndexOf('>', itemGroupStart);
+        Assert.Equal("<ItemGroup>", project[itemGroupStart..(itemGroupEnd + 1)].Trim());
+
+        var repositoryRoot = Path.GetFullPath(Path.Combine(DesktopRoot, ".."));
+        var generatedRoot = Path.Combine(repositoryRoot, "Site", "src", "data", "generated");
+        using var manifest = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(generatedRoot, "launcher-banners-v1.json")));
+        var assets = EnumerateObjects(manifest.RootElement)
+            .Where(element => element.TryGetProperty("path", out var path)
+                && path.GetString()?.StartsWith("/launcher-art/", StringComparison.Ordinal) == true)
+            .ToArray();
+        Assert.NotEmpty(assets);
+        foreach (var asset in assets)
+        {
+            var sha256 = asset.GetProperty("sha256").GetString();
+            Assert.NotNull(sha256);
+            Assert.Equal($"/launcher-art/{sha256}.webp", asset.GetProperty("path").GetString());
+            var file = Path.Combine(generatedRoot, "launcher-art", $"{sha256}.webp");
+            Assert.True(File.Exists(file), $"Missing bundled launcher art: {file}");
+            Assert.Equal(
+                sha256,
+                Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file))).ToLowerInvariant());
+        }
+
         Assert.Contains("Name=\"ExcludeOptionalPublishDiagnostics\"", project, StringComparison.Ordinal);
         Assert.Contains("AfterTargets=\"ComputeFilesToPublish\"", project, StringComparison.Ordinal);
         Assert.Contains("ResolvedFileToPublish Remove=\"@(ResolvedFileToPublish)\"", project, StringComparison.Ordinal);
@@ -305,6 +331,23 @@ public sealed class PackagingScriptTests
             @"(?i)^(?!en-us\\)[a-z]{2,3}(?:-[a-z0-9]{2,8})*\\(?:Microsoft\.ui\.xaml\.dll\.mui|Microsoft\.UI\.Xaml\.Phone\.dll\.mui)$",
             project,
             StringComparison.Ordinal);
+
+        static IEnumerable<JsonElement> EnumerateObjects(JsonElement element)
+        {
+            if (element.ValueKind == JsonValueKind.Object)
+            {
+                yield return element;
+                foreach (var property in element.EnumerateObject())
+                    foreach (var nested in EnumerateObjects(property.Value))
+                        yield return nested;
+            }
+            else if (element.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in element.EnumerateArray())
+                    foreach (var nested in EnumerateObjects(item))
+                        yield return nested;
+            }
+        }
     }
 
     private static (int ExitCode, string Output) RunPowerShell(string command)
