@@ -67,7 +67,16 @@ for ($index = $headerIndexes[0] + 1; $index -lt $lines.Count; $index++) {
             throw 'A provenance source path crosses a reparse point.'
         }
     }
-    if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -cne $expectedHash) {
+    $stream = [IO.File]::OpenRead($source)
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        $currentHash = [BitConverter]::ToString($sha256.ComputeHash($stream)).Replace('-', '')
+    }
+    finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
+    if ($currentHash -cne $expectedHash) {
         throw 'A provenance source hash does not match the pinned checkout.'
     }
 }
