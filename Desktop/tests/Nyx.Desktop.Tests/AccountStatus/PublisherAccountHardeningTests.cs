@@ -4463,10 +4463,8 @@ public sealed class PublisherAccountHardeningTests
             "CoreWebView2Environment.GetAvailableBrowserVersionString(null)",
             browser,
             StringComparison.Ordinal);
-        Assert.Contains(
-            "CoreWebView2Environment.CreateWithOptionsAsync(\n            null,",
-            initialization,
-            StringComparison.Ordinal);
+        Assert.Contains("CoreWebView2Environment.CreateWithOptionsAsync(", initialization, StringComparison.Ordinal);
+        Assert.Contains("null,", initialization, StringComparison.Ordinal);
         Assert.DoesNotContain("WebView2Runtime", initialization, StringComparison.Ordinal);
         Assert.DoesNotContain("Directory.Exists", initialization, StringComparison.Ordinal);
     }

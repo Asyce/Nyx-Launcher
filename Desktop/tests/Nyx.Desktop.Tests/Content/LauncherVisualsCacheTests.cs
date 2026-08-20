@@ -13,9 +13,9 @@ public sealed class LauncherVisualsCacheTests
     private const string HoyoHsrVideo = "https://fastcdn.hoyoverse.com/static-resource-v2/2026/07/09/afba5bfdb3678ac02b6cd2705e44e8db_635706159057290737.webm";
     private const string HoyoZzzVideo = "https://fastcdn.hoyoverse.com/static-resource-v2/2026/07/27/ac4360ca5c3247dd5630ecb5a261d9ca_2272221460347633592.webm";
     private const string WuwaIndexEndpoint = "https://prod-alicdn-gamestarter.kurogame.com/launcher/launcher/50004_obOHXFrFanqsaIEOmuKroCcbZkQRBC7c/G153/index.json";
-    private const string WuwaBackgroundId = "dOlPEc8xvpP8r4k2lyIOK6p0R7hNNqRf";
-    private const string WuwaBackgroundEndpoint = "https://prod-alicdn-gamestarter.kurogame.com/launcher/50004_obOHXFrFanqsaIEOmuKroCcbZkQRBC7c/G153/background/dOlPEc8xvpP8r4k2lyIOK6p0R7hNNqRf/en.json";
-    private const string WuwaVideo = "https://hw-pcdownload-qcloud.aki-game.net/launcher/clientUpload/7rbsd6c7nkrnzydzlr.mp4";
+    private const string WuwaBackgroundId = "nmJutnA7saYMz2eJ46CL8mB3VUEZvyCs";
+    private const string WuwaBackgroundEndpoint = "https://prod-alicdn-gamestarter.kurogame.com/launcher/50004_obOHXFrFanqsaIEOmuKroCcbZkQRBC7c/G153/background/nmJutnA7saYMz2eJ46CL8mB3VUEZvyCs/en.json";
+    private const string WuwaVideo = "https://hw-pcdownload-qcloud.aki-game.net/launcher/clientUpload/0nr2n8wkbta7l7flfl.mp4";
     private const string OfficialEndpoint = "https://launcher.gryphline.com/api/proxy/web/batch_proxy";
     private const string OfficialVideo = "https://gl-utils-public.hg-cdn.com/hg-utils/prod/eppcsuwqpaueijqk/YDUTE5gscDZ229CW/background/main.mp4";
     private const string OfficialRequest = "{\"proxy_reqs\":[{\"kind\":\"get_main_bg_image\",\"get_main_bg_image_req\":{\"appcode\":\"YDUTE5gscDZ229CW\",\"language\":\"en-us\",\"channel\":\"6\",\"sub_channel\":\"6\",\"platform\":\"Windows\",\"source\":\"launcher\"}}]}";

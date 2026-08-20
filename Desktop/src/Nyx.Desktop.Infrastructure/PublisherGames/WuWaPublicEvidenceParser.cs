@@ -9,7 +9,7 @@ internal sealed class WuWaPublicEvidenceParser
     internal const int MaximumConfigBytes = 4 * 1024;
     internal const int MaximumResourceBytes = 1024 * 1024;
     internal const int MaximumResourceEntries = 10_000;
-    internal const long MaximumRuntimeBytes = 256L * 1024 * 1024;
+    internal const long MaximumRuntimeBytes = 2L * 1024 * 1024 * 1024;
     internal const string ExpectedRuntimeDestination =
         "Client/Binaries/Win64/Client-Win64-Shipping.exe";
 

@@ -103,8 +103,8 @@ public sealed class BannerCycleUiTests
         var bannerRegion = Slice(xaml, "x:Name=\"BannerCycleRegion\"", "x:Name=\"BannerCycleStack\"");
 
         Assert.Contains("x:Name=\"BannerCycleColumns\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Width=\"560\"", bannerRegion, StringComparison.Ordinal);
-        Assert.Contains("Height=\"292\"", bannerRegion, StringComparison.Ordinal);
+        Assert.Contains("Width=\"704\"", bannerRegion, StringComparison.Ordinal);
+        Assert.Contains("Height=\"390\"", bannerRegion, StringComparison.Ordinal);
         Assert.DoesNotContain("MinHeight", bannerRegion, StringComparison.Ordinal);
         Assert.Contains("BorderBrush=\"{ThemeResource DeckBorderBrush}\"", bannerRegion, StringComparison.Ordinal);
         Assert.Contains("BorderThickness=\"1\"", bannerRegion, StringComparison.Ordinal);
@@ -287,11 +287,16 @@ public sealed class BannerCycleUiTests
         Assert.Contains("x:Name=\"CodesHeaderDivider\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Background=\"{ThemeResource HairlineBrush}\"", Slice(xaml, "x:Name=\"CodesHeaderDivider\"", "x:Name=\"SignalPanel\""), StringComparison.Ordinal);
         Assert.Contains("x:Name=\"CodeRefreshStatusText\"", xaml, StringComparison.Ordinal);
+        Assert.Contains(
+            "Visibility=\"Collapsed\"",
+            Slice(xaml, "x:Name=\"CodeRefreshStatusText\"", "x:Name=\"RefreshCodesButton\""),
+            StringComparison.Ordinal);
         Assert.Contains("x:Name=\"RefreshCodesButton\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Click=\"RefreshCodesButton_Click\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ToolTipService.ToolTip=\"Refresh redemption codes\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ToolTipService.ToolTip=\"Open the official redemption page\"", xaml, StringComparison.Ordinal);
         Assert.Contains("RefreshCodesManualAsync", refresh, StringComparison.Ordinal);
+        Assert.Contains("CodeRefreshStatusText.Visibility = Visibility.Visible", refresh, StringComparison.Ordinal);
         Assert.Contains("UPDATING", refresh, StringComparison.Ordinal);
         Assert.Contains("UP TO DATE", refresh, StringComparison.Ordinal);
         Assert.Contains("KEPT SAFE COPY", refresh, StringComparison.Ordinal);

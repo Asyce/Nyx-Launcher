@@ -63,6 +63,29 @@ public sealed class WuWaIdentityAdapterTests
         Assert.Equal("3.5.3", result.Version);
     }
 
+    [Fact]
+    public void Current_3_6_runtime_size_stays_inside_the_bounded_evidence_contract()
+    {
+        using var fixture = FakePublisherInstall.CreateWuWa();
+        var resourcePath = fixture.PathOf(@"Wuthering Waves Game\LocalGameResources.json");
+        File.WriteAllText(
+            resourcePath,
+            $$"""
+            {"resource":[{
+              "dest":"{{WuWaPublicEvidenceParser.ExpectedRuntimeDestination}}",
+              "size":975548424,
+              "md5":"d4cdb8e9b7fb58a7baaba746deee3d03",
+              "fromFolder":null
+            }]}
+            """);
+
+        var result = new WuWaPublicEvidenceParser().ReadResource(resourcePath);
+
+        Assert.Equal(PublisherGameInspectionReason.None, result.Reason);
+        Assert.Equal(975548424, result.Value?.RuntimeSize);
+        Assert.True(PublisherFileIdentity.IsComparableLength(975548424));
+    }
+
     [Theory]
     [InlineData(4, "d4cdb8e9b7fb58a7baaba746deee3d03")]
     [InlineData(3, "00000000000000000000000000000000")]

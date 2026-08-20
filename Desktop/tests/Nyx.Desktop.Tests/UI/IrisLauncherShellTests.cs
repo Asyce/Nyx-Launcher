@@ -148,7 +148,7 @@ public sealed class IrisLauncherShellTests
 
         foreach (var scale in new[] { 1d, 1.25d })
         {
-            var lowerRegionDip = 378d * scale;
+            var lowerRegionDip = 280d * scale;
             var launchDip = LauncherOpenLayoutGeometry.LaunchButtonHeight * scale;
             Assert.True(launchDip <= lowerRegionDip);
         }
@@ -200,6 +200,7 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("HorizontalAlignment=\"Stretch\"", SliceElement(xaml, "x:Name=\"StableOpenScreenshotFolderButton\""), StringComparison.Ordinal);
         Assert.Contains("x:Name=\"AutomaticDailyCheckInToggle\"", onLaunchContent, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"Fps120Toggle\"", onLaunchContent, StringComparison.Ordinal);
+        Assert.Contains("Orientation=\"Horizontal\"", onLaunchContent, StringComparison.Ordinal);
         Assert.Contains("CharacterSpacing=\"100\"", SliceElement(xaml, "x:Name=\"AccountAndToolsProviderText\""), StringComparison.Ordinal);
         Assert.Contains("FontSize=\"14\"", SliceElement(xaml, "x:Name=\"AccountAndToolsProviderText\""), StringComparison.Ordinal);
         foreach (var heading in new[] { "OnLaunchHeading", "StableExportHeading" })
@@ -273,7 +274,7 @@ public sealed class IrisLauncherShellTests
         var xaml = ReadAppFile("MainPage.xaml");
         var code = ReadAppFile("MainPage.xaml.cs");
         var layout = ReadAppFile("ViewModels", "LauncherLayoutState.cs");
-        var handler = Slice(code, "private void SectionCollapseButton_Click", "private void AchievementSource_Click");
+        var handler = Slice(code, "private void SectionCollapseButton_Click", "private async void AchievementSource_Click");
 
         foreach (var (name, section, label) in new[]
                  {
@@ -291,7 +292,7 @@ public sealed class IrisLauncherShellTests
         }
 
         Assert.Contains("BannerCycleColumns.Visibility", handler, StringComparison.Ordinal);
-        Assert.Contains("BannerCycleRegion.Height = expanded ? 292 : double.NaN", handler, StringComparison.Ordinal);
+        Assert.Contains("BannerCycleRegion.Height = expanded ? 390 : double.NaN", handler, StringComparison.Ordinal);
         Assert.Contains("SignalPanel.Visibility", handler, StringComparison.Ordinal);
         Assert.Contains("AccountSectionContent.Visibility", handler, StringComparison.Ordinal);
         Assert.Contains("accountSectionExpanded = expanded", handler, StringComparison.Ordinal);
@@ -316,8 +317,9 @@ public sealed class IrisLauncherShellTests
         Assert.DoesNotContain("x:Name=\"DeckColumn", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"BannerCycleStack\"", xaml, StringComparison.Ordinal);
         var bannerRegion = SliceElement(xaml, "x:Name=\"BannerCycleRegion\"");
-        Assert.Contains("Width=\"560\"", bannerRegion, StringComparison.Ordinal);
-        Assert.Contains("Height=\"292\"", bannerRegion, StringComparison.Ordinal);
+        Assert.Contains("Width=\"704\"", bannerRegion, StringComparison.Ordinal);
+        Assert.Contains("Height=\"390\"", bannerRegion, StringComparison.Ordinal);
+        Assert.Contains("Grid.ColumnSpan=\"2\"", SliceElement(xaml, "x:Name=\"BannerContentRegion\""), StringComparison.Ordinal);
         Assert.DoesNotContain("BannerCycleRegion.MinHeight", code, StringComparison.Ordinal);
         Assert.Contains("LowerActionRegion.Height + 12", code, StringComparison.Ordinal);
         Assert.Contains("DeckHeight: 172", ReadAppFile("ViewModels", "LauncherLayoutState.cs"), StringComparison.Ordinal);
@@ -332,9 +334,8 @@ public sealed class IrisLauncherShellTests
         var code = ReadAppFile("MainPage.xaml.cs");
 
         Assert.Contains("CombinedStatusPanel.Height = double.NaN", code, StringComparison.Ordinal);
-        Assert.Contains("CombinedStatusPanel.VerticalAlignment = SignalPanel.Visibility is Visibility.Collapsed", code, StringComparison.Ordinal);
-        Assert.Contains("? VerticalAlignment.Bottom", code, StringComparison.Ordinal);
-        Assert.Contains(": VerticalAlignment.Stretch", code, StringComparison.Ordinal);
+        Assert.Contains("CombinedStatusPanel.VerticalAlignment = VerticalAlignment.Bottom", code, StringComparison.Ordinal);
+        Assert.Contains("VerticalAlignment=\"Bottom\"", SliceElement(xaml, "x:Name=\"AccountAndToolsPanel\""), StringComparison.Ordinal);
         Assert.Contains("x:Name=\"CombinedStatusPanel\"", xaml, StringComparison.Ordinal);
         Assert.Matches(@"x:Name=""NyxToolsPanel""\s+Grid\.Column=""1""", xaml);
         Assert.Matches(@"x:Name=""LaunchStack""\s+Grid\.Column=""2""", xaml);
@@ -881,7 +882,7 @@ public sealed class IrisLauncherShellTests
             window,
             @"<Button\s+x:Name=""(?:Settings|Minimize|Close)Button""\s+Width=""42""\s+Height=""36""\s+MinWidth=""42""\s+MinHeight=""36""").Count);
         Assert.Contains("x:Name=\"SettingsIcon\"", window, StringComparison.Ordinal);
-        Assert.Matches(@"BannerContentRegion\.Margin = new Thickness\(\s*30,\s*38,", code);
+        Assert.Matches(@"BannerContentRegion\.Margin = new Thickness\(\s*26,\s*38,", code);
         Assert.Contains("x:Key=\"LauncherInfoSurfaceBrush\"", palette, StringComparison.Ordinal);
         Assert.Contains("Background=\"{ThemeResource LauncherInfoSurfaceBrush}\"", SliceElement(xaml, "x:Name=\"BannerCycleRegion\""), StringComparison.Ordinal);
         Assert.Contains("Background=\"Transparent\"", SliceElement(xaml, "x:Name=\"LowerActionRegion\""), StringComparison.Ordinal);
@@ -934,8 +935,8 @@ public sealed class IrisLauncherShellTests
         var code = ReadAppFile("MainPage.xaml.cs");
 
         Assert.Contains("x:Name=\"LowerActionGrid\" ColumnSpacing=\"16\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Height=\"378\"", SliceElement(xaml, "x:Name=\"LowerActionRegion\""), StringComparison.Ordinal);
-        Assert.Contains("LowerActionRegion.Height = Math.Max(profile.DeckHeight, 378)", code, StringComparison.Ordinal);
+        Assert.Contains("Height=\"280\"", SliceElement(xaml, "x:Name=\"LowerActionRegion\""), StringComparison.Ordinal);
+        Assert.Contains("LowerActionRegion.Height = Math.Max(profile.DeckHeight, 280)", code, StringComparison.Ordinal);
         Assert.Contains("<ColumnDefinition Width=\"280\" />", xaml, StringComparison.Ordinal);
         Assert.Contains("<ColumnDefinition Width=\"*\" />", xaml, StringComparison.Ordinal);
         Assert.Contains("const double toolsWidth = 415d", code, StringComparison.Ordinal);

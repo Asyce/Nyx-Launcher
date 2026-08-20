@@ -214,15 +214,16 @@
                 x:Name="BannerContentRegion"
                 Grid.RowSpan="2"
                 Grid.Column="1"
-                Width="620"
-                Margin="52,72,20,390"
+                Grid.ColumnSpan="2"
+                Width="704"
+                Margin="26,38,18,292"
                 HorizontalAlignment="Left"
                 VerticalAlignment="Stretch">
-                <StackPanel x:Name="ContentPanel" MaxWidth="620" Spacing="0">
+                <StackPanel x:Name="ContentPanel" MaxWidth="704" Spacing="0">
                     <Border
                         x:Name="BannerCycleRegion"
-                        Width="560"
-                        Height="292"
+                        Width="704"
+                        Height="390"
                         Padding="0"
                         AutomationProperties.Name="Current and next character banners"
                         Background="{ThemeResource LauncherInfoSurfaceBrush}"
@@ -674,7 +675,7 @@
                 Grid.RowSpan="2"
                 Grid.Column="1"
                 Grid.ColumnSpan="2"
-                Height="378"
+                Height="280"
                 Margin="0"
                 Padding="26,10"
                 HorizontalAlignment="Stretch"
@@ -740,6 +741,7 @@
                                     FontSize="8"
                                     Foreground="{ThemeResource MistBrush}"
                                     Text=""
+                                    Visibility="Collapsed"
                                     AutomationProperties.LiveSetting="Polite" />
                                 <Button
                                     x:Name="RefreshCodesButton"
@@ -1202,7 +1204,7 @@
                         x:Name="AccountAndToolsPanel"
                         Grid.Column="1"
                         Margin="0,8,0,0"
-                        VerticalAlignment="Stretch"
+                        VerticalAlignment="Bottom"
                         RowSpacing="3"
                         AutomationProperties.Name="Account and export controls">
                         <Grid.RowDefinitions>
@@ -1318,28 +1320,33 @@
                                 FontSize="10"
                                 Foreground="{ThemeResource IrisBrush}"
                                 Text="ON LAUNCH" />
-                            <CheckBox
-                                x:Name="AutomaticDailyCheckInToggle"
-                                HorizontalAlignment="Left"
-                                AutomationProperties.Name="Automatically complete the daily web check-in when this game launches"
-                                Click="AutomaticDailyCheckInToggle_Click"
-                                Content="Daily Web check-in"
-                                FontFamily="{StaticResource NyxBodyFont}"
-                                FontSize="10"
-                                Foreground="{ThemeResource MoonBrush}" />
-                            <CheckBox
-                                x:Name="Fps120Toggle"
-                                Height="28"
-                                MinHeight="28"
-                                AutomationProperties.Name="Set 120 FPS on launch"
-                                Click="Fps120Toggle_Click"
-                                Content="Set 120 FPS"
-                                FontFamily="{StaticResource NyxBodyFont}"
-                                FontSize="10"
-                                Foreground="{ThemeResource MoonBrush}"
-                                VerticalContentAlignment="Center"
-                                ToolTipService.ToolTip="Set the selected game to 120 FPS before launch. Genshin Impact and Star Rail use separate saved settings."
-                                Visibility="Collapsed" />
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <CheckBox
+                                    x:Name="AutomaticDailyCheckInToggle"
+                                    Height="28"
+                                    MinHeight="28"
+                                    HorizontalAlignment="Left"
+                                    VerticalContentAlignment="Center"
+                                    AutomationProperties.Name="Automatically complete the daily web check-in when this game launches"
+                                    Click="AutomaticDailyCheckInToggle_Click"
+                                    Content="Daily Web check-in"
+                                    FontFamily="{StaticResource NyxBodyFont}"
+                                    FontSize="10"
+                                    Foreground="{ThemeResource MoonBrush}" />
+                                <CheckBox
+                                    x:Name="Fps120Toggle"
+                                    Height="28"
+                                    MinHeight="28"
+                                    AutomationProperties.Name="Set 120 FPS on launch"
+                                    Click="Fps120Toggle_Click"
+                                    Content="Set 120 FPS"
+                                    FontFamily="{StaticResource NyxBodyFont}"
+                                    FontSize="10"
+                                    Foreground="{ThemeResource MoonBrush}"
+                                    VerticalContentAlignment="Center"
+                                    ToolTipService.ToolTip="Set the selected game to 120 FPS before launch. Genshin Impact and Star Rail use separate saved settings."
+                                    Visibility="Collapsed" />
+                            </StackPanel>
                         </StackPanel>
 
                         <Grid x:Name="ExportHeaderGrid" Grid.Row="1" Margin="12,0">

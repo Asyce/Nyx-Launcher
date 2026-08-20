@@ -8,7 +8,7 @@ namespace Nyx.Desktop.Infrastructure.PublisherGames;
 
 internal static class PublisherFileIdentity
 {
-    private const long MaximumComparableExecutableBytes = 256L * 1024 * 1024;
+    private const long MaximumComparableExecutableBytes = 2L * 1024 * 1024 * 1024;
 
     internal static bool FixedTimeEquals(byte[] left, byte[] right) =>
         CryptographicOperations.FixedTimeEquals(left, right);
@@ -16,8 +16,34 @@ internal static class PublisherFileIdentity
     internal static byte[] GetSha256(FileStream stream)
         => GetHash(stream, HashAlgorithmName.SHA256);
 
-    internal static byte[] GetMd5(FileStream stream)
-        => GetHash(stream, HashAlgorithmName.MD5);
+    internal static (byte[] Sha256, byte[] Md5) GetSha256AndMd5(FileStream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        stream.Position = 0;
+        using var sha256 = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var md5 = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
+        var buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+        try
+        {
+            while (true)
+            {
+                var read = stream.Read(buffer, 0, buffer.Length);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                sha256.AppendData(buffer, 0, read);
+                md5.AppendData(buffer, 0, read);
+            }
+
+            return (sha256.GetHashAndReset(), md5.GetHashAndReset());
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+        }
+    }
 
     private static byte[] GetHash(FileStream stream, HashAlgorithmName algorithm)
     {
@@ -370,8 +396,7 @@ internal sealed class ProtectedPublisherExecutableObservation : IDisposable
                 throw new IOException("Executable is outside the bounded proof size.");
             }
 
-            var digest = PublisherFileIdentity.GetSha256(stream);
-            var md5Digest = PublisherFileIdentity.GetMd5(stream);
+            var (digest, md5Digest) = PublisherFileIdentity.GetSha256AndMd5(stream);
             var metadata = metadataReader.Read(path, fileIdentity, identityReader);
             PublisherPathIdentity.EnsurePathMatches(path, fileIdentity, identityReader);
             var digestAfterMetadata = PublisherFileIdentity.GetSha256(stream);

@@ -117,8 +117,8 @@ public sealed class PengoWebToolsUiTests
     public void Export_controls_reject_preflight_and_active_job_races()
     {
         var code = ReadAppFile("MainPage.xaml.cs");
-        var exportToggle = Slice(code, "private async void ExportToggle_Click", "private void AchievementSource_Click");
-        var source = Slice(code, "private void AchievementSource_Click", "private async Task StartHoyoLabAchievementExportAsync");
+        var exportToggle = Slice(code, "private void ExportToggle_Click", "private async void AchievementSource_Click");
+        var source = Slice(code, "private async void AchievementSource_Click", "private async Task StartHoyoLabAchievementExportAsync");
         var hoyoLab = Slice(code, "private async Task StartHoyoLabAchievementExportAsync", "private string GetAchievementSource");
         var render = Slice(code, "private void RenderExportTools", "private static string FormatExportStatus");
 
@@ -136,10 +136,29 @@ public sealed class PengoWebToolsUiTests
     }
 
     [Fact]
+    public void Star_rail_source_choices_exist_only_while_achievements_are_selected()
+    {
+        var code = ReadAppFile("MainPage.xaml.cs");
+        var exportToggle = Slice(code, "private void ExportToggle_Click", "private async void AchievementSource_Click");
+        var source = Slice(code, "private async void AchievementSource_Click", "private async Task StartHoyoLabAchievementExportAsync");
+        var render = Slice(code, "private void RenderExportTools", "private static string FormatExportStatus");
+
+        Assert.Contains("ReferenceEquals(sender, AchievementExportToggle) && AchievementExportToggle.IsChecked == true", exportToggle, StringComparison.Ordinal);
+        Assert.Contains("? AchievementExportSources.Game", exportToggle, StringComparison.Ordinal);
+        Assert.Contains("var showAchievementSource = selected.Id == \"hsr\"", render, StringComparison.Ordinal);
+        Assert.Contains("&& armed.AchievementsArmed", render, StringComparison.Ordinal);
+        Assert.Contains("AchievementSourceOptionsPanel.Visibility = showAchievementSource", render, StringComparison.Ordinal);
+        Assert.Contains("HoyoLabAchievementSourceRadio.Visibility = showAchievementSource && !armed.PullsArmed", render, StringComparison.Ordinal);
+        Assert.Contains("if (existing.PullsArmed)", source, StringComparison.Ordinal);
+        Assert.Contains("AchievementsArmed = source == AchievementExportSources.HoyoLab", source, StringComparison.Ordinal);
+        Assert.Contains("await StartHoyoLabAchievementExportAsync()", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void HoyoLab_export_reservation_is_taken_before_first_await_and_cleared_in_finally()
     {
         var code = ReadAppFile("MainPage.xaml.cs");
-        var launch = Slice(code, "private async void LaunchButton_Click", "private async void ExportToggle_Click");
+        var launch = Slice(code, "private async void LaunchButton_Click", "private void ExportToggle_Click");
         var hoyoLab = Slice(code, "private async Task StartHoyoLabAchievementExportAsync", "private string GetAchievementSource");
 
         Assert.Contains("if (gameId == \"hsr\" && hoyoLabExportReservation.IsHeld)", launch, StringComparison.Ordinal);

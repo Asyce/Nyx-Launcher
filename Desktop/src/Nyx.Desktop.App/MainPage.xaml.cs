@@ -2671,6 +2671,7 @@ public sealed partial class MainPage : Page
         }
 
         RefreshCodesButton.IsEnabled = false;
+        CodeRefreshStatusText.Visibility = Visibility.Visible;
         CodeRefreshStatusText.Text = "UPDATING";
         try
         {
@@ -4240,7 +4241,7 @@ public sealed partial class MainPage : Page
         }
     }
 
-    private async void ExportToggle_Click(object sender, RoutedEventArgs e)
+    private void ExportToggle_Click(object sender, RoutedEventArgs e)
     {
         if (GameSelector?.SelectedItem is not GameLauncherItem selected)
         {
@@ -4254,9 +4255,9 @@ public sealed partial class MainPage : Page
         {
             return;
         }
-        var achievementSource = ReferenceEquals(sender, PullExportToggle)
-            && selected.Id == "hsr"
-            && PullExportToggle.IsChecked == true
+        var achievementSource = selected.Id == "hsr"
+            && (ReferenceEquals(sender, PullExportToggle) && PullExportToggle.IsChecked == true
+                || ReferenceEquals(sender, AchievementExportToggle) && AchievementExportToggle.IsChecked == true)
                 ? AchievementExportSources.Game
                 : GetAchievementSource(selected.Id);
         var capability = ExportProviderCatalog.GetEnabled(
@@ -4266,14 +4267,6 @@ public sealed partial class MainPage : Page
         if (ReferenceEquals(sender, PullExportToggle) && !capability.Supports(ExportKind.Pulls)) return;
         if (ReferenceEquals(sender, AchievementExportToggle) && !capability.Supports(ExportKind.Achievements)) return;
         var gameId = selected.Id;
-        if (ReferenceEquals(sender, AchievementExportToggle)
-            && gameId == "hsr"
-            && achievementSource == AchievementExportSources.HoyoLab)
-        {
-            AchievementExportToggle.IsChecked = false;
-            await StartHoyoLabAchievementExportAsync();
-            return;
-        }
         var pullsArmed = capability.Supports(ExportKind.Pulls) && PullExportToggle.IsChecked == true;
         var achievementsArmed = capability.Supports(ExportKind.Achievements) && AchievementExportToggle.IsChecked == true;
         var saved = launcherState.TryUpdate(state =>
@@ -4357,16 +4350,14 @@ public sealed partial class MainPage : Page
             case "banners":
                 expanded = BannerCycleColumns.Visibility is Visibility.Collapsed;
                 BannerCycleColumns.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-                BannerCycleRegion.Height = expanded ? 292 : double.NaN;
+                BannerCycleRegion.Height = expanded ? 390 : double.NaN;
                 label = "Banners";
                 break;
             case "codes":
                 expanded = SignalPanel.Visibility is Visibility.Collapsed;
                 SignalPanel.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
                 CodesHeaderDivider.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-                CombinedStatusPanel.VerticalAlignment = expanded
-                    ? VerticalAlignment.Stretch
-                    : VerticalAlignment.Bottom;
+                CombinedStatusPanel.VerticalAlignment = VerticalAlignment.Bottom;
                 label = "Codes";
                 break;
             case "account":
@@ -4381,9 +4372,7 @@ public sealed partial class MainPage : Page
                 {
                     RenderHoyoLabAccountIdentity(selected);
                 }
-                AccountAndToolsPanel.VerticalAlignment = expanded
-                    ? VerticalAlignment.Stretch
-                    : VerticalAlignment.Bottom;
+                AccountAndToolsPanel.VerticalAlignment = VerticalAlignment.Bottom;
                 label = "Account";
                 break;
             default:
@@ -4396,7 +4385,7 @@ public sealed partial class MainPage : Page
         ToolTipService.SetToolTip(button, $"{action} {label}");
     }
 
-    private void AchievementSource_Click(object sender, RoutedEventArgs e)
+    private async void AchievementSource_Click(object sender, RoutedEventArgs e)
     {
         if (GameSelector?.SelectedItem is not GameLauncherItem { Id: "hsr" }
             || sender is not FrameworkElement { Tag: string requested })
@@ -4414,7 +4403,7 @@ public sealed partial class MainPage : Page
         var existing = launcherState.Snapshot.Export.Games.TryGetValue("hsr", out var configuredArming)
             ? configuredArming
             : new Nyx.Desktop.Core.State.ExportGameArming();
-        if (existing.PullsArmed || existing.AchievementsArmed)
+        if (existing.PullsArmed)
         {
             RenderSelection();
             return;
@@ -4431,11 +4420,24 @@ public sealed partial class MainPage : Page
             games["hsr"] = current with
             {
                 AchievementSource = source,
+                AchievementsArmed = source == AchievementExportSources.HoyoLab
+                    ? false
+                    : current.AchievementsArmed,
             };
             return state with { Export = state.Export with { Games = games } };
         });
-        if (!saved) NyxToolsStatusText.Text = "Nyx could not save that achievement source. Try again.";
-        else RenderSelection();
+        if (!saved)
+        {
+            NyxToolsStatusText.Text = "Nyx could not save that achievement source. Try again.";
+        }
+        else if (source == AchievementExportSources.HoyoLab && existing.AchievementsArmed)
+        {
+            await StartHoyoLabAchievementExportAsync();
+        }
+        else
+        {
+            RenderSelection();
+        }
     }
 
     private void StableAchievementSourceRadio_Click(object sender, RoutedEventArgs e)
@@ -4862,8 +4864,9 @@ public sealed partial class MainPage : Page
             game.ApplyLayout(profile);
         }
 
-        ContentPanel.MaxWidth = profile.ContentWidth;
-        BannerContentRegion.MaxWidth = profile.ContentWidth;
+        const double bannerWidth = 704d;
+        ContentPanel.MaxWidth = bannerWidth;
+        BannerContentRegion.MaxWidth = bannerWidth;
         ApplyLowerActionLayout(profile);
 
         if (GameSelector.ItemsPanelRoot is ItemsStackPanel itemsPanel)
@@ -4928,12 +4931,12 @@ public sealed partial class MainPage : Page
         Grid.SetRow(BannerContentRegion, 0);
         Grid.SetRowSpan(BannerContentRegion, 2);
         Grid.SetColumn(BannerContentRegion, 1);
-        Grid.SetColumnSpan(BannerContentRegion, 1);
-        BannerContentRegion.Width = profile.ContentWidth;
+        Grid.SetColumnSpan(BannerContentRegion, 2);
+        BannerContentRegion.Width = bannerWidth;
         BannerContentRegion.HorizontalAlignment = HorizontalAlignment.Left;
         BannerContentRegion.VerticalAlignment = VerticalAlignment.Stretch;
         BannerContentRegion.Margin = new Thickness(
-            30,
+            26,
             38,
             18,
             LowerActionRegion.Height + 12);
@@ -4948,7 +4951,7 @@ public sealed partial class MainPage : Page
     private void ApplyLowerActionLayout(LauncherLayoutProfile profile)
     {
         compactCodeRows = false;
-        LowerActionRegion.Height = Math.Max(profile.DeckHeight, 378);
+        LowerActionRegion.Height = Math.Max(profile.DeckHeight, 280);
         LowerActionRegion.Padding = new Thickness(26, 8, 26, 12);
         LowerActionGrid.ColumnSpacing = 16;
 
@@ -4973,9 +4976,7 @@ public sealed partial class MainPage : Page
         CombinedStatusPanel.Height = double.NaN;
         CombinedStatusPanel.Margin = new Thickness(0, 8, 0, 0);
         CombinedStatusPanel.Padding = new Thickness(16, 10, 12, 10);
-        CombinedStatusPanel.VerticalAlignment = SignalPanel.Visibility is Visibility.Collapsed
-            ? VerticalAlignment.Bottom
-            : VerticalAlignment.Stretch;
+        CombinedStatusPanel.VerticalAlignment = VerticalAlignment.Bottom;
         CombinedStatusPanel.CornerRadius = new CornerRadius(10);
         CombinedBannerColumn.Width = new GridLength(1, GridUnitType.Star);
 
@@ -5810,20 +5811,34 @@ public sealed partial class MainPage : Page
             selected.Id,
             launcherState.Snapshot.Preferences.FeatureFlags,
             achievementSource);
+        var gameAchievementAvailable = ExportProviderCatalog.GetEnabled(
+            selected.Id,
+            launcherState.Snapshot.Preferences.FeatureFlags,
+            AchievementExportSources.Game).Supports(ExportKind.Achievements);
+        var hoyoLabAchievementAvailable = selected.Id == "hsr"
+            && ExportProviderCatalog.GetEnabled(
+                selected.Id,
+                launcherState.Snapshot.Preferences.FeatureFlags,
+                AchievementExportSources.HoyoLab).Supports(ExportKind.Achievements);
         var catalogCapability = ExportProviderCatalog.Get(selected.Id);
         var pullsSupported = catalogCapability.Supports(ExportKind.Pulls);
         var achievementsSupported = catalogCapability.Supports(ExportKind.Achievements);
         var pullsOffered = selected.Id is "gi" or "hsr" or "zzz" or "wuwa";
         var achievementsOffered = selected.Id is "gi" or "hsr" or "zzz";
         var pullsAvailable = capability.Supports(ExportKind.Pulls);
-        var achievementsAvailable = capability.Supports(ExportKind.Achievements);
+        var achievementsAvailable = selected.Id == "hsr"
+            ? gameAchievementAvailable || hoyoLabAchievementAvailable
+            : capability.Supports(ExportKind.Achievements);
         var usesHoyoLab = selected.Id == "hsr"
             && achievementSource == AchievementExportSources.HoyoLab;
         var hasActiveJob = latestExportJobs.TryGetValue(selected.Id, out var activeJobId)
             && !exports.GetSnapshot(activeJobId).IsFinished;
         var hasHoyoLabExportPreparation = selected.Id == "hsr"
             && hoyoLabExportReservation.IsHeld;
-        var sourceLocked = armed.PullsArmed || armed.AchievementsArmed;
+        var sourceLocked = armed.PullsArmed;
+        var showAchievementSource = selected.Id == "hsr"
+            && armed.AchievementsArmed
+            && achievementsAvailable;
         PullExportToggle.IsChecked = pullsAvailable && armed.PullsArmed;
         AchievementExportToggle.IsChecked = !usesHoyoLab
             && achievementsAvailable
@@ -5838,7 +5853,7 @@ public sealed partial class MainPage : Page
         AchievementExportPanel.Visibility = achievementsOffered
             ? Visibility.Visible
             : Visibility.Collapsed;
-        AchievementSourceButton.Visibility = selected.Id == "hsr"
+        AchievementSourceButton.Visibility = showAchievementSource
             ? Visibility.Visible
             : Visibility.Collapsed;
         AchievementSourceButton.IsEnabled = selected.Id == "hsr"
@@ -5849,7 +5864,7 @@ public sealed partial class MainPage : Page
         AchievementSourceButton.Content = achievementSource == AchievementExportSources.HoyoLab
             ? "HOYOLAB \u25BE"
             : "GAME \u25BE";
-        AchievementSourceOptionsPanel.Visibility = selected.Id == "hsr"
+        AchievementSourceOptionsPanel.Visibility = showAchievementSource
             ? Visibility.Visible
             : Visibility.Collapsed;
         GameAchievementSourceRadio.IsChecked = selected.Id == "hsr"
@@ -5857,26 +5872,26 @@ public sealed partial class MainPage : Page
         HoyoLabAchievementSourceRadio.IsChecked = selected.Id == "hsr"
             && achievementSource == AchievementExportSources.HoyoLab;
         Grid.SetColumnSpan(GameAchievementSourceRadio, 1);
-        GameAchievementSourceRadio.Visibility = selected.Id == "hsr"
+        GameAchievementSourceRadio.Visibility = showAchievementSource
             ? Visibility.Visible
             : Visibility.Collapsed;
         Grid.SetColumn(GameAchievementSourceRadio, 1);
         Grid.SetColumn(HoyoLabAchievementSourceRadio, 2);
         Grid.SetColumnSpan(HoyoLabAchievementSourceRadio, 1);
-        HoyoLabAchievementSourceRadio.Visibility = selected.Id == "hsr" && !armed.PullsArmed
+        HoyoLabAchievementSourceRadio.Visibility = showAchievementSource && !armed.PullsArmed
             ? Visibility.Visible
             : Visibility.Collapsed;
-        GameAchievementSourceRadio.IsEnabled = achievementsSupported
+        GameAchievementSourceRadio.IsEnabled = gameAchievementAvailable
             && !sourceLocked
             && !gameActionsInFlight.Contains(selected.Id)
             && !hasHoyoLabExportPreparation
             && !hasActiveJob;
-        HoyoLabAchievementSourceRadio.IsEnabled = selected.Id == "hsr"
+        HoyoLabAchievementSourceRadio.IsEnabled = hoyoLabAchievementAvailable
             && !sourceLocked
             && AchievementSourceButton.IsEnabled;
         AchievementExportToggle.Height = selected.Id == "hsr" ? 28 : 34;
         AchievementExportToggle.MinHeight = selected.Id == "hsr" ? 28 : 34;
-        AchievementExportLabel.Text = usesHoyoLab ? "Export now" : "Achievements";
+        AchievementExportLabel.Text = "Achievements";
         PullExportToggle.IsEnabled = pullsAvailable
             && !hasActiveJob
             && !gameActionsInFlight.Contains(selected.Id)
@@ -5895,8 +5910,8 @@ public sealed partial class MainPage : Page
             ? $"Export pulls on the next {selected.DisplayName} launch"
             : $"Pull export for {selected.DisplayName} is coming later";
         var achievementAccessibilityName = achievementsAvailable
-            ? usesHoyoLab
-                ? "Export Star Rail achievements from HoYoLAB now, without opening the game"
+            ? selected.Id == "hsr"
+                ? "Turn on Star Rail achievement export, then choose Game or HoYoLAB"
                 : $"Export achievements on the next {selected.DisplayName} launch"
             : $"Achievement export for {selected.DisplayName} is coming later";
         AutomationProperties.SetName(PullExportToggle, pullAccessibilityName);
@@ -5930,10 +5945,6 @@ public sealed partial class MainPage : Page
                 ? "Export tools for this game are not ready yet."
                 : !pullsSupported && !achievementsSupported
                 ? "No supported export tools for this game."
-                : usesHoyoLab
-                ? armed.PullsArmed
-                    ? "Pulls run on launch. HoYoLAB achievements export immediately."
-                    : "HoYoLAB achievements export immediately; Star Rail can stay closed."
                 : (armed.PullsArmed, armed.AchievementsArmed) switch
             {
                 (true, true) => "Pull and achievement exports will start with the next launch.",

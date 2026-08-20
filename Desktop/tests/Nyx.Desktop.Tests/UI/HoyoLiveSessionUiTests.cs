@@ -609,13 +609,12 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("Text=\"Export from:\"", Slice(xaml, "x:Name=\"AchievementSourcePrefix\"", "/>"), StringComparison.Ordinal);
         Assert.DoesNotContain("Choose what Nyx should export", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Use the official launcher for updates and pre-loads", xaml, StringComparison.Ordinal);
-        Assert.Contains("HoyoLabAchievementSourceRadio.Visibility = selected.Id == \"hsr\"", page, StringComparison.Ordinal);
-        Assert.Contains("AchievementSourceOptionsPanel.Visibility = selected.Id == \"hsr\"", page, StringComparison.Ordinal);
-        Assert.Contains("var sourceLocked = armed.PullsArmed || armed.AchievementsArmed", page, StringComparison.Ordinal);
-        Assert.Contains("GameAchievementSourceRadio.IsEnabled = achievementsSupported", page, StringComparison.Ordinal);
+        Assert.Contains("HoyoLabAchievementSourceRadio.Visibility = showAchievementSource && !armed.PullsArmed", page, StringComparison.Ordinal);
+        Assert.Contains("AchievementSourceOptionsPanel.Visibility = showAchievementSource", page, StringComparison.Ordinal);
+        Assert.Contains("var sourceLocked = armed.PullsArmed", page, StringComparison.Ordinal);
+        Assert.Contains("GameAchievementSourceRadio.IsEnabled = gameAchievementAvailable", page, StringComparison.Ordinal);
         Assert.Contains("&& !sourceLocked", Slice(page, "GameAchievementSourceRadio.IsEnabled", "AchievementExportToggle.Height"), StringComparison.Ordinal);
-        Assert.Contains("HoyoLabAchievementSourceRadio.Visibility = selected.Id == \"hsr\" && !armed.PullsArmed", page, StringComparison.Ordinal);
-        Assert.Contains("if (existing.PullsArmed || existing.AchievementsArmed)", page, StringComparison.Ordinal);
+        Assert.Contains("if (existing.PullsArmed)", page, StringComparison.Ordinal);
         Assert.Contains("var pullsOffered = selected.Id is \"gi\" or \"hsr\" or \"zzz\" or \"wuwa\"", page, StringComparison.Ordinal);
         Assert.Contains("var achievementsOffered = selected.Id is \"gi\" or \"hsr\" or \"zzz\"", page, StringComparison.Ordinal);
         var achievementCard = Slice(xaml, "x:Name=\"AchievementExportCard\"", "x:Name=\"StableAchievementExportToggle\"");
