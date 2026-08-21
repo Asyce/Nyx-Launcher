@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "revision": "8337e25ce5ab4f6dfb4c45f147ff6bb0005a56e908a6509a5cf80eefaf417ca5",
-  "generatedAt": "2026-08-21T02:22:41.437Z",
+  "revision": "8707b3981a2f55eb368a504187d1c54db2287eee31e1ff27bd1cc7685fd086a2",
+  "generatedAt": "2026-08-21T03:06:08.880Z",
   "health": {
     "status": "ok",
     "games": {
@@ -43,7 +43,7 @@
         "remaining": {
           "startsAt": "2026-08-12T03:00:00.000Z",
           "endsAt": "2026-09-01T09:59:59.000Z",
-          "durationSeconds": 977837
+          "durationSeconds": 975230
         },
         "characters": [
           {
@@ -789,7 +789,7 @@
         "remaining": {
           "startsAt": "2026-08-05T04:00:00.000Z",
           "endsAt": "2026-08-25T07:00:00.000Z",
-          "durationSeconds": 362238
+          "durationSeconds": 359631
         },
         "characters": [
           {
@@ -1902,7 +1902,7 @@
           "id": "hsr-hoyo-ann-59582dfb96bb",
           "title": "Version 4.4 Event Warp: Phase II",
           "type": "banner",
-          "start": "2026-08-04T04:00:00.000Z",
+          "start": "2026-08-04T11:00:00.000Z",
           "end": "2026-08-25T14:00:00.000Z",
           "url": "https://sg-hkrpg-api.hoyoverse.com/common/hkrpg_global/announcement/api/getAnnContent?game=hkrpg&game_biz=hkrpg_global&lang=en&ann_id=1294"
         },
@@ -1918,24 +1918,24 @@
           "id": "hsr-hoyo-ann-38b45482599c",
           "title": "\"Imagenae: Holy Grail War\" Event Details",
           "type": "event",
-          "start": "2026-07-23T03:00:00.000Z",
-          "end": "2026-08-25T22:00:00.000Z",
+          "start": "2026-07-23T10:00:00.000Z",
+          "end": "2026-08-26T05:00:00.000Z",
           "url": "https://sg-hkrpg-api.hoyoverse.com/common/hkrpg_global/announcement/api/getAnnContent?game=hkrpg&game_biz=hkrpg_global&lang=en&ann_id=1304"
         },
         {
           "id": "hsr-hoyo-ann-12c1a7a21c89",
           "title": "\"Antigraft Brickbuster\": Complete hacking operations to obtain Self-Modeling Resins, Tracks of Destiny, Stellar Jades, and more!",
           "type": "event",
-          "start": "2026-07-14T03:30:00.000Z",
-          "end": "2026-08-25T19:59:00.000Z",
+          "start": "2026-07-14T10:30:00.000Z",
+          "end": "2026-08-26T02:59:00.000Z",
           "url": "https://sg-hkrpg-api.hoyoverse.com/common/hkrpg_global/announcement/api/getAnnContent?game=hkrpg&game_biz=hkrpg_global&lang=en&ann_id=1301"
         },
         {
           "id": "hsr-hoyo-ann-5869c3577b20",
           "title": "\"Currency Wars: Zero-Sum Game\" Season Expansion Details V4.4",
           "type": "event",
-          "start": "2026-07-13T04:00:00.000Z",
-          "end": "2026-11-10T22:00:00.000Z",
+          "start": "2026-07-13T11:00:00.000Z",
+          "end": "2026-11-11T05:00:00.000Z",
           "url": "https://sg-hkrpg-api.hoyoverse.com/common/hkrpg_global/announcement/api/getAnnContent?game=hkrpg&game_biz=hkrpg_global&lang=en&ann_id=1296"
         }
       ],
@@ -1982,7 +1982,7 @@
         "remaining": {
           "startsAt": "2026-08-19T04:00:00.000Z",
           "endsAt": "2026-09-08T06:59:59.000Z",
-          "durationSeconds": 1571837
+          "durationSeconds": 1569230
         },
         "characters": [
           {
@@ -2918,7 +2918,7 @@
         "remaining": {
           "startsAt": "2026-08-20T09:00:00.000Z",
           "endsAt": "2026-09-10T08:59:00.000Z",
-          "durationSeconds": 1751778
+          "durationSeconds": 1749171
         },
         "characters": [
           {
@@ -3685,7 +3685,7 @@
         "remaining": {
           "startsAt": "2026-08-09T04:00:00.000Z",
           "endsAt": "2026-09-01T21:59:59.000Z",
-          "durationSeconds": 1021037
+          "durationSeconds": 1018430
         },
         "characters": [
           {
