@@ -61,7 +61,8 @@ public sealed partial class MainPage : Page
 
     private const int WuWaLaunchObservationCount = 6;
     private const int EndfieldLaunchObservationCount = 6;
-    private const int MaximumDisplayedBannerRows = 4;
+    private const int MaximumDisplayedCurrentBannerCharacters = 10;
+    private const int MaximumDisplayedBannerCharactersPerPhase = 5;
     private const double LaunchStarfieldWidth = 367;
     private const double LaunchStarfieldHeight = 82;
     private static readonly TimeSpan WuWaLaunchObservationInterval =
@@ -6122,12 +6123,14 @@ public sealed partial class MainPage : Page
                 && (live.End is null || now < live.End)
                 ? live
                 : null;
-            var upcoming = launcherGame.UpcomingForDisplayAt(now, 3);
+            var upcoming = launcherGame.UpcomingForDisplayAt(now, 5);
             RenderBannerRows(selected.Id, current, now);
-            RenderUpcomingBannerGroups(selected.Id, upcoming, now);
+            RenderUpcomingBannerGroups(selected.Id, current, upcoming, now);
             RenderBannerCategories(selected.Id, launcherGame);
             BannerCycleHeading.Text = "BANNERS";
-            BannerCycleTiming.Text = FormatCurrentBannerTiming(current, now);
+            BannerCycleTiming.Text = FormatBannerTimelineLabel(
+                current?.Phase,
+                FormatCurrentBannerTiming(current, now));
             var timingVisibility = string.IsNullOrWhiteSpace(BannerCycleTiming.Text)
                 ? Visibility.Collapsed
                 : Visibility.Visible;
@@ -6146,7 +6149,6 @@ public sealed partial class MainPage : Page
         var collab = game.Collections.FirstOrDefault(collection => collection.Kind == "collab");
         var hasCurrent = BannerCharacterRows.Count > 0;
         var hasUpcoming = UpcomingBannerGroups.Count > 0;
-        var hasBoth = hasCurrent && hasUpcoming;
         UpcomingBannerCategoryButton.Visibility = hasUpcoming
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -6160,14 +6162,6 @@ public sealed partial class MainPage : Page
         CurrentBannerSection.Visibility = hasCurrent ? Visibility.Visible : Visibility.Collapsed;
         UpcomingBannerList.Visibility = hasUpcoming ? Visibility.Visible : Visibility.Collapsed;
         BannerCollectionList.Visibility = Visibility.Collapsed;
-        CurrentBannerColumn.Width = hasCurrent
-            ? new GridLength(1, GridUnitType.Star)
-            : new GridLength(0);
-        UpcomingBannerColumn.Width = hasUpcoming
-            ? new GridLength(1, GridUnitType.Star)
-            : new GridLength(0);
-        BannerColumnDivider.Visibility = hasBoth ? Visibility.Visible : Visibility.Collapsed;
-        BannerCycleColumns.ColumnSpacing = hasBoth ? 24 : 0;
         CurrentBannerCategoryButton.Opacity = category == "current" ? 1 : 0.62;
         UpcomingBannerCategoryButton.Opacity = category == "upcoming" ? 1 : 0.62;
         CollabBannerCategoryButton.Opacity = category == "collab" ? 1 : 0.62;
@@ -6216,35 +6210,78 @@ public sealed partial class MainPage : Page
         return string.Empty;
     }
 
+    private static string FormatBannerTimelineLabel(string? phase, string timing)
+    {
+        var label = FormatBannerPhaseLabel(phase);
+        if (string.IsNullOrEmpty(label)) return timing;
+        return string.IsNullOrEmpty(timing) ? label : $"{label} \u00B7 {timing}";
+    }
+
+    private static string FormatBannerPhaseLabel(string? phase)
+    {
+        var value = phase?.Trim();
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+        if (value.StartsWith("Version ", StringComparison.OrdinalIgnoreCase)) value = value[8..].Trim();
+        else if (value.StartsWith("Patch ", StringComparison.OrdinalIgnoreCase)) value = value[6..].Trim();
+        var marker = value.LastIndexOf(" Phase ", StringComparison.OrdinalIgnoreCase);
+        return marker > 0
+            ? $"Patch {value[..marker].Trim()} \u00B7 Phase {value[(marker + 7)..].Trim()}"
+            : $"Patch {value}";
+    }
+
     private void RenderUpcomingBannerGroups(
         string gameId,
+        LauncherBannersCurrentPhase? current,
         IReadOnlyList<LauncherBannersUpcomingPhase> upcoming,
         DateTimeOffset now)
     {
-        var projected = upcoming
+        var projected = new List<UpcomingBannerGroupItem>();
+        if (gameId == "ae" && current is not null)
+        {
+            var lossCharacters = OrderBannerCharacters(current.Characters)
+                .Where(static character => character.Limited == false)
+                .Select(CreateUpcomingBannerCharacter)
+                .ToArray();
+            if (lossCharacters.Length > 0)
+            {
+                projected.Add(new UpcomingBannerGroupItem(
+                    $"loss:{current.Start.ToUniversalTime():O}",
+                    "Available on loss",
+                    lossCharacters));
+            }
+        }
+
+        projected.AddRange(upcoming
             .Where(static phase => phase.Characters.Count > 0)
-            .Take(3)
+            .Take(5)
             .Select((phase, index) =>
             {
                 var orderedCharacters = OrderBannerCharacters(phase.Characters).ToArray();
-                var displayedCharacters = orderedCharacters.Length <= 2
+                var displayedCharacters = orderedCharacters.Length <= MaximumDisplayedBannerCharactersPerPhase
                     ? orderedCharacters.Select(CreateUpcomingBannerCharacter).ToArray()
                     :
                     [
-                        CreateUpcomingBannerCharacter(orderedCharacters[0]),
+                        .. orderedCharacters
+                            .Take(MaximumDisplayedBannerCharactersPerPhase - 1)
+                            .Select(CreateUpcomingBannerCharacter),
                         UpcomingBannerCharacterItem.CreateOverflow(
-                            orderedCharacters.Skip(1).Select(CreateBannerPortrait).ToArray()),
+                            orderedCharacters
+                                .Skip(MaximumDisplayedBannerCharactersPerPhase - 1)
+                                .Select(CreateBannerPortrait)
+                                .ToArray()),
                     ];
                 return new UpcomingBannerGroupItem(
                     phase.Announced ? $"announced:{index}" : phase.Start!.Value.ToUniversalTime().ToString("O"),
                     phase.Announced
-                        ? "ANNOUNCED"
-                        : $"Starts in {BannerTimingFormatter.FormatRemaining(phase.Start!.Value - now)}",
+                        ? FormatBannerTimelineLabel(phase.Phase, "Soon\u2122")
+                        : FormatBannerTimelineLabel(
+                            phase.Phase,
+                            $"Starts in {BannerTimingFormatter.FormatRemaining(phase.Start!.Value - now)}"),
                     displayedCharacters);
             })
-            .ToArray();
+            .ToArray());
 
-        for (var index = 0; index < projected.Length; index++)
+        for (var index = 0; index < projected.Count; index++)
         {
             var next = projected[index];
             if (index < UpcomingBannerGroups.Count
@@ -6262,7 +6299,7 @@ public sealed partial class MainPage : Page
             }
         }
 
-        while (UpcomingBannerGroups.Count > projected.Length)
+        while (UpcomingBannerGroups.Count > projected.Count)
         {
             UpcomingBannerGroups.RemoveAt(UpcomingBannerGroups.Count - 1);
         }
@@ -6443,13 +6480,15 @@ public sealed partial class MainPage : Page
             return;
         }
 
-        var characters = OrderBannerCharacters(current.Characters, current.SelectedCharacterId).ToArray();
+        var characters = OrderBannerCharacters(current.Characters, current.SelectedCharacterId)
+            .Where(character => gameId != "ae" || character.Limited != false)
+            .ToArray();
         var timing = FormatCurrentBannerTiming(current, now);
         var phaseStableKey = current.Start.ToUniversalTime().ToString("O");
         BannerCharacterRows.Clear();
-        var namedCount = characters.Length <= MaximumDisplayedBannerRows
+        var namedCount = characters.Length <= MaximumDisplayedCurrentBannerCharacters
             ? characters.Length
-            : MaximumDisplayedBannerRows - 1;
+            : MaximumDisplayedCurrentBannerCharacters - 1;
         foreach (var character in characters.Take(namedCount))
         {
             BannerCharacterRows.Add(new BannerCharacterRowItem(
@@ -6462,7 +6501,7 @@ public sealed partial class MainPage : Page
                 100));
         }
 
-        if (characters.Length > MaximumDisplayedBannerRows)
+        if (characters.Length > MaximumDisplayedCurrentBannerCharacters)
         {
             BannerCharacterRows.Add(BannerCharacterRowItem.CreateOverflow(
                 phaseStableKey,
@@ -7252,7 +7291,7 @@ public sealed record UpcomingBannerCharacterItem(
     public Visibility PrimaryVisibility => IsOverflow ? Visibility.Collapsed : Visibility.Visible;
     public Visibility OverflowVisibility => IsOverflow ? Visibility.Visible : Visibility.Collapsed;
     public bool CanOpen => !IsOverflow && CharacterUrl is not null;
-    public double DisplayFontSize => Name.Length > 18 ? 12 : Name.Length > 14 ? 13.5 : 15;
+    public double DisplayFontSize => Name.Length > 24 ? 10 : Name.Length > 18 ? 11 : Name.Length > 14 ? 12.5 : 14;
     public string AccessibilityName => CanOpen
         ? $"Open Pengo page for {Name}"
         : Name;
@@ -7299,6 +7338,7 @@ public sealed class UpcomingBannerGroupItem : INotifyPropertyChanged
         Timing = timing;
         Characters = characters.ToArray();
         Names = string.Join(Environment.NewLine, characters.Select(static character => character.Name));
+        ItemWidth = Math.Clamp(640d / Math.Min(5, Characters.Count), 128, 320);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -7307,6 +7347,7 @@ public sealed class UpcomingBannerGroupItem : INotifyPropertyChanged
     public string Timing { get; private set; }
     public IReadOnlyList<UpcomingBannerCharacterItem> Characters { get; }
     public string Names { get; }
+    public double ItemWidth { get; }
 
     public bool Matches(UpcomingBannerGroupItem other) =>
         string.Equals(StableKey, other.StableKey, StringComparison.Ordinal)
@@ -7382,7 +7423,7 @@ public sealed class BannerCharacterRowItem : INotifyPropertyChanged
 
     public Visibility OverflowVisibility => IsOverflow ? Visibility.Visible : Visibility.Collapsed;
 
-    public double DisplayFontSize => Name.Length > 18 ? 12 : Name.Length > 14 ? 13.5 : 15;
+    public double DisplayFontSize => Name.Length > 24 ? 10 : Name.Length > 18 ? 11 : Name.Length > 14 ? 12.5 : 14;
 
     public Uri? CharacterUrl { get; }
 

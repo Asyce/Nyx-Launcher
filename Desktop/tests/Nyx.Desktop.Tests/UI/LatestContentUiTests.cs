@@ -13,8 +13,8 @@ public sealed class BannerCycleUiTests
         Assert.Contains("launcherBanners.Current.Games.TryGetValue(selected.Id", render, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.SetName(\n                BannerCycleRegion", render, StringComparison.Ordinal);
         Assert.Contains("RenderBannerRows(selected.Id, current, now)", render, StringComparison.Ordinal);
-        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, upcoming, now)", render, StringComparison.Ordinal);
-        Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 3)", render, StringComparison.Ordinal);
+        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now)", render, StringComparison.Ordinal);
+        Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 5)", render, StringComparison.Ordinal);
         Assert.DoesNotContain("phase.Start > now", render, StringComparison.Ordinal);
         Assert.Contains("FormatCurrentBannerTiming(current, now)", render, StringComparison.Ordinal);
         Assert.DoesNotContain("SetBannerCard", render, StringComparison.Ordinal);
@@ -90,116 +90,36 @@ public sealed class BannerCycleUiTests
     }
 
     [Fact]
-    public void Banner_panel_uses_compact_rows_large_timing_and_shrinking_names()
+    public void Banner_panel_uses_one_compact_full_width_timeline_with_wrapped_characters()
     {
         var xaml = ReadAppFile("MainPage.xaml");
         var code = ReadAppFile("MainPage.xaml.cs");
         var columns = Slice(xaml, "x:Name=\"BannerCycleColumns\"", "x:Name=\"BannerCollectionList\"");
-        var currentBacking = Slice(xaml, "x:Name=\"CurrentBannerPortraitBacking\"", "x:Name=\"CurrentBannerPortrait\"");
-        var currentPortrait = Slice(xaml, "x:Name=\"CurrentBannerPortrait\"", "x:Name=\"CurrentBannerNameLabel\"");
-        var upcomingBacking = Slice(xaml, "x:Name=\"UpcomingBannerPortraitBacking\"", "x:Name=\"UpcomingBannerPortrait\"");
-        var upcomingPortrait = Slice(xaml, "x:Name=\"UpcomingBannerPortrait\"", "x:Name=\"UpcomingBannerNameLabel\"");
-        var upcomingPhaseSlot = Slice(xaml, "x:Name=\"UpcomingBannerPhaseSlot\"", ">");
         var bannerRegion = Slice(xaml, "x:Name=\"BannerCycleRegion\"", "x:Name=\"BannerCycleStack\"");
 
-        Assert.Contains("x:Name=\"BannerCycleColumns\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Width=\"704\"", bannerRegion, StringComparison.Ordinal);
         Assert.Contains("Height=\"390\"", bannerRegion, StringComparison.Ordinal);
-        Assert.DoesNotContain("MinHeight", bannerRegion, StringComparison.Ordinal);
         Assert.Contains("BorderBrush=\"{ThemeResource DeckBorderBrush}\"", bannerRegion, StringComparison.Ordinal);
-        Assert.Contains("BorderThickness=\"1\"", bannerRegion, StringComparison.Ordinal);
-        Assert.Contains("CornerRadius=\"10\"", bannerRegion, StringComparison.Ordinal);
-        Assert.Contains("Margin=\"14,0,14,12\"", columns, StringComparison.Ordinal);
-        Assert.Contains("ColumnSpacing=\"24\"", columns, StringComparison.Ordinal);
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(columns, "<ColumnDefinition Width=\"44\" />\\s*<ColumnDefinition Width=\"\\*\" />"));
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(columns, "<ColumnDefinition Width=\"38\" />\\s*<ColumnDefinition Width=\"\\*\" />"));
-        Assert.Contains("x:Name=\"CurrentBannerColumn\" Width=\"*\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"UpcomingBannerColumn\" Width=\"*\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Margin=\"14,0,14,10\"", columns, StringComparison.Ordinal);
+        Assert.DoesNotContain("CurrentBannerColumn", xaml + code, StringComparison.Ordinal);
+        Assert.DoesNotContain("UpcomingBannerColumn", xaml + code, StringComparison.Ordinal);
+        Assert.DoesNotContain("BannerColumnDivider", xaml + code, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"BannerCharacterList\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{x:Bind BannerCharacterRows, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"UpcomingBannerList\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{x:Bind UpcomingBannerGroups, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("<StackPanel Orientation=\"Vertical\" />", columns, StringComparison.Ordinal);
-        Assert.Contains("Width=\"40\"", currentBacking, StringComparison.Ordinal);
-        Assert.Contains("Height=\"40\"", currentBacking, StringComparison.Ordinal);
-        Assert.Contains("CornerRadius=\"20\"", currentBacking, StringComparison.Ordinal);
-        Assert.Contains("Width=\"36\"", currentPortrait, StringComparison.Ordinal);
-        Assert.Contains("Height=\"36\"", currentPortrait, StringComparison.Ordinal);
-        Assert.Contains("CornerRadius=\"18\"", currentPortrait, StringComparison.Ordinal);
-        Assert.Contains("Width=\"34\"", upcomingBacking, StringComparison.Ordinal);
-        Assert.Contains("Height=\"34\"", upcomingBacking, StringComparison.Ordinal);
-        Assert.Contains("CornerRadius=\"17\"", upcomingBacking, StringComparison.Ordinal);
-        Assert.Contains("Width=\"30\"", upcomingPortrait, StringComparison.Ordinal);
-        Assert.Contains("Height=\"30\"", upcomingPortrait, StringComparison.Ordinal);
-        Assert.Contains("CornerRadius=\"15\"", upcomingPortrait, StringComparison.Ordinal);
-        Assert.Contains("Source=\"{Binding PortraitSource}\"", currentPortrait, StringComparison.Ordinal);
-        Assert.Contains("Stretch=\"UniformToFill\"", currentPortrait, StringComparison.Ordinal);
-        Assert.Contains("Source=\"{Binding PortraitSource}\"", upcomingPortrait, StringComparison.Ordinal);
-        Assert.Contains("Stretch=\"UniformToFill\"", upcomingPortrait, StringComparison.Ordinal);
-        foreach (var part in new[]
-        {
-            "CurrentBannerNameLabel",
-            "CurrentBannerNameButton",
-            "UpcomingBannerNameLabel",
-            "UpcomingBannerNameButton",
-            "UpcomingBannerTiming",
-        })
-        {
-            Assert.Contains($"x:Name=\"{part}\"", columns, StringComparison.Ordinal);
-        }
-        Assert.DoesNotContain("CurrentBannerNameBacking", columns, StringComparison.Ordinal);
-        Assert.DoesNotContain("UpcomingBannerNameBacking", columns, StringComparison.Ordinal);
-        Assert.DoesNotContain("CurrentBannerTimingBacking", columns, StringComparison.Ordinal);
-        Assert.DoesNotContain("UpcomingBannerHeaderBacking", columns, StringComparison.Ordinal);
-        Assert.DoesNotContain("UpcomingBannerTimingBacking", columns, StringComparison.Ordinal);
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(columns, "Style=\\\"\\{StaticResource NyxCodeCopyButtonStyle\\}\\\"").Count);
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(columns, "TextWrapping=\\\"NoWrap\\\"").Count);
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(columns, "MaxLines=\\\"1\\\"").Count);
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(columns, "TextTrimming=\\\"CharacterEllipsis\\\"").Count);
-        Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(columns, "HorizontalContentAlignment=\\\"Stretch\\\"").Count);
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(columns, "<ColumnDefinition Width=\\\"44\\\" />"));
-        Assert.Single(System.Text.RegularExpressions.Regex.Matches(columns, "<ColumnDefinition Width=\\\"38\\\" />"));
-        Assert.DoesNotContain("<ColumnDefinition Width=\"136\" />", columns, StringComparison.Ordinal);
-        Assert.Contains("private const int MaximumDisplayedBannerRows = 4", code, StringComparison.Ordinal);
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(columns, "<ItemsWrapGrid").Count);
+        Assert.Contains("MaximumRowsOrColumns=\"5\"", columns, StringComparison.Ordinal);
+        Assert.Contains("ItemWidth=\"128\"", columns, StringComparison.Ordinal);
+        Assert.Contains("ItemWidth=\"{Binding ItemWidth}\"", columns, StringComparison.Ordinal);
+        Assert.Contains("private const int MaximumDisplayedCurrentBannerCharacters = 10", code, StringComparison.Ordinal);
+        Assert.Contains("private const int MaximumDisplayedBannerCharactersPerPhase = 5", code, StringComparison.Ordinal);
         Assert.Contains("OrderBannerCharacters(phase.Characters)", code, StringComparison.Ordinal);
-        Assert.Contains("MaximumDisplayedBannerRows - 1", code, StringComparison.Ordinal);
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(columns, "Margin=\"0,0,0,6\"" ).Count);
-        Assert.DoesNotContain("Margin=\"0,0,0,4\"", columns, StringComparison.Ordinal);
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(
-            columns,
-            System.Text.RegularExpressions.Regex.Escape("FontSize=\"{Binding DisplayFontSize}\"")).Count);
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(
-            code,
-            System.Text.RegularExpressions.Regex.Escape("public double DisplayFontSize => Name.Length > 18 ? 12 : Name.Length > 14 ? 13.5 : 15;")).Count);
-        Assert.DoesNotContain("<Ellipse", columns, StringComparison.Ordinal);
-        Assert.DoesNotContain("ItemsWrapGrid", columns, StringComparison.Ordinal);
-        Assert.DoesNotContain("ProgressBar", xaml, StringComparison.Ordinal);
-        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, upcoming, now)", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("current.Characters.Take(5)", code, StringComparison.Ordinal);
-        Assert.Contains(".Take(3)", code, StringComparison.Ordinal);
-        Assert.Contains("BannerCharacterRows.Clear()", code, StringComparison.Ordinal);
+        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now)", code, StringComparison.Ordinal);
+        Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 5)", code, StringComparison.Ordinal);
+        Assert.Contains("ItemWidth = Math.Clamp(640d / Math.Min(5, Characters.Count), 128, 320)", code, StringComparison.Ordinal);
         Assert.Contains("CreateOverflow", code, StringComparison.Ordinal);
-        Assert.Contains("character.Icon is null", code, StringComparison.Ordinal);
-        Assert.Contains("ResolveImageSource(path)", code, StringComparison.Ordinal);
-        Assert.Contains("if (portraitChanged) Notify(nameof(PortraitSource))", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty))", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("GetBannerRotationProgress", code, StringComparison.Ordinal);
-        Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 3)", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("Height=", upcomingPhaseSlot, StringComparison.Ordinal);
         Assert.DoesNotContain("x:Name=\"UpcomingPhaseDivider\"", columns, StringComparison.Ordinal);
-        Assert.DoesNotContain(".Where(phase => phase.Start > now)", code, StringComparison.Ordinal);
-        foreach (var obsolete in new[]
-        {
-            "CurrentBannerGroups",
-            "RenderCurrentBannerGroups",
-            "CurrentBannerGroupItem",
-            "CurrentBannerTimingList",
-            "BannerNameLinkItem",
-            "FormatBannerChannelTiming",
-        })
-        {
-            Assert.DoesNotContain(obsolete, xaml + code, StringComparison.Ordinal);
-        }
     }
 
     [Fact]
@@ -376,32 +296,27 @@ public sealed class BannerCycleUiTests
         Assert.DoesNotContain("collection.Kind == \"permanent\"", categories, StringComparison.Ordinal);
         Assert.DoesNotContain("category == \"permanent\"", categories, StringComparison.Ordinal);
         Assert.Contains("var hasCurrent = BannerCharacterRows.Count > 0", categories, StringComparison.Ordinal);
-        Assert.Contains("var hasBoth = hasCurrent && hasUpcoming", categories, StringComparison.Ordinal);
         Assert.Contains("CurrentBannerSection.Visibility = hasCurrent ? Visibility.Visible : Visibility.Collapsed", categories, StringComparison.Ordinal);
         Assert.Contains("UpcomingBannerList.Visibility = hasUpcoming ? Visibility.Visible : Visibility.Collapsed", categories, StringComparison.Ordinal);
         Assert.Contains("BannerCollectionList.Visibility = Visibility.Collapsed", categories, StringComparison.Ordinal);
-        Assert.Contains("CurrentBannerColumn.Width = hasCurrent", categories, StringComparison.Ordinal);
-        Assert.Contains("? new GridLength(1, GridUnitType.Star)", categories, StringComparison.Ordinal);
-        Assert.Contains(": new GridLength(0)", categories, StringComparison.Ordinal);
-        Assert.Contains("BannerColumnDivider.Visibility = hasBoth ? Visibility.Visible : Visibility.Collapsed", categories, StringComparison.Ordinal);
-        Assert.Contains("BannerCycleColumns.ColumnSpacing = hasBoth ? 24 : 0", categories, StringComparison.Ordinal);
+        Assert.DoesNotContain("GridLength", categories, StringComparison.Ordinal);
         Assert.DoesNotContain("category == \"upcoming\" ? Visibility.Visible", categories, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Upcoming_banner_uses_only_announced_or_countdown_as_its_heading()
+    public void Upcoming_banner_uses_patch_phase_countdown_and_separate_soon_groups()
     {
         var code = ReadAppFile("MainPage.xaml.cs");
         var render = Slice(code, "private void RenderUpcomingBannerGroups", "private void SyncRedemptionCodeRows");
         Assert.Contains("phase.Announced", render, StringComparison.Ordinal);
-        Assert.Contains("? \"ANNOUNCED\"", render, StringComparison.Ordinal);
+        Assert.Contains("FormatBannerTimelineLabel(phase.Phase, \"Soon\\u2122\")", render, StringComparison.Ordinal);
         Assert.Contains("$\"Starts in {BannerTimingFormatter.FormatRemaining(phase.Start!.Value - now)}\"", render, StringComparison.Ordinal);
-        Assert.DoesNotContain("phase.Phase", render, StringComparison.Ordinal);
-        Assert.DoesNotContain("UP NEXT", render, StringComparison.Ordinal);
+        Assert.Contains("\"Available on loss\"", render, StringComparison.Ordinal);
+        Assert.Contains("character.Limited == false", render, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Banner_header_removes_phase_labels_and_promotes_timing()
+    public void Banner_header_combines_patch_phase_and_timing_without_dividing_phases()
     {
         var xaml = ReadAppFile("MainPage.xaml");
         var code = ReadAppFile("MainPage.xaml.cs");
@@ -414,21 +329,18 @@ public sealed class BannerCycleUiTests
         Assert.Contains("x:Name=\"BannerCycleHeading\"", header, StringComparison.Ordinal);
         Assert.Contains("Text=\"BANNERS\"", header, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"BannerCollapseButton\"", header, StringComparison.Ordinal);
-        Assert.DoesNotContain("BannerCycleVersion", xaml + code, StringComparison.Ordinal);
-        Assert.DoesNotContain("BannerCyclePhase", xaml + code, StringComparison.Ordinal);
-        Assert.DoesNotContain("UpcomingBannerLabel", xaml, StringComparison.Ordinal);
-        Assert.Contains("FontSize=\"18\"", currentTiming, StringComparison.Ordinal);
+        Assert.Contains("FontSize=\"17\"", currentTiming, StringComparison.Ordinal);
         Assert.Contains("Foreground=\"{ThemeResource IrisBrush}\"", currentTiming, StringComparison.Ordinal);
-        Assert.Contains("FontSize=\"18\"", upcomingTiming, StringComparison.Ordinal);
+        Assert.Contains("FontSize=\"15\"", upcomingTiming, StringComparison.Ordinal);
         Assert.Contains("Foreground=\"{ThemeResource IrisBrush}\"", upcomingTiming, StringComparison.Ordinal);
         Assert.Contains("BannerCycleHeading.Text = \"BANNERS\"", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("<RowDefinition Height=\"*\" />", current, StringComparison.Ordinal);
         Assert.Contains("$\"Ends in {BannerTimingFormatter.FormatRemaining(change - now)}\"", code, StringComparison.Ordinal);
         Assert.Contains("$\"Ends in {BannerTimingFormatter.FormatRemaining(end - now)}\"", code, StringComparison.Ordinal);
+        Assert.Contains("FormatBannerTimelineLabel", code, StringComparison.Ordinal);
+        Assert.Contains("$\"Patch {value[..marker].Trim()} \\u00B7 Phase", code, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"BannerCycleHeaderDivider\"", header, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"BannerColumnDivider\"", Slice(xaml, "x:Name=\"BannerCycleColumns\"", "x:Name=\"BannerCollectionList\""), StringComparison.Ordinal);
+        Assert.DoesNotContain("BannerColumnDivider", xaml + code, StringComparison.Ordinal);
         Assert.Contains("var timingVisibility = string.IsNullOrWhiteSpace(BannerCycleTiming.Text)", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("CurrentBannerTimingBacking", code, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -22,7 +22,6 @@ public sealed class LauncherVisualsCacheTests
     private const string OfficialRequest = "{\"proxy_reqs\":[{\"kind\":\"get_main_bg_image\",\"get_main_bg_image_req\":{\"appcode\":\"YDUTE5gscDZ229CW\",\"language\":\"en-us\",\"channel\":\"6\",\"sub_channel\":\"6\",\"platform\":\"Windows\",\"source\":\"launcher\"}}]}";
 
     [Theory]
-    [InlineData("gi", HoyoGenshinVideo, HoyoGenshinImage)]
     [InlineData("hsr", HoyoHsrVideo, null)]
     [InlineData("zzz", HoyoZzzVideo, null)]
     public async Task Hoyo_refresh_uses_the_current_official_launcher_video_before_Pengo_fallback(
@@ -63,6 +62,65 @@ public sealed class LauncherVisualsCacheTests
                     new LauncherVisualsCache(root, http).TryLoadLastGood(gameId)).Files.Count);
             }
             Assert.DoesNotContain(handler.Requests, static request => request.Uri == LauncherVisualsCache.DefaultManifestUri.AbsoluteUri);
+        });
+    }
+
+    [Fact]
+    public async Task Genshin_prefers_verified_Pengo_MP4_and_keeps_the_current_official_image_as_fallback()
+    {
+        await WithRoot(async root =>
+        {
+            var video = Media("video/mp4", "compatible Genshin animation");
+            var image = Media("image/webp", "current official Genshin image");
+            var hash = Convert.ToHexString(SHA256.HashData(video)).ToLowerInvariant();
+            var url = $"https://assets.pengo.gg/launcher-visuals/{hash}.mp4";
+            var manifest = SingleAssetManifest(url, video, "video/mp4");
+            var handler = new RecordingHandler((request, _) => Task.FromResult(request.RequestUri!.AbsoluteUri switch
+            {
+                HoyoEndpoint => JsonResponse(HoyoPayload()),
+                var value when value == LauncherVisualsCache.DefaultManifestUri.AbsoluteUri => JsonResponse(manifest),
+                var value when value == url => MediaResponse(video, "video/mp4"),
+                HoyoGenshinImage => MediaResponse(image, "image/webp"),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+            }));
+            using var http = new HttpClient(handler);
+
+            var selection = await new LauncherVisualsCache(root, http).RefreshAsync("gi");
+
+            Assert.NotNull(selection);
+            Assert.Equal(2, selection.Files.Count);
+            Assert.EndsWith(".mp4", selection.Files[0], StringComparison.Ordinal);
+            Assert.EndsWith(".webp", selection.Files[1], StringComparison.Ordinal);
+            Assert.Contains(handler.Requests, request => request.Uri == url);
+            Assert.Contains(handler.Requests, request => request.Uri == HoyoGenshinImage);
+            Assert.DoesNotContain(handler.Requests, request => request.Uri == HoyoGenshinVideo);
+        });
+    }
+
+    [Fact]
+    public async Task Genshin_rejects_incompatible_Pengo_WebM_and_uses_the_current_official_image()
+    {
+        await WithRoot(async root =>
+        {
+            var video = Media("video/webm", "incompatible Genshin animation");
+            var image = Media("image/webp", "current official Genshin image");
+            var hash = Convert.ToHexString(SHA256.HashData(video)).ToLowerInvariant();
+            var url = $"https://assets.pengo.gg/launcher-visuals/{hash}.webm";
+            var manifest = SingleAssetManifest(url, video, "video/webm");
+            var handler = new RecordingHandler((request, _) => Task.FromResult(request.RequestUri!.AbsoluteUri switch
+            {
+                HoyoEndpoint => JsonResponse(HoyoPayload()),
+                var value when value == LauncherVisualsCache.DefaultManifestUri.AbsoluteUri => JsonResponse(manifest),
+                HoyoGenshinImage => MediaResponse(image, "image/webp"),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+            }));
+            using var http = new HttpClient(handler);
+
+            var selection = await new LauncherVisualsCache(root, http).RefreshAsync("gi");
+
+            Assert.NotNull(selection);
+            Assert.EndsWith(".webp", Assert.Single(selection.Files), StringComparison.Ordinal);
+            Assert.DoesNotContain(handler.Requests, request => request.Uri == url || request.Uri == HoyoGenshinVideo);
         });
     }
 
@@ -164,7 +222,7 @@ public sealed class LauncherVisualsCacheTests
         Directory.CreateDirectory(root);
         try
         {
-            var video = Media("video/webm", "verified launcher animation");
+            var video = Media("video/mp4", "verified launcher animation");
             var hash = Convert.ToHexString(SHA256.HashData(video)).ToLowerInvariant();
             var manifest = $$"""
             {
@@ -174,10 +232,10 @@ public sealed class LauncherVisualsCacheTests
                 "gi": {
                   "kind": "video",
                   "assets": [{
-                    "url": "https://assets.pengo.gg/launcher-visuals/{{hash}}.webm",
+                    "url": "https://assets.pengo.gg/launcher-visuals/{{hash}}.mp4",
                     "sha256": "{{hash}}",
                     "size": {{video.Length}},
-                    "mediaType": "video/webm"
+                    "mediaType": "video/mp4"
                   }]
                 }
               }
@@ -186,7 +244,7 @@ public sealed class LauncherVisualsCacheTests
             using var online = new HttpClient(new MapHandler(new Dictionary<string, (HttpStatusCode, byte[])>
             {
                 ["https://assets.pengo.gg/launcher-visuals-v1.json"] = (HttpStatusCode.OK, Encoding.UTF8.GetBytes(manifest)),
-                [$"https://assets.pengo.gg/launcher-visuals/{hash}.webm"] = (HttpStatusCode.OK, video),
+                [$"https://assets.pengo.gg/launcher-visuals/{hash}.mp4"] = (HttpStatusCode.OK, video),
             }));
             var cache = new LauncherVisualsCache(root, online);
 
@@ -268,7 +326,7 @@ public sealed class LauncherVisualsCacheTests
         {
             static (byte[] Bytes, string Hash) Asset(string value)
             {
-                var bytes = Media("video/webm", value);
+                var bytes = Media("video/mp4", value);
                 return (bytes, Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
             }
             static string Manifest(char revision, byte[] bytes, string hash) => JsonSerializer.Serialize(new
@@ -284,10 +342,10 @@ public sealed class LauncherVisualsCacheTests
                         {
                             new
                             {
-                                url = $"https://assets.pengo.gg/launcher-visuals/{hash}.webm",
+                                url = $"https://assets.pengo.gg/launcher-visuals/{hash}.mp4",
                                 sha256 = hash,
                                 size = bytes.Length,
-                                mediaType = "video/webm",
+                                mediaType = "video/mp4",
                             },
                         },
                     },
@@ -298,24 +356,24 @@ public sealed class LauncherVisualsCacheTests
             using (var http = new HttpClient(new MapHandler(new Dictionary<string, (HttpStatusCode, byte[])>
             {
                 ["https://assets.pengo.gg/launcher-visuals-v1.json"] = (HttpStatusCode.OK, Encoding.UTF8.GetBytes(Manifest('a', old.Bytes, old.Hash))),
-                [$"https://assets.pengo.gg/launcher-visuals/{old.Hash}.webm"] = (HttpStatusCode.OK, old.Bytes),
+                [$"https://assets.pengo.gg/launcher-visuals/{old.Hash}.mp4"] = (HttpStatusCode.OK, old.Bytes),
             })))
             {
                 Assert.NotNull(await new LauncherVisualsCache(root, http).RefreshAsync("gi"));
             }
-            var oldPath = Path.Combine(root, "ContentCache", "LauncherVisuals", "gi", old.Hash + ".webm");
+            var oldPath = Path.Combine(root, "ContentCache", "LauncherVisuals", "gi", old.Hash + ".mp4");
             Assert.True(File.Exists(oldPath));
 
             var next = Asset("new launcher animation");
             using (var http = new HttpClient(new MapHandler(new Dictionary<string, (HttpStatusCode, byte[])>
             {
                 ["https://assets.pengo.gg/launcher-visuals-v1.json"] = (HttpStatusCode.OK, Encoding.UTF8.GetBytes(Manifest('b', next.Bytes, next.Hash))),
-                [$"https://assets.pengo.gg/launcher-visuals/{next.Hash}.webm"] = (HttpStatusCode.OK, next.Bytes),
+                [$"https://assets.pengo.gg/launcher-visuals/{next.Hash}.mp4"] = (HttpStatusCode.OK, next.Bytes),
             })))
             {
                 var refreshed = await new LauncherVisualsCache(root, http).RefreshAsync("gi");
                 Assert.NotNull(refreshed);
-                Assert.Equal(next.Hash + ".webm", Path.GetFileName(Assert.Single(refreshed.Files)));
+                Assert.Equal(next.Hash + ".mp4", Path.GetFileName(Assert.Single(refreshed.Files)));
             }
 
             Assert.False(File.Exists(oldPath));
@@ -371,14 +429,14 @@ public sealed class LauncherVisualsCacheTests
             var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
             var extension = MediaExtension(mediaType);
             var url = $"https://assets.pengo.gg/launcher-visuals/{hash}{extension}";
-            var manifest = SingleAssetManifest(url, bytes, mediaType);
+            var manifest = SingleAssetManifest(url, bytes, mediaType, gameId: "hsr");
             using var http = new HttpClient(new MapHandler(new Dictionary<string, (HttpStatusCode, byte[])>
             {
                 ["https://assets.pengo.gg/launcher-visuals-v1.json"] = (HttpStatusCode.OK, Encoding.UTF8.GetBytes(manifest)),
                 [url] = (HttpStatusCode.OK, bytes),
             }));
 
-            var selection = await new LauncherVisualsCache(root, http).RefreshAsync("gi");
+            var selection = await new LauncherVisualsCache(root, http).RefreshAsync("hsr");
 
             Assert.NotNull(selection);
             Assert.Equal(mediaType.StartsWith("video/", StringComparison.Ordinal) ? "video" : "image", selection.Kind);
@@ -395,16 +453,16 @@ public sealed class LauncherVisualsCacheTests
             var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
             var extension = MediaExtension(mediaType);
             var url = $"https://assets.pengo.gg/launcher-visuals/{hash}{extension}";
-            var manifest = SingleAssetManifest(url, bytes, mediaType);
+            var manifest = SingleAssetManifest(url, bytes, mediaType, gameId: "hsr");
             using var http = new HttpClient(new MapHandler(new Dictionary<string, (HttpStatusCode, byte[])>
             {
                 ["https://assets.pengo.gg/launcher-visuals-v1.json"] = (HttpStatusCode.OK, Encoding.UTF8.GetBytes(manifest)),
                 [url] = (HttpStatusCode.OK, bytes),
             }));
 
-            Assert.Null(await new LauncherVisualsCache(root, http).RefreshAsync("gi"));
-            Assert.DoesNotContain(Directory.Exists(CacheRoot(root, "gi"))
-                    ? Directory.EnumerateFiles(CacheRoot(root, "gi"))
+            Assert.Null(await new LauncherVisualsCache(root, http).RefreshAsync("hsr"));
+            Assert.DoesNotContain(Directory.Exists(CacheRoot(root, "hsr"))
+                    ? Directory.EnumerateFiles(CacheRoot(root, "hsr"))
                     : [],
                 path => Path.GetFileName(path) != "state.json");
         });
@@ -430,16 +488,16 @@ public sealed class LauncherVisualsCacheTests
             var bytes = Media("video/webm", "wrong response type");
             var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
             var url = $"https://assets.pengo.gg/launcher-visuals/{hash}.webm";
-            var manifest = SingleAssetManifest(url, bytes, "video/webm");
+            var manifest = SingleAssetManifest(url, bytes, "video/webm", gameId: "hsr");
             var handler = new RecordingHandler((request, _) => Task.FromResult(
                 request.RequestUri!.AbsoluteUri.EndsWith(".json", StringComparison.Ordinal)
                     ? JsonResponse(manifest)
                     : MediaResponse(bytes, "video/mp4")));
             using var http = new HttpClient(handler);
 
-            Assert.Null(await new LauncherVisualsCache(root, http).RefreshAsync("gi"));
-            Assert.DoesNotContain(Directory.Exists(CacheRoot(root, "gi"))
-                    ? Directory.EnumerateFiles(CacheRoot(root, "gi"))
+            Assert.Null(await new LauncherVisualsCache(root, http).RefreshAsync("hsr"));
+            Assert.DoesNotContain(Directory.Exists(CacheRoot(root, "hsr"))
+                    ? Directory.EnumerateFiles(CacheRoot(root, "hsr"))
                     : [],
                 path => Path.GetFileName(path).Contains(".tmp-", StringComparison.Ordinal));
         });
@@ -458,17 +516,17 @@ public sealed class LauncherVisualsCacheTests
             var oldUrl = $"https://assets.pengo.gg/launcher-visuals/{oldHash}.webm";
             using (var oldHttp = new HttpClient(new MapHandler(new Dictionary<string, (HttpStatusCode, byte[])>
             {
-                ["https://assets.pengo.gg/launcher-visuals-v1.json"] = (HttpStatusCode.OK, Encoding.UTF8.GetBytes(SingleAssetManifest(oldUrl, oldBytes, "video/webm", 'c'))),
+                ["https://assets.pengo.gg/launcher-visuals-v1.json"] = (HttpStatusCode.OK, Encoding.UTF8.GetBytes(SingleAssetManifest(oldUrl, oldBytes, "video/webm", 'c', "hsr"))),
                 [oldUrl] = (HttpStatusCode.OK, oldBytes),
             })))
             {
-                Assert.NotNull(await new LauncherVisualsCache(root, oldHttp).RefreshAsync("gi"));
+                Assert.NotNull(await new LauncherVisualsCache(root, oldHttp).RefreshAsync("hsr"));
             }
 
             var nextBytes = Media("video/webm", "must not parse");
             var nextHash = Convert.ToHexString(SHA256.HashData(nextBytes)).ToLowerInvariant();
             var nextUrl = $"https://assets.pengo.gg/launcher-visuals/{nextHash}.webm";
-            var nextManifest = SingleAssetManifest(nextUrl, nextBytes, "video/webm", 'd');
+            var nextManifest = SingleAssetManifest(nextUrl, nextBytes, "video/webm", 'd', "hsr");
             var handler = new RecordingHandler((_, _) =>
             {
                 var response = new HttpResponseMessage(HttpStatusCode.OK)
@@ -480,12 +538,12 @@ public sealed class LauncherVisualsCacheTests
             });
             using var http = new HttpClient(handler);
 
-            var fallback = await new LauncherVisualsCache(root, http).RefreshAsync("gi");
+            var fallback = await new LauncherVisualsCache(root, http).RefreshAsync("hsr");
 
             Assert.NotNull(fallback);
             Assert.Equal(new string('c', 64), fallback.Revision);
-            Assert.True(File.Exists(Path.Combine(CacheRoot(root, "gi"), oldHash + ".webm")));
-            Assert.False(File.Exists(Path.Combine(CacheRoot(root, "gi"), nextHash + ".webm")));
+            Assert.True(File.Exists(Path.Combine(CacheRoot(root, "hsr"), oldHash + ".webm")));
+            Assert.False(File.Exists(Path.Combine(CacheRoot(root, "hsr"), nextHash + ".webm")));
             Assert.Equal([HoyoEndpoint, LauncherVisualsCache.DefaultManifestUri.AbsoluteUri], handler.Requests.Select(static request => request.Uri));
         });
     }
@@ -500,11 +558,11 @@ public sealed class LauncherVisualsCacheTests
             var oldUrl = $"https://assets.pengo.gg/launcher-visuals/{oldHash}.webm";
             using (var oldHttp = new HttpClient(new MapHandler(new Dictionary<string, (HttpStatusCode, byte[])>
             {
-                ["https://assets.pengo.gg/launcher-visuals-v1.json"] = (HttpStatusCode.OK, Encoding.UTF8.GetBytes(SingleAssetManifest(oldUrl, oldBytes, "video/webm", 'a'))),
+                ["https://assets.pengo.gg/launcher-visuals-v1.json"] = (HttpStatusCode.OK, Encoding.UTF8.GetBytes(SingleAssetManifest(oldUrl, oldBytes, "video/webm", 'a', "hsr"))),
                 [oldUrl] = (HttpStatusCode.OK, oldBytes),
             })))
             {
-                Assert.NotNull(await new LauncherVisualsCache(root, oldHttp).RefreshAsync("gi"));
+                Assert.NotNull(await new LauncherVisualsCache(root, oldHttp).RefreshAsync("hsr"));
             }
 
             var badBytes = Encoding.ASCII.GetBytes("not a webm signature");
@@ -512,16 +570,16 @@ public sealed class LauncherVisualsCacheTests
             var badUrl = $"https://assets.pengo.gg/launcher-visuals/{badHash}.webm";
             using var badHttp = new HttpClient(new MapHandler(new Dictionary<string, (HttpStatusCode, byte[])>
             {
-                ["https://assets.pengo.gg/launcher-visuals-v1.json"] = (HttpStatusCode.OK, Encoding.UTF8.GetBytes(SingleAssetManifest(badUrl, badBytes, "video/webm", 'b'))),
+                ["https://assets.pengo.gg/launcher-visuals-v1.json"] = (HttpStatusCode.OK, Encoding.UTF8.GetBytes(SingleAssetManifest(badUrl, badBytes, "video/webm", 'b', "hsr"))),
                 [badUrl] = (HttpStatusCode.OK, badBytes),
             }));
 
-            var fallback = await new LauncherVisualsCache(root, badHttp).RefreshAsync("gi");
+            var fallback = await new LauncherVisualsCache(root, badHttp).RefreshAsync("hsr");
 
             Assert.NotNull(fallback);
             Assert.Equal(new string('a', 64), fallback.Revision);
-            Assert.True(File.Exists(Path.Combine(CacheRoot(root, "gi"), oldHash + ".webm")));
-            Assert.False(File.Exists(Path.Combine(CacheRoot(root, "gi"), badHash + ".webm")));
+            Assert.True(File.Exists(Path.Combine(CacheRoot(root, "hsr"), oldHash + ".webm")));
+            Assert.False(File.Exists(Path.Combine(CacheRoot(root, "hsr"), badHash + ".webm")));
         });
     }
 
@@ -1269,13 +1327,14 @@ public sealed class LauncherVisualsCacheTests
         string url,
         byte[] bytes,
         string mediaType,
-        char revision = 'a') => JsonSerializer.Serialize(new
+        char revision = 'a',
+        string gameId = "gi") => JsonSerializer.Serialize(new
     {
         schema = 1,
         revision = new string(revision, 64),
         games = new Dictionary<string, object>
         {
-            ["gi"] = new
+            [gameId] = new
             {
                 kind = mediaType.StartsWith("video/", StringComparison.Ordinal) ? "video" : "image",
                 assets = new[]

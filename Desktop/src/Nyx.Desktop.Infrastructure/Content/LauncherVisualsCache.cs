@@ -78,6 +78,11 @@ public sealed class LauncherVisualsCache
         LastFailure = null;
         try
         {
+            if (gameId == "gi")
+                return await RefreshGenshinAsync(
+                    ReadOfficialHoyoAssetsAsync(cancellationToken),
+                    ReadManifestFallbackAsync(cancellationToken),
+                    cancellationToken);
             if (gameId == "ae") return await RefreshOfficialEndfieldAsync(cancellationToken);
             var asset = gameId == "wuwa"
                 ? await ReadOfficialWuwaAssetAsync(cancellationToken)
@@ -108,6 +113,15 @@ public sealed class LauncherVisualsCache
         {
             try
             {
+                if (gameId == "gi")
+                {
+                    Task<Manifest?> pending;
+                    lock (fallbackGate)
+                    {
+                        pending = fallbackManifest ??= ReadManifestFallbackAsync(cancellationToken);
+                    }
+                    return await RefreshGenshinAsync(hoyoAssets, pending, cancellationToken);
+                }
                 if (gameId == "ae") return await RefreshOfficialEndfieldAsync(cancellationToken);
                 var asset = gameId == "wuwa"
                     ? await ReadOfficialWuwaAssetAsync(cancellationToken)
@@ -142,6 +156,49 @@ public sealed class LauncherVisualsCache
             if (selection is not null) selectionReady?.Invoke(selection);
             return selection;
         }
+    }
+
+    private async Task<LauncherVisualSelection?> RefreshGenshinAsync(
+        Task<IReadOnlyDictionary<string, OfficialVideo>> officialAssets,
+        Task<Manifest?> fallbackManifest,
+        CancellationToken cancellationToken)
+    {
+        OfficialImage? fallback = null;
+        try
+        {
+            fallback = (await officialAssets)["gi"].Fallback;
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
+        {
+            LastFailure = exception.GetType().Name + ": " + exception.Message;
+        }
+
+        var manifest = await fallbackManifest;
+        if (manifest?.Games.TryGetValue("gi", out var entry) == true
+            && entry is { Kind: "video", Assets: [{ MediaType: "video/mp4" }] })
+        {
+            try
+            {
+                return await AcquireSelectionAsync("gi", manifest.Revision, entry, cancellationToken, fallback);
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
+            {
+                LastFailure = exception.GetType().Name + ": " + exception.Message;
+            }
+        }
+
+        if (fallback is not null)
+        {
+            try
+            {
+                return await AcquireOfficialImageSelectionAsync("gi", fallback, cancellationToken);
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
+            {
+                LastFailure = exception.GetType().Name + ": " + exception.Message;
+            }
+        }
+        return TryLoadLastGood("gi");
     }
 
     private async Task<LauncherVisualSelection?> RefreshManifestFallbackAsync(
@@ -352,6 +409,18 @@ public sealed class LauncherVisualsCache
         return selection;
     }
 
+    private async Task<LauncherVisualSelection> AcquireOfficialImageSelectionAsync(
+        string gameId,
+        OfficialImage asset,
+        CancellationToken cancellationToken)
+    {
+        var file = await AcquireOfficialAssetAsync(gameId, asset.Url, asset.MediaType, cancellationToken);
+        var selection = new LauncherVisualSelection(gameId, file.Sha256, "image", null, [file.Path]);
+        SaveLastGood(selection, [file]);
+        RemoveSupersededFiles(gameId, selection.Files);
+        return selection;
+    }
+
     private async Task<LauncherVisualSelection> RefreshOfficialEndfieldAsync(CancellationToken cancellationToken)
     {
         var asset = await ReadOfficialEndfieldAssetAsync(cancellationToken);
@@ -502,6 +571,8 @@ public sealed class LauncherVisualsCache
                 || (state.Kind == "gallery" && state.Files.Count != 3)
                 || (state.Kind == "image" && state.Files.Count != 1)
                 || (state.Kind == "video" && state.Files.Count is not (1 or 2))
+                || (gameId == "gi" && state.Kind == "video"
+                    && state.Files[0].EndsWith(".webm", StringComparison.OrdinalIgnoreCase))
                 || state.Files.Any(static name => string.IsNullOrWhiteSpace(name) || Path.GetFileName(name) != name)
                 || state.Files.Distinct(StringComparer.OrdinalIgnoreCase).Count() != state.Files.Count
                 || CleanCharacter(state.Character) != state.Character) return null;
@@ -696,12 +767,24 @@ public sealed class LauncherVisualsCache
         string gameId,
         string revision,
         Entry entry,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        OfficialImage? fallback = null)
     {
         var files = new List<AcquiredFile>(entry.Assets.Count);
         foreach (var asset in entry.Assets)
         {
             files.Add(await AcquireAsync(gameId, asset, cancellationToken));
+        }
+        if (fallback is not null)
+        {
+            try
+            {
+                files.Add(await AcquireOfficialAssetAsync(gameId, fallback.Url, fallback.MediaType, cancellationToken));
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
+            {
+                LastFailure = exception.GetType().Name + ": " + exception.Message;
+            }
         }
         var selection = new LauncherVisualSelection(
             gameId,
