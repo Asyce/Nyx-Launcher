@@ -521,6 +521,26 @@ public sealed class GameSessionCoordinatorTests
     }
 
     [Fact]
+    public async Task Completed_slow_probe_is_applied_on_the_next_refresh_without_restarting_it()
+    {
+        var fixture = new SessionFixture();
+        var completed = new TaskCompletionSource<GameSessionEvidence>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture["gi"].Observe = _ => new ValueTask<GameSessionEvidence>(completed.Task);
+        await using var coordinator = fixture.CreateCoordinator(
+            adapterCallTimeout: TimeSpan.FromMilliseconds(40));
+
+        var timedOut = await coordinator.RefreshAsync("gi");
+        completed.SetResult(ReadyRuntime);
+        await Task.Delay(20);
+        var recovered = await coordinator.RefreshAsync("gi");
+
+        Assert.Equal(GameSessionFailureReason.EvidenceUnavailable, timedOut.FailureReason);
+        Assert.Equal(LocalGameStatus.Running, recovered.Status);
+        Assert.Equal(1, fixture["gi"].ObserveCount);
+    }
+
+    [Fact]
     public async Task Slow_probe_and_failing_probe_are_isolated_from_other_games()
     {
         var fixture = new SessionFixture();

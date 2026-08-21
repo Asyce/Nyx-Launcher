@@ -399,11 +399,9 @@ internal sealed class ProtectedPublisherExecutableObservation : IDisposable
             var (digest, md5Digest) = PublisherFileIdentity.GetSha256AndMd5(stream);
             var metadata = metadataReader.Read(path, fileIdentity, identityReader);
             PublisherPathIdentity.EnsurePathMatches(path, fileIdentity, identityReader);
-            var digestAfterMetadata = PublisherFileIdentity.GetSha256(stream);
             var after = PublisherFileSnapshot.Capture(path);
             if (before != after
-                || after.Length != stream.Length
-                || !PublisherFileIdentity.FixedTimeEquals(digest, digestAfterMetadata))
+                || after.Length != stream.Length)
             {
                 throw new IOException("Executable changed while its identity was read.");
             }
@@ -431,16 +429,12 @@ internal sealed class ProtectedPublisherExecutableObservation : IDisposable
     public bool RemainsBound(IPublisherExecutableMetadataReader metadataReader)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-        var before = PublisherFileIdentity.GetSha256(stream);
         PublisherPathIdentity.EnsurePathMatches(Path, FileIdentity, identityReader);
         var currentMetadata = metadataReader.Read(Path, FileIdentity, identityReader);
         PublisherPathIdentity.EnsurePathMatches(Path, FileIdentity, identityReader);
-        var after = PublisherFileIdentity.GetSha256(stream);
         return PublisherFileSnapshot.Capture(Path) == Snapshot
             && stream.Length == Snapshot.Length
-            && currentMetadata == Metadata
-            && PublisherFileIdentity.FixedTimeEquals(Digest, before)
-            && PublisherFileIdentity.FixedTimeEquals(before, after);
+            && currentMetadata == Metadata;
     }
 
     public void Dispose()

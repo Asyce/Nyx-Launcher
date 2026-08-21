@@ -454,44 +454,49 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         CancellationToken linkedCancellation,
         CancellationToken callerCancellation)
     {
-        Task<GameSessionEvidence> observationTask;
+        Task<GameSessionEvidence>? observationTask = null;
         lock (entry.Sync)
         {
-            if (entry.OutstandingObservation is { IsCompleted: false })
+            if (entry.OutstandingObservation is { } outstanding)
+            {
+                if (!outstanding.IsCompleted) return ObservationAttempt.Unavailable;
+                observationTask = outstanding;
+                entry.OutstandingObservation = null;
+            }
+        }
+
+        if (observationTask is null)
+        {
+            try
+            {
+                observationTask = entry.Adapter.ObserveSessionAsync(linkedCancellation).AsTask();
+            }
+            catch (OperationCanceledException) when (IsStopped || linkedCancellation.IsCancellationRequested)
+            {
+                return IsStopped
+                    ? ObservationAttempt.CoordinatorStopped
+                    : callerCancellation.IsCancellationRequested
+                        ? ObservationAttempt.CallerCanceled
+                        : ObservationAttempt.Unavailable;
+            }
+            catch (OperationCanceledException)
+            {
+                return ObservationAttempt.Unavailable;
+            }
+            catch (Exception)
             {
                 return ObservationAttempt.Unavailable;
             }
 
-            entry.OutstandingObservation = null;
+            TrackOutstandingObservation(entry, observationTask);
         }
 
-        try
-        {
-            observationTask = entry.Adapter.ObserveSessionAsync(linkedCancellation).AsTask();
-        }
-        catch (OperationCanceledException) when (IsStopped || linkedCancellation.IsCancellationRequested)
-        {
-            return IsStopped
-                ? ObservationAttempt.CoordinatorStopped
-                : callerCancellation.IsCancellationRequested
-                    ? ObservationAttempt.CallerCanceled
-                    : ObservationAttempt.Unavailable;
-        }
-        catch (OperationCanceledException)
-        {
-            return ObservationAttempt.Unavailable;
-        }
-        catch (Exception)
-        {
-            return ObservationAttempt.Unavailable;
-        }
-
-        TrackOutstandingObservation(entry, observationTask);
         try
         {
             var evidence = await observationTask
                 .WaitAsync(adapterCallTimeout, linkedCancellation)
                 .ConfigureAwait(false);
+            ClearOutstandingObservation(entry, observationTask);
             return ObservationAttempt.Succeeded(evidence);
         }
         catch (TimeoutException)
@@ -500,18 +505,22 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         }
         catch (OperationCanceledException) when (IsStopped)
         {
+            ClearOutstandingObservation(entry, observationTask);
             return ObservationAttempt.CoordinatorStopped;
         }
         catch (OperationCanceledException) when (callerCancellation.IsCancellationRequested)
         {
+            ClearOutstandingObservation(entry, observationTask);
             return ObservationAttempt.CallerCanceled;
         }
         catch (OperationCanceledException)
         {
+            ClearOutstandingObservation(entry, observationTask);
             return ObservationAttempt.Unavailable;
         }
         catch (Exception)
         {
+            ClearOutstandingObservation(entry, observationTask);
             return ObservationAttempt.Unavailable;
         }
     }
@@ -526,20 +535,21 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         }
 
         _ = observationTask.ContinueWith(
-            completed =>
-            {
-                _ = completed.Exception;
-                lock (entry.Sync)
-                {
-                    if (ReferenceEquals(entry.OutstandingObservation, completed))
-                    {
-                        entry.OutstandingObservation = null;
-                    }
-                }
-            },
+            completed => _ = completed.Exception,
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
+    }
+
+    private static void ClearOutstandingObservation(
+        SessionEntry entry,
+        Task<GameSessionEvidence> observationTask)
+    {
+        lock (entry.Sync)
+        {
+            if (ReferenceEquals(entry.OutstandingObservation, observationTask))
+                entry.OutstandingObservation = null;
+        }
     }
 
     private DispatchAdmission AdmitDispatchAtomically(

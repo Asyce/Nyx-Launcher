@@ -134,7 +134,7 @@ public sealed class IrisLauncherShellTests
         Assert.DoesNotContain("Grid.Row=", launchTitle, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"LaunchDetail\"", innerFrame, StringComparison.Ordinal);
         Assert.Contains("VerticalAlignment=\"Bottom\"", innerFrame, StringComparison.Ordinal);
-        Assert.Contains("Height=\"18\"", innerFrame, StringComparison.Ordinal);
+        Assert.Contains("Height=\"20\"", innerFrame, StringComparison.Ordinal);
         Assert.Contains("Grid.Row=\"2\"", SliceElement(xaml, "x:Name=\"LaunchButton\""), StringComparison.Ordinal);
         Assert.Contains("Margin=\"12,0,12,0\"", SliceElement(xaml, "x:Name=\"LaunchButton\""), StringComparison.Ordinal);
         Assert.Contains("Grid.Row=\"3\"", SliceElement(xaml, "x:Name=\"LaunchUtilityButtons\""), StringComparison.Ordinal);
@@ -144,7 +144,7 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("Grid.Column=\"1\"", SliceElement(xaml, "x:Name=\"StableOpenScreenshotFolderButton\""), StringComparison.Ordinal);
         Assert.Contains("LaunchUtilityButtons.Width = LaunchButton.Width", code, StringComparison.Ordinal);
         Assert.Contains("LaunchButtonHeight = 110", layout, StringComparison.Ordinal);
-        Assert.Contains("LaunchStatusStripHeight = 18", layout, StringComparison.Ordinal);
+        Assert.Contains("LaunchStatusStripHeight = 20", layout, StringComparison.Ordinal);
 
         foreach (var scale in new[] { 1d, 1.25d })
         {
@@ -618,6 +618,9 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("Random.Shared.Next(selection.Files.Count)", code, StringComparison.Ordinal);
         Assert.Contains("TimeSpan.FromMilliseconds(700)", code, StringComparison.Ordinal);
         Assert.Contains("BeginLauncherBackgroundCrossfade", code, StringComparison.Ordinal);
+        Assert.Contains("selection.Files.Count > 1", code, StringComparison.Ordinal);
+        Assert.Contains("SetBackgroundSource(selection.Files[1])", code, StringComparison.Ordinal);
+        Assert.Contains("MediaFailed += LauncherMotionPlayer_MediaFailed", code, StringComparison.Ordinal);
         Assert.Equal(2, Regex.Matches(imageLoader, @"requestToken != launcherImageRequestToken \|\| generation != launcherVisualGeneration").Count);
         Assert.Matches(@"bitmap\.ImageFailed[\s\S]*?requestToken != launcherImageRequestToken \|\| generation != launcherVisualGeneration\) return;\s*incoming\.Source = null;", imageLoader);
         Assert.DoesNotContain("x:Name=\"BackgroundScrim\"", xaml, StringComparison.Ordinal);
@@ -1126,7 +1129,7 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("Margin=\"6,0,0,0\"", SliceElement(xaml, "x:Name=\"CurrentBannerSection\""), StringComparison.Ordinal);
         Assert.Contains("Width=\"24\"", SliceElement(xaml, "x:Name=\"RedemptionCodeRewardIcon\""), StringComparison.Ordinal);
         Assert.Contains("x:Name=\"LaunchDetail\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Height=\"18\"", SliceElement(xaml, "x:Name=\"LaunchDetail\""), StringComparison.Ordinal);
+        Assert.Contains("Height=\"20\"", SliceElement(xaml, "x:Name=\"LaunchDetail\""), StringComparison.Ordinal);
         Assert.Contains("Background = (Brush)Application.Current.Resources[\"SettingsSurfaceBrush\"]", manager, StringComparison.Ordinal);
         Assert.Contains("BorderBrush = (Brush)Application.Current.Resources[\"DeckBorderBrush\"]", manager, StringComparison.Ordinal);
         Assert.Contains("CloseButtonStyle = (Style)Application.Current.Resources[\"NyxDialogQuietStyle\"]", manager, StringComparison.Ordinal);

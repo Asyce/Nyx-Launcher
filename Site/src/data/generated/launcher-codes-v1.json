@@ -1,8 +1,26 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-11T07:19:03.071Z",
+  "generatedAt": "2026-08-18T00:40:57.915Z",
   "games": {
     "gi": [
+      {
+        "code": "Y1INABQB6DEX",
+        "added": "2026-08-17",
+        "amount": 60,
+        "currency": "Primogems"
+      },
+      {
+        "code": "BALLETCOLLAB",
+        "added": "2026-08-16",
+        "amount": 30,
+        "currency": "Primogems"
+      },
+      {
+        "code": "MYSNEZHNAYACAREER",
+        "added": "2026-08-13",
+        "amount": 160,
+        "currency": "Primogems"
+      },
       {
         "code": "LEGEDILJKSGM",
         "added": "2026-08-11",
@@ -14,53 +32,35 @@
         "added": "2026-08-07",
         "amount": 60,
         "currency": "Primogems"
-      },
-      {
-        "code": "Everwinter",
-        "added": "2026-07-31",
-        "amount": 100,
-        "currency": "Primogems"
-      },
-      {
-        "code": "OntoSnezhnaya",
-        "added": "2026-07-31",
-        "amount": 100,
-        "currency": "Primogems"
-      },
-      {
-        "code": "Odettte0812",
-        "added": "2026-07-31",
-        "amount": 100,
-        "currency": "Primogems"
       }
     ],
     "hsr": [
       {
+        "code": "NSJR3B97ZZ5X",
+        "added": "2026-08-15",
+        "amount": 50,
+        "currency": "Stellar Jade"
+      },
+      {
+        "code": "LSJ9JARPZH33",
+        "added": "2026-08-14",
+        "amount": 100,
+        "currency": "Stellar Jade"
+      },
+      {
+        "code": "YAJQ2TR6ZY2P",
+        "added": "2026-08-14",
+        "amount": 100,
+        "currency": "Stellar Jade"
+      },
+      {
+        "code": "2TKRKAR6YG2K",
+        "added": "2026-08-14",
+        "amount": 100,
+        "currency": "Stellar Jade"
+      },
+      {
         "code": "5S6ZHRWTDNJB",
-        "added": "2026-08-11",
-        "amount": 60,
-        "currency": "Stellar Jade"
-      },
-      {
-        "code": "4TKSX77Y58QK",
-        "added": "2026-08-11",
-        "amount": 30,
-        "currency": "Stellar Jade"
-      },
-      {
-        "code": "CREATIONNYMPH",
-        "added": "2026-08-11",
-        "amount": 60,
-        "currency": "Stellar Jade"
-      },
-      {
-        "code": "FAREWELL",
-        "added": "2026-08-11",
-        "amount": 60,
-        "currency": "Stellar Jade"
-      },
-      {
-        "code": "IFYOUAREREADINGTHIS",
         "added": "2026-08-11",
         "amount": 60,
         "currency": "Stellar Jade"
@@ -115,5 +115,5 @@
       }
     ]
   },
-  "revision": "70e0b530973232b06c775f3cb8f695ce912505da2763b647b770110cddd1c1cc"
+  "revision": "f50d89599d0f6002b9b14868302accacb89ab5621b334ae2c7772717d808abe5"
 }

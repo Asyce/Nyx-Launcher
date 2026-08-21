@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -60,6 +61,7 @@ public sealed class LauncherVisualsCache
         this.http = http ?? new HttpClient(new HttpClientHandler
         {
             AllowAutoRedirect = false,
+            AutomaticDecompression = DecompressionMethods.All,
             UseCookies = false,
         })
         {
@@ -185,7 +187,13 @@ public sealed class LauncherVisualsCache
                 || match?.Backgrounds is not { Count: > 0 and <= 10 } backgrounds)
                 throw new InvalidDataException("Official HoYo launcher response is invalid.");
             var videos = backgrounds
-                .Select(background => ParseHoyoVideo(background?.Video?.Url))
+                .Select(background =>
+                {
+                    var video = ParseHoyoVideo(background?.Video?.Url);
+                    return video is null
+                        ? null
+                        : video with { Fallback = ParseHoyoImage(background?.Background?.Url) };
+                })
                 .Where(static video => video is not null)
                 .Cast<OfficialVideo>()
                 .ToArray();
@@ -255,7 +263,37 @@ public sealed class LauncherVisualsCache
         return stem is [var hash, var identity]
             && IsLowerHash32(hash)
             && IsDigits(identity, 1, 20)
-                ? new OfficialVideo(url, "video/webm")
+                ? new OfficialVideo(url, "video/webm", null)
+                : null;
+    }
+
+    private static OfficialImage? ParseHoyoImage(string? rawUrl)
+    {
+        if (!Uri.TryCreate(rawUrl, UriKind.Absolute, out var url)
+            || url.Scheme != Uri.UriSchemeHttps
+            || !string.IsNullOrEmpty(url.UserInfo)
+            || !url.IsDefaultPort
+            || !string.IsNullOrEmpty(url.Query)
+            || !string.IsNullOrEmpty(url.Fragment)
+            || rawUrl != $"https://{url.Host}{url.AbsolutePath}") return null;
+        var expectedPrefix = url.Host switch
+        {
+            "fastcdn.hoyoverse.com" => "static-resource-v2",
+            "launcher-webstatic.hoyoverse.com" => "launcher-public",
+            _ => null,
+        };
+        var parts = url.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (expectedPrefix is null
+            || parts is not [var prefix, var year, var month, var day, var file]
+            || prefix != expectedPrefix
+            || !DateOnly.TryParseExact($"{year}-{month}-{day}", "yyyy-MM-dd", out _)) return null;
+        var extension = Path.GetExtension(file);
+        var stem = file[..^extension.Length].Split('_');
+        return extension is ".webp" or ".png"
+            && stem is [var hash, var identity]
+            && IsLowerHash32(hash)
+            && IsDigits(identity, 1, 20)
+                ? new OfficialImage(url, extension == ".webp" ? "image/webp" : "image/png")
                 : null;
     }
 
@@ -276,7 +314,7 @@ public sealed class LauncherVisualsCache
         if (parts is not ["launcher", "clientUpload", var file]
             || !file.EndsWith(".mp4", StringComparison.Ordinal)
             || !IsAsciiToken(file[..^4], 8, 64)) return false;
-        video = new OfficialVideo(url, "video/mp4");
+        video = new OfficialVideo(url, "video/mp4", null);
         return true;
     }
 
@@ -297,9 +335,19 @@ public sealed class LauncherVisualsCache
         OfficialVideo asset,
         CancellationToken cancellationToken)
     {
-        var file = await AcquireOfficialVideoAsync(gameId, asset, cancellationToken);
-        var selection = new LauncherVisualSelection(gameId, file.Sha256, "video", null, [file.Path]);
-        SaveLastGood(selection, [file]);
+        var files = new List<AcquiredFile>
+        {
+            await AcquireOfficialAssetAsync(gameId, asset.Url, asset.MediaType, cancellationToken),
+        };
+        if (asset.Fallback is { } fallback)
+            files.Add(await AcquireOfficialAssetAsync(gameId, fallback.Url, fallback.MediaType, cancellationToken));
+        var selection = new LauncherVisualSelection(
+            gameId,
+            files[0].Sha256,
+            "video",
+            null,
+            files.Select(static file => file.Path).ToArray());
+        SaveLastGood(selection, files);
         RemoveSupersededFiles(gameId, selection.Files);
         return selection;
     }
@@ -307,7 +355,7 @@ public sealed class LauncherVisualsCache
     private async Task<LauncherVisualSelection> RefreshOfficialEndfieldAsync(CancellationToken cancellationToken)
     {
         var asset = await ReadOfficialEndfieldAssetAsync(cancellationToken);
-        return await AcquireOfficialVideoSelectionAsync("ae", new(asset, "video/mp4"), cancellationToken);
+        return await AcquireOfficialVideoSelectionAsync("ae", new(asset, "video/mp4", null), cancellationToken);
     }
 
     private async Task<Uri> ReadOfficialEndfieldAssetAsync(CancellationToken cancellationToken)
@@ -344,18 +392,21 @@ public sealed class LauncherVisualsCache
         return url;
     }
 
-    private async Task<AcquiredFile> AcquireOfficialVideoAsync(
+    private async Task<AcquiredFile> AcquireOfficialAssetAsync(
         string gameId,
-        OfficialVideo asset,
+        Uri url,
+        string mediaType,
         CancellationToken cancellationToken)
     {
-        using var response = await http.GetAsync(asset.Url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        RejectRedirect(response, asset.Url);
+        using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        RejectRedirect(response, url);
         response.EnsureSuccessStatusCode();
-        if (!string.Equals(response.Content.Headers.ContentType?.MediaType, asset.MediaType, StringComparison.OrdinalIgnoreCase)
+        var maximumBytes = mediaType is "video/webm" or "video/mp4" ? MaximumVideoBytes : MaximumImageBytes;
+        if (!string.Equals(response.Content.Headers.ContentType?.MediaType, mediaType, StringComparison.OrdinalIgnoreCase)
             || response.Content.Headers.ContentLength is not { } size
-            || size is <= 0 or > MaximumVideoBytes)
-            throw new InvalidDataException("Official launcher video is invalid.");
+            || size is <= 0
+            || size > maximumBytes)
+            throw new InvalidDataException("Official launcher asset is invalid.");
 
         var directory = GameRoot(gameId);
         EnsureSafeCachePath(directory);
@@ -377,10 +428,16 @@ public sealed class LauncherVisualsCache
             EnsureSafeCachePath(temporary);
             if (!IsRegularFile(temporary)
                 || new FileInfo(temporary).Length != size
-                || !HasExpectedSignature(temporary, asset.MediaType)
+                || !HasExpectedSignature(temporary, mediaType)
                 || !await HashMatchesAsync(temporary, hash, cancellationToken))
-                throw new InvalidDataException("Official launcher video verification failed.");
-            var extension = asset.MediaType == "video/webm" ? ".webm" : ".mp4";
+                throw new InvalidDataException("Official launcher asset verification failed.");
+            var extension = mediaType switch
+            {
+                "video/webm" => ".webm",
+                "video/mp4" => ".mp4",
+                "image/webp" => ".webp",
+                _ => ".png",
+            };
             var destination = Path.Combine(directory, hash + extension);
             EnsureSafeCachePath(temporary);
             EnsureSafeCachePath(destination);
@@ -442,7 +499,9 @@ public sealed class LauncherVisualsCache
                 || !IsHash(state.Revision)
                 || state.Kind is not ("video" or "image" or "gallery")
                 || state.Files is null
-                || state.Files.Count != (state.Kind == "gallery" ? 3 : 1)
+                || (state.Kind == "gallery" && state.Files.Count != 3)
+                || (state.Kind == "image" && state.Files.Count != 1)
+                || (state.Kind == "video" && state.Files.Count is not (1 or 2))
                 || state.Files.Any(static name => string.IsNullOrWhiteSpace(name) || Path.GetFileName(name) != name)
                 || state.Files.Distinct(StringComparer.OrdinalIgnoreCase).Count() != state.Files.Count
                 || CleanCharacter(state.Character) != state.Character) return null;
@@ -466,7 +525,7 @@ public sealed class LauncherVisualsCache
             var files = new string[metadata.Count];
             for (var index = 0; index < metadata.Count; index++)
             {
-                if (!TryValidateCachedFile(gameId, state.Revision!, state.Kind, metadata[index], out var path))
+                if (!TryValidateCachedFile(gameId, state.Revision!, state.Kind, index, metadata[index], out var path))
                     return null;
                 files[index] = path;
             }
@@ -486,6 +545,7 @@ public sealed class LauncherVisualsCache
         string gameId,
         string revision,
         string kind,
+        int index,
         CacheFileState? file,
         out string path)
     {
@@ -496,9 +556,10 @@ public sealed class LauncherVisualsCache
             || !TryParseContentAddressedName(name, out var nameHash, out var extension)
             || hash != nameHash
             || size <= 0
-            || (kind == "video" && extension is not (".mp4" or ".webm"))
+            || (kind == "video" && index == 0 && extension is not (".mp4" or ".webm"))
+            || (kind == "video" && index > 0 && extension is not (".webp" or ".png"))
             || (kind is "image" or "gallery" && extension is not (".webp" or ".png"))
-            || size > (kind == "video" ? MaximumVideoBytes : MaximumImageBytes)
+            || size > (extension is ".mp4" or ".webm" ? MaximumVideoBytes : MaximumImageBytes)
             || (gameId == "ae" && kind == "video" && (extension != ".mp4" || revision != hash))) return false;
 
         path = Path.Combine(GameRoot(gameId), name);
@@ -723,7 +784,7 @@ public sealed class LauncherVisualsCache
         };
         for (var index = 0; index < state.FileMetadata.Count; index++)
         {
-            if (!TryValidateCachedFile(selection.GameId, selection.Revision, selection.Kind, state.FileMetadata[index], out var path)
+            if (!TryValidateCachedFile(selection.GameId, selection.Revision, selection.Kind, index, state.FileMetadata[index], out var path)
                 || path != selection.Files[index])
                 throw new InvalidDataException("Launcher visual cache state is invalid.");
         }
@@ -826,7 +887,8 @@ public sealed class LauncherVisualsCache
     private sealed record Manifest(string Revision, IReadOnlyDictionary<string, Entry> Games);
     private sealed record Entry(string Kind, string? Character, IReadOnlyList<Asset> Assets);
     private sealed record Asset(Uri Url, string Sha256, long Size, string MediaType, string Extension);
-    private sealed record OfficialVideo(Uri Url, string MediaType);
+    private sealed record OfficialVideo(Uri Url, string MediaType, OfficialImage? Fallback);
+    private sealed record OfficialImage(Uri Url, string MediaType);
     private sealed record AcquiredFile(string Path, long Size, string Sha256);
     private sealed class ManifestDto { public int Schema { get; set; } public string? Revision { get; set; } public Dictionary<string, EntryDto?>? Games { get; set; } }
     private sealed class EntryDto { public string? Kind { get; set; } public string? Character { get; set; } public List<AssetDto?>? Assets { get; set; } }
@@ -837,7 +899,7 @@ public sealed class LauncherVisualsCache
     private sealed class HoyoDataDto { [JsonPropertyName("game_info_list")] public List<HoyoGameInfoDto?>? GameInfoList { get; set; } }
     private sealed class HoyoGameInfoDto { public HoyoGameDto? Game { get; set; } public List<HoyoBackgroundDto?>? Backgrounds { get; set; } }
     private sealed class HoyoGameDto { public string? Id { get; set; } }
-    private sealed class HoyoBackgroundDto { public HoyoUrlDto? Video { get; set; } }
+    private sealed class HoyoBackgroundDto { public HoyoUrlDto? Background { get; set; } public HoyoUrlDto? Video { get; set; } }
     private sealed class HoyoUrlDto { public string? Url { get; set; } }
     private sealed class WuwaIndexDto { [JsonPropertyName("functionCode")] public WuwaFunctionCodeDto? FunctionCode { get; set; } }
     private sealed class WuwaFunctionCodeDto { public string? Background { get; set; } }

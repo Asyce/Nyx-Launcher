@@ -10,6 +10,7 @@ public sealed class LauncherVisualsCacheTests
 {
     private const string HoyoEndpoint = "https://sg-hyp-api.hoyoverse.com/hyp/hyp-connect/api/getAllGameBasicInfo?launcher_id=VYTpXlbWo8&language=en-us";
     private const string HoyoGenshinVideo = "https://launcher-webstatic.hoyoverse.com/launcher-public/2026/08/11/8e1c78aaa6e33ed60b88e12a461f8ee5_960034339638640640.webm";
+    private const string HoyoGenshinImage = "https://launcher-webstatic.hoyoverse.com/launcher-public/2026/08/11/7add3d312f1a796796e6b7b939a1f3a4_3849034172684705523.webp";
     private const string HoyoHsrVideo = "https://fastcdn.hoyoverse.com/static-resource-v2/2026/07/09/afba5bfdb3678ac02b6cd2705e44e8db_635706159057290737.webm";
     private const string HoyoZzzVideo = "https://fastcdn.hoyoverse.com/static-resource-v2/2026/07/27/ac4360ca5c3247dd5630ecb5a261d9ca_2272221460347633592.webm";
     private const string WuwaIndexEndpoint = "https://prod-alicdn-gamestarter.kurogame.com/launcher/launcher/50004_obOHXFrFanqsaIEOmuKroCcbZkQRBC7c/G153/index.json";
@@ -21,20 +22,23 @@ public sealed class LauncherVisualsCacheTests
     private const string OfficialRequest = "{\"proxy_reqs\":[{\"kind\":\"get_main_bg_image\",\"get_main_bg_image_req\":{\"appcode\":\"YDUTE5gscDZ229CW\",\"language\":\"en-us\",\"channel\":\"6\",\"sub_channel\":\"6\",\"platform\":\"Windows\",\"source\":\"launcher\"}}]}";
 
     [Theory]
-    [InlineData("gi", HoyoGenshinVideo)]
-    [InlineData("hsr", HoyoHsrVideo)]
-    [InlineData("zzz", HoyoZzzVideo)]
+    [InlineData("gi", HoyoGenshinVideo, HoyoGenshinImage)]
+    [InlineData("hsr", HoyoHsrVideo, null)]
+    [InlineData("zzz", HoyoZzzVideo, null)]
     public async Task Hoyo_refresh_uses_the_current_official_launcher_video_before_Pengo_fallback(
         string gameId,
-        string officialVideo)
+        string officialVideo,
+        string? officialImage)
     {
         await WithRoot(async root =>
         {
             var video = Media("video/webm", "official Genshin background");
+            var image = Media("image/webp", "official Genshin fallback");
             var handler = new RecordingHandler((request, _) => Task.FromResult(request.RequestUri!.AbsoluteUri switch
             {
                 HoyoEndpoint => JsonResponse(HoyoPayload()),
                 var url when url == officialVideo => MediaResponse(video, "video/webm"),
+                var url when url == officialImage => MediaResponse(image, "image/webp"),
                 _ => new HttpResponseMessage(HttpStatusCode.NotFound),
             }));
             using var http = new HttpClient(handler);
@@ -44,8 +48,20 @@ public sealed class LauncherVisualsCacheTests
             Assert.NotNull(selection);
             var hash = Convert.ToHexString(SHA256.HashData(video)).ToLowerInvariant();
             Assert.Equal(hash, selection.Revision);
-            Assert.Equal(hash + ".webm", Path.GetFileName(Assert.Single(selection.Files)));
-            Assert.Equal([HoyoEndpoint, officialVideo], handler.Requests.Select(static request => request.Uri));
+            Assert.Equal(hash + ".webm", Path.GetFileName(selection.Files[0]));
+            if (officialImage is null)
+            {
+                Assert.Single(selection.Files);
+                Assert.Equal([HoyoEndpoint, officialVideo], handler.Requests.Select(static request => request.Uri));
+            }
+            else
+            {
+                Assert.Equal(2, selection.Files.Count);
+                Assert.EndsWith(".webp", selection.Files[1], StringComparison.Ordinal);
+                Assert.Equal([HoyoEndpoint, officialVideo, officialImage], handler.Requests.Select(static request => request.Uri));
+                Assert.Equal(2, Assert.IsType<LauncherVisualSelection>(
+                    new LauncherVisualsCache(root, http).TryLoadLastGood(gameId)).Files.Count);
+            }
             Assert.DoesNotContain(handler.Requests, static request => request.Uri == LauncherVisualsCache.DefaultManifestUri.AbsoluteUri);
         });
     }
@@ -60,13 +76,18 @@ public sealed class LauncherVisualsCacheTests
             {
                 WuwaIndexEndpoint => JsonResponse(JsonSerializer.Serialize(new
                 {
+                    @default = new { resource = new { version = "2.6.5.0" } },
                     functionCode = new { background = WuwaBackgroundId },
+                    experiment = new { updater = new { enableCDNSelect = false } },
+                    crashInitSwitch = 1,
                 })),
                 WuwaBackgroundEndpoint => JsonResponse(JsonSerializer.Serialize(new
                 {
                     functionSwitch = 1,
                     backgroundFile = WuwaVideo,
                     backgroundFileType = 2,
+                    firstFrameImage = "https://hw-pcdownload-qcloud.aki-game.net/launcher/clientUpload/kp82e0hn4uq2qqwz80.webp",
+                    slogan = "https://hw-pcdownload-qcloud.aki-game.net/launcher/clientUpload/gsamyapds9ruiv7erm.png",
                 })),
                 WuwaVideo => MediaResponse(video, "video/mp4"),
                 _ => new HttpResponseMessage(HttpStatusCode.NotFound),
@@ -1393,7 +1414,7 @@ public sealed class LauncherVisualsCacheTests
         {
             game_info_list = new object[]
             {
-                new { game = new { id = "gopR6Cufr3" }, backgrounds = new[] { new { video = new { url = HoyoGenshinVideo } } } },
+                new { game = new { id = "gopR6Cufr3" }, backgrounds = new[] { new { background = new { url = HoyoGenshinImage }, video = new { url = HoyoGenshinVideo } } } },
                 new { game = new { id = "4ziysqXOQ8" }, backgrounds = new[] { new { video = new { url = HoyoHsrVideo } } } },
                 new { game = new { id = "U5hbdsT9W7" }, backgrounds = new[] { new { video = new { url = HoyoZzzVideo } } } },
             },

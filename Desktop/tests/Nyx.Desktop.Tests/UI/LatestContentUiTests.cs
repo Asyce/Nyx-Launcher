@@ -14,7 +14,7 @@ public sealed class BannerCycleUiTests
         Assert.Contains("AutomationProperties.SetName(\n                BannerCycleRegion", render, StringComparison.Ordinal);
         Assert.Contains("RenderBannerRows(selected.Id, current, now)", render, StringComparison.Ordinal);
         Assert.Contains("RenderUpcomingBannerGroups(selected.Id, upcoming, now)", render, StringComparison.Ordinal);
-        Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 2)", render, StringComparison.Ordinal);
+        Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 3)", render, StringComparison.Ordinal);
         Assert.DoesNotContain("phase.Start > now", render, StringComparison.Ordinal);
         Assert.Contains("FormatCurrentBannerTiming(current, now)", render, StringComparison.Ordinal);
         Assert.DoesNotContain("SetBannerCard", render, StringComparison.Ordinal);
@@ -176,7 +176,7 @@ public sealed class BannerCycleUiTests
         Assert.DoesNotContain("ProgressBar", xaml, StringComparison.Ordinal);
         Assert.Contains("RenderUpcomingBannerGroups(selected.Id, upcoming, now)", code, StringComparison.Ordinal);
         Assert.DoesNotContain("current.Characters.Take(5)", code, StringComparison.Ordinal);
-        Assert.Contains(".Take(2)", code, StringComparison.Ordinal);
+        Assert.Contains(".Take(3)", code, StringComparison.Ordinal);
         Assert.Contains("BannerCharacterRows.Clear()", code, StringComparison.Ordinal);
         Assert.Contains("CreateOverflow", code, StringComparison.Ordinal);
         Assert.Contains("character.Icon is null", code, StringComparison.Ordinal);
@@ -184,7 +184,7 @@ public sealed class BannerCycleUiTests
         Assert.Contains("if (portraitChanged) Notify(nameof(PortraitSource))", code, StringComparison.Ordinal);
         Assert.DoesNotContain("PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty))", code, StringComparison.Ordinal);
         Assert.DoesNotContain("GetBannerRotationProgress", code, StringComparison.Ordinal);
-        Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 2)", code, StringComparison.Ordinal);
+        Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 3)", code, StringComparison.Ordinal);
         Assert.DoesNotContain("Height=", upcomingPhaseSlot, StringComparison.Ordinal);
         Assert.DoesNotContain("x:Name=\"UpcomingPhaseDivider\"", columns, StringComparison.Ordinal);
         Assert.DoesNotContain(".Where(phase => phase.Start > now)", code, StringComparison.Ordinal);

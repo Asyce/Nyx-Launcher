@@ -483,9 +483,15 @@ public sealed partial class MainPage : Page
         InitializeComponent();
         visibleLauncherImageBackground = BackgroundArtwork;
         if (LauncherMotionBackground.MediaPlayer is { } primaryMotion)
+        {
             primaryMotion.MediaOpened += LauncherMotionPlayer_MediaOpened;
+            primaryMotion.MediaFailed += LauncherMotionPlayer_MediaFailed;
+        }
         if (LauncherMotionBackgroundNext.MediaPlayer is { } secondaryMotion)
+        {
             secondaryMotion.MediaOpened += LauncherMotionPlayer_MediaOpened;
+            secondaryMotion.MediaFailed += LauncherMotionPlayer_MediaFailed;
+        }
         bannerCountdownTimer.Tick += BannerCountdownTimer_Tick;
         codeCopyResetTimer.Tick += CodeCopyResetTimer_Tick;
         publisherResourceRefreshTimer.Tick += PublisherResourceRefreshTimer_Tick;
@@ -5545,6 +5551,13 @@ public sealed partial class MainPage : Page
             : 0;
         if (selection.Kind == "video")
         {
+            if (selection.Files.Count > 1)
+            {
+                SetBackgroundSource(selection.Files[1]);
+                BackgroundArtwork.Opacity = 1;
+                BackgroundArtworkNext.Opacity = 0;
+                visibleLauncherImageBackground = BackgroundArtwork;
+            }
             PrepareLauncherMotionBackground(selection.Files[0], generation);
             return;
         }
@@ -5564,6 +5577,8 @@ public sealed partial class MainPage : Page
         if (incoming.MediaPlayer is not { } player) return;
         player.MediaOpened -= LauncherMotionPlayer_MediaOpened;
         player.MediaOpened += LauncherMotionPlayer_MediaOpened;
+        player.MediaFailed -= LauncherMotionPlayer_MediaFailed;
+        player.MediaFailed += LauncherMotionPlayer_MediaFailed;
         player.IsMuted = true;
         player.IsLoopingEnabled = true;
         incoming.Source = MediaSource.CreateFromUri(new Uri(file));
@@ -5594,6 +5609,29 @@ public sealed partial class MainPage : Page
                 incoming,
                 generation,
                 TimeSpan.FromMilliseconds(380));
+        });
+    }
+
+    private void LauncherMotionPlayer_MediaFailed(
+        Windows.Media.Playback.MediaPlayer sender,
+        Windows.Media.Playback.MediaPlayerFailedEventArgs args)
+    {
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            var incoming = ReferenceEquals(LauncherMotionBackground.MediaPlayer, sender)
+                ? LauncherMotionBackground
+                : ReferenceEquals(LauncherMotionBackgroundNext.MediaPlayer, sender)
+                    ? LauncherMotionBackgroundNext
+                    : null;
+            if (incoming is null) return;
+            var generation = ReferenceEquals(incoming, LauncherMotionBackground)
+                ? launcherMotionPrimaryGeneration
+                : launcherMotionSecondaryGeneration;
+            if (generation != launcherVisualGeneration
+                || activeLauncherVisual is not { Kind: "video", Files.Count: > 1 } selection) return;
+            HideLauncherMotionBackgrounds();
+            SetBackgroundSource(selection.Files[1]);
+            BackgroundArtwork.Opacity = 1;
         });
     }
 
@@ -6084,7 +6122,7 @@ public sealed partial class MainPage : Page
                 && (live.End is null || now < live.End)
                 ? live
                 : null;
-            var upcoming = launcherGame.UpcomingForDisplayAt(now, 2);
+            var upcoming = launcherGame.UpcomingForDisplayAt(now, 3);
             RenderBannerRows(selected.Id, current, now);
             RenderUpcomingBannerGroups(selected.Id, upcoming, now);
             RenderBannerCategories(selected.Id, launcherGame);
@@ -6185,7 +6223,7 @@ public sealed partial class MainPage : Page
     {
         var projected = upcoming
             .Where(static phase => phase.Characters.Count > 0)
-            .Take(2)
+            .Take(3)
             .Select((phase, index) =>
             {
                 var orderedCharacters = OrderBannerCharacters(phase.Characters).ToArray();

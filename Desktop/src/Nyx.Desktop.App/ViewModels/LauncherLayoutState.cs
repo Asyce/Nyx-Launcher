@@ -30,7 +30,7 @@ public sealed record LauncherLayoutProfile(
 public static class LauncherOpenLayoutGeometry
 {
     public const double LaunchButtonHeight = 110;
-    public const double LaunchStatusStripHeight = 18;
+    public const double LaunchStatusStripHeight = 20;
 }
 
 public static class LauncherBackgroundSourceProjection
