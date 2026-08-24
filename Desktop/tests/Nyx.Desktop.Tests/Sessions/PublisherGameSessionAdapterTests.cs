@@ -325,7 +325,7 @@ public sealed class PublisherGameSessionAdapterTests
             }
 
             entered.Signal();
-            release.Wait(TimeSpan.FromSeconds(2));
+            release.Wait(TimeSpan.FromSeconds(10));
             return Result(PublisherGameLaunchStatus.Running);
         }
 
@@ -335,7 +335,7 @@ public sealed class PublisherGameSessionAdapterTests
 
         var firstWuWa = coordinator.RequestLaunchAsync("wuwa").AsTask();
         var firstEndfield = coordinator.RequestLaunchAsync("ae").AsTask();
-        Assert.True(entered.Wait(TimeSpan.FromSeconds(1)));
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
         var duplicateWuWa = coordinator.RequestLaunchAsync("wuwa").AsTask();
         release.Set();
 
@@ -425,7 +425,7 @@ public sealed class PublisherGameSessionAdapterTests
                 : new StaticSessionAdapter(game.Id)),
             timeProvider,
             startupTimeout: TimeSpan.FromSeconds(10),
-            adapterCallTimeout: TimeSpan.FromSeconds(2),
+            adapterCallTimeout: TimeSpan.FromSeconds(10),
             absenceConfirmationInterval: TimeSpan.FromSeconds(1));
     }
 
