@@ -950,6 +950,19 @@ public sealed class PublisherResourceCaptureAuthority(
     public string GameId { get; } = gameId;
     public long Generation { get; } = generation;
     public bool HasExpectedBinding => expectedBinding is not null;
+    public bool AllResponsesCompleted
+    {
+        get
+        {
+            lock (sync)
+            {
+                return reserved > 0
+                    && pending.Count == 0
+                    && processing.Count == 0
+                    && completed == reserved;
+            }
+        }
+    }
 
     public bool Open(long requestGeneration)
     {

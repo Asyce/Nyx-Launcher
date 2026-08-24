@@ -13,6 +13,9 @@ int main()
     assert(static_cast<unsigned>(Result::GameStartedAttachTimedOut) == 2);
     assert(static_cast<unsigned>(Result::InvalidRequest) == 3);
     assert(static_cast<unsigned>(Result::StartFailure) == 4);
+    assert(nyx120::ResultWithoutGameWindow(true, false) == Result::StartFailure);
+    assert(nyx120::ResultWithoutGameWindow(false, true) == Result::StartFailure);
+    assert(nyx120::ResultWithoutGameWindow(false, false) == Result::GameStartedAttachTimedOut);
     assert(nyx120::MaximumRequestBytes == 64 * 1024);
     assert(nyx120::IsExpectedExecutableName(L"GenshinImpact.exe"));
     assert(!nyx120::IsExpectedExecutableName(L"NotGenshinImpact.exe"));

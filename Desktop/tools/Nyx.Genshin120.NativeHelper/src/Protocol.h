@@ -22,6 +22,11 @@ namespace nyx120
         StartFailure = 4,
     };
 
+    constexpr Result ResultWithoutGameWindow(bool processExited, bool modalDialogSeen) noexcept
+    {
+        return processExited || modalDialogSeen ? Result::StartFailure : Result::GameStartedAttachTimedOut;
+    }
+
 #pragma pack(push, 1)
     struct RequestHeader
     {

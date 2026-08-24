@@ -304,12 +304,14 @@ public sealed class BannerCycleUiTests
     }
 
     [Fact]
-    public void Upcoming_banner_uses_patch_phase_countdown_and_separate_soon_groups()
+    public void Upcoming_banner_uses_known_patch_labels_and_only_marks_unknown_groups_as_soon()
     {
         var code = ReadAppFile("MainPage.xaml.cs");
         var render = Slice(code, "private void RenderUpcomingBannerGroups", "private void SyncRedemptionCodeRows");
         Assert.Contains("phase.Announced", render, StringComparison.Ordinal);
-        Assert.Contains("FormatBannerTimelineLabel(phase.Phase, \"Soon\\u2122\")", render, StringComparison.Ordinal);
+        Assert.Contains("string.IsNullOrWhiteSpace(phase.Phase)", render, StringComparison.Ordinal);
+        Assert.Contains("FormatBannerPhaseLabel(phase.Phase)", render, StringComparison.Ordinal);
+        Assert.Contains("? \"Soon\\u2122\"", render, StringComparison.Ordinal);
         Assert.Contains("$\"Starts in {BannerTimingFormatter.FormatRemaining(phase.Start!.Value - now)}\"", render, StringComparison.Ordinal);
         Assert.Contains("\"Available on loss\"", render, StringComparison.Ordinal);
         Assert.Contains("character.Limited == false", render, StringComparison.Ordinal);

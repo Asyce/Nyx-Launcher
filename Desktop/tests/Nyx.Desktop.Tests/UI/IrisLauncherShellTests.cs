@@ -221,6 +221,7 @@ public sealed class IrisLauncherShellTests
         Assert.DoesNotContain("OfficialLauncherStatusText", xaml, StringComparison.Ordinal);
         Assert.Contains("SetLaunchDetail(message)", code, StringComparison.Ordinal);
         Assert.Contains("SetLaunchDetail(officialLauncherStatus)", code, StringComparison.Ordinal);
+        Assert.Contains("string.IsNullOrWhiteSpace(detail) ? accessibleName : detail", code, StringComparison.Ordinal);
         Assert.Contains("Height=\"28\"", SliceElement(xaml, "x:Name=\"Fps120Toggle\""), StringComparison.Ordinal);
         Assert.Contains("MinHeight=\"28\"", SliceElement(xaml, "x:Name=\"Fps120Toggle\""), StringComparison.Ordinal);
         Assert.Contains("Style=\"{StaticResource NyxHelpButtonStyle}\"", SliceElement(xaml, "x:Name=\"AchievementExportHelpButton\""), StringComparison.Ordinal);
@@ -609,7 +610,7 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("RefreshAllAsync", code, StringComparison.Ordinal);
         Assert.Contains("\"wuwa\"", selectionHandler, StringComparison.Ordinal);
         Assert.Contains("if (isOfficial && launcherVisualRequestedGameId == gameId) return;", selectionHandler, StringComparison.Ordinal);
-        Assert.Contains("SetBackgroundSource(LauncherBackgroundSourceProjection.From(launcherState.Snapshot, gameId));", selectionHandler, StringComparison.Ordinal);
+        Assert.Contains("PrepareLauncherImageBackground(fallback, generation", selectionHandler, StringComparison.Ordinal);
         Assert.DoesNotContain("LauncherMotionBackground.Source = null", selectionHandler, StringComparison.Ordinal);
         Assert.DoesNotContain("SetBackgroundSource(\"ms-appx:///Assets/backgroundnyx.png\")", selectionHandler[..selectionHandler.IndexOf("HideLauncherMotionBackgrounds", StringComparison.Ordinal)], StringComparison.Ordinal);
         Assert.DoesNotContain("backgroundnyx.png", code, StringComparison.Ordinal);
@@ -628,7 +629,7 @@ public sealed class IrisLauncherShellTests
     }
 
     [Fact]
-    public void Official_switch_retires_previous_layers_before_using_cached_or_preloaded_art()
+    public void Official_switch_keeps_the_previous_layer_until_cached_or_preloaded_art_is_ready()
     {
         var code = ReadAppFile("MainPage.xaml.cs");
         var selectionHandler = Slice(code, "private void ApplySelectedAppearance", "private void StartLauncherVisualPreload");
@@ -636,11 +637,12 @@ public sealed class IrisLauncherShellTests
         var preload = selectionHandler.IndexOf("preloadedLauncherVisuals.TryGetValue", StringComparison.Ordinal);
         var cached = selectionHandler.IndexOf("launcherVisuals.TryLoadLastGood", StringComparison.Ordinal);
 
-        Assert.True(retire >= 0 && retire < preload && retire < cached);
+        Assert.True(retire >= 0 && preload >= 0 && cached >= 0 && preload < retire && cached < retire);
         Assert.Contains("launcherImageRequestToken++;", selectionHandler, StringComparison.Ordinal);
-        Assert.Contains("BackgroundArtwork.Source = null;", selectionHandler, StringComparison.Ordinal);
-        Assert.Contains("BackgroundArtworkNext.Source = null;", selectionHandler, StringComparison.Ordinal);
-        Assert.Contains("SetBackgroundSource(LauncherBackgroundSourceProjection.From(launcherState.Snapshot, gameId));", selectionHandler, StringComparison.Ordinal);
+        Assert.DoesNotContain("BackgroundArtwork.Source = null;", selectionHandler, StringComparison.Ordinal);
+        Assert.DoesNotContain("BackgroundArtworkNext.Source = null;", selectionHandler, StringComparison.Ordinal);
+        Assert.Contains("PrepareLauncherImageBackground(fallback, generation", selectionHandler, StringComparison.Ordinal);
+        Assert.Contains("if (!hasVisibleBackground && selection.Files.Count > 1)", code, StringComparison.Ordinal);
         Assert.Contains("requestToken != launcherImageRequestToken || generation != launcherVisualGeneration", code, StringComparison.Ordinal);
         Assert.Contains("if (!launcherMotionPaused) player.Play();", code, StringComparison.Ordinal);
     }

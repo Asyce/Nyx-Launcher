@@ -917,10 +917,14 @@ public sealed class PublisherAccountHardeningTests
         var capture = new PublisherResourceCaptureAuthority("gi", generation);
 
         Assert.True(capture.Open(generation));
+        Assert.False(capture.AllResponsesCompleted);
         Assert.False(capture.TryBeginResponse(generation, binding));
         Assert.True(capture.TryReserve(generation, "gi", binding));
+        Assert.False(capture.AllResponsesCompleted);
         Assert.True(capture.TryBeginResponse(generation, binding));
+        Assert.False(capture.AllResponsesCompleted);
         Assert.True(capture.CompleteResponse(generation, binding, PublisherResourceProof.Valid, snapshot));
+        Assert.True(capture.AllResponsesCompleted);
 
         var result = capture.Seal(generation);
         Assert.Equal(PublisherResourceReadOutcome.Valid, result.Outcome);
@@ -5176,10 +5180,20 @@ public sealed class PublisherAccountHardeningTests
             "RestoreCachedResources();",
             consent,
             StringComparison.Ordinal);
+        var hoyoOwnership = constructor.IndexOf(
+            "AcquireProfileOwnership(\"HoYoLAB\")",
+            consent,
+            StringComparison.Ordinal);
+        var skportOwnership = constructor.IndexOf(
+            "AcquireProfileOwnership(\"SKPORT\")",
+            restore,
+            StringComparison.Ordinal);
         Assert.True(
             pendingOnRestart >= 0
             && pendingOnRestart < consent
-            && consent < restore);
+            && consent < hoyoOwnership
+            && hoyoOwnership < restore
+            && restore < skportOwnership);
 
         var app = ReadAppFile("App.xaml.cs");
         var recovery = Slice(

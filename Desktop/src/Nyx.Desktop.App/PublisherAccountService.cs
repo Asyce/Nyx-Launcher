@@ -118,10 +118,10 @@ public sealed class PublisherAccountService : IAsyncDisposable
         consent = new(
             hoyoLabAccountAccess && !this.hoyoCleanupPending,
             skportAccountAccess && !this.skportCleanupPending);
-        RestoreCachedResources();
         (hoyoProfileOwner, ownsHoyoProfile) = AcquireProfileOwnership("HoYoLAB");
         try
         {
+            RestoreCachedResources();
             (skportProfileOwner, ownsSkportProfile) = AcquireProfileOwnership("SKPORT");
         }
         catch

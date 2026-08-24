@@ -652,6 +652,7 @@ public sealed partial class MainPage : Page
 
         RenderSelection();
         StartLauncherVisualPreload(lease);
+        _ = RefreshPublisherResourcesOnStartupAsync(lease);
         var hoyoCheck = updaterScanFinished
             ? Task.CompletedTask
             : RefreshHoyoMaintenanceAsync(lease, refreshSessions: true);
@@ -666,7 +667,6 @@ public sealed partial class MainPage : Page
                 () => hoyoCheck,
                 () => wuwaCheck),
             endfieldCheck);
-        _ = RefreshPublisherResourcesOnStartupAsync(lease);
     }
 
     private void MainPage_Unloaded(object sender, RoutedEventArgs e)
@@ -1027,11 +1027,22 @@ public sealed partial class MainPage : Page
         }
 
         var gameId = selected.Id;
+        officialLauncherStatusOverride = null;
         if (gameId == "hsr" && hoyoLabExportReservation.IsHeld)
         {
             return;
         }
-        officialLauncherStatusOverride = null;
+        if (gameId is "gi" or "hsr" or "zzz"
+            && Games.FirstOrDefault(game =>
+                game.Id != gameId
+                && (game.Id is "gi" or "hsr" or "zzz")
+                && sessions.GetSnapshot(game.Id).Status is LocalGameStatus.Running) is { } runningGame)
+        {
+            SetOfficialLauncherStatus(
+                gameId,
+                $"Close {runningGame.DisplayName} before starting {selected.DisplayName}.");
+            return;
+        }
         if (!gameActionsInFlight.Add(gameId))
         {
             return;
@@ -2032,6 +2043,8 @@ public sealed partial class MainPage : Page
                     ChoosePublisherRoleAsync,
                     pageLease?.CancellationToken ?? CancellationToken.None);
                 publisherResourceAutomaticAttempts[gameId] = AccountDisplayClock();
+                if (pageLease is { } lease)
+                    _ = RefreshPublisherResourcesOnStartupAsync(lease, gameId);
             }
         }
         catch (OperationCanceledException)
@@ -2112,26 +2125,38 @@ public sealed partial class MainPage : Page
         }
     }
 
-    private async Task RefreshPublisherResourcesOnStartupAsync(SessionUiLease lease)
+    private async Task RefreshPublisherResourcesOnStartupAsync(
+        SessionUiLease lease,
+        string? skipGameId = null)
     {
         var selectedId = (GameSelector?.SelectedItem as GameLauncherItem)?.Id;
         if (selectedId == "wuwa" && IsWuWaAccountStatusEnabled())
         {
             publisherResourceAutomaticAttempts["wuwa"] = AccountDisplayClock();
             await RefreshWuWaAccountStatusAsync(lease);
-            return;
         }
 
         if (lease.CancellationToken.IsCancellationRequested)
             return;
 
-        // Startup work belongs to the game the user selected. Background
-        // games refresh only when selected or when their own timer is due.
-        await RefreshPublisherResourceAutomaticallyAsync(
-            selectedId ?? string.Empty,
-            lease,
-            selected: true,
-            force: true);
+        foreach (var gameId in new[] { selectedId, "gi", "hsr", "zzz" }
+                     .OfType<string>()
+                     .Distinct(StringComparer.Ordinal))
+        {
+            if (gameId == skipGameId) continue;
+            await RefreshPublisherResourceAutomaticallyAsync(
+                gameId,
+                lease,
+                selected: gameId == selectedId,
+                force: true);
+            if (lease.CancellationToken.IsCancellationRequested) return;
+        }
+
+        if (selectedId != "wuwa" && IsWuWaAccountStatusEnabled())
+        {
+            publisherResourceAutomaticAttempts["wuwa"] = AccountDisplayClock();
+            await RefreshWuWaAccountStatusAsync(lease);
+        }
     }
 
     private async Task RefreshPublisherResourceAfterCheckInAsync(
@@ -2400,6 +2425,9 @@ public sealed partial class MainPage : Page
             string.IsNullOrWhiteSpace(message) ? "Launch status" : message);
         ToolTipService.SetToolTip(
             LaunchDetail,
+            string.IsNullOrWhiteSpace(message) ? null : message);
+        ToolTipService.SetToolTip(
+            LaunchButton,
             string.IsNullOrWhiteSpace(message) ? null : message);
     }
 
@@ -5496,13 +5524,7 @@ public sealed partial class MainPage : Page
         activeLauncherVisual = null;
         if (isOfficial)
         {
-            HideLauncherMotionBackgrounds();
             launcherImageRequestToken++;
-            BackgroundArtwork.Source = null;
-            BackgroundArtworkNext.Source = null;
-            displayedBackgroundSource = null;
-            SetBackgroundSource(LauncherBackgroundSourceProjection.From(launcherState.Snapshot, gameId));
-            BackgroundArtwork.Opacity = 1;
             if (preloadedLauncherVisuals.TryGetValue(gameId, out var preloaded))
             {
                 ApplyLauncherVisual(preloaded, generation);
@@ -5511,6 +5533,10 @@ public sealed partial class MainPage : Page
             {
                 preloadedLauncherVisuals[gameId] = cached;
                 ApplyLauncherVisual(cached, generation);
+            }
+            else if (LauncherBackgroundSourceProjection.From(launcherState.Snapshot, gameId) is { } fallback)
+            {
+                PrepareLauncherImageBackground(fallback, generation, TimeSpan.FromMilliseconds(380));
             }
             if (pageLease is { } lease) StartLauncherVisualPreload(lease);
             return;
@@ -5552,7 +5578,9 @@ public sealed partial class MainPage : Page
             : 0;
         if (selection.Kind == "video")
         {
-            if (selection.Files.Count > 1)
+            var hasVisibleBackground = visibleLauncherMotionBackground?.Source is not null
+                || visibleLauncherImageBackground?.Source is not null;
+            if (!hasVisibleBackground && selection.Files.Count > 1)
             {
                 SetBackgroundSource(selection.Files[1]);
                 BackgroundArtwork.Opacity = 1;
@@ -6273,7 +6301,9 @@ public sealed partial class MainPage : Page
                 return new UpcomingBannerGroupItem(
                     phase.Announced ? $"announced:{index}" : phase.Start!.Value.ToUniversalTime().ToString("O"),
                     phase.Announced
-                        ? FormatBannerTimelineLabel(phase.Phase, "Soon\u2122")
+                        ? string.IsNullOrWhiteSpace(phase.Phase)
+                            ? "Soon\u2122"
+                            : FormatBannerPhaseLabel(phase.Phase)
                         : FormatBannerTimelineLabel(
                             phase.Phase,
                             $"Starts in {BannerTimingFormatter.FormatRemaining(phase.Start!.Value - now)}"),
@@ -6515,8 +6545,7 @@ public sealed partial class MainPage : Page
         string? selectedCharacterId = null) =>
         characters
             .OrderBy(character => string.Equals(character.Id, selectedCharacterId, StringComparison.Ordinal) ? 0 : 1)
-            .ThenByDescending(character => character.Debut ?? DateTimeOffset.MinValue)
-            .ThenBy(character => character.Name, StringComparer.Ordinal);
+            .ThenByDescending(character => character.Debut ?? DateTimeOffset.MaxValue);
 
     private ImageSource? ResolveBannerPortrait(LauncherBannersCharacter character)
     {
@@ -7220,7 +7249,9 @@ public sealed partial class MainPage : Page
         LaunchTitle.Text = title;
         SetLaunchDetail(detail);
         AutomationProperties.SetName(LaunchButton, accessibleName);
-        ToolTipService.SetToolTip(LaunchButton, accessibleName);
+        ToolTipService.SetToolTip(
+            LaunchButton,
+            string.IsNullOrWhiteSpace(detail) ? accessibleName : detail);
     }
 
     private static string WithVersion(string state, string? version) =>

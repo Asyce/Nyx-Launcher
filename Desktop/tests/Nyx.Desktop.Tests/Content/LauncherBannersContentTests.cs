@@ -481,7 +481,7 @@ public sealed class LauncherBannersContentTests
         Assert.Equal("Liino", endfield.Current.Characters.Single(character => character.Id == endfield.Current.SelectedCharacterId).Name);
         var announced = Assert.Single(endfield.Upcoming);
         Assert.True(announced.Announced);
-        Assert.Equal(["Si (Feranmut Proxy)", "Hongshan Imperial Guard", "Sarkaz Archer"], announced.Characters.Select(character => character.Name));
+        Assert.Equal(["Si", "Hongshan Imperial Guard"], announced.Characters.Select(character => character.Name));
     }
 
     [Fact]

@@ -95,7 +95,7 @@ public sealed class PengoWebToolsUiTests
     }
 
     [Fact]
-    public void Startup_resource_refresh_targets_only_the_selected_game()
+    public void Startup_resource_refresh_prioritizes_the_selected_game_and_preloads_the_others()
     {
         var code = ReadAppFile("MainPage.xaml.cs");
         var startup = Slice(
@@ -103,14 +103,15 @@ public sealed class PengoWebToolsUiTests
             "private async Task RefreshPublisherResourcesOnStartupAsync",
             "private async Task RefreshPublisherResourceAfterCheckInAsync");
 
-        Assert.Contains("selectedId ?? string.Empty", startup, StringComparison.Ordinal);
+        Assert.Contains("new[] { selectedId, \"gi\", \"hsr\", \"zzz\" }", startup, StringComparison.Ordinal);
         Assert.Contains("RefreshWuWaAccountStatusAsync", startup, StringComparison.Ordinal);
         Assert.Single(
             Regex.Matches(startup, "RefreshPublisherResourceAutomaticallyAsync", RegexOptions.CultureInvariant)
                 .Cast<Match>());
-        Assert.DoesNotContain("new[] { \"gi\", \"hsr\", \"zzz\" }", startup, StringComparison.Ordinal);
-        Assert.DoesNotContain("selected: false", startup, StringComparison.Ordinal);
-        Assert.DoesNotContain("foreach", startup, StringComparison.Ordinal);
+        Assert.Contains("foreach", startup, StringComparison.Ordinal);
+        Assert.Contains("selected: gameId == selectedId", startup, StringComparison.Ordinal);
+        Assert.Contains("force: true", startup, StringComparison.Ordinal);
+        Assert.Contains("if (gameId == skipGameId) continue;", startup, StringComparison.Ordinal);
     }
 
     [Fact]

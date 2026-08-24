@@ -830,13 +830,22 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
                 StringComparison.Ordinal))
                 return new(null, PublisherResourceReadOutcome.NeedsReview);
 
-            await Task.Delay(
-                TimeSpan.FromSeconds(ResourceCaptureTimeoutSeconds),
-                linked.Token);
-            var trigger = await ReadResourceFetchStateAsync(
-                controllerKey,
-                entry.GameId,
-                linked.Token);
+            PublisherResourceTriggerResult? trigger = null;
+            var deadline = Environment.TickCount64 + (ResourceCaptureTimeoutSeconds * 1000L);
+            while (Environment.TickCount64 < deadline)
+            {
+                if (trigger?.State != "done")
+                {
+                    trigger = await ReadResourceFetchStateAsync(
+                        controllerKey,
+                        entry.GameId,
+                        linked.Token);
+                }
+                if (trigger is { State: not ("running" or "done") }
+                    || (trigger?.State == "done" && authority.AllResponsesCompleted))
+                    break;
+                await Task.Delay(TimeSpan.FromMilliseconds(100), linked.Token);
+            }
             return PublisherResourceTriggerPolicy.Seal(
                 authority,
                 generation,

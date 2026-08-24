@@ -379,7 +379,7 @@ namespace
         return true;
     }
 
-    struct WindowSearch { DWORD ProcessId; HWND Window; };
+    struct WindowSearch { DWORD ProcessId; HWND Window; bool LaunchBlocked; };
 
     bool IsWindowDrawing(HWND window) noexcept
     {
@@ -406,17 +406,28 @@ namespace
             search->Window = window;
             return FALSE;
         }
+        if (IsWindowVisible(window) && std::wcscmp(className, L"#32770") == 0)
+        {
+            search->LaunchBlocked = true;
+            return FALSE;
+        }
         return TRUE;
     }
 
-    HWND WaitForGameWindow(DWORD processId, HANDLE process) noexcept
+    HWND WaitForGameWindow(DWORD processId, HANDLE process, bool& launchBlocked) noexcept
     {
+        launchBlocked = false;
         const ULONGLONG deadline = GetTickCount64() + WindowWaitMilliseconds;
         while (GetTickCount64() < deadline)
         {
-            WindowSearch search{ processId, nullptr };
+            WindowSearch search{ processId, nullptr, false };
             EnumWindows(FindGameWindow, reinterpret_cast<LPARAM>(&search));
             if (search.Window) return search.Window;
+            if (search.LaunchBlocked)
+            {
+                launchBlocked = true;
+                return nullptr;
+            }
             if (WaitForSingleObject(process, 100) == WAIT_OBJECT_0) return nullptr;
         }
         return nullptr;
@@ -472,12 +483,14 @@ namespace
         executable.Reset();
         rootHandles.clear();
 
-        HWND window = WaitForGameWindow(info.dwProcessId, process.Get());
+        bool launchBlocked = false;
+        HWND window = WaitForGameWindow(info.dwProcessId, process.Get(), launchBlocked);
         if (!window)
         {
             UnmapViewOfFile(ipc);
-            return WaitForSingleObject(process.Get(), 0) == WAIT_OBJECT_0 ?
-                nyx120::Result::GameStartedAttachFailed : nyx120::Result::GameStartedAttachTimedOut;
+            return nyx120::ResultWithoutGameWindow(
+                WaitForSingleObject(process.Get(), 0) == WAIT_OBJECT_0,
+                launchBlocked);
         }
 
         HMODULE stub = LoadLibraryExW(payloadPath.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);

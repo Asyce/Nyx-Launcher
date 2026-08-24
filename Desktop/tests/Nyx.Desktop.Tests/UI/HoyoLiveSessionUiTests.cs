@@ -37,6 +37,8 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("HashSet<string> gameActionsInFlight", page, StringComparison.Ordinal);
         Assert.Contains("gameActionsInFlight.Add(gameId)", page, StringComparison.Ordinal);
         Assert.Contains("gameActionsInFlight.Remove(gameId)", page, StringComparison.Ordinal);
+        Assert.Contains("Close {runningGame.DisplayName} before starting {selected.DisplayName}.", page, StringComparison.Ordinal);
+        Assert.Contains("sessions.GetSnapshot(game.Id).Status is LocalGameStatus.Running", page, StringComparison.Ordinal);
         Assert.DoesNotContain("sessions.RequestLaunchAsync(\"gi\"", page, StringComparison.Ordinal);
     }
 
@@ -340,6 +342,18 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("await publisherAccounts.RefreshResourceAsync(", refresh, StringComparison.Ordinal);
         Assert.Contains("string.Equals(current.Id, gameId, StringComparison.Ordinal)", refresh, StringComparison.Ordinal);
         Assert.DoesNotContain("Visibility", refresh, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Energy_capture_finishes_when_the_response_is_ready_instead_of_waiting_twelve_seconds()
+    {
+        var window = ReadAppFile("PublisherSessionWindow.xaml.cs")
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var read = Slice(window, "public async Task<PublisherResourceReadResult> ReadResourceAsync", "private async Task<PublisherCheckInProof> CaptureCheckInProofAsync");
+
+        Assert.Contains("authority.AllResponsesCompleted", read, StringComparison.Ordinal);
+        Assert.Contains("TimeSpan.FromMilliseconds(100)", read, StringComparison.Ordinal);
+        Assert.DoesNotContain("Task.Delay(\n                TimeSpan.FromSeconds(ResourceCaptureTimeoutSeconds)", read, StringComparison.Ordinal);
     }
 
     [Fact]
