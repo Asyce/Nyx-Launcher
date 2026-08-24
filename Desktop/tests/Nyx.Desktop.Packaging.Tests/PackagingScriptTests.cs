@@ -325,6 +325,10 @@ public sealed class PackagingScriptTests
         Assert.Contains("$updaterVersionInfo.FileVersion -cne $Version", build, StringComparison.Ordinal);
         Assert.Contains("$appVersionInfo.ProductVersion -cne $expectedProductVersion", build, StringComparison.Ordinal);
         Assert.Contains("$updaterVersionInfo.ProductVersion -cne $expectedProductVersion", build, StringComparison.Ordinal);
+        Assert.Contains("$generatedAppManifest = Join-Path $workRoot 'app.manifest'", build, StringComparison.Ordinal);
+        Assert.Contains("$appIdentity = \"<assemblyIdentity version=`\"$Version`\" name=`\"Nyx.Desktop.App.app`\"/>\"", build, StringComparison.Ordinal);
+        Assert.Contains("\"-p:ApplicationManifest=$generatedAppManifest\"", build, StringComparison.Ordinal);
+        Assert.Contains("$embeddedAppIdentities[0].Groups['version'].Value -cne $Version", build, StringComparison.Ordinal);
         Assert.Contains("Write-Output \"TAG=$($stableIdentity.Tag)\"", build, StringComparison.Ordinal);
         Assert.Contains("Write-Output \"COMMIT=$($stableIdentity.Commit)\"", build, StringComparison.Ordinal);
         Assert.Contains("Channel = 'stable'", stable, StringComparison.Ordinal);

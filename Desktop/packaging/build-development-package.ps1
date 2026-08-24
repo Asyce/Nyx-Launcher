@@ -271,9 +271,20 @@ $payloadRoot = Join-Path $bundleRoot 'payload'
 $temporaryArtifactPath = Join-Path $workRoot "$artifactBase.zip"
 $temporaryManifestPath = Join-Path $workRoot "$artifactBase.release.json"
 $temporaryHashPath = Join-Path $workRoot "$artifactBase.zip.sha256"
+$sourceAppManifest = Join-Path $desktopRoot 'src\Nyx.Desktop.App\app.manifest'
+$generatedAppManifest = Join-Path $workRoot 'app.manifest'
 [void] (New-Item -ItemType Directory -Path $publishRoot, $toolRoot, $payloadRoot -Force)
 
 try {
+    $sourceAppManifestText = [IO.File]::ReadAllText($sourceAppManifest)
+    $appIdentityPattern = '<assemblyIdentity version="[^"]+" name="Nyx\.Desktop\.App\.app"\s*/>'
+    if ([regex]::Matches($sourceAppManifestText, $appIdentityPattern).Count -ne 1) {
+        throw 'The source application manifest identity is missing or ambiguous.'
+    }
+    $appIdentity = "<assemblyIdentity version=`"$Version`" name=`"Nyx.Desktop.App.app`"/>"
+    $generatedAppManifestText = [regex]::Replace($sourceAppManifestText, $appIdentityPattern, $appIdentity)
+    [IO.File]::WriteAllText($generatedAppManifest, $generatedAppManifestText, [Text.UTF8Encoding]::new($false))
+
     $cargo = (Get-Command cargo -ErrorAction Stop).Source
     $python = (Get-Command python -ErrorAction Stop).Source
     $helperRoot = Join-Path $repositoryRoot 'Extractor\Achievements'
@@ -416,6 +427,7 @@ try {
         '-p:ContinuousIntegrationBuild=true',
         "-p:PathMap=$repositoryRoot=C:\_src\Nyx",
         "-p:Version=$Version",
+        "-p:ApplicationManifest=$generatedAppManifest",
         "-p:AchievementHelperSource=$builtHelper",
         "-p:AchievementHelperSha256=$helperSha256",
         "-p:Genshin120HelperSource=$genshin120Helper",
@@ -470,6 +482,14 @@ try {
         (Get-FileHash -LiteralPath $packagedGenshin120License -Algorithm SHA256).Hash.ToLowerInvariant() -cne $genshin120LicenseSha256 -or
         (Get-FileHash -LiteralPath $packagedGenshin120Provenance -Algorithm SHA256).Hash.ToLowerInvariant() -cne $genshin120ProvenanceSha256) {
         throw 'A packaged Genshin 120 FPS helper file changed after verification.'
+    }
+    $appBinaryText = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($entryPoint))
+    $embeddedAppIdentities = [regex]::Matches(
+        $appBinaryText,
+        '<assemblyIdentity version="(?<version>[^"]+)" name="Nyx\.Desktop\.App\.app">')
+    if ($embeddedAppIdentities.Count -ne 1 -or
+        $embeddedAppIdentities[0].Groups['version'].Value -cne $Version) {
+        throw 'The embedded application manifest version does not match the package version.'
     }
     if ($Channel -eq 'stable') {
         $appVersionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($entryPoint)

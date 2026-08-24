@@ -16,7 +16,7 @@ When the worktree is clean and `HEAD` has exactly one tag, which must be `vMAJOR
 & .\packaging\build-stable-package.ps1
 ```
 
-The stable build maps `v1.4` to `1.4.0.0` and `v1.4.2` to `1.4.2.0`. Components cannot have leading zeros and must fit from 0 through 65535. A supplied `-Version` is only a cross-check and must match the tag-derived four-part version. The stable manifest uses only `https://pengo.gg/desktop/updates/stable/Nyx-Desktop-<version>-win-x64.zip`. Development manifests keep `packageUrl` empty.
+The stable build maps `v1.4` to `1.4.0.0` and `v1.4.2` to `1.4.2.0`. Components cannot have leading zeros and must fit from 0 through 65535. A supplied `-Version` is only a cross-check and must match the tag-derived four-part version. The build generates the embedded Windows application identity from that same four-part version and rejects the binary if it differs. The stable manifest uses only `https://pengo.gg/desktop/updates/stable/Nyx-Desktop-<version>-win-x64.zip`. Development manifests keep `packageUrl` empty.
 
 The normal invocation restores dependencies before publishing, so it also works after tests or other commands have rewritten local RID restore assets. Use `-NoRestore` only when the exact projects have already been restored and you intentionally want to reuse those assets. Both scripts forward `-NoRestore` and `-Force`. The build is fixed to Release, `win-x64`, self-contained Windows App SDK output, a fixed ZIP timestamp, sorted entries, and no PDB files. Output goes only to `packaging\artifacts`, with the channel in each artifact name. `-Force` keeps the last artifact in place while the replacement builds and verifies, then replaces only generated files in that folder.
 
