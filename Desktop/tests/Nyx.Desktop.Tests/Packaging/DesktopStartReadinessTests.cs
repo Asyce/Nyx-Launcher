@@ -36,11 +36,13 @@ public sealed class DesktopStartReadinessTests
         Assert.Contains("Test-UnpackagedOutput", script);
         Assert.Contains("Nyx.Desktop.App.pri", script);
         Assert.Contains("pengo-achievements-launcher.exe", script);
+        Assert.Matches(@"if \(-not \$CheckOnly\)\s*\{\s*\$requiredOutputPaths \+= \$achievementHelperOutput\s*\}", script);
         Assert.Contains("verify_release.py", script);
         Assert.Contains("-p:AchievementHelperSource=$builtAchievementHelper", script);
         Assert.Contains("-p:AchievementHelperSha256=$achievementHelperSha256", script);
         Assert.Contains("verify-release.ps1", script);
         Assert.Contains("https://github.com/34736384/genshin-fps-unlock.git", script);
+        Assert.Contains("& $git.Source -c core.longpaths=true clone --quiet --depth 1 --branch v3.5.0 https://github.com/34736384/genshin-fps-unlock.git", script, StringComparison.Ordinal);
         Assert.Contains("2b85d61dd06f6e11ad86fdd6bd90339f9abc58eb", script);
         Assert.Contains("-p:Genshin120HelperSource=$genshin120Helper", script);
         Assert.Contains("-p:Genshin120HelperSha256=$genshin120HelperSha256", script);

@@ -224,9 +224,11 @@ $requiredOutputPaths = @(
     (Join-Path $outputRoot 'Assets\Catalog\giicon.png'),
     (Join-Path $outputRoot 'Assets\Iris\nyx-logo.png'),
     (Join-Path $outputRoot 'Assets\Brand\kofi-logo.png'),
-    (Join-Path $outputRoot 'Assets\Content\launcher-banners-v1.json'),
-    $achievementHelperOutput
+    (Join-Path $outputRoot 'Assets\Content\launcher-banners-v1.json')
 )
+if (-not $CheckOnly) {
+    $requiredOutputPaths += $achievementHelperOutput
+}
 
 function Test-UnpackagedOutput {
     foreach ($path in $requiredOutputPaths) {
@@ -296,7 +298,7 @@ if (-not (Test-Path -LiteralPath $genshin120UpstreamRoot -PathType Container)) {
         Stop-NyxStart -Code $script:ExitRunSupport -Message 'Install Git so Nyx can verify the pinned Genshin 120 FPS helper source.'
     }
     [void] (New-Item -ItemType Directory -Path (Split-Path -Parent $genshin120UpstreamRoot) -Force)
-    & $git.Source clone --quiet --depth 1 --branch v3.5.0 https://github.com/34736384/genshin-fps-unlock.git $genshin120UpstreamRoot
+    & $git.Source -c core.longpaths=true clone --quiet --depth 1 --branch v3.5.0 https://github.com/34736384/genshin-fps-unlock.git $genshin120UpstreamRoot
     if ($LASTEXITCODE -ne 0) {
         Stop-NyxStart -Code $script:ExitRun -Message 'The pinned Genshin 120 FPS source could not be retrieved.'
     }
