@@ -675,6 +675,7 @@ public static class NyxNativeSmokeCapture
 
     $settings = Wait-ExactElement -Root $window -Name 'Settings'
     $settings.SetFocus()
+    Assert-FocusIs -Expected $settings
     Send-SafeKey -Key Tab
     if (-not (Test-IsDescendant -Element ([System.Windows.Automation.AutomationElement]::FocusedElement) -Ancestor $window)) {
         Throw-SmokeFailure 'MAIN_FOCUS_ESCAPED'

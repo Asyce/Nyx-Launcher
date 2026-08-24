@@ -61,6 +61,9 @@ public sealed class NativeSmokeScriptTests
         Assert.DoesNotContain("Screenshot", safeBlock.Groups["body"].Value, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Export", safeBlock.Groups["body"].Value, StringComparison.OrdinalIgnoreCase);
         Assert.Matches(
+            new Regex(@"\$settings\.SetFocus\(\)\r?\n\s*Assert-FocusIs -Expected \$settings\r?\n\s*Send-SafeKey -Key Tab", RegexOptions.CultureInvariant),
+            source);
+        Assert.Matches(
             new Regex(@"\$cancel\.SetFocus\(\)[\s\S]{0,120}\r?\n\s*Send-SafeKey -Key Enter", RegexOptions.CultureInvariant),
             source);
         Assert.Matches(
