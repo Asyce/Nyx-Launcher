@@ -8,9 +8,16 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $helperRoot '..\..\..'))
 $outputRoot = Join-Path $repoRoot '.verification-build\genshin120-native-helper'
 $objectRoot = Join-Path $outputRoot 'obj'
 $releaseRoot = Join-Path $outputRoot 'release'
-$vsDevCmd = 'C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\Common7\Tools\VsDevCmd.bat'
+$vsWhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+if (-not (Test-Path -LiteralPath $vsWhere -PathType Leaf)) { throw "vswhere.exe was not found: $vsWhere" }
+$vsInstallPath = (& $vsWhere -latest -products '*' -requires 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' -property installationPath | Select-Object -First 1)
+$vsWhereExitCode = $LASTEXITCODE
+$vsInstallPath = ([string]$vsInstallPath).Trim()
+if ($vsWhereExitCode -ne 0 -or [String]::IsNullOrWhiteSpace($vsInstallPath)) { throw 'No Visual Studio installation with the required C++ tools was found.' }
+$vsInstallPath = [IO.Path]::GetFullPath($vsInstallPath)
+$vsDevCmd = Join-Path $vsInstallPath 'Common7\Tools\VsDevCmd.bat'
 
-if (-not (Test-Path -LiteralPath $vsDevCmd)) { throw "VS2019 Build Tools were not found." }
+if (-not (Test-Path -LiteralPath $vsDevCmd -PathType Leaf)) { throw "VsDevCmd.bat was not found: $vsDevCmd" }
 if (Test-Path -LiteralPath $outputRoot) {
     $resolvedOutput = [IO.Path]::GetFullPath($outputRoot)
     $resolvedVerification = [IO.Path]::GetFullPath((Join-Path $repoRoot '.verification-build')) + [IO.Path]::DirectorySeparatorChar
@@ -21,7 +28,8 @@ New-Item -ItemType Directory -Force -Path $objectRoot, $releaseRoot | Out-Null
 
 function Invoke-VsBuild([string]$Command) {
     $commandFile = Join-Path $objectRoot ('build-' + [guid]::NewGuid().ToString('N') + '.cmd')
-    [IO.File]::WriteAllText($commandFile, "@call `"$vsDevCmd`" -no_logo -arch=x64 -host_arch=x64`r`n$Command`r`n", [Text.UTF8Encoding]::new($false))
+    $commandFileContents = "@call `"$vsDevCmd`" -no_logo -arch=x64 -host_arch=x64`r`n@if errorlevel 1 exit /b 1`r`n@where.exe cl.exe >nul`r`n@if errorlevel 1 exit /b 1`r`n@where.exe link.exe >nul`r`n@if errorlevel 1 exit /b 1`r`n@where.exe rc.exe >nul`r`n@if errorlevel 1 exit /b 1`r`n$Command`r`n"
+    [IO.File]::WriteAllText($commandFile, $commandFileContents, [Text.UTF8Encoding]::new($false))
     try {
         & $env:ComSpec /d /c $commandFile
         if ($LASTEXITCODE -ne 0) { throw "Native build failed with exit code $LASTEXITCODE." }
@@ -31,7 +39,8 @@ function Invoke-VsBuild([string]$Command) {
 
 $stub = Join-Path $objectRoot 'Nyx.Genshin120.Stub.dll'
 $stubObject = Join-Path $objectRoot 'Stub.obj'
-Invoke-VsBuild "cl.exe /nologo /std:c++17 /O2 /GL /MT /GS /guard:cf /sdl /W4 /WX /DUNICODE /D_UNICODE /DNDEBUG /DWIN32_LEAN_AND_MEAN /LD `"$sourceRoot\Stub.cpp`" /Fo`"$stubObject`" /link /NOLOGO /LTCG /BREPRO /DLL /MACHINE:X64 /DYNAMICBASE /NXCOMPAT /GUARD:CF /OPT:REF /OPT:ICF /OUT:`"$stub`" kernel32.lib user32.lib"
+$stubImportLibrary = Join-Path $objectRoot 'Nyx.Genshin120.Stub.lib'
+Invoke-VsBuild "cl.exe /nologo /std:c++17 /O2 /GL /MT /GS /guard:cf /sdl /W4 /WX /DUNICODE /D_UNICODE /DNDEBUG /DWIN32_LEAN_AND_MEAN /LD `"$sourceRoot\Stub.cpp`" /Fo`"$stubObject`" /link /NOLOGO /LTCG /BREPRO /DLL /MACHINE:X64 /DYNAMICBASE /NXCOMPAT /GUARD:CF /OPT:REF /OPT:ICF /OUT:`"$stub`" /IMPLIB:`"$stubImportLibrary`" kernel32.lib user32.lib"
 
 $payloadHash = (Get-FileHash -LiteralPath $stub -Algorithm SHA256).Hash.ToLowerInvariant()
 $hashBytes = for ($index = 0; $index -lt 64; $index += 2) { '0x' + $payloadHash.Substring($index, 2) }

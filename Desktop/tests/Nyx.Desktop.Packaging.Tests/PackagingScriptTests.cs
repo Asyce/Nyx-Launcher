@@ -169,6 +169,16 @@ public sealed class PackagingScriptTests
             "Nyx.Desktop.App",
             "Nyx.Desktop.App.csproj"));
         var solution = File.ReadAllText(Path.Combine(DesktopRoot, "Nyx.Desktop.slnx"));
+        var nativeBuild = File.ReadAllText(Path.Combine(
+            DesktopRoot,
+            "tools",
+            "Nyx.Genshin120.NativeHelper",
+            "build.ps1"));
+        var nativeVerify = File.ReadAllText(Path.Combine(
+            DesktopRoot,
+            "tools",
+            "Nyx.Genshin120.NativeHelper",
+            "verify-release.ps1"));
 
         Assert.Contains("https://github.com/34736384/genshin-fps-unlock.git", build, StringComparison.Ordinal);
         Assert.Contains("v3.5.0", build, StringComparison.Ordinal);
@@ -192,6 +202,11 @@ public sealed class PackagingScriptTests
         Assert.DoesNotContain("Nyx.Genshin120.Stub.dll</Link>", project, StringComparison.Ordinal);
         Assert.DoesNotContain("Nyx.Genshin120.NativeHelper", solution, StringComparison.Ordinal);
         Assert.Contains("verify-genshin-provenance.ps1", build, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.VisualStudio.Component.VC.Tools.x86.x64", nativeBuild, StringComparison.Ordinal);
+        Assert.Contains("/IMPLIB:`\"$stubImportLibrary`\"", nativeBuild, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.VisualStudio.Component.VC.Tools.x86.x64", nativeVerify, StringComparison.Ordinal);
+        Assert.DoesNotContain("Visual Studio\\2019", nativeBuild + nativeVerify, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("14.29.30133", nativeBuild + nativeVerify, StringComparison.Ordinal);
     }
 
     [Fact]
