@@ -71,7 +71,7 @@ public sealed class IrisLauncherShellTests
         }
 
         Assert.Contains("BannerCycleColumns.Visibility", handler, StringComparison.Ordinal);
-        Assert.Contains("BannerCycleRegion.Height = expanded ? 390 : double.NaN", handler, StringComparison.Ordinal);
+        Assert.DoesNotContain("BannerCycleRegion.Height =", handler, StringComparison.Ordinal);
         Assert.Contains("SignalPanel.Visibility", handler, StringComparison.Ordinal);
         Assert.Contains("AccountSectionContent.Visibility", handler, StringComparison.Ordinal);
         Assert.Contains("accountSectionExpanded = expanded", handler, StringComparison.Ordinal);

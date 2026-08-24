@@ -264,7 +264,7 @@ public sealed partial class MainPage : Page
 
     public ObservableCollection<RedemptionCodeRowItem> RedemptionCodeRows { get; } = new();
 
-    public ObservableCollection<BannerCharacterRowItem> BannerCharacterRows { get; } = new();
+    public ObservableCollection<IReadOnlyList<BannerCharacterRowItem>> BannerCharacterRows { get; } = new();
 
     public ObservableCollection<UpcomingBannerGroupItem> UpcomingBannerGroups { get; } = new();
 
@@ -4374,7 +4374,6 @@ public sealed partial class MainPage : Page
             case "banners":
                 expanded = BannerCycleColumns.Visibility is Visibility.Collapsed;
                 BannerCycleColumns.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-                BannerCycleRegion.Height = expanded ? 390 : double.NaN;
                 label = "Banners";
                 break;
             case "codes":
@@ -4959,9 +4958,8 @@ public sealed partial class MainPage : Page
         Grid.SetRowSpan(BannerContentRegion, 2);
         Grid.SetColumn(BannerContentRegion, 1);
         Grid.SetColumnSpan(BannerContentRegion, 2);
-        BannerContentRegion.Width = bannerWidth;
         BannerContentRegion.HorizontalAlignment = HorizontalAlignment.Left;
-        BannerContentRegion.VerticalAlignment = VerticalAlignment.Stretch;
+        BannerContentRegion.VerticalAlignment = VerticalAlignment.Top;
         BannerContentRegion.Margin = new Thickness(
             26,
             38,
@@ -6511,24 +6509,28 @@ public sealed partial class MainPage : Page
         var namedCount = characters.Length <= MaximumDisplayedCurrentBannerCharacters
             ? characters.Length
             : MaximumDisplayedCurrentBannerCharacters - 1;
-        foreach (var character in characters.Take(namedCount))
-        {
-            BannerCharacterRows.Add(new BannerCharacterRowItem(
+        var rows = characters.Take(namedCount)
+            .Select(character => new BannerCharacterRowItem(
                 character,
                 phaseStableKey,
                 ResolveBannerPortrait(character),
                 timing,
                 true,
                 false,
-                100));
-        }
+                100))
+            .ToList();
 
         if (characters.Length > MaximumDisplayedCurrentBannerCharacters)
         {
-            BannerCharacterRows.Add(BannerCharacterRowItem.CreateOverflow(
+            rows.Add(BannerCharacterRowItem.CreateOverflow(
                 phaseStableKey,
                 timing,
                 characters.Skip(namedCount).Select(CreateBannerPortrait).ToArray()));
+        }
+
+        foreach (var row in rows.Chunk(5))
+        {
+            BannerCharacterRows.Add(row);
         }
     }
 
@@ -7335,7 +7337,6 @@ public sealed record UpcomingBannerCharacterItem(
     public Visibility PrimaryVisibility => IsOverflow ? Visibility.Collapsed : Visibility.Visible;
     public Visibility OverflowVisibility => IsOverflow ? Visibility.Visible : Visibility.Collapsed;
     public bool CanOpen => !IsOverflow && CharacterUrl is not null;
-    public double DisplayFontSize => Name.Length > 24 ? 10 : Name.Length > 18 ? 11 : Name.Length > 14 ? 12.5 : 14;
     public string AccessibilityName => CanOpen
         ? $"Open Pengo page for {Name}"
         : Name;
@@ -7381,8 +7382,7 @@ public sealed class UpcomingBannerGroupItem : INotifyPropertyChanged
         StableKey = stableKey;
         Timing = timing;
         Characters = characters.ToArray();
-        Names = string.Join(Environment.NewLine, characters.Select(static character => character.Name));
-        ItemWidth = Math.Clamp(640d / Math.Min(5, Characters.Count), 128, 320);
+        CharacterRows = Characters.Chunk(5).ToArray();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -7390,8 +7390,7 @@ public sealed class UpcomingBannerGroupItem : INotifyPropertyChanged
     public string StableKey { get; }
     public string Timing { get; private set; }
     public IReadOnlyList<UpcomingBannerCharacterItem> Characters { get; }
-    public string Names { get; }
-    public double ItemWidth { get; }
+    public IReadOnlyList<IReadOnlyList<UpcomingBannerCharacterItem>> CharacterRows { get; }
 
     public bool Matches(UpcomingBannerGroupItem other) =>
         string.Equals(StableKey, other.StableKey, StringComparison.Ordinal)
@@ -7466,8 +7465,6 @@ public sealed class BannerCharacterRowItem : INotifyPropertyChanged
     public Visibility PrimaryVisibility => IsOverflow ? Visibility.Collapsed : Visibility.Visible;
 
     public Visibility OverflowVisibility => IsOverflow ? Visibility.Visible : Visibility.Collapsed;
-
-    public double DisplayFontSize => Name.Length > 24 ? 10 : Name.Length > 18 ? 11 : Name.Length > 14 ? 12.5 : 14;
 
     public Uri? CharacterUrl { get; }
 
