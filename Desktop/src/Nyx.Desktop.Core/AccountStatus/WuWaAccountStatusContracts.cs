@@ -26,6 +26,13 @@ public sealed record WuWaAccountStatusSnapshot(
     int Liveness,
     int LivenessMaxCount);
 
+public sealed record WuWaAccountIdentity(string PlayerId, string Region)
+{
+    public string DisplayText => $"{PlayerId} · {Region}";
+
+    public override string ToString() => nameof(WuWaAccountIdentity);
+}
+
 public static class WuWaAccountStatusRules
 {
     // Protected publisher recovery snapshots already use a fourteen-day trust
@@ -44,5 +51,9 @@ public sealed record WuWaAccountStatusResult(
     DateTimeOffset? SuccessfulAt,
     bool IsStale)
 {
+    public WuWaAccountIdentity? Identity { get; init; }
+
     public bool IsSuccess => Failure is WuWaAccountStatusFailure.None && Snapshot is not null;
+
+    public override string ToString() => nameof(WuWaAccountStatusResult);
 }

@@ -137,6 +137,27 @@ public sealed class WuWaAccountStatusTests
         Assert.True(parser.IsRedisEmpty(Utf8("{\"code\":1005,\"msg\":\"ignored\"}")));
     }
 
+    [Fact]
+    public void Account_identity_and_result_redact_personal_values_and_keep_constructor_compatibility()
+    {
+        var identity = new WuWaAccountIdentity("2468013579", "Europe");
+        Assert.Equal("2468013579 · Europe", identity.DisplayText);
+        Assert.Equal(nameof(WuWaAccountIdentity), identity.ToString());
+        Assert.DoesNotContain(identity.PlayerId, identity.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(identity.Region, identity.ToString(), StringComparison.Ordinal);
+
+        var result = new WuWaAccountStatusResult(
+            DateTimeOffset.UtcNow,
+            WuWaAccountStatusFailure.None,
+            new WuWaAccountStatusSnapshot(1, 2, 3, 4, 5, 6, 7),
+            DateTimeOffset.UtcNow,
+            false);
+        Assert.Null(result.Identity);
+        Assert.Equal(nameof(WuWaAccountStatusResult), result.ToString());
+        Assert.DoesNotContain(identity.PlayerId, result.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(identity.Region, result.ToString(), StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(0L, 0L)]
     [InlineData(WuWaAccountStatusRules.MaximumRecoverySeconds, WuWaAccountStatusRules.MaximumRecoverySeconds)]
@@ -300,6 +321,9 @@ public sealed class WuWaAccountStatusTests
         var results = await Task.WhenAll(first, second);
 
         Assert.All(results, result => Assert.True(result.IsSuccess));
+        Assert.Equal(roleId, results[0].Identity?.PlayerId);
+        Assert.Equal("Europe", results[0].Identity?.Region);
+        Assert.Equal($"{roleId} · Europe", results[0].Identity?.DisplayText);
         Assert.Equal(2, transport.Calls.Count);
         Assert.Equal(WuWaAccountStatusTransport.PlayerInfoEndpoint, transport.Calls[0].Endpoint);
         Assert.Equal(WuWaAccountStatusTransport.RoleEndpoint, transport.Calls[1].Endpoint);
@@ -310,6 +334,9 @@ public sealed class WuWaAccountStatusTests
         Assert.DoesNotContain(oauth, results[0].ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain(roleId, results[0].ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain("Europe", results[0].ToString(), StringComparison.Ordinal);
+        var resultIdentity = Assert.IsType<WuWaAccountIdentity>(results[0].Identity);
+        Assert.DoesNotContain(roleId, resultIdentity.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("Europe", resultIdentity.ToString(), StringComparison.Ordinal);
 
         var limited = await service.RefreshAsync();
         Assert.Same(results[0], limited);
@@ -322,6 +349,7 @@ public sealed class WuWaAccountStatusTests
         Assert.Equal(WuWaAccountStatusFailure.InvalidResponse, stale.Failure);
         Assert.NotNull(stale.Snapshot);
         Assert.True(stale.IsStale);
+        Assert.Equal(results[0].Identity, stale.Identity);
         Assert.DoesNotContain(oauth, stale.ToString(), StringComparison.Ordinal);
     }
 
@@ -482,6 +510,7 @@ public sealed class WuWaAccountStatusTests
         Assert.Equal(WuWaAccountStatusFailure.InvalidResponse, exhausted.Failure);
         Assert.Equal(accepted.Snapshot, exhausted.Snapshot);
         Assert.Equal(accepted.SuccessfulAt, exhausted.SuccessfulAt);
+        Assert.Equal(accepted.Identity, exhausted.Identity);
         Assert.True(exhausted.IsStale);
         Assert.Equal(WuWaAccountStatusService.ProductionRedisEmptyMaximumRetries + 2, transport.RoleCalls);
     }
@@ -520,6 +549,7 @@ public sealed class WuWaAccountStatusTests
         Assert.Equal(failure, transient.Failure);
         Assert.Equal(accepted.Snapshot, transient.Snapshot);
         Assert.Equal(accepted.SuccessfulAt, transient.SuccessfulAt);
+        Assert.Equal(accepted.Identity, transient.Identity);
         Assert.True(transient.IsStale);
     }
 
@@ -722,7 +752,9 @@ public sealed class WuWaAccountStatusTests
         await disposal.WaitAsync(TimeSpan.FromSeconds(2));
         Assert.Equal(WuWaAccountStatusFailure.Shutdown, (await refresh).Failure);
         Assert.Null(service.Current);
-        Assert.Equal(WuWaAccountStatusFailure.Shutdown, (await service.RefreshAsync()).Failure);
+        var afterDispose = await service.RefreshAsync();
+        Assert.Equal(WuWaAccountStatusFailure.Shutdown, afterDispose.Failure);
+        Assert.Null(afterDispose.Identity);
     }
 
     [Fact]
@@ -755,6 +787,7 @@ public sealed class WuWaAccountStatusTests
         Assert.Equal(WuWaAccountStatusFailure.Timeout, changedAccount.Failure);
         Assert.Null(changedAccount.Snapshot);
         Assert.Null(changedAccount.SuccessfulAt);
+        Assert.Null(changedAccount.Identity);
         Assert.Null(service.Current!.Snapshot);
 
         File.Delete(CachePath(directory.Path, "A1730"));
@@ -763,6 +796,7 @@ public sealed class WuWaAccountStatusTests
         Assert.Equal(WuWaAccountStatusFailure.CacheNotFound, signedOut.Failure);
         Assert.Null(signedOut.Snapshot);
         Assert.Null(signedOut.SuccessfulAt);
+        Assert.Null(signedOut.Identity);
     }
 
     [Fact]
@@ -794,6 +828,7 @@ public sealed class WuWaAccountStatusTests
         Assert.Equal(WuWaAccountStatusFailure.PlayerInfoRejected, rejected.Failure);
         Assert.Null(rejected.Snapshot);
         Assert.Null(rejected.SuccessfulAt);
+        Assert.Null(rejected.Identity);
     }
 
     [Fact]

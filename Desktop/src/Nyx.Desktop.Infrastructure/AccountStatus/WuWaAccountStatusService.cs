@@ -240,7 +240,8 @@ public sealed class WuWaAccountStatusService : IAsyncDisposable
                             clock.GetUtcNow(),
                             snapshot,
                             credentialBinding,
-                            accountBinding);
+                            accountBinding,
+                            identity);
 
                     var isRedisEmpty = parser.IsRedisEmpty(roleResponse);
                     return new(
@@ -348,13 +349,17 @@ public sealed class WuWaAccountStatusService : IAsyncDisposable
                     outcome.ObservedAt,
                     outcome.Snapshot!,
                     outcome.CredentialBinding!,
-                    outcome.AccountBinding!);
+                    outcome.AccountBinding!,
+                    outcome.Identity!);
                 current = new(
                     outcome.ObservedAt,
                     WuWaAccountStatusFailure.None,
                     outcome.Snapshot,
                     outcome.ObservedAt,
-                    false);
+                    false)
+                {
+                    Identity = outcome.Identity,
+                };
                 return current;
             }
 
@@ -387,7 +392,10 @@ public sealed class WuWaAccountStatusService : IAsyncDisposable
                 prior?.Snapshot,
                 prior?.ObservedAt,
                 prior is not null && (outcome.ObservedAt - prior.ObservedAt >= staleAfter
-                    || outcome.Failure is not WuWaAccountStatusFailure.RateLimited));
+                    || outcome.Failure is not WuWaAccountStatusFailure.RateLimited))
+            {
+                Identity = prior?.Identity,
+            };
             return current;
         }
     }
@@ -446,12 +454,14 @@ public sealed class WuWaAccountStatusService : IAsyncDisposable
         DateTimeOffset ObservedAt,
         WuWaAccountStatusSnapshot Snapshot,
         byte[] CredentialBinding,
-        byte[] AccountBinding);
+        byte[] AccountBinding,
+        WuWaAccountIdentity Identity);
 
     private sealed record FetchOutcome(
         WuWaAccountStatusFailure Failure,
         DateTimeOffset ObservedAt,
         WuWaAccountStatusSnapshot? Snapshot,
         byte[]? CredentialBinding,
-        byte[]? AccountBinding);
+        byte[]? AccountBinding,
+        WuWaAccountIdentity? Identity = null);
 }

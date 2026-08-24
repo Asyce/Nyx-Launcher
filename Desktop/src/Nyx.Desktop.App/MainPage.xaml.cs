@@ -4394,7 +4394,10 @@ public sealed partial class MainPage : Page
                 }
                 else if (GameSelector.SelectedItem is GameLauncherItem selected)
                 {
-                    RenderHoyoLabAccountIdentity(selected);
+                    if (selected.Id == "wuwa")
+                        RenderWuWaAccountIdentity();
+                    else
+                        RenderHoyoLabAccountIdentity(selected);
                 }
                 AccountAndToolsPanel.VerticalAlignment = VerticalAlignment.Bottom;
                 label = "Account";
@@ -5257,7 +5260,7 @@ public sealed partial class MainPage : Page
 
         if (selected.Id == "wuwa")
         {
-            AccountAndToolsIdentityText.Visibility = Visibility.Collapsed;
+            RenderWuWaAccountIdentity();
             var enabled = IsWuWaAccountStatusEnabled();
             AccountConnectionButton.Content = enabled ? "Stop" : "Start";
             AccountConnectionButton.IsEnabled = !wuwaAccountStatusActionInFlight;
@@ -6822,6 +6825,7 @@ public sealed partial class MainPage : Page
 
     private void RenderWuWaAccountStatus()
     {
+        RenderWuWaAccountIdentity();
         WuWaAccountResourceValueText.Text = string.Empty;
         AccountProviderText.Text = "ROVER";
         AccountConnectionWarningText.Text = "Unofficial local connection · may stop working.";
@@ -6892,6 +6896,26 @@ public sealed partial class MainPage : Page
         WuWaAccountFreshnessText.Text = result.IsStale && age is not null
             ? $"STALE {age} · {failure}"
             : failure;
+    }
+
+    private void RenderWuWaAccountIdentity()
+    {
+        var identity = IsWuWaAccountStatusEnabled() && !wuwaAccountStatusActionInFlight
+            ? wuwaAccountStatus.Current?.Identity
+            : null;
+        var identityText = identity?.DisplayText ?? string.Empty;
+        AccountAndToolsIdentityText.Text = identityText;
+        AccountAndToolsIdentityText.Visibility = accountSectionExpanded && !string.IsNullOrEmpty(identityText)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        AutomationProperties.SetName(
+            AccountAndToolsIdentityText,
+            string.IsNullOrEmpty(identityText)
+                ? "No Wuthering Waves account selected"
+                : $"Wuthering Waves account: {identityText}");
+        AutomationProperties.SetHelpText(
+            AccountAndToolsIdentityText,
+            "Wuthering Waves account UID and region; account name is not available.");
     }
 
     private void RenderPublisherAccountStatus(string gameId)
