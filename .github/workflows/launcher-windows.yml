@@ -36,9 +36,10 @@ jobs:
         shell: pwsh
         run: dotnet test Desktop\Nyx.Desktop.slnx --configuration Release --no-build --no-restore --verbosity minimal --maxcpucount:1
 
-      - name: Run locked Rust tests
+      - name: Run portable locked Rust tests
         shell: pwsh
-        run: cargo test --locked --manifest-path Extractor\Achievements\Cargo.toml
+        # These two integration tests require the reviewed Npcap 1.88 installation and run on PENGO.
+        run: cargo test --locked --manifest-path Extractor\Achievements\Cargo.toml -- --skip npcap::tests::actual_compiled_filters_accept_only_the_selected_games_udp_frames --skip npcap::tests::reviewed_dll_loads_without_capture_and_preloading_is_rejected
 
       - name: Build stable package
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
