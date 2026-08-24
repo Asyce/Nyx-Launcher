@@ -34,7 +34,7 @@ jobs:
 
       - name: Run .NET tests
         shell: pwsh
-        run: dotnet test Desktop\Nyx.Desktop.slnx --configuration Release --no-build --no-restore --verbosity minimal
+        run: dotnet test Desktop\Nyx.Desktop.slnx --configuration Release --no-build --no-restore --verbosity minimal --maxcpucount:1
 
       - name: Run locked Rust tests
         shell: pwsh
