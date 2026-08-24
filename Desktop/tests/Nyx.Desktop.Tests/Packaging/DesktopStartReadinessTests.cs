@@ -73,7 +73,8 @@ public sealed class DesktopStartReadinessTests
         var result = RunPowerShell(StartScript, "-CheckOnly");
 
         Assert.Equal(0, result.ExitCode);
-        Assert.Contains("Nyx developer start is ready", result.Output);
+        Assert.Contains("Nyx app preflight passed", result.Output);
+        Assert.Contains("A real start will build and verify its achievement helper before launching", result.Output);
         Assert.DoesNotContain("Starting Nyx", result.Output);
         Assert.DoesNotContain("Restoring", result.Output);
     }

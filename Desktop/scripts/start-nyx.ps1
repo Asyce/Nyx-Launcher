@@ -247,7 +247,7 @@ if ($CheckOnly) {
     if (-not (Test-UnpackagedOutput)) {
         Stop-NyxStart -Code $script:ExitRunSupport -Message 'The reviewed unpackaged x64 build output is incomplete. Build Nyx, then retry.'
     }
-    Write-Host "Nyx developer start is ready (Windows x64, SDK $pinnedSdk, unpackaged self-contained app)." -ForegroundColor Green
+    Write-Host "Nyx app preflight passed (Windows x64, SDK $pinnedSdk). A real start will build and verify its achievement helper before launching." -ForegroundColor Green
     exit 0
 }
 

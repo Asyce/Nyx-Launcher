@@ -24,8 +24,13 @@ public sealed class NativeSmokeScriptTests
         Assert.Contains("[long] $declaredTotal = 0", source, StringComparison.Ordinal);
         Assert.Contains("$size -gt (6GB - $declaredTotal)", source, StringComparison.Ordinal);
         Assert.Contains("retryStateCheckedForGames++", source, StringComparison.Ordinal);
+        Assert.Contains("retryStates += [ordered]@{ game = $gameName; state = $retryState }", source, StringComparison.Ordinal);
         Assert.Contains("SCREENSHOT_BLACK_OR_FLAT", source, StringComparison.Ordinal);
         Assert.Contains("[NyxNativeSmokeCapture]::PrintWindow", source, StringComparison.Ordinal);
+        Assert.Contains("$height = [Math]::Min([int] $rect.Height, 720)", source, StringComparison.Ordinal);
+        Assert.Contains("$safeHeight = [Math]::Min($height, 120)", source, StringComparison.Ordinal);
+        Assert.Contains("-Surface $gameName", source, StringComparison.Ordinal);
+        Assert.Equal(3, Regex.Matches(source, @"Save-SanitizedScreenshot", RegexOptions.CultureInvariant).Count);
         Assert.DoesNotContain("CopyFromScreen", source, StringComparison.Ordinal);
         Assert.Single(Regex.Matches(source, @"\.Invoke\(\)", RegexOptions.CultureInvariant).Cast<Match>());
 

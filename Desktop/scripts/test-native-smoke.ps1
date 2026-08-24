@@ -38,6 +38,7 @@ $uiChecks = [ordered]@{
     gamesSelected = @()
     sideEffectControlsInspected = 0
     retryStateCheckedForGames = 0
+    retryStates = @()
     bannersCollapsedAndExpanded = $false
     accountControlObserved = $false
     accountCollapsedAndExpanded = $false
@@ -545,12 +546,13 @@ function Assert-FocusIs {
 function Save-SanitizedScreenshot {
     param(
         [Parameter(Mandatory)] [object] $Window,
-        [Parameter(Mandatory)] [string] $FileName
+        [Parameter(Mandatory)] [string] $FileName,
+        [Parameter(Mandatory)] [string] $Surface
     )
     $rect = $Window.Current.BoundingRectangle
     $width = [Math]::Min([int] $rect.Width, 1280)
-    $height = [Math]::Min([int] $rect.Height, 120)
-    if ($width -lt 320 -or $height -lt 60) { Throw-SmokeFailure 'SCREENSHOT_BOUNDS_INVALID' }
+    $height = [Math]::Min([int] $rect.Height, 720)
+    if ($width -lt 320 -or $height -lt 120) { Throw-SmokeFailure 'SCREENSHOT_BOUNDS_INVALID' }
     $bitmap = [Drawing.Bitmap]::new($width, $height, [Drawing.Imaging.PixelFormat]::Format24bppRgb)
     try {
         $graphics = [Drawing.Graphics]::FromImage($bitmap)
@@ -582,9 +584,18 @@ function Save-SanitizedScreenshot {
         $variance = ($sumSquares / $samples) - ($mean * $mean)
         if ($mean -lt 8 -or $variance -lt 64) { Throw-SmokeFailure 'SCREENSHOT_BLACK_OR_FLAT' }
         $path = Join-Path $EvidenceDirectory $FileName
-        $bitmap.Save($path, [Drawing.Imaging.ImageFormat]::Png)
+        $safeHeight = [Math]::Min($height, 120)
+        $safeBitmap = $bitmap.Clone(
+            [Drawing.Rectangle]::new(0, 0, $width, $safeHeight),
+            [Drawing.Imaging.PixelFormat]::Format24bppRgb)
+        try { $safeBitmap.Save($path, [Drawing.Imaging.ImageFormat]::Png) }
+        finally { $safeBitmap.Dispose() }
         return [ordered]@{
             file = $FileName
+            surface = $Surface
+            inspectedWidth = $width
+            inspectedHeight = $height
+            persistedHeight = $safeHeight
             meanBrightness = [Math]::Round($mean, 2)
             variance = [Math]::Round($variance, 2)
         }
@@ -629,7 +640,20 @@ public static class NyxNativeSmokeCapture
         $script:uiChecks.gamesSelected += $gameName
         $script:uiChecks.sideEffectControlsInspected += 3
         $script:uiChecks.retryStateCheckedForGames++
-        if ([string] $launch.Current.Name -like 'Try *') { $script:retryControlObserved = $true }
+        $retryState = if ([string] $launch.Current.Name -like 'Try *') { 'retry' } else { 'not-present' }
+        $script:uiChecks.retryStates += [ordered]@{ game = $gameName; state = $retryState }
+        if ($retryState -ceq 'retry') { $script:retryControlObserved = $true }
+        $frameNumber = @($script:uiChecks.gamesSelected).Count
+        $frameName = if ($frameNumber -eq $gameNames.Count) {
+            'shell-safe.png'
+        }
+        else {
+            "shell-game-$frameNumber-safe.png"
+        }
+        $script:screenshotEvidence += Save-SanitizedScreenshot `
+            -Window $window `
+            -FileName $frameName `
+            -Surface $gameName
     }
 
     $banner = Wait-ExactElement -Root $window -Name 'Collapse Banners'
@@ -660,8 +684,6 @@ public static class NyxNativeSmokeCapture
     if (-not (Test-IsDescendant -Element ([System.Windows.Automation.AutomationElement]::FocusedElement) -Ancestor $window)) {
         Throw-SmokeFailure 'MAIN_FOCUS_ESCAPED'
     }
-    $script:screenshotEvidence += Save-SanitizedScreenshot -Window $window -FileName 'shell-safe.png'
-
     Invoke-SafeElement -Element $settings -ExpectedName 'Settings'
     $title = 'Settings - Arknights: Endfield'
     [void] (Wait-ExactElement -Root $window -Name $title)
@@ -677,7 +699,10 @@ public static class NyxNativeSmokeCapture
     if (-not (Test-IsDescendant -Element ([System.Windows.Automation.AutomationElement]::FocusedElement) -Ancestor $modal)) {
         Throw-SmokeFailure 'MODAL_FOCUS_ESCAPED'
     }
-    $script:screenshotEvidence += Save-SanitizedScreenshot -Window $window -FileName 'settings-safe.png'
+    $script:screenshotEvidence += Save-SanitizedScreenshot `
+        -Window $window `
+        -FileName 'settings-safe.png' `
+        -Surface $title
     $cancel.SetFocus()
     Assert-FocusIs -Expected $cancel
     Send-SafeKey -Key Enter
