@@ -15,6 +15,7 @@ public sealed class PackagingScriptTests
         foreach (var script in new[]
         {
             Path.Combine(PackagingRoot, "build-development-package.ps1"),
+            Path.Combine(PackagingRoot, "build-stable-package.ps1"),
             Path.Combine(PackagingRoot, "verify-genshin-provenance.ps1"),
             Path.Combine(PackagingRoot, "scripts", "Install-Nyx.ps1"),
             Path.Combine(PackagingRoot, "scripts", "Uninstall-Nyx.ps1"),
@@ -32,10 +33,11 @@ public sealed class PackagingScriptTests
     public void Scripts_do_not_interpret_commands_or_download_and_uninstall_requires_explicit_data_switch()
     {
         var build = File.ReadAllText(Path.Combine(PackagingRoot, "build-development-package.ps1"));
+        var stable = File.ReadAllText(Path.Combine(PackagingRoot, "build-stable-package.ps1"));
         var provenance = File.ReadAllText(Path.Combine(PackagingRoot, "verify-genshin-provenance.ps1"));
         var install = File.ReadAllText(Path.Combine(PackagingRoot, "scripts", "Install-Nyx.ps1"));
         var uninstall = File.ReadAllText(Path.Combine(PackagingRoot, "scripts", "Uninstall-Nyx.ps1"));
-        var all = build + provenance + install + uninstall;
+        var all = build + stable + provenance + install + uninstall;
 
         Assert.DoesNotContain("Invoke-Expression", all, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Invoke-WebRequest", all, StringComparison.OrdinalIgnoreCase);
@@ -172,7 +174,7 @@ public sealed class PackagingScriptTests
         Assert.Contains("v3.5.0", build, StringComparison.Ordinal);
         Assert.Contains("2b85d61dd06f6e11ad86fdd6bd90339f9abc58eb", build, StringComparison.Ordinal);
         Assert.Contains("$genshin120VerificationRoot = Join-Path $workRoot", build, StringComparison.Ordinal);
-        Assert.Contains("git clone --quiet --depth 1 --branch", build, StringComparison.Ordinal);
+        Assert.Contains("git -c core.longpaths=true clone --quiet --depth 1 --branch", build, StringComparison.Ordinal);
         Assert.Contains("verify-release.ps1", build, StringComparison.Ordinal);
         Assert.Contains("Get-FileHash -LiteralPath $genshin120Helper -Algorithm SHA256", build, StringComparison.Ordinal);
         Assert.True(
@@ -267,6 +269,7 @@ public sealed class PackagingScriptTests
     public void Development_package_restores_by_default_with_an_explicit_no_restore_opt_out()
     {
         var build = File.ReadAllText(Path.Combine(PackagingRoot, "build-development-package.ps1"));
+        var stable = File.ReadAllText(Path.Combine(PackagingRoot, "build-stable-package.ps1"));
         var readme = File.ReadAllText(Path.Combine(PackagingRoot, "README.md"));
         var updateDoc = File.ReadAllText(Path.Combine(
             DesktopRoot,
@@ -277,9 +280,118 @@ public sealed class PackagingScriptTests
         Assert.Contains("[switch] $NoRestore", build, StringComparison.Ordinal);
         Assert.Contains("$restoreArgument = if ($NoRestore) { @('--no-restore') } else { @() }", build, StringComparison.Ordinal);
         Assert.DoesNotContain("[switch] $Restore", build, StringComparison.Ordinal);
-        Assert.Contains("build-development-package.ps1 -Version 1.0.0.0", readme, StringComparison.Ordinal);
+        Assert.Contains("build-development-package.ps1 -Version 1.4.0.0", readme, StringComparison.Ordinal);
         Assert.Contains("Use `-NoRestore` only", readme, StringComparison.Ordinal);
         Assert.Contains("`-NoRestore` is an explicit opt-out", updateDoc, StringComparison.Ordinal);
+        Assert.Contains("NoRestore = $NoRestore", stable, StringComparison.Ordinal);
+        Assert.Contains("Force = $Force", stable, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Stable_package_seals_the_tag_derived_version_channel_url_and_binary_versions()
+    {
+        var build = File.ReadAllText(Path.Combine(PackagingRoot, "build-development-package.ps1"));
+        var stable = File.ReadAllText(Path.Combine(PackagingRoot, "build-stable-package.ps1"));
+        var readme = File.ReadAllText(Path.Combine(PackagingRoot, "README.md"));
+        var updating = File.ReadAllText(Path.Combine(DesktopRoot, "docs", "updating.md"));
+        var buildProperties = File.ReadAllText(Path.Combine(DesktopRoot, "Directory.Build.props"));
+        var appManifest = File.ReadAllText(Path.Combine(DesktopRoot, "src", "Nyx.Desktop.App", "app.manifest"));
+        var packageManifest = File.ReadAllText(Path.Combine(DesktopRoot, "src", "Nyx.Desktop.App", "Package.appxmanifest"));
+
+        Assert.Contains("[string] $Version = '1.4.0.0'", build, StringComparison.Ordinal);
+        Assert.Contains("[ValidateSet('development', 'stable')]", build, StringComparison.Ordinal);
+        Assert.Contains("[string] $Channel = 'development'", build, StringComparison.Ordinal);
+        Assert.Contains("$artifactBase = \"Nyx-Desktop-$Version-$Channel-win-x64\"", build, StringComparison.Ordinal);
+        Assert.Contains("channel = $Channel", build, StringComparison.Ordinal);
+        Assert.Contains("https://pengo.gg/desktop/updates/stable/$payloadFile", build, StringComparison.Ordinal);
+        Assert.Contains("[Reflection.AssemblyName]::GetAssemblyName($appAssembly).Version.ToString()", build, StringComparison.Ordinal);
+        Assert.Contains("$expectedProductVersion = \"$Version+$($stableIdentity.Commit)\"", build, StringComparison.Ordinal);
+        Assert.Contains("$appVersionInfo.FileVersion -cne $Version", build, StringComparison.Ordinal);
+        Assert.Contains("$updaterVersionInfo.FileVersion -cne $Version", build, StringComparison.Ordinal);
+        Assert.Contains("$appVersionInfo.ProductVersion -cne $expectedProductVersion", build, StringComparison.Ordinal);
+        Assert.Contains("$updaterVersionInfo.ProductVersion -cne $expectedProductVersion", build, StringComparison.Ordinal);
+        Assert.Contains("Write-Output \"TAG=$($stableIdentity.Tag)\"", build, StringComparison.Ordinal);
+        Assert.Contains("Write-Output \"COMMIT=$($stableIdentity.Commit)\"", build, StringComparison.Ordinal);
+        Assert.Contains("Channel = 'stable'", stable, StringComparison.Ordinal);
+        Assert.Contains("build-development-package.ps1", stable, StringComparison.Ordinal);
+        Assert.Contains("<Version>1.4.0</Version>", buildProperties, StringComparison.Ordinal);
+        Assert.Contains("version=\"1.4.0.0\"", appManifest, StringComparison.Ordinal);
+        Assert.Contains("Version=\"1.4.0.0\"", packageManifest, StringComparison.Ordinal);
+        Assert.Contains("Both channels are unsigned", readme, StringComparison.Ordinal);
+        Assert.Contains("Both channels remain unsigned", updating, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Stable_identity_requires_one_clean_strict_tag_and_matching_version()
+    {
+        var temporaryRoot = Path.Combine(Path.GetTempPath(), "Nyx.StablePackaging.Tests", Guid.NewGuid().ToString("N"));
+        var repository = Path.Combine(temporaryRoot, "repo");
+        Directory.CreateDirectory(repository);
+        try
+        {
+            Assert.Equal(0, RunGit(repository, "init", "--quiet").ExitCode);
+            Assert.Equal(0, RunGit(repository, "config", "user.name", "Nyx Packaging Tests").ExitCode);
+            Assert.Equal(0, RunGit(repository, "config", "user.email", "packaging-tests@invalid.example").ExitCode);
+            File.WriteAllText(Path.Combine(repository, "tracked.txt"), "fixture\n");
+            Assert.Equal(0, RunGit(repository, "add", "tracked.txt").ExitCode);
+            Assert.Equal(0, RunGit(repository, "commit", "--quiet", "-m", "fixture").ExitCode);
+            var commit = RunGit(repository, "rev-parse", "HEAD");
+            Assert.Equal(0, commit.ExitCode);
+            var expectedCommit = commit.Output.Trim();
+            var probe = WriteStableIdentityProbe(temporaryRoot);
+
+            Assert.Equal(0, RunGit(repository, "tag", "v1.4").ExitCode);
+            var valid = RunStableIdentityProbe(probe, repository);
+            Assert.Equal(0, valid.ExitCode);
+            using (var identity = JsonDocument.Parse(valid.Output))
+            {
+                Assert.Equal("v1.4", identity.RootElement.GetProperty("Tag").GetString());
+                Assert.Equal(expectedCommit, identity.RootElement.GetProperty("Commit").GetString());
+                Assert.Equal("1.4.0.0", identity.RootElement.GetProperty("Version").GetString());
+            }
+
+            var mismatch = RunStableIdentityProbe(probe, repository, "1.4.1.0");
+            Assert.NotEqual(0, mismatch.ExitCode);
+            Assert.Contains("does not match stable tag", mismatch.Output, StringComparison.Ordinal);
+
+            File.WriteAllText(Path.Combine(repository, "dirty.txt"), "dirty\n");
+            var dirty = RunStableIdentityProbe(probe, repository);
+            Assert.NotEqual(0, dirty.ExitCode);
+            Assert.Contains("clean Git worktree", dirty.Output, StringComparison.Ordinal);
+            File.Delete(Path.Combine(repository, "dirty.txt"));
+
+            Assert.Equal(0, RunGit(repository, "tag", "release-candidate").ExitCode);
+            var multiple = RunStableIdentityProbe(probe, repository);
+            Assert.NotEqual(0, multiple.ExitCode);
+            Assert.Contains("exactly one tag", multiple.Output, StringComparison.Ordinal);
+            Assert.Equal(0, RunGit(repository, "tag", "-d", "v1.4", "release-candidate").ExitCode);
+
+            Assert.Equal(0, RunGit(repository, "tag", "v01.4").ExitCode);
+            var leadingZero = RunStableIdentityProbe(probe, repository);
+            Assert.NotEqual(0, leadingZero.ExitCode);
+            Assert.Contains("without leading zeros", leadingZero.Output, StringComparison.Ordinal);
+            Assert.Equal(0, RunGit(repository, "tag", "-d", "v01.4").ExitCode);
+
+            Assert.Equal(0, RunGit(repository, "tag", "v65536.1").ExitCode);
+            var tooLarge = RunStableIdentityProbe(probe, repository);
+            Assert.NotEqual(0, tooLarge.ExitCode);
+            Assert.Contains("between 0 and 65535", tooLarge.Output, StringComparison.Ordinal);
+            Assert.Equal(0, RunGit(repository, "tag", "-d", "v65536.1").ExitCode);
+
+            Assert.Equal(0, RunGit(repository, "tag", "v1.4.7").ExitCode);
+            var patch = RunStableIdentityProbe(probe, repository);
+            Assert.Equal(0, patch.ExitCode);
+            using var patchIdentity = JsonDocument.Parse(patch.Output);
+            Assert.Equal("1.4.7.0", patchIdentity.RootElement.GetProperty("Version").GetString());
+        }
+        finally
+        {
+            foreach (var file in Directory.EnumerateFiles(temporaryRoot, "*", SearchOption.AllDirectories))
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+            }
+            Directory.Delete(temporaryRoot, recursive: true);
+        }
     }
 
     [Fact]
@@ -348,6 +460,71 @@ public sealed class PackagingScriptTests
                         yield return nested;
             }
         }
+    }
+
+    private static string WriteStableIdentityProbe(string root)
+    {
+        var build = File.ReadAllText(Path.Combine(PackagingRoot, "build-development-package.ps1"));
+        const string functionName = "function Get-StableReleaseIdentity";
+        var functionStart = build.IndexOf(functionName, StringComparison.Ordinal);
+        var functionEnd = build.IndexOf("Assert-SafePackagingRoot", functionStart, StringComparison.Ordinal);
+        Assert.True(functionStart >= 0 && functionEnd > functionStart);
+
+        var probe = Path.Combine(root, "stable-identity-probe.ps1");
+        File.WriteAllText(probe, """
+            param(
+                [Parameter(Mandatory)] [string] $RepositoryRoot,
+                [string] $RequestedVersion
+            )
+
+            Set-StrictMode -Version Latest
+            $ErrorActionPreference = 'Stop'
+
+            """ + build[functionStart..functionEnd] + """
+
+            $arguments = @{
+                RepositoryRoot = $RepositoryRoot
+                GitPath = (Get-Command git -ErrorAction Stop).Source
+            }
+            if ($PSBoundParameters.ContainsKey('RequestedVersion')) {
+                $arguments['RequestedVersion'] = $RequestedVersion
+            }
+            Get-StableReleaseIdentity @arguments | ConvertTo-Json -Compress
+            """);
+        return probe;
+    }
+
+    private static (int ExitCode, string Output) RunStableIdentityProbe(
+        string probe,
+        string repository,
+        string? requestedVersion = null)
+    {
+        var arguments = new List<string> { "-RepositoryRoot", repository };
+        if (requestedVersion is not null)
+        {
+            arguments.Add("-RequestedVersion");
+            arguments.Add(requestedVersion);
+        }
+        return RunPowerShellFile(probe, arguments.ToArray());
+    }
+
+    private static (int ExitCode, string Output) RunGit(string repository, params string[] arguments)
+    {
+        var start = new ProcessStartInfo
+        {
+            FileName = "git.exe",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        start.ArgumentList.Add("-C");
+        start.ArgumentList.Add(repository);
+        foreach (var argument in arguments) start.ArgumentList.Add(argument);
+        using var process = Process.Start(start)!;
+        var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+        Assert.True(process.WaitForExit(30_000));
+        return (process.ExitCode, output);
     }
 
     private static (int ExitCode, string Output) RunPowerShell(string command)

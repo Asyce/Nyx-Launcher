@@ -1,6 +1,6 @@
 # Nyx Desktop {{VERSION}}
 
-Development distribution for local Windows testing.
+Direct Windows distribution for Nyx.
 
 - Normal-user, per-Windows-user installation.
 - Start menu entry and separate uninstaller.
@@ -8,4 +8,4 @@ Development distribution for local Windows testing.
 - Update packages are SHA-256 checked before staging and checked again before replacement.
 - A prior app tree is retained until a staged update is confirmed or rolled back.
 
-This build is not publicly signed and is not a production release.
+This build is not publicly signed. Windows SmartScreen may warn.

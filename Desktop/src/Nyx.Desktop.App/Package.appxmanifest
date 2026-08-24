@@ -10,7 +10,7 @@
   <Identity
     Name="B8776DE2-1615-44C9-B555-DFF081435056"
     Publisher="CN=AppPublisher"
-    Version="1.0.0.0" />
+    Version="1.4.0.0" />
 
   <mp:PhoneIdentity PhoneProductId="B8776DE2-1615-44C9-B555-DFF081435056" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
