@@ -10,7 +10,7 @@ $objectRoot = Join-Path $outputRoot 'obj'
 $releaseRoot = Join-Path $outputRoot 'release'
 $vsWhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 if (-not (Test-Path -LiteralPath $vsWhere -PathType Leaf)) { throw "vswhere.exe was not found: $vsWhere" }
-$vsInstallPath = (& $vsWhere -latest -products '*' -requires 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' -property installationPath | Select-Object -First 1)
+$vsInstallPath = & $vsWhere -latest -products '*' -requires 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' -property installationPath
 $vsWhereExitCode = $LASTEXITCODE
 $vsInstallPath = ([string]$vsInstallPath).Trim()
 if ($vsWhereExitCode -ne 0 -or [String]::IsNullOrWhiteSpace($vsInstallPath)) { throw 'No Visual Studio installation with the required C++ tools was found.' }

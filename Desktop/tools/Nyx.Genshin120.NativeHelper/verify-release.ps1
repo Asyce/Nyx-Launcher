@@ -15,7 +15,7 @@ function Assert-True([bool]$Condition, [string]$Message) {
 
 $vsWhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 Assert-True (Test-Path -LiteralPath $vsWhere -PathType Leaf) "vswhere.exe was not found: $vsWhere"
-$vsInstallPath = (& $vsWhere -latest -products '*' -requires 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' -property installationPath | Select-Object -First 1)
+$vsInstallPath = & $vsWhere -latest -products '*' -requires 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' -property installationPath
 $vsWhereExitCode = $LASTEXITCODE
 $vsInstallPath = ([string]$vsInstallPath).Trim()
 Assert-True ($vsWhereExitCode -eq 0 -and -not [String]::IsNullOrWhiteSpace($vsInstallPath)) 'No Visual Studio installation with the required C++ tools was found.'
