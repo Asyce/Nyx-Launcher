@@ -378,7 +378,7 @@ public sealed class IrisLauncherShellTests
         var code = ReadAppFile("MainWindow.xaml.cs");
 
         var xaml = ReadAppFile("MainWindow.xaml");
-        Assert.Contains("presenter.SetBorderAndTitleBar(false, false)", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("SetBorderAndTitleBar", code, StringComparison.Ordinal);
         Assert.Contains("WindowStyleCaption = 0x00C00000", code, StringComparison.Ordinal);
         Assert.Contains("WindowStyleThickFrame = 0x00040000", code, StringComparison.Ordinal);
         Assert.Contains("SetWindowLongW", code, StringComparison.Ordinal);

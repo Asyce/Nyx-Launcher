@@ -61,7 +61,6 @@ public sealed partial class MainWindow : Window
         {
             presenter.IsResizable = false;
             presenter.IsMaximizable = false;
-            presenter.SetBorderAndTitleBar(false, false);
         }
         ConfigureFixedClientSize();
 
