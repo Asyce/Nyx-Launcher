@@ -61,6 +61,9 @@ public sealed class NativeSmokeScriptTests
         Assert.DoesNotContain("Screenshot", safeBlock.Groups["body"].Value, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Export", safeBlock.Groups["body"].Value, StringComparison.OrdinalIgnoreCase);
         Assert.Matches(
+            new Regex(@"function Assert-SideEffectControl \{[\s\S]*?AddSeconds\(20\)[\s\S]*?Find-AutomationIdElement -Root \$Root -AutomationId \$AutomationId[\s\S]*?Start-Sleep -Milliseconds 100[\s\S]*?SIDE_EFFECT_CONTROL_MISSING[\s\S]*?^\}", RegexOptions.Multiline | RegexOptions.CultureInvariant),
+            source);
+        Assert.Matches(
             new Regex(@"\$settings\.SetFocus\(\)\r?\n\s*Assert-FocusIs -Expected \$settings\r?\n\s*Send-SafeKey -Key Tab", RegexOptions.CultureInvariant),
             source);
         Assert.Matches(

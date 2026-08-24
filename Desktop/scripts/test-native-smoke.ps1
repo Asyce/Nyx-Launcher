@@ -490,9 +490,13 @@ function Assert-SideEffectControl {
         [Parameter(Mandatory)] [object] $Root,
         [Parameter(Mandatory)] [string] $AutomationId
     )
-    $element = Find-AutomationIdElement -Root $Root -AutomationId $AutomationId
-    if ($null -eq $element) { Throw-SmokeFailure 'SIDE_EFFECT_CONTROL_MISSING' }
-    return $element
+    $deadline = [DateTime]::UtcNow.AddSeconds(20)
+    do {
+        $element = Find-AutomationIdElement -Root $Root -AutomationId $AutomationId
+        if ($null -ne $element) { return $element }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $deadline)
+    Throw-SmokeFailure 'SIDE_EFFECT_CONTROL_MISSING'
 }
 
 function Test-IsDescendant {
