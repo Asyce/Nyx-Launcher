@@ -67,6 +67,9 @@ public sealed class NativeSmokeScriptTests
             new Regex(@"\$settings\.SetFocus\(\)\r?\n\s*Assert-FocusIs -Expected \$settings\r?\n\s*Send-SafeKey -Key Tab", RegexOptions.CultureInvariant),
             source);
         Assert.Matches(
+            new Regex(@"\$cancel\.SetFocus\(\)\r?\n\s*Assert-FocusIs -Expected \$cancel\r?\n\s*Send-SafeKey -Key ShiftTab", RegexOptions.CultureInvariant),
+            source);
+        Assert.Matches(
             new Regex(@"\$cancel\.SetFocus\(\)[\s\S]{0,120}\r?\n\s*Send-SafeKey -Key Enter", RegexOptions.CultureInvariant),
             source);
         Assert.Matches(

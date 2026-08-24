@@ -695,6 +695,7 @@ public static class NyxNativeSmokeCapture
     $cancel = Wait-ExactElement -Root $window -Name 'Cancel'
     $modal = Get-ModalContainer -Window $window -Cancel $cancel -Title $title
     $cancel.SetFocus()
+    Assert-FocusIs -Expected $cancel
     Send-SafeKey -Key ShiftTab
     if (-not (Test-IsDescendant -Element ([System.Windows.Automation.AutomationElement]::FocusedElement) -Ancestor $modal)) {
         Throw-SmokeFailure 'MODAL_FOCUS_ESCAPED'
