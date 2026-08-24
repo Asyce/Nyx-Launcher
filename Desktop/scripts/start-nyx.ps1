@@ -171,7 +171,7 @@ if ($targetFramework.Length -gt 80 -or
 $isAdministrator = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 
-if ($isAdministrator) {
+if ($isAdministrator -and -not $CheckOnly) {
     Stop-NyxStart -Code $script:ExitRegistration -Message 'Close this administrator window and start Nyx normally. The launcher itself never needs elevation.'
 }
 

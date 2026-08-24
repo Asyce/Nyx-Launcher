@@ -46,9 +46,9 @@ public sealed class DesktopStartReadinessTests
         Assert.Contains("2b85d61dd06f6e11ad86fdd6bd90339f9abc58eb", script);
         Assert.Contains("-p:Genshin120HelperSource=$genshin120Helper", script);
         Assert.Contains("-p:Genshin120HelperSha256=$genshin120HelperSha256", script);
-        Assert.Contains("if ($isAdministrator)", script);
+        Assert.Contains("if ($isAdministrator -and -not $CheckOnly)", script);
         Assert.True(
-            script.IndexOf("if ($isAdministrator)", StringComparison.Ordinal) <
+            script.IndexOf("if ($isAdministrator -and -not $CheckOnly)", StringComparison.Ordinal) <
             script.IndexOf("& $dotnet.Source restore", StringComparison.Ordinal),
             "Elevation must be refused before optional restore.");
         Assert.Contains("if ($CheckOnly -and $Restore)", script);
