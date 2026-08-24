@@ -28,17 +28,20 @@ public sealed class HoyoLiveSessionUiTests
     }
 
     [Fact]
-    public void One_launch_button_targets_the_selected_game_and_tracks_inflight_per_game()
+    public void One_launch_button_allows_different_games_and_tracks_inflight_per_game()
     {
         var page = ReadAppFile("MainPage.xaml.cs");
+        var launch = Slice(page, "private async void LaunchButton_Click", "private async void WuWaAccountStatusToggle_Click");
 
         Assert.Contains("var gameId = selected.Id;", page, StringComparison.Ordinal);
-        Assert.Contains("sessions.RequestLaunchAsync(gameId", page, StringComparison.Ordinal);
+        Assert.Contains("sessions.RequestLaunchAsync(gameId", launch, StringComparison.Ordinal);
         Assert.Contains("HashSet<string> gameActionsInFlight", page, StringComparison.Ordinal);
-        Assert.Contains("gameActionsInFlight.Add(gameId)", page, StringComparison.Ordinal);
-        Assert.Contains("gameActionsInFlight.Remove(gameId)", page, StringComparison.Ordinal);
-        Assert.Contains("Close {runningGame.DisplayName} before starting {selected.DisplayName}.", page, StringComparison.Ordinal);
-        Assert.Contains("sessions.GetSnapshot(game.Id).Status is LocalGameStatus.Running", page, StringComparison.Ordinal);
+        Assert.Contains("if (!gameActionsInFlight.Add(gameId))", launch, StringComparison.Ordinal);
+        Assert.Contains("gameActionsInFlight.Remove(gameId)", launch, StringComparison.Ordinal);
+        Assert.Contains("sessions.RequestLaunchAsync(gameId, cancellationToken)", launch, StringComparison.Ordinal);
+        Assert.DoesNotContain("Games.FirstOrDefault(game =>", launch, StringComparison.Ordinal);
+        Assert.DoesNotContain("sessions.GetSnapshot(game.Id)", launch, StringComparison.Ordinal);
+        Assert.DoesNotContain("Close {runningGame.DisplayName} before starting {selected.DisplayName}.", launch, StringComparison.Ordinal);
         Assert.DoesNotContain("sessions.RequestLaunchAsync(\"gi\"", page, StringComparison.Ordinal);
     }
 

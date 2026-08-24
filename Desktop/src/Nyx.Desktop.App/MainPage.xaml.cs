@@ -1032,17 +1032,6 @@ public sealed partial class MainPage : Page
         {
             return;
         }
-        if (gameId is "gi" or "hsr" or "zzz"
-            && Games.FirstOrDefault(game =>
-                game.Id != gameId
-                && (game.Id is "gi" or "hsr" or "zzz")
-                && sessions.GetSnapshot(game.Id).Status is LocalGameStatus.Running) is { } runningGame)
-        {
-            SetOfficialLauncherStatus(
-                gameId,
-                $"Close {runningGame.DisplayName} before starting {selected.DisplayName}.");
-            return;
-        }
         if (!gameActionsInFlight.Add(gameId))
         {
             return;
