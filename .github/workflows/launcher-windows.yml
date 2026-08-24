@@ -1,0 +1,96 @@
+name: Nyx Desktop Windows
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify and package
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: '10.0.100'
+
+      - name: Restore with NuGet audit
+        shell: pwsh
+        run: dotnet restore Desktop\Nyx.Desktop.slnx -p:NuGetAudit=true -p:NuGetAuditMode=all '-warnAsError:NU1901;NU1902;NU1903;NU1904'
+
+      - name: Build Release
+        shell: pwsh
+        run: dotnet build Desktop\Nyx.Desktop.slnx --configuration Release --no-restore --verbosity minimal
+
+      - name: Run .NET tests
+        shell: pwsh
+        run: dotnet test Desktop\Nyx.Desktop.slnx --configuration Release --no-build --no-restore --verbosity minimal
+
+      - name: Run locked Rust tests
+        shell: pwsh
+        run: cargo test --locked --manifest-path Extractor\Achievements\Cargo.toml
+
+      - name: Build stable package
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        shell: pwsh
+        run: .\Desktop\packaging\build-stable-package.ps1
+
+      - name: Build development package
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        shell: pwsh
+        run: .\Desktop\packaging\build-development-package.ps1
+
+      - name: Upload sealed package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: nyx-desktop-package
+          if-no-files-found: error
+          path: |
+            Desktop/packaging/artifacts/*.zip
+            Desktop/packaging/artifacts/*.zip.sha256
+            Desktop/packaging/artifacts/*.release.json
+
+  release:
+    name: Create GitHub release
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    needs: verify
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download sealed package
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: nyx-desktop-package
+          path: Desktop/packaging/artifacts
+
+      - name: Create latest release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $artifactRoot = Join-Path $env:GITHUB_WORKSPACE 'Desktop\packaging\artifacts'
+          $assets = @(
+            Get-ChildItem -LiteralPath $artifactRoot -File -Filter '*.zip'
+            Get-ChildItem -LiteralPath $artifactRoot -File -Filter '*.zip.sha256'
+            Get-ChildItem -LiteralPath $artifactRoot -File -Filter '*.release.json'
+          )
+          if ($assets.Count -ne 3) {
+            throw "Expected exactly three release assets, found $($assets.Count)."
+          }
+          $assetPaths = @($assets | ForEach-Object { $_.FullName })
+          & gh release create $env:GITHUB_REF_NAME @assetPaths --verify-tag --generate-notes --latest
+          if ($LASTEXITCODE -ne 0) {
+            throw 'GitHub release creation failed.'
+          }
