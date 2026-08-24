@@ -170,6 +170,7 @@ cargo check --all-targets --locked
 cargo clippy --all-targets --locked -- -D warnings
 cargo test --all-targets --locked
 cargo build --release --locked
+python -m pip install --require-hashes -r tools/requirements.txt
 python tools/verify_release.py target/release/pengo-achievements-launcher.exe
 ```
 

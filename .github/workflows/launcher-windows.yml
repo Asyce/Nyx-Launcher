@@ -41,6 +41,10 @@ jobs:
         # These two integration tests require the reviewed Npcap 1.88 installation and run on PENGO.
         run: cargo test --locked --manifest-path Extractor\Achievements\Cargo.toml -- --skip npcap::tests::actual_compiled_filters_accept_only_the_selected_games_udp_frames --skip npcap::tests::reviewed_dll_loads_without_capture_and_preloading_is_rejected
 
+      - name: Install PE verifier dependency
+        shell: pwsh
+        run: python -m pip install --disable-pip-version-check --require-hashes -r Extractor\Achievements\tools\requirements.txt
+
       - name: Build stable package
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         shell: pwsh
