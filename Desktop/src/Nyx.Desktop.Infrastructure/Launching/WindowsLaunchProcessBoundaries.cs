@@ -309,71 +309,71 @@ public sealed class Genshin120FpsProcessStarter : IGenshin120FpsProcessStarter, 
             return Genshin120FpsStartStatus.HelperUnavailable;
         }
         using (helper)
-        try
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            using var game = BoundExecutable.Open(
-                specification.FileName,
-                specification.WorkingDirectory,
-                expectedSha256: null);
-            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                using var game = BoundExecutable.Open(
+                    specification.FileName,
+                    specification.WorkingDirectory,
+                    expectedSha256: null);
+                cancellationToken.ThrowIfCancellationRequested();
 
-            var correlation = Guid.NewGuid().ToString("D");
-            using var pipe = new NamedPipeServerStream(
-                PipePrefix + correlation,
-                PipeDirection.InOut,
-                1,
-                PipeTransmissionMode.Byte,
-                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly,
-                4096,
-                4096);
-            cancellationToken.ThrowIfCancellationRequested();
-            using var process = StartElevatedHelper(correlation, helper);
-            cancellationToken.ThrowIfCancellationRequested();
-            using var connectionBudget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            connectionBudget.CancelAfter(PipeConnectionTimeout);
-            await pipe.WaitForConnectionAsync(connectionBudget.Token).ConfigureAwait(false);
-            if (!GetNamedPipeClientProcessId(pipe.SafePipeHandle, out var clientProcessId)
-                || !IsExpectedClientProcessId(clientProcessId, process.Id))
+                var correlation = Guid.NewGuid().ToString("D");
+                using var pipe = new NamedPipeServerStream(
+                    PipePrefix + correlation,
+                    PipeDirection.InOut,
+                    1,
+                    PipeTransmissionMode.Byte,
+                    PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly,
+                    4096,
+                    4096);
+                cancellationToken.ThrowIfCancellationRequested();
+                using var process = StartElevatedHelper(correlation, helper);
+                cancellationToken.ThrowIfCancellationRequested();
+                using var connectionBudget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                connectionBudget.CancelAfter(PipeConnectionTimeout);
+                await pipe.WaitForConnectionAsync(connectionBudget.Token).ConfigureAwait(false);
+                if (!GetNamedPipeClientProcessId(pipe.SafePipeHandle, out var clientProcessId)
+                    || !IsExpectedClientProcessId(clientProcessId, process.Id))
+                {
+                    return Genshin120FpsStartStatus.Failed;
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                var requestBytes = SerializeRequest(specification, game.Sha256);
+                cancellationToken.ThrowIfCancellationRequested();
+                var requestWritten = await WriteRequestAfterHandoffAsync(
+                    pipe,
+                    requestBytes,
+                    RequestWriteTimeout).ConfigureAwait(false);
+                var result = requestWritten
+                    ? await ReadTerminalResponseAsync(pipe, responseTimeout).ConfigureAwait(false)
+                    : Genshin120FpsStartStatus.GameStartUnconfirmed;
+                return result is Genshin120FpsStartStatus.GameStartUnconfirmed
+                    && TryRecoverExitedHelperResult(process, out var recovered)
+                        ? recovered
+                        : result;
+            }
+            catch (Win32Exception exception) when (exception.NativeErrorCode == 1223)
+            {
+                return Genshin120FpsStartStatus.ElevationCancelled;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                return Genshin120FpsStartStatus.TimedOut;
+            }
+            catch (Exception exception) when (exception is IOException
+                                                  or UnauthorizedAccessException
+                                                  or SecurityException
+                                                  or InvalidOperationException
+                                                  or Win32Exception)
             {
                 return Genshin120FpsStartStatus.Failed;
             }
-
-            cancellationToken.ThrowIfCancellationRequested();
-            var requestBytes = SerializeRequest(specification, game.Sha256);
-            cancellationToken.ThrowIfCancellationRequested();
-            var requestWritten = await WriteRequestAfterHandoffAsync(
-                pipe,
-                requestBytes,
-                RequestWriteTimeout).ConfigureAwait(false);
-            var result = requestWritten
-                ? await ReadTerminalResponseAsync(pipe, responseTimeout).ConfigureAwait(false)
-                : Genshin120FpsStartStatus.GameStartUnconfirmed;
-            return result is Genshin120FpsStartStatus.GameStartUnconfirmed
-                && TryRecoverExitedHelperResult(process, out var recovered)
-                    ? recovered
-                    : result;
-        }
-        catch (Win32Exception exception) when (exception.NativeErrorCode == 1223)
-        {
-            return Genshin120FpsStartStatus.ElevationCancelled;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (OperationCanceledException)
-        {
-            return Genshin120FpsStartStatus.TimedOut;
-        }
-        catch (Exception exception) when (exception is IOException
-                                              or UnauthorizedAccessException
-                                              or SecurityException
-                                              or InvalidOperationException
-                                              or Win32Exception)
-        {
-            return Genshin120FpsStartStatus.Failed;
-        }
     }
 
     private Process StartElevatedHelper(string correlation, BoundExecutable helper)
@@ -459,13 +459,13 @@ public sealed class Genshin120FpsProcessStarter : IGenshin120FpsProcessStarter, 
     }
 
     private static Genshin120FpsStartStatus ParseResultCode(uint resultCode) => resultCode switch
-        {
-            0 => Genshin120FpsStartStatus.Ready,
-            1 => Genshin120FpsStartStatus.GameStartedAttachFailed,
-            2 => Genshin120FpsStartStatus.GameStartedAttachTimedOut,
-            3 or 4 => Genshin120FpsStartStatus.Failed,
-            _ => Genshin120FpsStartStatus.GameStartUnconfirmed,
-        };
+    {
+        0 => Genshin120FpsStartStatus.Ready,
+        1 => Genshin120FpsStartStatus.GameStartedAttachFailed,
+        2 => Genshin120FpsStartStatus.GameStartedAttachTimedOut,
+        3 or 4 => Genshin120FpsStartStatus.Failed,
+        _ => Genshin120FpsStartStatus.GameStartUnconfirmed,
+    };
 
     private static bool TryRecoverExitedHelperResult(
         Process process,

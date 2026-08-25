@@ -367,92 +367,95 @@ public sealed class ExportCoordinator : IAsyncDisposable
         {
             await PublishAsync(entry, "job", ExportJobState.PendingLaunch.ToString(), null, cancellationToken).ConfigureAwait(false);
 
-        // Pull baseline and achievement preparation are independent preflights.
-        // Neither can veto launch or the other export lane.
-        IPullExportSession? pullSession = null;
-        if ((requested & ExportKind.Pulls) != 0)
-        {
-            entry.SetPulls(ExportTaskState.Preparing);
-            await PublishAsync(entry, "pulls", ExportTaskState.Preparing.ToString(), null, CancellationToken.None).ConfigureAwait(false);
-            try
+            // Pull baseline and achievement preparation are independent preflights.
+            // Neither can veto launch or the other export lane.
+            IPullExportSession? pullSession = null;
+            if ((requested & ExportKind.Pulls) != 0)
             {
-                pullSession = await pulls.PrepareAsync(entry.GameId, entry.Token).ConfigureAwait(false);
+                entry.SetPulls(ExportTaskState.Preparing);
+                await PublishAsync(entry, "pulls", ExportTaskState.Preparing.ToString(), null, CancellationToken.None).ConfigureAwait(false);
+                try
+                {
+                    pullSession = await pulls.PrepareAsync(entry.GameId, entry.Token).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    var code = ExportErrorSanitizer.Code(exception);
+                    entry.SetPulls(code == "canceled" ? ExportTaskState.Canceled : ExportTaskState.Failed, errorCode: code);
+                    entry.TryComplete();
+                    await PublishAsync(entry, "pulls", entry.Snapshot.Pulls.State.ToString(), code, CancellationToken.None).ConfigureAwait(false);
+                }
             }
-            catch (Exception exception)
-            {
-                var code = ExportErrorSanitizer.Code(exception);
-                entry.SetPulls(code == "canceled" ? ExportTaskState.Canceled : ExportTaskState.Failed, errorCode: code);
-                entry.TryComplete();
-                await PublishAsync(entry, "pulls", entry.Snapshot.Pulls.State.ToString(), code, CancellationToken.None).ConfigureAwait(false);
-            }
-        }
 
-        IAchievementExportSession? achievementSession = null;
-        if ((requested & ExportKind.Achievements) != 0)
-        {
-            entry.SetAchievements(ExportTaskState.Preparing);
-            await PublishAsync(entry, "achievements", ExportTaskState.Preparing.ToString(), null, CancellationToken.None).ConfigureAwait(false);
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(entry.Token, cancellationToken);
-            timeout.CancelAfter(achievementPrepareTimeout);
+            IAchievementExportSession? achievementSession = null;
+            if ((requested & ExportKind.Achievements) != 0)
+            {
+                entry.SetAchievements(ExportTaskState.Preparing);
+                await PublishAsync(entry, "achievements", ExportTaskState.Preparing.ToString(), null, CancellationToken.None).ConfigureAwait(false);
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(entry.Token, cancellationToken);
+                timeout.CancelAfter(achievementPrepareTimeout);
+                try
+                {
+                    achievementSession = await achievements.StartAsync(
+                        entry.GameId,
+                        null,
+                        entry.Token).ConfigureAwait(false);
+                    entry.SetAchievementLauncherIndependent(
+                        achievementSession is ILauncherIndependentAchievementExportSession);
+                    await achievementSession.Ready.WaitAsync(timeout.Token).ConfigureAwait(false);
+                    entry.SetAchievements(ExportTaskState.Running);
+                    await PublishAsync(entry, "achievements", ExportTaskState.Running.ToString(), null, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    if (achievementSession is not null) await achievementSession.DisposeAsync().ConfigureAwait(false);
+                    achievementSession = null;
+                    var code = timeout.IsCancellationRequested && !entry.Token.IsCancellationRequested && !cancellationToken.IsCancellationRequested
+                        ? "timed-out"
+                        : ExportErrorSanitizer.Code(exception);
+                    entry.SetAchievements(code == "canceled" ? ExportTaskState.Canceled : ExportTaskState.Failed, errorCode: code);
+                    entry.TryComplete();
+                    await PublishAsync(entry, "achievements", entry.Snapshot.Achievements.State.ToString(), code, CancellationToken.None).ConfigureAwait(false);
+                }
+            }
+
+            bool admitted;
             try
             {
-                achievementSession = await achievements.StartAsync(
-                    entry.GameId,
-                    null,
-                    entry.Token).ConfigureAwait(false);
-                entry.SetAchievementLauncherIndependent(
-                    achievementSession is ILauncherIndependentAchievementExportSession);
-                await achievementSession.Ready.WaitAsync(timeout.Token).ConfigureAwait(false);
-                entry.SetAchievements(ExportTaskState.Running);
-                await PublishAsync(entry, "achievements", ExportTaskState.Running.ToString(), null, CancellationToken.None).ConfigureAwait(false);
+                admitted = !cancellationToken.IsCancellationRequested
+                    && !entry.Token.IsCancellationRequested
+                    && Volatile.Read(ref closed) == 0
+                    && await launchAdmission(cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception exception)
+            catch (OperationCanceledException) { admitted = false; }
+            catch (Exception) { admitted = false; }
+            if (!admitted)
             {
+                if (pullSession is not null) await pullSession.DisposeAsync().ConfigureAwait(false);
                 if (achievementSession is not null) await achievementSession.DisposeAsync().ConfigureAwait(false);
-                achievementSession = null;
-                var code = timeout.IsCancellationRequested && !entry.Token.IsCancellationRequested && !cancellationToken.IsCancellationRequested
-                    ? "timed-out"
-                    : ExportErrorSanitizer.Code(exception);
-                entry.SetAchievements(code == "canceled" ? ExportTaskState.Canceled : ExportTaskState.Failed, errorCode: code);
-                entry.TryComplete();
-                await PublishAsync(entry, "achievements", entry.Snapshot.Achievements.State.ToString(), code, CancellationToken.None).ConfigureAwait(false);
+                entry.Cancel(forceComplete: true);
+                await PublishAsync(entry, "job", ExportJobState.Canceled.ToString(), "launch-not-admitted", CancellationToken.None).ConfigureAwait(false);
+                return new(false, entry.Snapshot.JobId, entry.Snapshot);
             }
-        }
 
-        bool admitted;
-        try { admitted = !cancellationToken.IsCancellationRequested
-                && !entry.Token.IsCancellationRequested
-                && Volatile.Read(ref closed) == 0
-                && await launchAdmission(cancellationToken).ConfigureAwait(false); }
-        catch (OperationCanceledException) { admitted = false; }
-        catch (Exception) { admitted = false; }
-        if (!admitted)
-        {
-            if (pullSession is not null) await pullSession.DisposeAsync().ConfigureAwait(false);
-            if (achievementSession is not null) await achievementSession.DisposeAsync().ConfigureAwait(false);
-            entry.Cancel(forceComplete: true);
-            await PublishAsync(entry, "job", ExportJobState.Canceled.ToString(), "launch-not-admitted", CancellationToken.None).ConfigureAwait(false);
-            return new(false, entry.Snapshot.JobId, entry.Snapshot);
-        }
+            entry.MarkRunning();
+            entry.SetLaunchSettled(
+                admitted: true,
+                emptyState: requested == ExportKind.None
+                    ? unsupported != ExportKind.None
+                        ? ExportJobState.Unsupported
+                        : ExportJobState.Completed
+                    : null);
+            if (achievementSession is not null)
+                _ = Task.Run(() => CompleteAchievementsAsync(entry, achievementSession));
+            if (requested == ExportKind.None)
+            {
+                await PublishAsync(entry, "job", entry.Snapshot.State.ToString(), null, CancellationToken.None).ConfigureAwait(false);
+                return new(true, entry.Snapshot.JobId, entry.Snapshot);
+            }
 
-        entry.MarkRunning();
-        entry.SetLaunchSettled(
-            admitted: true,
-            emptyState: requested == ExportKind.None
-                ? unsupported != ExportKind.None
-                    ? ExportJobState.Unsupported
-                    : ExportJobState.Completed
-                : null);
-        if (achievementSession is not null)
-            _ = Task.Run(() => CompleteAchievementsAsync(entry, achievementSession));
-        if (requested == ExportKind.None)
-        {
-            await PublishAsync(entry, "job", entry.Snapshot.State.ToString(), null, CancellationToken.None).ConfigureAwait(false);
+            if (pullSession is not null) _ = Task.Run(() => RunPullsAsync(entry, pullSession));
             return new(true, entry.Snapshot.JobId, entry.Snapshot);
-        }
-
-        if (pullSession is not null) _ = Task.Run(() => RunPullsAsync(entry, pullSession));
-        return new(true, entry.Snapshot.JobId, entry.Snapshot);
         }
         finally
         {

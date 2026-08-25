@@ -316,27 +316,27 @@ public sealed class LauncherStateStore
         string provider,
         bool cleanupPending,
         bool? accountAccess) => state with
-    {
-        Preferences = state.Preferences with
         {
-            FeatureFlags = provider switch
+            Preferences = state.Preferences with
             {
-                "HoYoLAB" => state.Preferences.FeatureFlags with
+                FeatureFlags = provider switch
                 {
-                    HoyoLabAccountAccess = accountAccess
-                        ?? state.Preferences.FeatureFlags.HoyoLabAccountAccess,
-                    HoyoLabAccountCleanupPending = cleanupPending,
+                    "HoYoLAB" => state.Preferences.FeatureFlags with
+                    {
+                        HoyoLabAccountAccess = accountAccess
+                            ?? state.Preferences.FeatureFlags.HoyoLabAccountAccess,
+                        HoyoLabAccountCleanupPending = cleanupPending,
+                    },
+                    "SKPORT" => state.Preferences.FeatureFlags with
+                    {
+                        SkportAccountAccess = accountAccess
+                            ?? state.Preferences.FeatureFlags.SkportAccountAccess,
+                        SkportAccountCleanupPending = cleanupPending,
+                    },
+                    _ => throw new ArgumentOutOfRangeException(nameof(provider)),
                 },
-                "SKPORT" => state.Preferences.FeatureFlags with
-                {
-                    SkportAccountAccess = accountAccess
-                        ?? state.Preferences.FeatureFlags.SkportAccountAccess,
-                    SkportAccountCleanupPending = cleanupPending,
-                },
-                _ => throw new ArgumentOutOfRangeException(nameof(provider)),
             },
-        },
-    };
+        };
 
     private static void WriteStateReplacing(string path, LauncherState state)
     {

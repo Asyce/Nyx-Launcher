@@ -1,4 +1,8 @@
 .gitattributes text eol=lf
+.editorconfig text eol=lf
+*.cs text eol=lf
+*.rs text eol=lf
+*.yml text eol=lf
 *.ps1 text eol=crlf
 
 # Deployment verifies these generated launcher assets byte-for-byte against Git.

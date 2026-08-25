@@ -960,7 +960,7 @@ public sealed class HoyoLiveSessionUiTests
     {
         var xaml = ReadAppFile("MainPage.xaml");
         var page = ReadAppFile("MainPage.xaml.cs");
-        var accountButton = Slice(xaml, "x:Name=\"ChangePublisherAccountButton\"", "/>" );
+        var accountButton = Slice(xaml, "x:Name=\"ChangePublisherAccountButton\"", "/>");
 
         Assert.Contains("x:Name=\"AccountAndToolsIdentityText\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name=\"HoYoLAB character identity\"", xaml, StringComparison.Ordinal);

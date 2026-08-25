@@ -336,23 +336,23 @@ public static class LauncherStateMigrations
         var normalized = dto is null
             ? LauncherFeatureFlags.Defaults()
             : new LauncherFeatureFlags
-        {
-            GiPulls = dto.GiPulls ?? true,
-            GiAchievements = dto.GiAchievements ?? true,
-            HsrPulls = dto.HsrPulls ?? true,
-            HsrAchievements = dto.HsrAchievements ?? true,
-            ZzzPulls = dto.ZzzPulls ?? true,
-            ZzzAchievements = dto.ZzzAchievements ?? false,
-            WuWaPulls = dto.WuWaPulls ?? true,
-            WuWaAchievements = dto.WuWaAchievements ?? false,
-            WuWaAccountStatus = dto.WuWaAccountStatus ?? false,
-            HoyoLabAccountAccess = dto.HoyoLabAccountAccess ?? false,
-            SkportAccountAccess = dto.SkportAccountAccess ?? false,
-            HoyoLabAccountCleanupPending = dto.HoyoLabAccountCleanupPending ?? false,
-            SkportAccountCleanupPending = dto.SkportAccountCleanupPending ?? false,
-            EndfieldPulls = dto.EndfieldPulls ?? false,
-            EndfieldAchievements = dto.EndfieldAchievements ?? false,
-        };
+            {
+                GiPulls = dto.GiPulls ?? true,
+                GiAchievements = dto.GiAchievements ?? true,
+                HsrPulls = dto.HsrPulls ?? true,
+                HsrAchievements = dto.HsrAchievements ?? true,
+                ZzzPulls = dto.ZzzPulls ?? true,
+                ZzzAchievements = dto.ZzzAchievements ?? false,
+                WuWaPulls = dto.WuWaPulls ?? true,
+                WuWaAchievements = dto.WuWaAchievements ?? false,
+                WuWaAccountStatus = dto.WuWaAccountStatus ?? false,
+                HoyoLabAccountAccess = dto.HoyoLabAccountAccess ?? false,
+                SkportAccountAccess = dto.SkportAccountAccess ?? false,
+                HoyoLabAccountCleanupPending = dto.HoyoLabAccountCleanupPending ?? false,
+                SkportAccountCleanupPending = dto.SkportAccountCleanupPending ?? false,
+                EndfieldPulls = dto.EndfieldPulls ?? false,
+                EndfieldAchievements = dto.EndfieldAchievements ?? false,
+            };
 
         // Version 4 activates the two pull lanes only after their desktop
         // writers, Pengo round trips, and routing gates are proven. Version 4+

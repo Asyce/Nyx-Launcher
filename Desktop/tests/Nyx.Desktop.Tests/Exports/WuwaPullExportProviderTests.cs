@@ -260,7 +260,8 @@ public sealed class WuwaPullExportProviderTests
                 ? "[{\"id\":\"same\",\"cardPoolType\":1,\"resourceId\":\"r\",\"qualityLevel\":5,\"name\":\"Item\",\"resourceType\":\"Character\",\"time\":\"2026-07-17 12:34:56\",\"count\":1},{\"id\":\"same\",\"cardPoolType\":1,\"resourceId\":\"r\",\"qualityLevel\":5,\"name\":\"Item\",\"resourceType\":\"Character\",\"time\":\"2026-07-17 12:34:56\",\"count\":1}]"
                 : "[]";
             return JsonResponse("{\"code\":0,\"data\":" + data + "}");
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         var api = new WuwaPullApiClient(http, new PullExportSafetyLimits(), new NoWaitWuwaPullRequestPacer());
 
         var archive = await api.DownloadAsync(auth, default);
@@ -281,7 +282,8 @@ public sealed class WuwaPullExportProviderTests
                 ? "[{\"cardPoolType\":\"Resonators Accurate Modulation\",\"resourceId\":\"r\",\"qualityLevel\":5,\"name\":\"Item\",\"resourceType\":\"Resonator\",\"time\":\"2026-07-17 12:34:56\",\"count\":1},{\"cardPoolType\":\"Resonators Accurate Modulation\",\"resourceId\":\"r\",\"qualityLevel\":5,\"name\":\"Item\",\"resourceType\":\"Resonator\",\"time\":\"2026-07-17 12:34:56\",\"count\":1}]"
                 : "[]";
             return JsonResponse("{\"code\":0,\"data\":" + data + "}");
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         var api = new WuwaPullApiClient(http, new PullExportSafetyLimits(), new NoWaitWuwaPullRequestPacer());
 
         var archive = await api.DownloadAsync(auth, default);
@@ -302,7 +304,8 @@ public sealed class WuwaPullExportProviderTests
         {
             calls++;
             return Task.FromResult(JsonResponse("{\"code\":0,\"uid\":\"999999999\",\"data\":[]}"));
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         var api = new WuwaPullApiClient(http, new PullExportSafetyLimits(), new NoWaitWuwaPullRequestPacer());
 
         var error = await Assert.ThrowsAsync<PullExportException>(async () => await api.DownloadAsync(auth, default));
@@ -321,7 +324,8 @@ public sealed class WuwaPullExportProviderTests
         {
             calls++;
             return Task.FromResult(JsonResponse("{\"code\":0,\"data\":[]}"));
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         var api = new WuwaPullApiClient(http, new PullExportSafetyLimits(), pacer);
         var archive = await api.DownloadAsync(auth, default);
         Assert.Empty(archive.Records);
@@ -334,7 +338,8 @@ public sealed class WuwaPullExportProviderTests
             var redirect = new HttpResponseMessage(HttpStatusCode.Redirect);
             redirect.Headers.Location = new Uri("https://attacker.invalid/steal");
             return Task.FromResult(redirect);
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         var redirectApi = new WuwaPullApiClient(redirectHttp, new PullExportSafetyLimits(), new NoWaitWuwaPullRequestPacer());
         var redirectError = await Assert.ThrowsAsync<PullExportException>(async () => await redirectApi.DownloadAsync(auth, default));
         Assert.Equal(PullExportErrorCodes.UpstreamInvalid, redirectError.ErrorCode);
@@ -346,7 +351,8 @@ public sealed class WuwaPullExportProviderTests
             return Task.FromResult(pool == 2
                 ? JsonResponse("{\"code\":-1,\"data\":[]}")
                 : JsonResponse("{\"code\":0,\"data\":[]}"));
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         var partialApi = new WuwaPullApiClient(partialHttp, new PullExportSafetyLimits(), new NoWaitWuwaPullRequestPacer());
         var partialError = await Assert.ThrowsAsync<PullExportException>(async () => await partialApi.DownloadAsync(auth, default));
         Assert.Equal(PullExportErrorCodes.UpstreamRejected, partialError.ErrorCode);
@@ -360,7 +366,8 @@ public sealed class WuwaPullExportProviderTests
         {
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
             return JsonResponse("{}");
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         var api = new WuwaPullApiClient(
             http,
             new PullExportSafetyLimits(RequestTimeout: TimeSpan.FromMilliseconds(100)),
@@ -373,7 +380,8 @@ public sealed class WuwaPullExportProviderTests
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(new string('x', 2_100_000), Encoding.UTF8, "application/json"),
-            }))) { Timeout = Timeout.InfiniteTimeSpan };
+            })))
+        { Timeout = Timeout.InfiniteTimeSpan };
         var oversizeApi = new WuwaPullApiClient(
             oversizeHttp,
             new PullExportSafetyLimits(MaximumResponseBytes: 1_024),
@@ -385,7 +393,8 @@ public sealed class WuwaPullExportProviderTests
         {
             await Task.Delay(TimeSpan.FromSeconds(2), token);
             return JsonResponse("{\"code\":0,\"data\":[]}");
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         var timeoutApi = new WuwaPullApiClient(
             timeoutHttp,
             new PullExportSafetyLimits(RequestTimeout: TimeSpan.FromMilliseconds(100)),

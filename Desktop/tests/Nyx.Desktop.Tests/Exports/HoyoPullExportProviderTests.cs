@@ -229,7 +229,8 @@ public sealed class HoyoPullExportProviderTests
         {
             requests.Add(request.RequestUri!);
             return JsonResponse(Page([]));
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         var api = new HoyoPullApiClient(http, new PullExportSafetyLimits(), new NoWaitPullRequestPacer());
         var auth = new HoyoAuthQuery([
             new("auth_appid", "webview_gacha"), new("authkey", "ZZZ_SANITIZED_TEST_TOKEN"),
@@ -264,7 +265,8 @@ public sealed class HoyoPullExportProviderTests
             return JsonResponse(Page(type == "2"
                 ? [Record(type, "100", rankType: "4"), Record(type, "100", rankType: "4")]
                 : []));
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         var validApi = new HoyoPullApiClient(validHttp, new PullExportSafetyLimits(), new NoWaitPullRequestPacer());
         var auth = new HoyoAuthQuery([new("authkey", "DEDUP_TEST_TOKEN"), new("lang", "en-us")]);
 
@@ -277,7 +279,8 @@ public sealed class HoyoPullExportProviderTests
             return JsonResponse(Page(type == "2"
                 ? [Record(type, "100", rankType: "4"), Record(type, "100", rankType: "4", uid: "600000002")]
                 : []));
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         var mixedApi = new HoyoPullApiClient(mixedHttp, new PullExportSafetyLimits(), new NoWaitPullRequestPacer());
 
         var error = await Assert.ThrowsAsync<PullExportException>(async () =>
@@ -302,7 +305,8 @@ public sealed class HoyoPullExportProviderTests
             if (query["gacha_type"] == "2" && query["end_id"] == "0")
                 return JsonResponse(Page(Enumerable.Range(1, 20).Select(id => Record("2", id.ToString(), rankType: "4")).ToArray()));
             return JsonResponse(new { retcode = -1, message = "rejected" });
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         using var provider = new HoyoPullExportProvider(http, profile, downloads, new NoWaitPullRequestPacer());
 
         await using var session = await provider.PrepareAsync("zzz", default);
@@ -715,19 +719,19 @@ public sealed class HoyoPullExportProviderTests
         string gachaId = "",
         string rankType = "5",
         string uid = "600000001") => new
-    {
-        uid,
-        gacha_id = gachaId,
-        gacha_type = gachaType,
-        item_id = "1001",
-        count = "1",
-        time = "2026-07-17 12:34:56",
-        name = "Test Item",
-        lang = "en-us",
-        item_type = "Character",
-        rank_type = rankType,
-        id,
-    };
+        {
+            uid,
+            gacha_id = gachaId,
+            gacha_type = gachaType,
+            item_id = "1001",
+            count = "1",
+            time = "2026-07-17 12:34:56",
+            name = "Test Item",
+            lang = "en-us",
+            item_type = "Character",
+            rank_type = rankType,
+            id,
+        };
 
     private static HttpResponseMessage JsonResponse(object value) => new(HttpStatusCode.OK)
     {
@@ -773,7 +777,8 @@ public sealed class HoyoPullExportProviderTests
             {
                 Interlocked.Increment(ref requests);
                 return JsonResponse(Page([]));
-            })) { Timeout = Timeout.InfiniteTimeSpan };
+            }))
+            { Timeout = Timeout.InfiniteTimeSpan };
             Provider = new HoyoPullExportProvider(
                 http,
                 temp.Combine("profile"),

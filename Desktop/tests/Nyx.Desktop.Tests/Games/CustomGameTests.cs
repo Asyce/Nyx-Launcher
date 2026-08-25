@@ -47,7 +47,10 @@ public sealed class CustomGameTests
         var probe = new FakeProbe();
         var existing = new CustomGameDefinition
         {
-            Id = "custom-old", Name = "Old", ExecutablePath = @"C:\Games\game.exe", IconPath = @"C:\Games\old.png",
+            Id = "custom-old",
+            Name = "Old",
+            ExecutablePath = @"C:\Games\game.exe",
+            IconPath = @"C:\Games\old.png",
         };
         var draft = new CustomGameDraft("New", @"C:\Games\game.exe", @"C:\Games\icon.png", RawArguments: "--safe & whoami");
         var unsafeResult = CustomGameValidator.Validate(draft, [existing], probe);

@@ -967,7 +967,8 @@ public sealed class LauncherVisualsCacheTests
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
                 throw new InvalidOperationException("Unreachable.");
-            })) { Timeout = TimeSpan.FromMilliseconds(20) })
+            }))
+            { Timeout = TimeSpan.FromMilliseconds(20) })
             {
                 Assert.Null(await new LauncherVisualsCache(root, timedHttp).RefreshAsync("ae"));
             }
@@ -1491,7 +1492,8 @@ public sealed class LauncherVisualsCacheTests
             try { File.CreateSymbolicLink(link, target); }
             catch (Exception exception) when (exception is IOException
                 or UnauthorizedAccessException
-                or PlatformNotSupportedException) { return Task.CompletedTask; }
+                or PlatformNotSupportedException)
+            { return Task.CompletedTask; }
             WriteState(root, "ae", hash, "video", [new(hash + ".mp4", bytes.Length, hash)]);
 
             Assert.Null(new LauncherVisualsCache(root).TryLoadLastGood("ae"));
@@ -1522,7 +1524,8 @@ public sealed class LauncherVisualsCacheTests
             try { Directory.CreateSymbolicLink(probe, external); Directory.Delete(probe); }
             catch (Exception exception) when (exception is IOException
                 or UnauthorizedAccessException
-                or PlatformNotSupportedException) { return; }
+                or PlatformNotSupportedException)
+            { return; }
 
             if (mode == "swapped-game") Directory.CreateDirectory(link);
             else
@@ -1585,15 +1588,15 @@ public sealed class LauncherVisualsCacheTests
         string mediaType,
         char revision = 'a',
         string gameId = "gi") => JsonSerializer.Serialize(new
-    {
-        schema = 1,
-        revision = new string(revision, 64),
-        games = new Dictionary<string, object>
         {
-            [gameId] = new
+            schema = 1,
+            revision = new string(revision, 64),
+            games = new Dictionary<string, object>
             {
-                kind = mediaType.StartsWith("video/", StringComparison.Ordinal) ? "video" : "image",
-                assets = new[]
+                [gameId] = new
+                {
+                    kind = mediaType.StartsWith("video/", StringComparison.Ordinal) ? "video" : "image",
+                    assets = new[]
                 {
                     new
                     {
@@ -1603,9 +1606,9 @@ public sealed class LauncherVisualsCacheTests
                         mediaType,
                     },
                 },
+                },
             },
-        },
-    });
+        });
 
     private static string MediaExtension(string mediaType) => mediaType switch
     {

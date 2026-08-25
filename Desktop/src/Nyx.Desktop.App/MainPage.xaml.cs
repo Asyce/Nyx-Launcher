@@ -6191,12 +6191,12 @@ public sealed partial class MainPage : Page
                 : !pullsOffered && !achievementsOffered
                 ? "No supported export tools for this game."
                 : (armed.PullsArmed, armed.AchievementsArmed) switch
-            {
-                (true, true) => "Pull and achievement exports will start with the next launch.",
-                (true, false) => "Pull export will start with the next launch.",
-                (false, true) => "Achievement export will start with the next launch.",
-                _ => string.Empty,
-            };
+                {
+                    (true, true) => "Pull and achievement exports will start with the next launch.",
+                    (true, false) => "Pull export will start with the next launch.",
+                    (false, true) => "Achievement export will start with the next launch.",
+                    _ => string.Empty,
+                };
             NyxToolsStatusText.Text = kinds;
         }
         SetStableExportStatus(NyxToolsStatusText.Text);
@@ -7152,13 +7152,13 @@ public sealed partial class MainPage : Page
                 : checkIn is not null
                     ? $"DAY EXPIRED · {connection.ToString().ToUpperInvariant()}"
                     : connection switch
-                {
-                    PublisherConnectionState.Connected => "CONNECTED",
-                    PublisherConnectionState.Connecting => "CONNECTING",
-                    PublisherConnectionState.LoginRequired => "LOGIN NEEDED",
-                    PublisherConnectionState.NeedsReview => "TRY AGAIN",
-                    _ => "PRIVATE SESSION",
-                };
+                    {
+                        PublisherConnectionState.Connected => "CONNECTED",
+                        PublisherConnectionState.Connecting => "CONNECTING",
+                        PublisherConnectionState.LoginRequired => "LOGIN NEEDED",
+                        PublisherConnectionState.NeedsReview => "TRY AGAIN",
+                        _ => "PRIVATE SESSION",
+                    };
 
         if (gameId != "ae" && resource is null)
         {

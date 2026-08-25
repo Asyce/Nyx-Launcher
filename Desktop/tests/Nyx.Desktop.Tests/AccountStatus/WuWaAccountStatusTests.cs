@@ -127,9 +127,13 @@ public sealed class WuWaAccountStatusTests
         Assert.False(parser.TryParsePlayerInfo(Utf8("{\"code\":0,\"data\":{\"roleId\":\"1\",\"region\":\"America\"}}"), out _));
         Assert.False(parser.TryParseRole(Utf8(ResponseWithNested("America", new
         {
-            Energy = 180, MaxEnergy = 240, StoreEnergy = 45,
-            StoreEnergyRecoverTime = 1000, EnergyRecoverTime = 2000,
-            Liveness = 60, LivenessMaxCount = 100,
+            Energy = 180,
+            MaxEnergy = 240,
+            StoreEnergy = 45,
+            StoreEnergyRecoverTime = 1000,
+            EnergyRecoverTime = 2000,
+            Liveness = 60,
+            LivenessMaxCount = 100,
         })), "America", out _));
         Assert.False(parser.TryParseRole(Utf8(ResponseWithNested("America", new { Energy = 999 })), "America", out _));
         Assert.False(parser.TryParseRole(role, "../America", out _));
@@ -677,9 +681,13 @@ public sealed class WuWaAccountStatusTests
             Utf8(ResponseWithNested("Europe", new { roleId = "1" })),
             Utf8(RoleResponse("Europe", new
             {
-                Energy = 1, MaxEnergy = 2, StoreEnergy = 0,
-                StoreEnergyRecoverTime = 0, EnergyRecoverTime = 1,
-                Liveness = 1, LivenessMaxCount = 2,
+                Energy = 1,
+                MaxEnergy = 2,
+                StoreEnergy = 0,
+                StoreEnergyRecoverTime = 0,
+                EnergyRecoverTime = 1,
+                Liveness = 1,
+                LivenessMaxCount = 2,
             })));
         await using var service = new WuWaAccountStatusService(
             transport,
@@ -707,9 +715,13 @@ public sealed class WuWaAccountStatusTests
             Utf8(ResponseWithNested("Europe", new { roleId = "1" })),
             Utf8(RoleResponse("Europe", new
             {
-                Energy = 1, MaxEnergy = 2, StoreEnergy = 0,
-                StoreEnergyRecoverTime = 0, EnergyRecoverTime = 1,
-                Liveness = 1, LivenessMaxCount = 2,
+                Energy = 1,
+                MaxEnergy = 2,
+                StoreEnergy = 0,
+                StoreEnergyRecoverTime = 0,
+                EnergyRecoverTime = 1,
+                Liveness = 1,
+                LivenessMaxCount = 2,
             })));
         await using var service = new WuWaAccountStatusService(
             transport,
@@ -766,9 +778,13 @@ public sealed class WuWaAccountStatusTests
             Utf8(ResponseWithNested("Europe", new { roleId = "1" })),
             Utf8(RoleResponse("Europe", new
             {
-                Energy = 199, MaxEnergy = 240, StoreEnergy = 30,
-                StoreEnergyRecoverTime = 0, EnergyRecoverTime = 1,
-                Liveness = 80, LivenessMaxCount = 100,
+                Energy = 199,
+                MaxEnergy = 240,
+                StoreEnergy = 30,
+                StoreEnergyRecoverTime = 0,
+                EnergyRecoverTime = 1,
+                Liveness = 80,
+                LivenessMaxCount = 100,
             })));
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
         await using var service = new WuWaAccountStatusService(
@@ -808,9 +824,13 @@ public sealed class WuWaAccountStatusTests
             Utf8(ResponseWithNested("Europe", new { roleId = "1" })),
             Utf8(RoleResponse("Europe", new
             {
-                Energy = 199, MaxEnergy = 240, StoreEnergy = 30,
-                StoreEnergyRecoverTime = 0, EnergyRecoverTime = 1,
-                Liveness = 80, LivenessMaxCount = 100,
+                Energy = 199,
+                MaxEnergy = 240,
+                StoreEnergy = 30,
+                StoreEnergyRecoverTime = 0,
+                EnergyRecoverTime = 1,
+                Liveness = 80,
+                LivenessMaxCount = 100,
             })));
         var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
         await using var service = new WuWaAccountStatusService(
@@ -840,9 +860,13 @@ public sealed class WuWaAccountStatusTests
             Utf8(ResponseWithNested("Europe", new { roleId = "1" })),
             Utf8(RoleResponse("Europe", new
             {
-                Energy = 199, MaxEnergy = 240, StoreEnergy = 30,
-                StoreEnergyRecoverTime = 0, EnergyRecoverTime = 1,
-                Liveness = 80, LivenessMaxCount = 100,
+                Energy = 199,
+                MaxEnergy = 240,
+                StoreEnergy = 30,
+                StoreEnergyRecoverTime = 0,
+                EnergyRecoverTime = 1,
+                Liveness = 80,
+                LivenessMaxCount = 100,
             })));
         await using var service = new WuWaAccountStatusService(
             transport,

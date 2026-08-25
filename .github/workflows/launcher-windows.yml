@@ -34,6 +34,12 @@ jobs:
           cargo install cargo-audit --version 0.22.1 --locked
           cargo audit --file Extractor\Achievements\Cargo.lock --ignore RUSTSEC-2023-0071
 
+      - name: Verify formatting
+        shell: pwsh
+        run: |
+          dotnet format Desktop\Nyx.Desktop.slnx --verify-no-changes --no-restore
+          cargo fmt --all --manifest-path Extractor\Achievements\Cargo.toml -- --check
+
       - name: Build Release
         shell: pwsh
         run: dotnet build Desktop\Nyx.Desktop.slnx --configuration Release --no-restore --verbosity minimal

@@ -350,7 +350,8 @@ mod tests {
                     .collect::<Vec<_>>()
             };
         let gi = normalize(std::fs::read(contracts.join("achievements-gi-catalog.json")).unwrap());
-        let hsr = normalize(std::fs::read(contracts.join("achievements-hsr-catalog.json")).unwrap());
+        let hsr =
+            normalize(std::fs::read(contracts.join("achievements-hsr-catalog.json")).unwrap());
         assert_eq!(
             format!("{:x}", Sha256::digest(&gi)),
             "5608dd41a26a06639c6455d65de7abdd2a7e5e997f55c6ed93dec6d08dc673b5"

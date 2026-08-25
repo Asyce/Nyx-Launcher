@@ -1484,41 +1484,41 @@ public static class PublisherAccountPresentation
 {
     public static string? ResourceCaptureGuidance(
         PublisherResourceCaptureDiagnostic diagnostic) => diagnostic switch
-    {
-        PublisherResourceCaptureDiagnostic.NoAcceptedRequest =>
-            "OFFICIAL REQUEST NOT SEEN · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.ResponseRejected =>
-            "RESPONSE NOT ACCEPTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.ResponseIncomplete =>
-            "RESPONSE INCOMPLETE · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.RequestRejected =>
-            "REQUEST REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.PublisherResultRejected =>
-            "PUBLISHER RESULT REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.EnvelopeRejected =>
-            "RESPONSE ENVELOPE REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.DataRejected =>
-            "RESPONSE DATA REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.CoreFieldsRejected =>
-            "RESOURCE FIELDS REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.TimeFieldsRejected =>
-            "RECOVERY FIELDS REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.ReserveRejected =>
-            "RESERVE FIELD REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.BoundsRejected =>
-            "VALUE BOUNDS REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.SignatureRejected =>
-            "SIGNATURE REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.BrowserRequestBlocked =>
-            "BROWSER REQUEST BLOCKED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.OperationTimedOut =>
-            "OPERATION TIMED OUT · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.BrowserSessionUnavailable =>
-            "BROWSER CLOSED · RESTART NYX",
-        PublisherResourceCaptureDiagnostic.LoginRequired => "SIGN IN AGAIN",
-        PublisherResourceCaptureDiagnostic.SelectionRequired => "CHOOSE REGION",
-        _ => null,
-    };
+        {
+            PublisherResourceCaptureDiagnostic.NoAcceptedRequest =>
+                "OFFICIAL REQUEST NOT SEEN · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.ResponseRejected =>
+                "RESPONSE NOT ACCEPTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.ResponseIncomplete =>
+                "RESPONSE INCOMPLETE · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.RequestRejected =>
+                "REQUEST REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.PublisherResultRejected =>
+                "PUBLISHER RESULT REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.EnvelopeRejected =>
+                "RESPONSE ENVELOPE REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.DataRejected =>
+                "RESPONSE DATA REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.CoreFieldsRejected =>
+                "RESOURCE FIELDS REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.TimeFieldsRejected =>
+                "RECOVERY FIELDS REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.ReserveRejected =>
+                "RESERVE FIELD REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.BoundsRejected =>
+                "VALUE BOUNDS REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.SignatureRejected =>
+                "SIGNATURE REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.BrowserRequestBlocked =>
+                "BROWSER REQUEST BLOCKED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.OperationTimedOut =>
+                "OPERATION TIMED OUT · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.BrowserSessionUnavailable =>
+                "BROWSER CLOSED · RESTART NYX",
+            PublisherResourceCaptureDiagnostic.LoginRequired => "SIGN IN AGAIN",
+            PublisherResourceCaptureDiagnostic.SelectionRequired => "CHOOSE REGION",
+            _ => null,
+        };
 
     public static bool IsCurrentDayCheckIn(DailyCheckInResult result, DateTimeOffset now)
     {

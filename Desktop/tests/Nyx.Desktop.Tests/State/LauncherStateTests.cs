@@ -1555,13 +1555,13 @@ public sealed class LauncherStateTests
         string id,
         long creationOrder,
         string? executablePath = null) => new()
-    {
-        Id = id,
-        Name = id,
-        ExecutablePath = executablePath ?? $@"C:\Games\{id}.exe",
-        IconPath = $@"C:\Games\{id}.png",
-        CreationOrder = creationOrder,
-    };
+        {
+            Id = id,
+            Name = id,
+            ExecutablePath = executablePath ?? $@"C:\Games\{id}.exe",
+            IconPath = $@"C:\Games\{id}.png",
+            CreationOrder = creationOrder,
+        };
 
     private static void AssertUniqueExecutableIdentities(IReadOnlyList<CustomGameDefinition> games)
     {
@@ -1579,28 +1579,28 @@ public sealed class LauncherStateTests
         string? iconPath = null,
         string gameId = "gi",
         CustomGameDefinition? customGame = null) => new()
-    {
-        GameId = gameId,
-        OpenedAppearance = opened.Appearance.TryGetValue(gameId, out var appearance)
+        {
+            GameId = gameId,
+            OpenedAppearance = opened.Appearance.TryGetValue(gameId, out var appearance)
             ? appearance
             : new GameAppearanceState(),
-        Appearance = new GameAppearanceState { IconPath = iconPath },
-        CustomGame = customGame,
-        RailOrder = railOrder,
-        OpenedManualInstallRoot = opened.Preferences.ManualInstallRoots.TryGetValue(gameId, out var root)
+            Appearance = new GameAppearanceState { IconPath = iconPath },
+            CustomGame = customGame,
+            RailOrder = railOrder,
+            OpenedManualInstallRoot = opened.Preferences.ManualInstallRoots.TryGetValue(gameId, out var root)
             ? root
             : gameId == "ae" ? opened.Preferences.EndfieldInstallRoot : null,
-        ManualInstallRoot = opened.Preferences.ManualInstallRoots.TryGetValue(gameId, out root)
+            ManualInstallRoot = opened.Preferences.ManualInstallRoots.TryGetValue(gameId, out root)
             ? root
             : gameId == "ae" ? opened.Preferences.EndfieldInstallRoot : null,
-        OpenedOfficialLaunchOptions = opened.OfficialLaunchOptions.TryGetValue(gameId, out var options)
+            OpenedOfficialLaunchOptions = opened.OfficialLaunchOptions.TryGetValue(gameId, out var options)
             ? options
             : null,
-        OfficialLaunchOptions = opened.OfficialLaunchOptions.TryGetValue(gameId, out options)
+            OfficialLaunchOptions = opened.OfficialLaunchOptions.TryGetValue(gameId, out options)
             ? options
             : null,
-        PublisherPasswordSavingEnabled = opened.Preferences.PublisherPasswordSavingEnabled,
-    };
+            PublisherPasswordSavingEnabled = opened.Preferences.PublisherPasswordSavingEnabled,
+        };
 
     private static string FindStateWorker()
     {

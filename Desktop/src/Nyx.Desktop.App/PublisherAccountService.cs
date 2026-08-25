@@ -1623,9 +1623,9 @@ public sealed class PublisherAccountService : IAsyncDisposable
             passwordSavingEnabled: passwordState.PasswordSavingEnabled,
             passwordCleanupCompleted: provider == "HoYoLAB"
                 ? static () => { }
-                : () => passwordStorage.CompleteCleanup(
-                    PublisherProfileCleanupScope.PasswordsOnly,
-                    succeeded: true));
+        : () => passwordStorage.CompleteCleanup(
+            PublisherProfileCleanupScope.PasswordsOnly,
+            succeeded: true));
     }
 
     private async Task<bool> ClearSavedPasswordsAsync(
