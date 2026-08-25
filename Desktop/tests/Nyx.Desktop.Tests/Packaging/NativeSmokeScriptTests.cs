@@ -26,6 +26,11 @@ public sealed class NativeSmokeScriptTests
         Assert.Contains("retryStateCheckedForGames++", source, StringComparison.Ordinal);
         Assert.Contains("retryStates += [ordered]@{ game = $gameName; state = $retryState }", source, StringComparison.Ordinal);
         Assert.Contains("SCREENSHOT_BLACK_OR_FLAT", source, StringComparison.Ordinal);
+        Assert.Contains("SECOND_INSTANCE_DID_NOT_REDIRECT", source, StringComparison.Ordinal);
+        Assert.Contains("$script:uiChecks.secondInstanceRedirected = $true", source, StringComparison.Ordinal);
+        Assert.Contains("$settings = Wait-ExactElement -Root $window -Name 'Settings'", source, StringComparison.Ordinal);
+        Assert.Contains("public static extern bool SetForegroundWindow(IntPtr window);", source, StringComparison.Ordinal);
+        Assert.Equal(4, Regex.Matches(source, @"\[NyxNativeSmokeCapture\]::SetForegroundWindow", RegexOptions.CultureInvariant).Count);
         Assert.Contains("[NyxNativeSmokeCapture]::PrintWindow", source, StringComparison.Ordinal);
         Assert.Contains("$height = [Math]::Min([int] $rect.Height, 720)", source, StringComparison.Ordinal);
         Assert.Contains("$safeHeight = [Math]::Min($height, 120)", source, StringComparison.Ordinal);

@@ -35,6 +35,7 @@ $screenshotEvidence = @()
 $retryControlObserved = $false
 $uiChecks = [ordered]@{
     shellControlsFound = $false
+    secondInstanceRedirected = $false
     gamesSelected = @()
     sideEffectControlsInspected = 0
     retryStateCheckedForGames = 0
@@ -621,6 +622,10 @@ public static class NyxNativeSmokeCapture
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool PrintWindow(IntPtr window, IntPtr deviceContext, uint flags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetForegroundWindow(IntPtr window);
 }
 '@
 
@@ -633,6 +638,21 @@ public static class NyxNativeSmokeCapture
     [void] (Wait-ExactElement -Root $window -Name 'Minimize')
     [void] (Wait-ExactElement -Root $window -Name 'Close')
     $script:uiChecks.shellControlsFound = $true
+
+    $primaryWindowId = $window.GetRuntimeId() -join ','
+    $secondaryProcess = Start-Process -FilePath $entryPoint -WorkingDirectory $AppRoot -PassThru
+    if (-not $secondaryProcess.WaitForExit(10000)) {
+        try { $secondaryProcess.Kill() } catch { }
+        Throw-SmokeFailure 'SECOND_INSTANCE_DID_NOT_REDIRECT'
+    }
+    if ($secondaryProcess.ExitCode -ne 0) { Throw-SmokeFailure 'SECOND_INSTANCE_REDIRECT_FAILED' }
+    $window = Wait-Window
+    if ($script:appProcess.HasExited -or
+        $window.Current.ProcessId -ne $script:appProcess.Id -or
+        ($window.GetRuntimeId() -join ',') -cne $primaryWindowId) {
+        Throw-SmokeFailure 'PRIMARY_INSTANCE_LOST'
+    }
+    $script:uiChecks.secondInstanceRedirected = $true
 
     foreach ($gameName in $gameNames) {
         $game = Wait-GameItem -Root $window -GameName $gameName
@@ -678,6 +698,7 @@ public static class NyxNativeSmokeCapture
     }
 
     $settings = Wait-ExactElement -Root $window -Name 'Settings'
+    [void] [NyxNativeSmokeCapture]::SetForegroundWindow([IntPtr] $window.Current.NativeWindowHandle)
     $settings.SetFocus()
     Assert-FocusIs -Expected $settings
     Send-SafeKey -Key Tab
@@ -694,6 +715,7 @@ public static class NyxNativeSmokeCapture
     [void] (Wait-ExactElement -Root $window -Name $title)
     $cancel = Wait-ExactElement -Root $window -Name 'Cancel'
     $modal = Get-ModalContainer -Window $window -Cancel $cancel -Title $title
+    [void] [NyxNativeSmokeCapture]::SetForegroundWindow([IntPtr] $window.Current.NativeWindowHandle)
     $cancel.SetFocus()
     Assert-FocusIs -Expected $cancel
     Send-SafeKey -Key ShiftTab
@@ -709,6 +731,7 @@ public static class NyxNativeSmokeCapture
         -Window $window `
         -FileName 'settings-safe.png' `
         -Surface $title
+    [void] [NyxNativeSmokeCapture]::SetForegroundWindow([IntPtr] $window.Current.NativeWindowHandle)
     $cancel.SetFocus()
     Assert-FocusIs -Expected $cancel
     Send-SafeKey -Key Enter
@@ -719,6 +742,7 @@ public static class NyxNativeSmokeCapture
     Invoke-SafeElement -Element $settings -ExpectedName 'Settings'
     [void] (Wait-ExactElement -Root $window -Name $title)
     $cancel = Wait-ExactElement -Root $window -Name 'Cancel'
+    [void] [NyxNativeSmokeCapture]::SetForegroundWindow([IntPtr] $window.Current.NativeWindowHandle)
     $cancel.SetFocus()
     Assert-FocusIs -Expected $cancel
     Send-SafeKey -Key Escape
