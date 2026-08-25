@@ -218,7 +218,7 @@
                 Margin="26,38,18,292"
                 HorizontalAlignment="Left"
                 VerticalAlignment="Top">
-                <StackPanel x:Name="ContentPanel" MaxWidth="704" Spacing="0">
+                <StackPanel x:Name="ContentPanel" MaxWidth="848" Spacing="0">
                     <Border
                         x:Name="BannerCycleRegion"
                         Padding="0"

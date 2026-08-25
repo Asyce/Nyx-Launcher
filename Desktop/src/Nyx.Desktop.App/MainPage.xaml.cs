@@ -4891,9 +4891,9 @@ public sealed partial class MainPage : Page
             game.ApplyLayout(profile);
         }
 
-        const double bannerWidth = 704d;
-        ContentPanel.MaxWidth = bannerWidth;
-        BannerContentRegion.MaxWidth = bannerWidth;
+        const double bannerContentMaxWidth = 848d;
+        ContentPanel.MaxWidth = bannerContentMaxWidth;
+        BannerContentRegion.MaxWidth = bannerContentMaxWidth;
         ApplyLowerActionLayout(profile);
 
         if (GameSelector.ItemsPanelRoot is ItemsStackPanel itemsPanel)
@@ -6574,7 +6574,7 @@ public sealed partial class MainPage : Page
                 characters.Skip(namedCount).Select(CreateBannerPortrait).ToArray()));
         }
 
-        foreach (var row in rows.Chunk(4))
+        foreach (var row in rows.Chunk(5))
         {
             BannerCharacterRows.Add(row);
         }
@@ -7428,7 +7428,7 @@ public sealed class UpcomingBannerGroupItem : INotifyPropertyChanged
         StableKey = stableKey;
         Timing = timing;
         Characters = characters.ToArray();
-        CharacterRows = Characters.Chunk(4).ToArray();
+        CharacterRows = Characters.Chunk(5).ToArray();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
