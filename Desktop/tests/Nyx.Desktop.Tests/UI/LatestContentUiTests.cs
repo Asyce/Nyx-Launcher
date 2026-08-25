@@ -124,6 +124,8 @@ public sealed class BannerCycleUiTests
         Assert.Contains("Width=\"34\"", columns, StringComparison.Ordinal);
         Assert.Contains("Height=\"34\"", columns, StringComparison.Ordinal);
         Assert.Contains("FontSize=\"15\"", columns, StringComparison.Ordinal);
+        Assert.Equal(2, columns.Split("LineHeight=\"20\"", StringSplitOptions.None).Length - 1);
+        Assert.Equal(2, columns.Split("LineStackingStrategy=\"BlockLineHeight\"", StringSplitOptions.None).Length - 1);
         Assert.Contains("TextWrapping=\"Wrap\"", columns, StringComparison.Ordinal);
         Assert.DoesNotContain("MaxLines=\"1\"", columns, StringComparison.Ordinal);
         Assert.DoesNotContain("TextTrimming=\"CharacterEllipsis\"", columns, StringComparison.Ordinal);
