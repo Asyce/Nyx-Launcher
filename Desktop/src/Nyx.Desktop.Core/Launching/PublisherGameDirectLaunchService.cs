@@ -308,6 +308,12 @@ public sealed class PublisherGameDirectLaunchService
          || (inspection.Status is PublisherGameInspectionStatus.NeedsReview
              && inspection.Reason == profile.RequiredReason
              && inspection.VersionState == profile.RequiredVersionState
+             && inspection.Version is null)
+         || (gameId is "wuwa"
+             && inspection.PreInstallAvailable
+             && inspection.Status is PublisherGameInspectionStatus.NeedsReview
+             && inspection.Reason is PublisherGameInspectionReason.VersionUnavailable
+             && inspection.VersionState is PublisherGameVersionState.Unavailable
              && inspection.Version is null))
         && inspection.HasFullInstallMaintenanceProof
         && string.Equals(inspection.GameId, gameId, StringComparison.Ordinal)

@@ -44,6 +44,25 @@ public sealed class EndfieldOfficialMaintenanceExecutorTests
     }
 
     [Fact]
+    public void Forged_Endfield_pre_install_advisory_is_rejected_before_validation()
+    {
+        using var fixture = FakePublisherInstall.CreateEndfield();
+        var valid = Request(fixture);
+        var forged = new OfficialMaintenanceHandoffRequest(
+            valid.Target,
+            valid.Instructions,
+            preInstallAvailable: true);
+        fixture.Metadata.ReadPaths.Clear();
+        var starter = new FakeStarter();
+
+        var result = Executor(fixture, new FakeProcessInspector(), starter).Open(forged);
+
+        Assert.Equal(EndfieldOfficialMaintenanceStatus.Unsupported, result.Status);
+        Assert.Empty(fixture.Metadata.ReadPaths);
+        Assert.Empty(starter.Requests);
+    }
+
+    [Fact]
     public void Forged_version_path_or_instructions_never_start()
     {
         using var fixture = FakePublisherInstall.CreateEndfield();

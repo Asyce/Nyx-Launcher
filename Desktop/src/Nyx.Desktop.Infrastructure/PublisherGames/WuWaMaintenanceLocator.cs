@@ -209,7 +209,9 @@ public sealed class WuWaMaintenanceService
                 InspectionReason: inspection.Reason);
         }
 
-        var request = OfficialMaintenanceHandoffFactory.Create(inspection.MaintenanceTarget);
+        var request = OfficialMaintenanceHandoffFactory.Create(
+            inspection.MaintenanceTarget,
+            inspection.PreInstallAvailable);
         return executor.Check(request);
     }
 

@@ -36,6 +36,51 @@ public sealed class WuWaIdentityAdapterTests
     }
 
     [Fact]
+    public void Pre_install_config_uses_the_installed_resource_version_and_exposes_advisory()
+    {
+        using var fixture = FakePublisherInstall.CreateWuWa(
+            configVersion: "3.6.0",
+            resourceVersion: "3.5.1");
+        SetPreDownload(fixture, "3.6.0");
+
+        var result = fixture.CreateWuWaAdapter().Inspect(fixture.Root);
+
+        Assert.Equal(PublisherGameInspectionStatus.Ready, result.Status);
+        Assert.Equal(PublisherGameInspectionReason.None, result.Reason);
+        Assert.Equal(PublisherGameVersionState.Available, result.VersionState);
+        Assert.Equal("3.5.1", result.Version);
+        Assert.True(result.PreInstallAvailable);
+        Assert.NotNull(result.MaintenanceTarget);
+    }
+
+    [Fact]
+    public void Pre_install_without_resource_version_is_full_proof_version_unavailable()
+    {
+        using var fixture = FakePublisherInstall.CreateWuWa(
+            configVersion: "3.6.0",
+            resourceVersion: "3.5.1");
+        SetPreDownload(fixture, "3.6.0");
+        var runtimePath = fixture.PathOf(
+            @"Wuthering Waves Game\Client\Binaries\Win64\Client-Win64-Shipping.exe");
+        var runtimeBytes = File.ReadAllBytes(runtimePath);
+        var runtimeMd5 = Convert.ToHexString(MD5.HashData(runtimeBytes)).ToLowerInvariant();
+        File.WriteAllText(
+            fixture.PathOf(@"Wuthering Waves Game\LocalGameResources.json"),
+            $$"""
+            {"resource":[{"dest":"{{WuWaPublicEvidenceParser.ExpectedRuntimeDestination}}","size":{{runtimeBytes.Length}},"md5":"{{runtimeMd5}}","fromFolder":null}]}
+            """);
+
+        var result = fixture.CreateWuWaAdapter().Inspect(fixture.Root);
+
+        Assert.Equal(PublisherGameInspectionStatus.NeedsReview, result.Status);
+        Assert.Equal(PublisherGameInspectionReason.VersionUnavailable, result.Reason);
+        Assert.Equal(PublisherGameVersionState.Unavailable, result.VersionState);
+        Assert.Null(result.Version);
+        Assert.True(result.PreInstallAvailable);
+        Assert.NotNull(result.MaintenanceTarget);
+    }
+
+    [Fact]
     public void Current_official_resource_shape_uses_runtime_size_and_checksum_when_from_folder_is_null()
     {
         using var fixture = FakePublisherInstall.CreateWuWa(
@@ -145,7 +190,8 @@ public sealed class WuWaIdentityAdapterTests
 
     [Theory]
     [InlineData("{\"version\":\"3.5.0\",\"isPreDownload\":false,\"appId\":50004}")]
-    [InlineData("{\"version\":\"3.5.0\",\"isPreDownload\":true,\"appId\":\"50004\"}")]
+    [InlineData("{\"version\":\"3.5.0\",\"isPreDownload\":\"true\",\"appId\":\"50004\"}")]
+    [InlineData("{\"version\":\"3.5.0\",\"isPreDownload\":1,\"appId\":\"50004\"}")]
     [InlineData("{\"version\":\"3.5.0\",\"isPreDownload\":false,\"appId\":\"50005\"}")]
     [InlineData("{\"Version\":\"3.5.0\",\"isPreDownload\":false,\"appId\":\"50004\"}")]
     [InlineData("{\"version\":\"3.5.0\",\"version\":\"3.5.0\",\"isPreDownload\":false,\"appId\":\"50004\"}")]
@@ -172,6 +218,21 @@ public sealed class WuWaIdentityAdapterTests
         var result = fixture.CreateWuWaAdapter().Inspect(fixture.Root);
 
         Assert.Equal(PublisherGameInspectionReason.ConfigIdentityMismatch, result.Reason);
+    }
+
+    [Fact]
+    public void Root_and_nested_pre_install_flags_must_match()
+    {
+        using var fixture = FakePublisherInstall.CreateWuWa(resourceVersion: "3.5.0");
+        SetPreDownload(fixture, "3.5.0");
+        File.WriteAllText(
+            fixture.PathOf(@"Wuthering Waves Game\launcherDownload\launcherDownloadConfig.json"),
+            "{\"version\":\"3.5.0\",\"isPreDownload\":false,\"appId\":\"50004\"}");
+
+        var result = fixture.CreateWuWaAdapter().Inspect(fixture.Root);
+
+        Assert.Equal(PublisherGameInspectionReason.ConfigIdentityMismatch, result.Reason);
+        Assert.False(result.PreInstallAvailable);
     }
 
     [Fact]
@@ -752,6 +813,17 @@ public sealed class WuWaIdentityAdapterTests
         fixture.CreateWuWaAdapter().Inspect(fixture.Root);
 
         Assert.Equal(before, fixture.Snapshot());
+    }
+
+    private static void SetPreDownload(FakePublisherInstall fixture, string version)
+    {
+        const string format = "{{\"version\":\"{0}\",\"isPreDownload\":true,\"appId\":\"50004\"}}";
+        File.WriteAllText(
+            fixture.PathOf(@"Wuthering Waves Game\launcherDownloadConfig.json"),
+            string.Format(format, version));
+        File.WriteAllText(
+            fixture.PathOf(@"Wuthering Waves Game\launcherDownload\launcherDownloadConfig.json"),
+            string.Format(format, version));
     }
 
     private static bool TryCreateFileLink(string linkPath, string targetPath)

@@ -81,6 +81,22 @@ public sealed class WuWaMaintenanceUiTests
     }
 
     [Fact]
+    public void WuWa_pre_install_notice_requires_the_validated_request_and_never_animates()
+    {
+        var page = ReadAppFile("MainPage.xaml.cs");
+        var renderStart = page.IndexOf("private void RenderPreInstallNotice", StringComparison.Ordinal);
+        var renderEnd = page.IndexOf("private void RenderHoyoLabAccountIdentity", renderStart, StringComparison.Ordinal);
+        var render = page[renderStart..renderEnd];
+
+        Assert.Contains("selected.Id == \"wuwa\"", render, StringComparison.Ordinal);
+        Assert.Contains("wuwaMaintenanceRequest?.PreInstallAvailable == true", render, StringComparison.Ordinal);
+        Assert.Contains("WuWaOfficialMaintenanceStatus.Ready", render, StringComparison.Ordinal);
+        Assert.Contains("WuWaOfficialMaintenanceStatus.Running", render, StringComparison.Ordinal);
+        Assert.DoesNotContain("Endfield", render, StringComparison.Ordinal);
+        Assert.DoesNotContain("Storyboard", render, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Only_explicit_click_dispatches_the_stored_request_and_suppresses_repeats()
     {
         var page = ReadAppFile("MainPage.xaml.cs");

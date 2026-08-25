@@ -118,6 +118,21 @@ public sealed class WuWaMaintenanceLocatorTests
     }
 
     [Fact]
+    public void Pre_install_advisory_is_carried_into_the_sealed_maintenance_request()
+    {
+        using var fixture = FakePublisherInstall.CreateWuWa(
+            configVersion: "3.6.0",
+            resourceVersion: "3.5.1");
+        SetPreDownload(fixture, "3.6.0");
+        var starter = new FakeStarter();
+
+        var result = Service(fixture, starter, RunningProcessStatus.NotRunning).Check();
+
+        Assert.Equal(WuWaOfficialMaintenanceStatus.Ready, result.Status);
+        Assert.True(result.Request?.PreInstallAvailable == true);
+    }
+
+    [Fact]
     public void Version_conflict_with_full_proof_is_maintenance_ready_but_never_direct_launch()
     {
         using var fixture = FakePublisherInstall.CreateWuWa();
@@ -450,6 +465,17 @@ public sealed class WuWaMaintenanceLocatorTests
 
     private static FakeRegistryReader Registry(params (string Name, object? Value)[] values) =>
         new(values.ToDictionary(pair => pair.Name, pair => pair.Value, StringComparer.Ordinal));
+
+    private static void SetPreDownload(FakePublisherInstall fixture, string version)
+    {
+        const string format = "{{\"version\":\"{0}\",\"isPreDownload\":true,\"appId\":\"50004\"}}";
+        File.WriteAllText(
+            fixture.PathOf(@"Wuthering Waves Game\launcherDownloadConfig.json"),
+            string.Format(format, version));
+        File.WriteAllText(
+            fixture.PathOf(@"Wuthering Waves Game\launcherDownload\launcherDownloadConfig.json"),
+            string.Format(format, version));
+    }
 
     private sealed class FakeRegistryReader(IReadOnlyDictionary<string, object?> values)
         : IWuWaUninstallRegistryReader

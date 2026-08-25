@@ -191,6 +191,34 @@ public sealed class PublisherGameDirectLaunchServiceTests
     }
 
     [Fact]
+    public void Exact_wuwa_pre_install_version_unavailable_proof_is_admitted()
+    {
+        var result = new PublisherGameInspectionResult(
+            "wuwa",
+            PublisherGameInspectionStatus.NeedsReview,
+            PublisherGameInspectionReason.VersionUnavailable,
+            PublisherGameVersionState.Unavailable,
+            WuWaRoot,
+            maintenanceTarget: new(
+                "wuwa",
+                WuWaRoot,
+                Path.Combine(WuWaRoot, "launcher.exe"),
+                "2.6.3.0"),
+            preInstallAvailable: true);
+        var validator = new FakeValidator(() => new FakeInspection(result));
+        var process = new FakeProcessInspector();
+        var starter = new FakeStarter();
+        var service = new PublisherGameDirectLaunchService(validator, process, starter);
+
+        var observed = service.CheckGame("wuwa", WuWaRoot);
+
+        Assert.Equal(PublisherGameLaunchStatus.Ready, observed.Status);
+        Assert.Equal(PublisherGameInspectionReason.VersionUnavailable, observed.InspectionReason);
+        Assert.Equal(2, process.Checks.Count);
+        Assert.Empty(starter.Starts);
+    }
+
+    [Fact]
     public void Redirected_root_identity_drift_and_unstable_proof_never_start()
     {
         var redirected = new Fixture("wuwa", WuWaRoot)

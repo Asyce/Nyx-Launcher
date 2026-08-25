@@ -173,6 +173,7 @@ public sealed partial class MainPage : Page
     private GenshinLaunchStatus? updaterStatus;
     private GenshinLaunchFailureReason gameFailureReason;
     private string? officialLauncherStatusOverride;
+    private string? preInstallNoticeKey;
     private bool updaterScanFinished;
     private bool wuwaScanFinished;
     private readonly HashSet<string> gameActionsInFlight = new(StringComparer.Ordinal);
@@ -5185,6 +5186,7 @@ public sealed partial class MainPage : Page
     {
         if (selected.IsCustom)
         {
+            RenderPreInstallNotice(selected);
             LaunchResourceMetricsPanel.Visibility = Visibility.Collapsed;
             AccountAndToolsIdentityText.Visibility = Visibility.Collapsed;
             OnLaunchPanel.Visibility = Visibility.Collapsed;
@@ -5198,6 +5200,7 @@ public sealed partial class MainPage : Page
         SetStableExportStatus(NyxToolsStatusText.Text);
         StableOpenUpdaterButton.Content = OpenUpdaterButton.Content;
         StableOpenUpdaterButton.IsEnabled = OpenUpdaterButton.IsEnabled;
+        RenderPreInstallNotice(selected);
         AutomationProperties.SetName(
             StableOpenUpdaterButton,
             $"Open {selected.DisplayName}'s official launcher");
@@ -5325,6 +5328,49 @@ public sealed partial class MainPage : Page
                 ? Visibility.Visible
                 : Visibility.Collapsed;
         LaunchResourceRefreshButton.IsEnabled = !publisherAccountActionInFlight;
+    }
+
+    private void RenderPreInstallNotice(GameLauncherItem selected)
+    {
+        var message = selected.Id == "wuwa"
+            && wuwaMaintenanceStatus is (
+                WuWaOfficialMaintenanceStatus.Ready
+                or WuWaOfficialMaintenanceStatus.Running
+                or WuWaOfficialMaintenanceStatus.Opened
+                or WuWaOfficialMaintenanceStatus.Failed)
+            && wuwaMaintenanceRequest?.PreInstallAvailable == true
+                ? "Pre-install available — open Official Launcher"
+                : selected.Id is "gi" or "hsr" or "zzz"
+                    ? GameRailSignalProjector.ProjectPublisher(selected.Id, publisherStatus.Current)?.Kind switch
+                    {
+                        GameRailSignalKind.UpdateAndPreDownload =>
+                            "Update and pre-install available — open Official Launcher",
+                        GameRailSignalKind.PreDownloadAvailable =>
+                            "Pre-install available — open Official Launcher",
+                        _ => null,
+                    }
+                    : null;
+        var key = message is null ? null : $"{selected.Id}:{message}";
+        if (string.Equals(preInstallNoticeKey, key, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        preInstallNoticeKey = key;
+        var available = message is not null;
+        PreInstallNoticeButton.Content = message ?? string.Empty;
+        PreInstallNoticeButton.Visibility = available
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        AutomationProperties.SetName(
+            PreInstallNoticeButton,
+            message ?? "No pre-install available");
+        AutomationProperties.SetHelpText(PreInstallNoticeButton, message);
+        StableOpenUpdaterButton.BorderBrush = (Brush)Application.Current.Resources[
+            available ? "PreInstallNoticeBrush" : "DeckBorderBrush"];
+        StableOpenUpdaterButton.Background = (Brush)Application.Current.Resources[
+            available ? "PreInstallSurfaceBrush" : "QuietSurfaceBrush"];
+        StableOpenUpdaterButton.BorderThickness = new Thickness(available ? 2 : 1);
     }
 
     private void RenderHoyoLabAccountIdentity(GameLauncherItem selected)

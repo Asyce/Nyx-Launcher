@@ -34,6 +34,42 @@ public sealed class WuWaOfficialMaintenanceExecutorTests
     }
 
     [Fact]
+    public void Pre_install_version_unavailable_proof_can_open_the_official_launcher()
+    {
+        using var fixture = FakePublisherInstall.CreateWuWa(
+            configVersion: "3.6.0",
+            resourceVersion: "3.5.1");
+        SetPreDownload(fixture, "3.6.0");
+        SetResourceVersionNull(fixture);
+        var request = Request(fixture);
+        var starter = new FakeStarter();
+
+        var result = Executor(fixture, new FakeProcessInspector(), starter).Open(request);
+
+        Assert.Equal(WuWaOfficialMaintenanceStatus.Opened, result.Status);
+        Assert.True(result.Request?.PreInstallAvailable == true);
+        Assert.Empty(Assert.Single(starter.Requests).Arguments);
+    }
+
+    [Fact]
+    public void Fresh_revalidation_must_match_the_pre_install_advisory()
+    {
+        using var fixture = FakePublisherInstall.CreateWuWa(
+            configVersion: "3.6.0",
+            resourceVersion: "3.5.1");
+        SetPreDownload(fixture, "3.6.0");
+        var request = Request(fixture);
+        Assert.True(request.PreInstallAvailable);
+        SetDownloadConfig(fixture, "3.5.1", isPreDownload: false);
+        var starter = new FakeStarter();
+
+        var result = Executor(fixture, new FakeProcessInspector(), starter).Open(request);
+
+        Assert.Equal(WuWaOfficialMaintenanceStatus.NeedsReview, result.Status);
+        Assert.Empty(starter.Requests);
+    }
+
+    [Fact]
     public void Missing_fresh_root_has_no_execution_capability()
     {
         using var fixture = FakePublisherInstall.CreateWuWa(resourceVersion: "3.5.0");
@@ -485,9 +521,40 @@ public sealed class WuWaOfficialMaintenanceExecutorTests
 
     private static OfficialMaintenanceHandoffRequest Request(FakePublisherInstall fixture)
     {
-        var target = Assert.IsType<ValidatedOfficialMaintenanceTarget>(
-            fixture.CreateWuWaAdapter().Inspect(fixture.Root).MaintenanceTarget);
-        return OfficialMaintenanceHandoffFactory.Create(target);
+        var inspection = fixture.CreateWuWaAdapter().Inspect(fixture.Root);
+        var target = Assert.IsType<ValidatedOfficialMaintenanceTarget>(inspection.MaintenanceTarget);
+        return OfficialMaintenanceHandoffFactory.Create(target, inspection.PreInstallAvailable);
+    }
+
+    private static void SetPreDownload(FakePublisherInstall fixture, string version) =>
+        SetDownloadConfig(fixture, version, isPreDownload: true);
+
+    private static void SetDownloadConfig(
+        FakePublisherInstall fixture,
+        string version,
+        bool isPreDownload)
+    {
+        var json = $"{{\"version\":\"{version}\",\"isPreDownload\":{isPreDownload.ToString().ToLowerInvariant()},\"appId\":\"50004\"}}";
+        File.WriteAllText(
+            fixture.PathOf(@"Wuthering Waves Game\launcherDownloadConfig.json"),
+            json);
+        File.WriteAllText(
+            fixture.PathOf(@"Wuthering Waves Game\launcherDownload\launcherDownloadConfig.json"),
+            json);
+    }
+
+    private static void SetResourceVersionNull(FakePublisherInstall fixture)
+    {
+        var runtimePath = fixture.PathOf(
+            @"Wuthering Waves Game\Client\Binaries\Win64\Client-Win64-Shipping.exe");
+        var runtimeBytes = File.ReadAllBytes(runtimePath);
+        var runtimeMd5 = Convert.ToHexString(System.Security.Cryptography.MD5.HashData(runtimeBytes))
+            .ToLowerInvariant();
+        File.WriteAllText(
+            fixture.PathOf(@"Wuthering Waves Game\LocalGameResources.json"),
+            $$"""
+            {"resource":[{"dest":"{{WuWaPublicEvidenceParser.ExpectedRuntimeDestination}}","size":{{runtimeBytes.Length}},"md5":"{{runtimeMd5}}","fromFolder":null}]}
+            """);
     }
 
     private static WuWaOfficialMaintenanceExecutor Executor(

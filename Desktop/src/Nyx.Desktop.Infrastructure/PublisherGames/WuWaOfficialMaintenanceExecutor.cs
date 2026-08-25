@@ -114,7 +114,9 @@ public sealed class WuWaOfficialMaintenanceExecutor
         OfficialMaintenanceHandoffRequest freshRequest;
         try
         {
-            freshRequest = OfficialMaintenanceHandoffFactory.Create(result.MaintenanceTarget);
+            freshRequest = OfficialMaintenanceHandoffFactory.Create(
+                result.MaintenanceTarget,
+                result.PreInstallAvailable);
         }
         catch (InvalidOperationException)
         {
@@ -166,12 +168,13 @@ public sealed class WuWaOfficialMaintenanceExecutor
 
     private static bool HasExecutableMaintenanceProof(PublisherGameInspectionResult result) =>
         result.HasFullInstallMaintenanceProof
-        && (result.Status, result.Reason) is (
-                PublisherGameInspectionStatus.Ready,
-                PublisherGameInspectionReason.None)
-            or (
-                PublisherGameInspectionStatus.NeedsReview,
-                PublisherGameInspectionReason.VersionConflict);
+        && ((result.Status is PublisherGameInspectionStatus.Ready
+             && result.Reason is PublisherGameInspectionReason.None)
+            || (result.Status is PublisherGameInspectionStatus.NeedsReview
+                && result.Reason is PublisherGameInspectionReason.VersionConflict)
+            || (result.PreInstallAvailable
+                && result.Status is PublisherGameInspectionStatus.NeedsReview
+                && result.Reason is PublisherGameInspectionReason.VersionUnavailable));
 
     private static bool IsWuWaRequest(OfficialMaintenanceHandoffRequest request) =>
         string.Equals(request.Target.GameId, "wuwa", StringComparison.Ordinal)
@@ -200,6 +203,7 @@ public sealed class WuWaOfficialMaintenanceExecutor
             fresh.Target.LauncherVersion,
             StringComparison.Ordinal)
         && string.Equals(first.Instructions, fresh.Instructions, StringComparison.Ordinal)
+        && first.PreInstallAvailable == fresh.PreInstallAvailable
         && first.Arguments.SequenceEqual(fresh.Arguments, StringComparer.Ordinal);
 
     private static bool IsBoundaryFailure(Exception exception) =>

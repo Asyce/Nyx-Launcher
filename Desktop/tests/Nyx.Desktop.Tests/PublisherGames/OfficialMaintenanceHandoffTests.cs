@@ -25,6 +25,7 @@ public sealed class OfficialMaintenanceHandoffTests
         Assert.True(handoff.RequiresProtectedExecutableBinding);
         Assert.False(handoff.AllowsDirectUpdate);
         Assert.False(handoff.AllowsDirectGameLaunch);
+        Assert.False(handoff.PreInstallAvailable);
     }
 
     [Fact]
@@ -43,6 +44,7 @@ public sealed class OfficialMaintenanceHandoffTests
             handoff.Instructions);
         Assert.Empty(handoff.Arguments);
         Assert.DoesNotContain("://", handoff.Instructions, StringComparison.Ordinal);
+        Assert.Throws<ArgumentException>(() => OfficialMaintenanceHandoffFactory.Create(target, true));
     }
 
     [Fact]
@@ -55,7 +57,7 @@ public sealed class OfficialMaintenanceHandoffTests
             typeof(OfficialMaintenanceHandoffFactory).GetMethods(
                 BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly),
             method => Assert.Equal(
-                [typeof(ValidatedOfficialMaintenanceTarget)],
+                [typeof(ValidatedOfficialMaintenanceTarget), typeof(bool)],
                 method.GetParameters().Select(parameter => parameter.ParameterType).ToArray()));
     }
 

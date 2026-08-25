@@ -6,10 +6,12 @@ public sealed class OfficialMaintenanceHandoffRequest
 {
     internal OfficialMaintenanceHandoffRequest(
         ValidatedOfficialMaintenanceTarget target,
-        string instructions)
+        string instructions,
+        bool preInstallAvailable = false)
     {
         Target = target;
         Instructions = instructions;
+        PreInstallAvailable = preInstallAvailable;
         Arguments = new ReadOnlyCollection<string>([]);
     }
 
@@ -18,6 +20,8 @@ public sealed class OfficialMaintenanceHandoffRequest
     public IReadOnlyList<string> Arguments { get; }
 
     public string Instructions { get; }
+
+    public bool PreInstallAvailable { get; }
 
     public bool RequiresUserInteraction => true;
 
@@ -35,9 +39,16 @@ public sealed class OfficialMaintenanceHandoffRequest
 public static class OfficialMaintenanceHandoffFactory
 {
     public static OfficialMaintenanceHandoffRequest Create(
-        ValidatedOfficialMaintenanceTarget target)
+        ValidatedOfficialMaintenanceTarget target,
+        bool preInstallAvailable = false)
     {
         ArgumentNullException.ThrowIfNull(target);
+        if (preInstallAvailable && target.GameId is not "wuwa")
+        {
+            throw new ArgumentException(
+                "Only WuWa can expose a pre-install advisory.",
+                nameof(preInstallAvailable));
+        }
         var instructions = target.GameId switch
         {
             "wuwa" => "Use the validated Kuro launcher to maintain Wuthering Waves.",
@@ -45,7 +56,7 @@ public static class OfficialMaintenanceHandoffFactory
             _ => throw new InvalidOperationException("Unsupported validated maintenance family."),
         };
 
-        return new(target, instructions);
+        return new(target, instructions, preInstallAvailable);
     }
 }
 
