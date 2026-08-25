@@ -10,6 +10,35 @@ public sealed class GameCatalogTests
         Assert.Equal(["gi", "hsr", "zzz", "wuwa", "ae"], GameCatalog.All.Select(game => game.Id));
     }
 
+    [Theory]
+    [InlineData("gi", "HoYoPlay", "HoYoLAB", true, true, true, true, true, true)]
+    [InlineData("hsr", "HoYoPlay", "HoYoLAB", true, true, true, true, true, true)]
+    [InlineData("zzz", "HoYoPlay", "HoYoLAB", true, false, true, false, true, true)]
+    [InlineData("wuwa", "KURO GAMES", null, false, false, true, false, true, true)]
+    [InlineData("ae", "GRYPHLINK", "SKPORT", true, false, false, false, true, true)]
+    public void Catalog_contains_the_approved_capability_matrix(
+        string gameId,
+        string railProvider,
+        string? accountProvider,
+        bool supportsDailyCheckIn,
+        bool supports120Fps,
+        bool supportsPulls,
+        bool supportsAchievements,
+        bool supportsScreenshots,
+        bool supportsBackgrounds)
+    {
+        var game = GameCatalog.GetRequired(gameId);
+
+        Assert.Equal(railProvider, game.RailProvider);
+        Assert.Equal(accountProvider, game.AccountProvider);
+        Assert.Equal(supportsDailyCheckIn, game.SupportsDailyCheckIn);
+        Assert.Equal(supports120Fps, game.Supports120Fps);
+        Assert.Equal(supportsPulls, game.SupportsPulls);
+        Assert.Equal(supportsAchievements, game.SupportsAchievements);
+        Assert.Equal(supportsScreenshots, game.SupportsScreenshots);
+        Assert.Equal(supportsBackgrounds, game.SupportsBackgrounds);
+    }
+
     [Fact]
     public void Catalog_and_definitions_cannot_be_mutated_by_callers()
     {
@@ -31,13 +60,15 @@ public sealed class GameCatalogTests
     [InlineData("GI")]
     [InlineData("ww")]
     [InlineData("endfield")]
+    [InlineData("custom-1")]
     [InlineData("")]
     [InlineData(" gi")]
     [InlineData("gi ")]
     [InlineData(null)]
     public void Aliases_and_unsupported_ids_are_rejected(string? gameId)
     {
-        Assert.False(GameCatalog.TryGet(gameId, out _));
+        Assert.False(GameCatalog.TryGet(gameId, out var game));
+        Assert.Null(game);
         Assert.Throws<UnsupportedGameException>(() => GameCatalog.GetRequired(gameId));
     }
 }

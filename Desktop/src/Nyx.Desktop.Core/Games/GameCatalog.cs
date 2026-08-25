@@ -6,11 +6,11 @@ public static class GameCatalog
 {
     private static readonly GameDefinition[] Definitions =
     [
-        new("gi", "Genshin Impact"),
-        new("hsr", "Honkai: Star Rail"),
-        new("zzz", "Zenless Zone Zero"),
-        new("wuwa", "Wuthering Waves"),
-        new("ae", "Arknights: Endfield"),
+        new("gi", "Genshin Impact", "HoYoPlay", "HoYoLAB", true, true, true, true, true, true),
+        new("hsr", "Honkai: Star Rail", "HoYoPlay", "HoYoLAB", true, true, true, true, true, true),
+        new("zzz", "Zenless Zone Zero", "HoYoPlay", "HoYoLAB", true, false, true, false, true, true),
+        new("wuwa", "Wuthering Waves", "KURO GAMES", null, false, false, true, false, true, true),
+        new("ae", "Arknights: Endfield", "GRYPHLINK", "SKPORT", true, false, false, false, true, true),
     ];
 
     private static readonly IReadOnlyDictionary<string, GameDefinition> ById =
