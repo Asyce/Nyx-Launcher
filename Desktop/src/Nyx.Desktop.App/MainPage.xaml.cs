@@ -62,7 +62,7 @@ public sealed partial class MainPage : Page
     private const int WuWaLaunchObservationCount = 6;
     private const int EndfieldLaunchObservationCount = 6;
     private const int MaximumDisplayedCurrentBannerCharacters = 10;
-    private const int MaximumDisplayedBannerCharactersPerPhase = 5;
+    private const int MaximumDisplayedBannerCharactersPerPhase = 10;
     private const double LaunchStarfieldWidth = 367;
     private const double LaunchStarfieldHeight = 82;
     private static readonly TimeSpan WuWaLaunchObservationInterval =

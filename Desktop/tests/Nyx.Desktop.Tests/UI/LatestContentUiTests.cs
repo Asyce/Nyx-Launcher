@@ -130,7 +130,7 @@ public sealed class BannerCycleUiTests
         Assert.DoesNotContain("DisplayFontSize", xaml + code, StringComparison.Ordinal);
         Assert.DoesNotContain("ItemWidth", xaml + code, StringComparison.Ordinal);
         Assert.Contains("private const int MaximumDisplayedCurrentBannerCharacters = 10", code, StringComparison.Ordinal);
-        Assert.Contains("private const int MaximumDisplayedBannerCharactersPerPhase = 5", code, StringComparison.Ordinal);
+        Assert.Contains("private const int MaximumDisplayedBannerCharactersPerPhase = 10", code, StringComparison.Ordinal);
         Assert.Contains("OrderBannerCharacters(phase.Characters)", code, StringComparison.Ordinal);
         Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now)", code, StringComparison.Ordinal);
         Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 5)", code, StringComparison.Ordinal);
