@@ -67,23 +67,26 @@ public sealed class PengoWebToolsUiTests
     }
 
     [Fact]
-    public void Feature_flags_gate_each_lane_while_planned_provider_controls_stay_visible()
+    public void Catalog_offers_export_controls_while_feature_flags_gate_provider_availability()
     {
         var code = ReadAppFile("MainPage.xaml.cs");
         var render = Slice(code, "private void RenderExportTools", "private static string FormatExportStatus");
 
         Assert.Contains("ExportProviderCatalog.GetEnabled", render, StringComparison.Ordinal);
-        Assert.Contains("ExportProviderCatalog.Get(selected.Id)", render, StringComparison.Ordinal);
-        Assert.Contains("var pullsSupported = catalogCapability.Supports(ExportKind.Pulls)", render, StringComparison.Ordinal);
-        Assert.Contains("var achievementsSupported = catalogCapability.Supports(ExportKind.Achievements)", render, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExportProviderCatalog.Get(selected.Id)", render, StringComparison.Ordinal);
         Assert.Contains("armed.AchievementSource", render, StringComparison.Ordinal);
         Assert.Contains("achievementSource);", render, StringComparison.Ordinal);
         Assert.Contains("NyxToolsPanel.Visibility = Visibility.Collapsed", render, StringComparison.Ordinal);
         Assert.Contains("ApplySavedPanelVisibility(selected)", render, StringComparison.Ordinal);
+        Assert.True(
+            render.IndexOf("if (selected.IsCustom) return;", StringComparison.Ordinal)
+            < render.IndexOf("GameCatalog.GetRequired(selected.Id)", StringComparison.Ordinal));
+        Assert.Contains("var pullsOffered = definition.SupportsPulls", render, StringComparison.Ordinal);
+        Assert.Contains("var achievementsOffered = definition.SupportsAchievements", render, StringComparison.Ordinal);
         Assert.Contains("PullExportToggle.Visibility = pullsOffered", render, StringComparison.Ordinal);
         Assert.Contains("AchievementExportPanel.Visibility = achievementsOffered", render, StringComparison.Ordinal);
-        Assert.Contains("selected.Id is \"gi\" or \"hsr\" or \"zzz\" or \"wuwa\"", render, StringComparison.Ordinal);
-        Assert.Contains("selected.Id is \"gi\" or \"hsr\" or \"zzz\"", render, StringComparison.Ordinal);
+        Assert.DoesNotContain("var pullsOffered = selected.Id", render, StringComparison.Ordinal);
+        Assert.DoesNotContain("var achievementsOffered = selected.Id", render, StringComparison.Ordinal);
         Assert.Contains("No supported export tools for this game.", render, StringComparison.Ordinal);
         Assert.Contains("Export tools for this game are not ready yet.", render, StringComparison.Ordinal);
         Assert.Contains("PullExportToggle.IsEnabled = pullsAvailable", render, StringComparison.Ordinal);

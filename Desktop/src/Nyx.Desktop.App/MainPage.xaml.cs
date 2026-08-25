@@ -115,16 +115,6 @@ public sealed partial class MainPage : Page
             ["wuwa"] = ("Waveplate", "Waveplate Crystal"),
         };
 
-    private static readonly IReadOnlyDictionary<string, string> MaintenanceProviders =
-        new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["gi"] = "HoYoPlay",
-            ["hsr"] = "HoYoPlay",
-            ["zzz"] = "HoYoPlay",
-            ["wuwa"] = "KURO GAMES",
-            ["ae"] = "GRYPHLINK",
-        };
-
     private static readonly IReadOnlyDictionary<string, string> RedemptionUrlTemplates =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -557,7 +547,7 @@ public sealed partial class MainPage : Page
                     game.Id,
                     game.DisplayName,
                     appearance?.IconPath ?? IconPaths[game.Id],
-                    MaintenanceProviders[game.Id],
+                    game.RailProvider,
                     "⋯",
                     "Checking local status",
                     isCustom: false);
@@ -1376,7 +1366,8 @@ public sealed partial class MainPage : Page
     {
         if (publisherAccountActionInFlight
             || GameSelector?.SelectedItem is not GameLauncherItem selected
-            || !PublisherAccountCatalog.Get(selected.Id).SupportsDailyCheckIn
+            || !GameCatalog.TryGet(selected.Id, out var definition)
+            || !definition.SupportsDailyCheckIn
             || !HasPublisherConsent(selected.Id))
             return;
         publisherAccountActionInFlight = true;
@@ -1968,7 +1959,8 @@ public sealed partial class MainPage : Page
     {
         var preferences = launcherState.Snapshot.Preferences;
         if (!preferences.AutomaticDailyCheckInGames.Contains(gameId, StringComparer.Ordinal)
-            || !PublisherAccountCatalog.Get(gameId).SupportsDailyCheckIn
+            || !GameCatalog.TryGet(gameId, out var definition)
+            || !definition.SupportsDailyCheckIn
             || !HasPublisherConsent(gameId)
             || !automaticDailyCheckInsInFlight.Add(gameId)) return;
         _ = DispatcherQueue.TryEnqueue(RenderSelection);
@@ -2429,7 +2421,9 @@ public sealed partial class MainPage : Page
         var lease = pageLease;
         if (lease is null
             || screenshotFolderActionInFlight
-            || GameSelector?.SelectedItem is not GameLauncherItem selected)
+            || GameSelector?.SelectedItem is not GameLauncherItem selected
+            || !GameCatalog.TryGet(selected.Id, out var definition)
+            || !definition.SupportsScreenshots)
         {
             return;
         }
@@ -2491,7 +2485,8 @@ public sealed partial class MainPage : Page
     private void Fps120Toggle_Click(object sender, RoutedEventArgs e)
     {
         if (GameSelector?.SelectedItem is not GameLauncherItem selected
-            || selected.Id is not ("gi" or "hsr"))
+            || !GameCatalog.TryGet(selected.Id, out var definition)
+            || !definition.Supports120Fps)
         {
             return;
         }
@@ -5336,6 +5331,7 @@ public sealed partial class MainPage : Page
             return;
         }
 
+        var definition = GameCatalog.GetRequired(selected.Id);
         AccountAndToolsProviderText.Text = "ACCOUNT";
         ChangePublisherAccountButton.Content = "Accounts";
         SetStableExportStatus(NyxToolsStatusText.Text);
@@ -5358,12 +5354,12 @@ public sealed partial class MainPage : Page
             SetLaunchDetail(officialLauncherStatus);
         }
 
-            Fps120Toggle.Visibility = selected.Id is "gi" or "hsr"
-                ? Visibility.Visible
-                : Visibility.Collapsed;
-        Fps120Toggle.IsChecked = selected.Id is "gi" or "hsr"
+        Fps120Toggle.Visibility = definition.Supports120Fps
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        Fps120Toggle.IsChecked = definition.Supports120Fps
             && app.Is120FpsOnLaunch(selected.Id);
-        Fps120Toggle.IsEnabled = selected.Id is "gi" or "hsr";
+        Fps120Toggle.IsEnabled = definition.Supports120Fps;
         AutomationProperties.SetName(
             Fps120Toggle,
             selected.Id switch
@@ -5382,12 +5378,12 @@ public sealed partial class MainPage : Page
             });
 
         StableOpenScreenshotFolderButton.IsEnabled = !screenshotFolderActionInFlight
-            && selected.Id is "gi" or "hsr" or "zzz" or "wuwa" or "ae";
+            && definition.SupportsScreenshots;
         AutomationProperties.SetName(
             StableOpenScreenshotFolderButton,
             $"Open {selected.DisplayName} screenshot folder");
 
-        var dailySupported = PublisherAccountCatalog.Get(selected.Id).SupportsDailyCheckIn;
+        var dailySupported = definition.SupportsDailyCheckIn;
         AutomaticDailyCheckInToggle.Visibility = dailySupported
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -5395,10 +5391,9 @@ public sealed partial class MainPage : Page
             && launcherState.Snapshot.Preferences.AutomaticDailyCheckInGames.Contains(
                 selected.Id,
                 StringComparer.Ordinal);
-        OnLaunchPanel.Visibility = selected.Id != "wuwa"
-            && (dailySupported || selected.Id is "gi" or "hsr")
-                ? Visibility.Visible
-                : Visibility.Collapsed;
+        OnLaunchPanel.Visibility = dailySupported || definition.Supports120Fps
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         if (selected.Id == "wuwa")
         {
@@ -6118,6 +6113,7 @@ public sealed partial class MainPage : Page
         NyxToolsPanel.Visibility = Visibility.Collapsed;
         ApplySavedPanelVisibility(selected);
         if (selected.IsCustom) return;
+        var definition = GameCatalog.GetRequired(selected.Id);
         var armed = launcherState.Snapshot.Export.Games.TryGetValue(selected.Id, out var saved)
             ? saved
             : new Nyx.Desktop.Core.State.ExportGameArming
@@ -6144,11 +6140,8 @@ public sealed partial class MainPage : Page
                 selected.Id,
                 launcherState.Snapshot.Preferences.FeatureFlags,
                 AchievementExportSources.HoyoLab).Supports(ExportKind.Achievements);
-        var catalogCapability = ExportProviderCatalog.Get(selected.Id);
-        var pullsSupported = catalogCapability.Supports(ExportKind.Pulls);
-        var achievementsSupported = catalogCapability.Supports(ExportKind.Achievements);
-        var pullsOffered = selected.Id is "gi" or "hsr" or "zzz" or "wuwa";
-        var achievementsOffered = selected.Id is "gi" or "hsr" or "zzz";
+        var pullsOffered = definition.SupportsPulls;
+        var achievementsOffered = definition.SupportsAchievements;
         var pullsAvailable = capability.Supports(ExportKind.Pulls);
         var achievementsAvailable = selected.Id == "hsr"
             ? gameAchievementAvailable || hoyoLabAchievementAvailable
@@ -6267,7 +6260,7 @@ public sealed partial class MainPage : Page
         {
             var kinds = !pullsAvailable && !achievementsAvailable && (pullsOffered || achievementsOffered)
                 ? "Export tools for this game are not ready yet."
-                : !pullsSupported && !achievementsSupported
+                : !pullsOffered && !achievementsOffered
                 ? "No supported export tools for this game."
                 : (armed.PullsArmed, armed.AchievementsArmed) switch
             {

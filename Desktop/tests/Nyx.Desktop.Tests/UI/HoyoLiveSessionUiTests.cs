@@ -125,6 +125,9 @@ public sealed class HoyoLiveSessionUiTests
             page,
             "private async void OpenScreenshotFolderButton_Click",
             "private void Fps120Toggle_Click");
+        var catalogGate = click.IndexOf(
+            "GameCatalog.TryGet(selected.Id, out var definition)",
+            StringComparison.Ordinal);
         var resolve = click.IndexOf("await Task.Run(", StringComparison.Ordinal);
         var ready = click.IndexOf("result.Status is not GameScreenshotFolderStatus.Ready", StringComparison.Ordinal);
         var open = click.IndexOf("Windows.System.Launcher.LaunchFolderPathAsync", StringComparison.Ordinal);
@@ -132,14 +135,32 @@ public sealed class HoyoLiveSessionUiTests
         var restored = click.IndexOf("screenshotFolderActionInFlight = false", StringComparison.Ordinal);
 
         Assert.Contains("var gameId = selected.Id", click, StringComparison.Ordinal);
+        Assert.Contains("!definition.SupportsScreenshots", click, StringComparison.Ordinal);
         Assert.Contains("await Task.Run(", click, StringComparison.Ordinal);
         Assert.Contains("() => app.ResolveScreenshotFolder(gameId)", click, StringComparison.Ordinal);
         Assert.Contains("current.Id != gameId", click, StringComparison.Ordinal);
         Assert.Contains("GameScreenshotFolderStatus.Ready", click, StringComparison.Ordinal);
         Assert.Contains("Windows.System.Launcher.LaunchFolderPathAsync(result.FolderPath)", click, StringComparison.Ordinal);
-        Assert.True(resolve >= 0 && ready > resolve && open > ready && finalizer > open && restored > finalizer);
+        Assert.True(catalogGate >= 0 && resolve > catalogGate && ready > resolve && open > ready && finalizer > open && restored > finalizer);
         Assert.DoesNotContain("Directory.CreateDirectory", click, StringComparison.Ordinal);
         Assert.DoesNotContain("result.FolderPath}", click, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Official_rail_and_controls_read_the_canonical_game_definition()
+    {
+        var page = ReadAppFile("MainPage.xaml.cs");
+        var rail = Slice(page, "private void RebuildGameRail", "private async void MainPage_Loaded");
+        var controls = Slice(page, "private void SyncRedesignedControls", "private void RenderHoyoLabAccountIdentity");
+        var customGate = controls.IndexOf("if (selected.IsCustom)", StringComparison.Ordinal);
+        var catalogRead = controls.IndexOf("var definition = GameCatalog.GetRequired(selected.Id);", StringComparison.Ordinal);
+
+        Assert.DoesNotContain("MaintenanceProviders", page, StringComparison.Ordinal);
+        Assert.Contains("game.RailProvider", rail, StringComparison.Ordinal);
+        Assert.True(customGate >= 0 && catalogRead > customGate);
+        Assert.Contains("definition.Supports120Fps", controls, StringComparison.Ordinal);
+        Assert.Contains("definition.SupportsScreenshots", controls, StringComparison.Ordinal);
+        Assert.Contains("definition.SupportsDailyCheckIn", controls, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -150,7 +171,13 @@ public sealed class HoyoLiveSessionUiTests
             page,
             "private void Fps120Toggle_Click",
             "private void SetOfficialLauncherStatus");
+        var catalogGate = toggle.IndexOf(
+            "GameCatalog.TryGet(selected.Id, out var definition)",
+            StringComparison.Ordinal);
+        var save = toggle.IndexOf("app.TrySet120FpsOnLaunch", StringComparison.Ordinal);
 
+        Assert.Contains("!definition.Supports120Fps", toggle, StringComparison.Ordinal);
+        Assert.True(catalogGate >= 0 && save > catalogGate);
         Assert.Contains("app.TrySet120FpsOnLaunch(selected.Id, enabled)", toggle, StringComparison.Ordinal);
         Assert.Contains("Fps120Toggle.IsChecked = app.Is120FpsOnLaunch(selected.Id)", toggle, StringComparison.Ordinal);
         Assert.Contains("Nyx could not save the 120 FPS setting.", toggle, StringComparison.Ordinal);
@@ -287,6 +314,10 @@ public sealed class HoyoLiveSessionUiTests
             page,
             "private async void DailyCheckInButton_Click",
             "private async Task SetPublisherConsentAsync");
+        var automatic = Slice(
+            page,
+            "private async Task RunAutomaticDailyCheckInOnLaunchAsync",
+            "private async Task SetPublisherConsentAsync");
         var postDailyRefresh = Slice(
             page,
             "private async Task RefreshPublisherResourceAfterCheckInAsync",
@@ -304,7 +335,12 @@ public sealed class HoyoLiveSessionUiTests
             "private async Task<DailyCheckInResult> CheckInCoreAsync",
             "private async Task RunProviderCheckInsAsync");
 
-        Assert.Contains("PublisherAccountCatalog.Get(selected.Id).SupportsDailyCheckIn", click, StringComparison.Ordinal);
+        Assert.Contains("GameCatalog.TryGet(selected.Id, out var definition)", click, StringComparison.Ordinal);
+        Assert.Contains("!definition.SupportsDailyCheckIn", click, StringComparison.Ordinal);
+        Assert.True(
+            click.IndexOf("GameCatalog.TryGet(selected.Id, out var definition)", StringComparison.Ordinal)
+            < click.IndexOf("publisherAccounts.CheckInAsync(", StringComparison.Ordinal));
+        Assert.DoesNotContain("PublisherAccountCatalog.Get(selected.Id).SupportsDailyCheckIn", click, StringComparison.Ordinal);
         Assert.Contains("publisherAccounts.CheckInAsync(", click, StringComparison.Ordinal);
         Assert.Contains("selected.Id,", click, StringComparison.Ordinal);
         Assert.DoesNotContain("CheckInAllAsync", click, StringComparison.Ordinal);
@@ -336,8 +372,13 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("[entry.GameId]", checkInOperation, StringComparison.Ordinal);
         Assert.DoesNotContain("[\"gi\", \"hsr\", \"zzz\"]", checkInOperation, StringComparison.Ordinal);
         Assert.DoesNotContain("[\"ae\"]", checkInOperation, StringComparison.Ordinal);
+        Assert.Contains("GameCatalog.TryGet(gameId, out var definition)", automatic, StringComparison.Ordinal);
+        Assert.Contains("!definition.SupportsDailyCheckIn", automatic, StringComparison.Ordinal);
+        Assert.True(
+            automatic.IndexOf("GameCatalog.TryGet(gameId, out var definition)", StringComparison.Ordinal)
+            < automatic.IndexOf("automaticDailyCheckInsInFlight.Add(gameId)", StringComparison.Ordinal));
         Assert.Contains(
-            "var dailySupported = PublisherAccountCatalog.Get(selected.Id).SupportsDailyCheckIn;",
+            "var dailySupported = definition.SupportsDailyCheckIn;",
             page,
             StringComparison.Ordinal);
     }
@@ -650,8 +691,8 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("GameAchievementSourceRadio.IsEnabled = gameAchievementAvailable", page, StringComparison.Ordinal);
         Assert.Contains("&& !sourceLocked", Slice(page, "GameAchievementSourceRadio.IsEnabled", "AchievementExportToggle.Height"), StringComparison.Ordinal);
         Assert.Contains("if (existing.PullsArmed)", page, StringComparison.Ordinal);
-        Assert.Contains("var pullsOffered = selected.Id is \"gi\" or \"hsr\" or \"zzz\" or \"wuwa\"", page, StringComparison.Ordinal);
-        Assert.Contains("var achievementsOffered = selected.Id is \"gi\" or \"hsr\" or \"zzz\"", page, StringComparison.Ordinal);
+        Assert.Contains("var pullsOffered = definition.SupportsPulls", page, StringComparison.Ordinal);
+        Assert.Contains("var achievementsOffered = definition.SupportsAchievements", page, StringComparison.Ordinal);
         var achievementCard = Slice(xaml, "x:Name=\"AchievementExportCard\"", "x:Name=\"StableAchievementExportToggle\"");
         var pullCard = Slice(xaml, "x:Name=\"PullExportCard\"", "x:Name=\"StablePullExportToggle\"");
         Assert.Contains("Grid.Column=\"1\"", achievementCard, StringComparison.Ordinal);
