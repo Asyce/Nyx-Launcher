@@ -72,7 +72,8 @@ if ($CheckOnly -and $Restore) {
 }
 
 $desktopRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$globalJsonPath = Join-Path $desktopRoot 'global.json'
+$repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $desktopRoot '..'))
+$globalJsonPath = Join-Path $repositoryRoot 'global.json'
 $projectPath = Join-Path $desktopRoot 'src\Nyx.Desktop.App\Nyx.Desktop.App.csproj'
 $assetsPath = Join-Path $desktopRoot 'src\Nyx.Desktop.App\obj\project.assets.json'
 
@@ -100,11 +101,11 @@ try {
     $pinnedSdk = [string] $globalJson.sdk.version
 }
 catch {
-    Stop-NyxStart -Code $script:ExitProject -Message 'Desktop\global.json is invalid.'
+    Stop-NyxStart -Code $script:ExitProject -Message 'global.json is invalid.'
 }
 
 if ([string]::IsNullOrWhiteSpace($pinnedSdk) -or $pinnedSdk.Length -gt 32) {
-    Stop-NyxStart -Code $script:ExitProject -Message 'Desktop\global.json does not contain a valid pinned SDK version.'
+    Stop-NyxStart -Code $script:ExitProject -Message 'global.json does not contain a valid pinned SDK version.'
 }
 
 $dotnet = Get-Command 'dotnet.exe' -CommandType Application -ErrorAction SilentlyContinue
@@ -257,7 +258,6 @@ $python = @(Get-Command 'python.exe' -CommandType Application -ErrorAction Silen
 if ($null -eq $cargo -or $null -eq $python) {
     Stop-NyxStart -Code $script:ExitRunSupport -Message 'Install Rust and Python so Nyx can build and verify the achievement helper.'
 }
-$repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $desktopRoot '..'))
 $achievementHelperRoot = Join-Path $repositoryRoot 'Extractor\Achievements'
 $achievementHelperBuildRoot = Join-Path $desktopRoot '.verification-build\achievement-helper'
 $genshin120HelperRoot = Join-Path $desktopRoot 'tools\Nyx.Genshin120.NativeHelper'

@@ -217,7 +217,7 @@ public sealed class DesktopStartReadinessTests
         private StartFixture(string root)
         {
             Root = root;
-            var scripts = Path.Combine(root, "scripts");
+            var scripts = Path.Combine(root, "Desktop", "scripts");
             Directory.CreateDirectory(scripts);
             StartScript = Path.Combine(scripts, "start-nyx.ps1");
             File.Copy(DesktopStartReadinessTests.StartScript, StartScript);
@@ -238,7 +238,7 @@ public sealed class DesktopStartReadinessTests
             string packageVersion = "2.2.0")
         {
             WriteGlobalJson(sdk);
-            var appRoot = Path.Combine(Root, "src", "Nyx.Desktop.App");
+            var appRoot = Path.Combine(Root, "Desktop", "src", "Nyx.Desktop.App");
             Directory.CreateDirectory(appRoot);
             File.WriteAllText(Path.Combine(appRoot, "Nyx.Desktop.App.csproj"),
                 $"<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0-windows10.0.22621.0</TargetFramework><OutputType>WinExe</OutputType><WindowsPackageType>None</WindowsPackageType><WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained><PublishTrimmed>false</PublishTrimmed></PropertyGroup><ItemGroup><PackageReference Include=\"{packageName}\" Version=\"{packageVersion}\" /></ItemGroup></Project>");
@@ -248,7 +248,7 @@ public sealed class DesktopStartReadinessTests
             string packageName = "Microsoft.WindowsAppSDK",
             string packageVersion = "2.2.0")
         {
-            var objectRoot = Path.Combine(Root, "src", "Nyx.Desktop.App", "obj");
+            var objectRoot = Path.Combine(Root, "Desktop", "src", "Nyx.Desktop.App", "obj");
             Directory.CreateDirectory(objectRoot);
             File.WriteAllText(
                 Path.Combine(objectRoot, "project.assets.json"),
@@ -258,7 +258,7 @@ public sealed class DesktopStartReadinessTests
         public void WriteOversizedProject(string sdk)
         {
             WriteMinimumProject(sdk);
-            var project = Path.Combine(Root, "src", "Nyx.Desktop.App", "Nyx.Desktop.App.csproj");
+            var project = Path.Combine(Root, "Desktop", "src", "Nyx.Desktop.App", "Nyx.Desktop.App.csproj");
             File.WriteAllText(project, "<Project><!--" + new string('x', 1_048_576) + "--></Project>");
         }
 
