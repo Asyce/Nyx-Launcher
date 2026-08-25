@@ -26,8 +26,9 @@ public sealed class NativeSmokeScriptTests
         Assert.Contains("retryStateCheckedForGames++", source, StringComparison.Ordinal);
         Assert.Contains("retryStates += [ordered]@{ game = $gameName; state = $retryState }", source, StringComparison.Ordinal);
         Assert.Contains("SCREENSHOT_BLACK_OR_FLAT", source, StringComparison.Ordinal);
-        Assert.Contains("SECOND_INSTANCE_DID_NOT_REDIRECT", source, StringComparison.Ordinal);
-        Assert.Contains("$script:uiChecks.secondInstanceRedirected = $true", source, StringComparison.Ordinal);
+        Assert.Matches(
+            new Regex(@"\$secondaryProcess = Start-Process[\s\S]*?\$secondaryProcess\.WaitForExit\(10000\)[\s\S]*?\$secondaryProcess\.ExitCode -ne 0[\s\S]*?\$script:appProcess\.HasExited[\s\S]*?\$window\.Current\.ProcessId -ne \$script:appProcess\.Id[\s\S]*?\$window\.GetRuntimeId\(\)[\s\S]*?\$script:uiChecks\.secondInstanceSuppressed = \$true", RegexOptions.CultureInvariant),
+            source);
         Assert.Contains("$settings = Wait-ExactElement -Root $window -Name 'Settings'", source, StringComparison.Ordinal);
         Assert.Contains("public static extern bool SetForegroundWindow(IntPtr window);", source, StringComparison.Ordinal);
         Assert.Equal(4, Regex.Matches(source, @"\[NyxNativeSmokeCapture\]::SetForegroundWindow", RegexOptions.CultureInvariant).Count);
@@ -69,16 +70,16 @@ public sealed class NativeSmokeScriptTests
             new Regex(@"function Assert-SideEffectControl \{[\s\S]*?AddSeconds\(20\)[\s\S]*?Find-AutomationIdElement -Root \$Root -AutomationId \$AutomationId[\s\S]*?Start-Sleep -Milliseconds 100[\s\S]*?SIDE_EFFECT_CONTROL_MISSING[\s\S]*?^\}", RegexOptions.Multiline | RegexOptions.CultureInvariant),
             source);
         Assert.Matches(
-            new Regex(@"\$settings\.SetFocus\(\)\r?\n\s*Assert-FocusIs -Expected \$settings\r?\n\s*Send-SafeKey -Key Tab", RegexOptions.CultureInvariant),
+            new Regex(@"\[NyxNativeSmokeCapture\]::SetForegroundWindow\([^\r\n]+\)\r?\n\s*\$settings\.SetFocus\(\)\r?\n\s*Assert-FocusIs -Expected \$settings\r?\n\s*Send-SafeKey -Key Tab", RegexOptions.CultureInvariant),
             source);
         Assert.Matches(
-            new Regex(@"\$cancel\.SetFocus\(\)\r?\n\s*Assert-FocusIs -Expected \$cancel\r?\n\s*Send-SafeKey -Key ShiftTab", RegexOptions.CultureInvariant),
+            new Regex(@"\[NyxNativeSmokeCapture\]::SetForegroundWindow\([^\r\n]+\)\r?\n\s*\$cancel\.SetFocus\(\)\r?\n\s*Assert-FocusIs -Expected \$cancel\r?\n\s*Send-SafeKey -Key ShiftTab", RegexOptions.CultureInvariant),
             source);
         Assert.Matches(
-            new Regex(@"\$cancel\.SetFocus\(\)[\s\S]{0,120}\r?\n\s*Send-SafeKey -Key Enter", RegexOptions.CultureInvariant),
+            new Regex(@"\[NyxNativeSmokeCapture\]::SetForegroundWindow\([^\r\n]+\)\r?\n\s*\$cancel\.SetFocus\(\)\r?\n\s*Assert-FocusIs -Expected \$cancel\r?\n\s*Send-SafeKey -Key Enter", RegexOptions.CultureInvariant),
             source);
         Assert.Matches(
-            new Regex(@"\$cancel\.SetFocus\(\)[\s\S]{0,120}\r?\n\s*Send-SafeKey -Key Escape", RegexOptions.CultureInvariant),
+            new Regex(@"\[NyxNativeSmokeCapture\]::SetForegroundWindow\([^\r\n]+\)\r?\n\s*\$cancel\.SetFocus\(\)\r?\n\s*Assert-FocusIs -Expected \$cancel\r?\n\s*Send-SafeKey -Key Escape", RegexOptions.CultureInvariant),
             source);
     }
 

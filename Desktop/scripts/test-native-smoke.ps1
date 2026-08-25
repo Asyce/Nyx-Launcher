@@ -35,7 +35,7 @@ $screenshotEvidence = @()
 $retryControlObserved = $false
 $uiChecks = [ordered]@{
     shellControlsFound = $false
-    secondInstanceRedirected = $false
+    secondInstanceSuppressed = $false
     gamesSelected = @()
     sideEffectControlsInspected = 0
     retryStateCheckedForGames = 0
@@ -643,16 +643,16 @@ public static class NyxNativeSmokeCapture
     $secondaryProcess = Start-Process -FilePath $entryPoint -WorkingDirectory $AppRoot -PassThru
     if (-not $secondaryProcess.WaitForExit(10000)) {
         try { $secondaryProcess.Kill() } catch { }
-        Throw-SmokeFailure 'SECOND_INSTANCE_DID_NOT_REDIRECT'
+        Throw-SmokeFailure 'SECOND_INSTANCE_NOT_SUPPRESSED'
     }
-    if ($secondaryProcess.ExitCode -ne 0) { Throw-SmokeFailure 'SECOND_INSTANCE_REDIRECT_FAILED' }
+    if ($secondaryProcess.ExitCode -ne 0) { Throw-SmokeFailure 'SECOND_INSTANCE_EXIT_FAILED' }
     $window = Wait-Window
     if ($script:appProcess.HasExited -or
         $window.Current.ProcessId -ne $script:appProcess.Id -or
         ($window.GetRuntimeId() -join ',') -cne $primaryWindowId) {
         Throw-SmokeFailure 'PRIMARY_INSTANCE_LOST'
     }
-    $script:uiChecks.secondInstanceRedirected = $true
+    $script:uiChecks.secondInstanceSuppressed = $true
 
     foreach ($gameName in $gameNames) {
         $game = Wait-GameItem -Root $window -GameName $gameName
