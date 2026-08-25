@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using System.Security.Cryptography;
 using Nyx.Desktop.Core.State;
 
@@ -93,6 +94,16 @@ internal sealed record UpdateJournal(
     string? DisplacedDirectoryName,
     string? ManifestSha256 = null);
 
+[JsonSourceGenerationOptions(
+    WriteIndented = true,
+    UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow)]
+[JsonSerializable(typeof(PendingUpdate))]
+[JsonSerializable(typeof(ActiveRelease))]
+[JsonSerializable(typeof(UpdateJournal))]
+internal sealed partial class UpdateMetadataJsonContext : JsonSerializerContext
+{
+}
+
 public static class UpdateTransaction
 {
     private const string ApplyOperation = "apply";
@@ -101,12 +112,6 @@ public static class UpdateTransaction
     private const string PreparedPhase = "prepared";
     private const string CurrentMovedPhase = "current-moved";
     private const string ReplacementMovedPhase = "replacement-moved";
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = false,
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-    };
 
     public static void Reconcile(UpdateLayout layout)
     {
@@ -237,7 +242,7 @@ public static class UpdateTransaction
             stagedName,
             null,
             manifestSha256);
-        AtomicJson.Write(layout.TransactionPath, journal);
+        AtomicJson.Write(layout.TransactionPath, journal, UpdateMetadataJsonContext.Default.UpdateJournal);
         checkpoint?.Invoke(UpdateTransactionCheckpoint.ApplyJournalPrepared);
         _ = ReconcileLocked(layout, checkpoint);
     }
@@ -260,7 +265,10 @@ public static class UpdateTransaction
 
         RequireConfirmationOpen(pending);
         UpdatePackageStager.VerifyTree(manifest, layout.AppRoot);
-        AtomicJson.Write(layout.ActivePath, new ActiveRelease(1, manifest.Version, manifest.Channel));
+        AtomicJson.Write(
+            layout.ActivePath,
+            new ActiveRelease(1, manifest.Version, manifest.Channel),
+            UpdateMetadataJsonContext.Default.ActiveRelease);
         File.Delete(layout.PendingPath);
     }
 
@@ -294,7 +302,10 @@ public static class UpdateTransaction
         UpdatePackageStager.VerifyTree(manifest, layout.AppRoot);
         RequireConfirmationOpen(pending);
         requireCallerRunning();
-        AtomicJson.Write(layout.ActivePath, new ActiveRelease(1, manifest.Version, manifest.Channel));
+        AtomicJson.Write(
+            layout.ActivePath,
+            new ActiveRelease(1, manifest.Version, manifest.Channel),
+            UpdateMetadataJsonContext.Default.ActiveRelease);
         File.Delete(layout.PendingPath);
         File.Delete(layout.PendingManifestPath);
         return true;
@@ -318,7 +329,10 @@ public static class UpdateTransaction
                 if (pending is null) return ConfirmationExpirationResult.Confirmed;
                 if (!pending.ConfirmationExpired)
                 {
-                    AtomicJson.Write(layout.PendingPath, pending with { ConfirmationExpired = true });
+                    AtomicJson.Write(
+                        layout.PendingPath,
+                        pending with { ConfirmationExpired = true },
+                        UpdateMetadataJsonContext.Default.PendingUpdate);
                 }
 
                 return ConfirmationExpirationResult.Expired;
@@ -391,7 +405,7 @@ public static class UpdateTransaction
             null,
             $"abandoned-{Guid.NewGuid():N}",
             pending.ManifestSha256);
-        AtomicJson.Write(layout.TransactionPath, journal);
+        AtomicJson.Write(layout.TransactionPath, journal, UpdateMetadataJsonContext.Default.UpdateJournal);
         checkpoint?.Invoke(UpdateTransactionCheckpoint.AbandonJournalPrepared);
         _ = ReconcileLocked(layout, checkpoint);
         return true;
@@ -404,7 +418,7 @@ public static class UpdateTransaction
             return null;
         }
 
-        var pending = ReadBounded<PendingUpdate>(path);
+        var pending = ReadBounded(path, UpdateMetadataJsonContext.Default.PendingUpdate);
         if (pending.SchemaVersion != 1
             || !UpdateManifestReader.TryParseVersion(pending.TargetVersion)
             || (pending.PreviousVersion is not null && !UpdateManifestReader.TryParseVersion(pending.PreviousVersion))
@@ -424,7 +438,7 @@ public static class UpdateTransaction
             return null;
         }
 
-        var active = ReadBounded<ActiveRelease>(path);
+        var active = ReadBounded(path, UpdateMetadataJsonContext.Default.ActiveRelease);
         if (active.SchemaVersion != 1 || !UpdateManifestReader.TryParseVersion(active.Version)
             || active.Channel is not ("development" or "preview" or "stable"))
         {
@@ -646,7 +660,8 @@ public static class UpdateTransaction
                 journal.TargetVersion,
                 journal.PreviousVersion,
                 journal.BackupDirectoryName,
-                journal.ManifestSha256));
+                journal.ManifestSha256),
+            UpdateMetadataJsonContext.Default.PendingUpdate);
         checkpoint?.Invoke(UpdateTransactionCheckpoint.ApplyPendingPublished);
         File.Delete(layout.TransactionPath);
         checkpoint?.Invoke(UpdateTransactionCheckpoint.ApplyJournalCleared);
@@ -680,7 +695,7 @@ public static class UpdateTransaction
             null,
             $"failed-{Guid.NewGuid():N}",
             pending.ManifestSha256);
-        AtomicJson.Write(layout.TransactionPath, journal);
+        AtomicJson.Write(layout.TransactionPath, journal, UpdateMetadataJsonContext.Default.UpdateJournal);
         checkpoint?.Invoke(UpdateTransactionCheckpoint.RollbackJournalPrepared);
         return ReconcileRollback(layout, journal, checkpoint);
     }
@@ -818,7 +833,7 @@ public static class UpdateTransaction
             return null;
         }
 
-        var journal = ReadBounded<UpdateJournal>(path);
+        var journal = ReadBounded(path, UpdateMetadataJsonContext.Default.UpdateJournal);
         var validOperation = journal.Operation is ApplyOperation or RollbackOperation or AbandonOperation;
         var validPhase = journal.Phase is PreparedPhase or CurrentMovedPhase or ReplacementMovedPhase;
         var validBackup = journal.BackupDirectoryName is null
@@ -849,7 +864,7 @@ public static class UpdateTransaction
         return journal;
     }
 
-    private static T ReadBounded<T>(string path)
+    private static T ReadBounded<T>(string path, JsonTypeInfo<T> typeInfo)
     {
         var safe = SafePaths.RequireExistingFile(path);
         if (new FileInfo(safe).Length is <= 0 or > 64 * 1024)
@@ -858,14 +873,14 @@ public static class UpdateTransaction
         }
 
         using var stream = File.OpenRead(safe);
-        return JsonSerializer.Deserialize<T>(stream, JsonOptions)
+        return JsonSerializer.Deserialize(stream, typeInfo)
             ?? throw new UpdateContractException("MetadataInvalid");
     }
 
     private static UpdateJournal WritePhase(UpdateLayout layout, UpdateJournal journal, string phase)
     {
         journal = journal with { Phase = phase };
-        AtomicJson.Write(layout.TransactionPath, journal);
+        AtomicJson.Write(layout.TransactionPath, journal, UpdateMetadataJsonContext.Default.UpdateJournal);
         return journal;
     }
 
@@ -1089,9 +1104,13 @@ public static class UpdateTransaction
 
 public static class AtomicJson
 {
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
+    public static void Write(string path, ActiveRelease value) =>
+        Write(path, value, UpdateMetadataJsonContext.Default.ActiveRelease);
 
-    public static void Write<T>(string path, T value)
+    internal static void Write(string path, UpdateJournal value) =>
+        Write(path, value, UpdateMetadataJsonContext.Default.UpdateJournal);
+
+    public static void Write<T>(string path, T value, JsonTypeInfo<T> typeInfo)
     {
         var directory = Path.GetDirectoryName(path) ?? throw new UpdateContractException("MetadataInvalid");
         SafePaths.CreateDirectoryTree(directory);
@@ -1106,7 +1125,7 @@ public static class AtomicJson
                 bufferSize: 16 * 1024,
                 FileOptions.WriteThrough))
             {
-                JsonSerializer.Serialize(stream, value, Options);
+                JsonSerializer.Serialize(stream, value, typeInfo);
                 stream.Flush(flushToDisk: true);
             }
 

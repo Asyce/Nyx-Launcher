@@ -496,7 +496,8 @@ try {
         '-r', 'win-x64',
         '--self-contained', 'true',
         '-p:PublishSingleFile=true',
-        '-p:PublishTrimmed=false',
+        '-p:PublishTrimmed=true',
+        '-p:DefineConstants=',
         '-p:DebugType=None',
         '-p:DebugSymbols=false',
         '-p:Deterministic=true',
@@ -507,6 +508,10 @@ try {
     ) + $restoreArgument
     & $dotnet @toolArguments
     if ($LASTEXITCODE -ne 0) { throw 'Nyx updater publish failed.' }
+    Assert-NoPrivateBuildStrings -Root $toolRoot -Needles @(
+        'NYX_UPDATER_DISPOSABLE_ROOT',
+        'NYX_UPDATER_DISPOSABLE_SMOKE_V1'
+    )
 
     $entryPoint = Join-Path $publishRoot 'Nyx.Desktop.App.exe'
     $appAssembly = Join-Path $publishRoot 'Nyx.Desktop.App.dll'

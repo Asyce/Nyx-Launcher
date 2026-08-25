@@ -8,7 +8,11 @@ internal static class UpdaterProgram
     {
         try
         {
+#if NYX_UPDATER_DISPOSABLE_SMOKE
+            var layout = DisposableSmokeLayout();
+#else
             var layout = UpdateLayout.ForCurrentUser();
+#endif
             if (args is ["launch"])
             {
                 StableUpdateRunner.Launch(layout);
@@ -133,4 +137,54 @@ internal static class UpdaterProgram
             return 4;
         }
     }
+
+#if NYX_UPDATER_DISPOSABLE_SMOKE
+    private const string DisposableRootVariable = "NYX_UPDATER_DISPOSABLE_ROOT";
+    private const string DisposableMarker = ".nyx-updater-disposable-smoke";
+    private const string DisposableMarkerContents = "NYX_UPDATER_DISPOSABLE_SMOKE_V1";
+    private const string DisposableRootPrefix = "nyx-updater-smoke-";
+
+    private static UpdateLayout DisposableSmokeLayout()
+    {
+        var root = SafePaths.RequireExistingDirectory(
+            Environment.GetEnvironmentVariable(DisposableRootVariable)
+            ?? throw new UpdateContractException("DisposableRootMissing"));
+        var name = Path.GetFileName(root);
+        if (name.Length != DisposableRootPrefix.Length + 32
+            || !name.StartsWith(DisposableRootPrefix, StringComparison.Ordinal)
+            || !name[DisposableRootPrefix.Length..].All(character =>
+                character is >= '0' and <= '9' or >= 'a' and <= 'f'))
+        {
+            throw new UpdateContractException("DisposableRootInvalid");
+        }
+
+        var marker = SafePaths.RequireExistingFile(SafePaths.CombineUnder(root, DisposableMarker));
+        if (!string.Equals(File.ReadAllText(marker), DisposableMarkerContents, StringComparison.Ordinal))
+        {
+            throw new UpdateContractException("DisposableRootInvalid");
+        }
+
+        var layout = UpdateLayout.ForUserRoots(
+            SafePaths.CombineUnder(root, "local"),
+            SafePaths.CombineUnder(root, "roaming"));
+        foreach (var path in new[]
+                 {
+                     layout.InstallRoot,
+                     layout.UserDataRoot,
+                     layout.LegacyUserDataRoot,
+                     layout.StartMenuShortcut,
+                 })
+        {
+            var relative = Path.GetRelativePath(root, Path.GetFullPath(path));
+            if (Path.IsPathRooted(relative)
+                || relative is ".."
+                || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            {
+                throw new UpdateContractException("DisposableRootInvalid");
+            }
+        }
+
+        return layout;
+    }
+#endif
 }

@@ -32,6 +32,15 @@ public sealed record StableUpdateArtifactNames(
     string IncomingDirectoryName,
     string ReadyDirectoryName);
 
+[JsonSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow)]
+[JsonSerializable(typeof(UpdateReleaseManifest))]
+[JsonSerializable(typeof(StableUpdateArtifactOwner))]
+internal sealed partial class UpdateContractJsonContext : JsonSerializerContext
+{
+}
+
 public static class StableUpdateArtifactContract
 {
     public const int MaximumOwnerBytes = 4 * 1024;
@@ -39,13 +48,6 @@ public static class StableUpdateArtifactContract
     private const string Prefix = "handoff-";
     private const string OwnerSuffix = ".owner.json";
     private const string ManifestSuffix = ".release.json";
-    private static readonly JsonSerializerOptions Options = new()
-    {
-        PropertyNameCaseInsensitive = false,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-    };
-
     public static StableUpdateArtifactNames CreateNames(string id, string targetVersion)
     {
         if (!IsId(id) || !UpdateManifestReader.TryParseVersion(targetVersion))
@@ -68,7 +70,7 @@ public static class StableUpdateArtifactContract
     public static byte[] SerializeOwner(StableUpdateArtifactOwner owner)
     {
         ValidateOwner(owner);
-        return JsonSerializer.SerializeToUtf8Bytes(owner, Options);
+        return JsonSerializer.SerializeToUtf8Bytes(owner, UpdateContractJsonContext.Default.StableUpdateArtifactOwner);
     }
 
     public static StableUpdateArtifactOwner ParseOwner(ReadOnlySpan<byte> bytes)
@@ -76,7 +78,7 @@ public static class StableUpdateArtifactContract
         if (bytes.Length is <= 0 or > MaximumOwnerBytes)
             throw new UpdateContractException("StableArtifactMetadataInvalid");
 
-        var owner = JsonSerializer.Deserialize<StableUpdateArtifactOwner>(bytes, Options)
+        var owner = JsonSerializer.Deserialize(bytes, UpdateContractJsonContext.Default.StableUpdateArtifactOwner)
             ?? throw new UpdateContractException("StableArtifactMetadataInvalid");
         ValidateOwner(owner);
         return owner;
@@ -121,13 +123,6 @@ public static partial class UpdateManifestReader
     public const int MaximumFileCount = 8192;
     public const long MaximumFileBytes = 2L * 1024 * 1024 * 1024;
 
-    private static readonly JsonSerializerOptions Options = new()
-    {
-        PropertyNameCaseInsensitive = false,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-    };
-
     public static UpdateReleaseManifest Parse(ReadOnlySpan<byte> bytes)
     {
         if (bytes.Length is <= 0 or > MaximumManifestBytes)
@@ -135,7 +130,7 @@ public static partial class UpdateManifestReader
             throw new UpdateContractException("ManifestSizeInvalid");
         }
 
-        var manifest = JsonSerializer.Deserialize<UpdateReleaseManifest>(bytes, Options)
+        var manifest = JsonSerializer.Deserialize(bytes, UpdateContractJsonContext.Default.UpdateReleaseManifest)
             ?? throw new UpdateContractException("ManifestMissing");
         Validate(manifest);
         return manifest;

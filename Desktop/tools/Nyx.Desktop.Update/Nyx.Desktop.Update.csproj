@@ -7,9 +7,12 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AssemblyName>Nyx.Desktop.Update</AssemblyName>
     <RootNamespace>Nyx.Desktop.Update</RootNamespace>
+    <PublishTrimmed>true</PublishTrimmed>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Nyx.Desktop.Core\Nyx.Desktop.Core.csproj" />
+    <Compile Include="..\..\src\Nyx.Desktop.Core\State\NyxUserDataPaths.cs" Link="Shared\NyxUserDataPaths.cs" />
+    <Compile Include="..\..\src\Nyx.Desktop.Core\Updating\StableUpdatePolicy.cs" Link="Shared\StableUpdatePolicy.cs" />
+    <Compile Include="..\..\src\Nyx.Desktop.Core\Updating\UpdateManifest.cs" Link="Shared\UpdateManifest.cs" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Nyx.Desktop.Core.Updating" />

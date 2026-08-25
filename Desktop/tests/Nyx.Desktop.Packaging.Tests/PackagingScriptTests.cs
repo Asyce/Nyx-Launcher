@@ -79,6 +79,22 @@ public sealed class PackagingScriptTests
     }
 
     [Fact]
+    public void Development_package_keeps_the_updater_trimmed()
+    {
+        var build = File.ReadAllText(Path.Combine(PackagingRoot, "build-development-package.ps1"));
+        var start = build.IndexOf("$toolArguments = @(", StringComparison.Ordinal);
+        var end = build.IndexOf("& $dotnet @toolArguments", start, StringComparison.Ordinal);
+        var updaterPublish = build[start..end];
+
+        Assert.Contains("-p:PublishTrimmed=true", updaterPublish, StringComparison.Ordinal);
+        Assert.DoesNotContain("-p:PublishTrimmed=false", updaterPublish, StringComparison.Ordinal);
+        Assert.Contains("-p:DefineConstants=", updaterPublish, StringComparison.Ordinal);
+        Assert.Contains("Assert-NoPrivateBuildStrings -Root $toolRoot", build, StringComparison.Ordinal);
+        Assert.Contains("NYX_UPDATER_DISPOSABLE_ROOT", build, StringComparison.Ordinal);
+        Assert.Contains("NYX_UPDATER_DISPOSABLE_SMOKE_V1", build, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Windows_workflow_uses_pinned_cargo_audit_and_only_the_reviewed_ignore()
     {
         var repositoryRoot = Path.GetFullPath(Path.Combine(DesktopRoot, ".."));

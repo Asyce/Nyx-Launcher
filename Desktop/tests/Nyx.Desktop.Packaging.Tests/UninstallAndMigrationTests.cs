@@ -286,7 +286,7 @@ public sealed class UninstallAndMigrationTests
 
         var layout = UpdateLayout.ForUserRoots(local, roaming);
 
-        Assert.Equal(NyxUserDataPaths.CanonicalRoot(local), layout.UserDataRoot);
+        Assert.Equal(CoreNyxUserDataPaths.CanonicalRoot(local), layout.UserDataRoot);
         Assert.EndsWith(Path.Combine("Pengo", "Nyx"), layout.UserDataRoot, StringComparison.OrdinalIgnoreCase);
     }
 

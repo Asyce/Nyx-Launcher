@@ -13,7 +13,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\tools\Nyx.Desktop.Update\Nyx.Desktop.Update.csproj" />
-    <ProjectReference Include="..\..\src\Nyx.Desktop.Core\Nyx.Desktop.Core.csproj" />
+    <ProjectReference Include="..\..\src\Nyx.Desktop.Core\Nyx.Desktop.Core.csproj" Aliases="core" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
