@@ -233,7 +233,6 @@ public sealed partial class MainPage : Page
     private readonly Dictionary<string, BitmapImage> imageSourceCache =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly UISettings uiSettings = new();
-    private readonly Dictionary<string, string> selectedBannerCategories = new(StringComparer.Ordinal);
     internal Func<DateTimeOffset> AccountDisplayClock { get; set; } = static () => DateTimeOffset.Now;
     private double redemptionCodeRowHeight = 26;
     private bool compactCodeRows;
@@ -268,8 +267,6 @@ public sealed partial class MainPage : Page
     public ObservableCollection<IReadOnlyList<BannerCharacterRowItem>> BannerCharacterRows { get; } = new();
 
     public ObservableCollection<UpcomingBannerGroupItem> UpcomingBannerGroups { get; } = new();
-
-    public ObservableCollection<BannerCollectionRowItem> BannerCollectionRows { get; } = new();
 
     internal bool ToggleLauncherAnimation()
     {
@@ -3985,8 +3982,6 @@ public sealed partial class MainPage : Page
                             Enabled = officialLaunchArgumentsEnabled.IsOn,
                         },
                     PublisherPasswordSavingEnabled = publisherPasswordSaving.IsOn,
-                    AutomaticArt = before.Preferences.FeatureFlags.AutomaticArt,
-                    RemoteBannerManifest = true,
                     OpenedPanelVisibility = selected.IsCustom ? null : openedPanelVisibility,
                     PanelVisibility = selected.IsCustom
                         ? null
@@ -6199,7 +6194,6 @@ public sealed partial class MainPage : Page
             var upcoming = launcherGame.UpcomingForDisplayAt(now, 5);
             RenderBannerRows(selected.Id, current, now);
             RenderUpcomingBannerGroups(selected.Id, current, upcoming, now);
-            RenderBannerCategories(selected.Id, launcherGame);
             BannerCycleHeading.Text = "BANNERS";
             BannerCycleTiming.Text = FormatBannerTimelineLabel(
                 current?.Phase,
@@ -6213,58 +6207,7 @@ public sealed partial class MainPage : Page
 
         BannerCharacterRows.Clear();
         UpcomingBannerGroups.Clear();
-        BannerCollectionRows.Clear();
         SyncRedemptionCodeRows(selected.Id, []);
-    }
-
-    private void RenderBannerCategories(string gameId, LauncherBannersGame game)
-    {
-        var collab = game.Collections.FirstOrDefault(collection => collection.Kind == "collab");
-        var hasCurrent = BannerCharacterRows.Count > 0;
-        var hasUpcoming = UpcomingBannerGroups.Count > 0;
-        UpcomingBannerCategoryButton.Visibility = hasUpcoming
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        CollabBannerCategoryButton.Visibility = gameId == "hsr" && collab is not null
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-
-        const string category = "current";
-        selectedBannerCategories[gameId] = category;
-
-        CurrentBannerSection.Visibility = hasCurrent ? Visibility.Visible : Visibility.Collapsed;
-        UpcomingBannerList.Visibility = hasUpcoming ? Visibility.Visible : Visibility.Collapsed;
-        BannerCollectionList.Visibility = Visibility.Collapsed;
-        CurrentBannerCategoryButton.Opacity = category == "current" ? 1 : 0.62;
-        UpcomingBannerCategoryButton.Opacity = category == "upcoming" ? 1 : 0.62;
-        CollabBannerCategoryButton.Opacity = category == "collab" ? 1 : 0.62;
-
-        var collection = category == "collab" ? collab : null;
-        var projected = collection?.Characters.Select(character =>
-        {
-            var portrait = ResolveImageSource(character.Icon is null
-                ? null
-                : launcherBanners.TryResolveManagedAsset(character.Icon));
-            return new BannerCollectionRowItem(
-                character.Name,
-                collection.Availability,
-                portrait,
-                character.CharacterUrl);
-        }).ToArray() ?? [];
-        for (var index = 0; index < projected.Length; index++)
-        {
-            if (index < BannerCollectionRows.Count
-                && BannerCollectionRows[index].Matches(projected[index]))
-            {
-                continue;
-            }
-            if (index < BannerCollectionRows.Count) BannerCollectionRows[index] = projected[index];
-            else BannerCollectionRows.Add(projected[index]);
-        }
-        while (BannerCollectionRows.Count > projected.Length)
-        {
-            BannerCollectionRows.RemoveAt(BannerCollectionRows.Count - 1);
-        }
     }
 
     private static string FormatCurrentBannerTiming(
@@ -6504,17 +6447,6 @@ public sealed partial class MainPage : Page
         // This is a local projection of the last snapshot. It never refreshes,
         // connects, checks in, or performs any account/network operation.
         RenderPublisherAccountStatus(selected.Id);
-    }
-
-    private void BannerCategoryButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (GameSelector?.SelectedItem is not GameLauncherItem selected
-            || sender is not Button { CommandParameter: string category })
-        {
-            return;
-        }
-        selectedBannerCategories[selected.Id] = category;
-        RenderBannerCycle();
     }
 
     private async void CharacterLink_Click(object sender, RoutedEventArgs e)
@@ -7395,36 +7327,6 @@ public sealed record UpcomingBannerCharacterItem(
     public string AccessibilityName => CanOpen
         ? $"Open Pengo page for {Name}"
         : Name;
-}
-
-public sealed class BannerCollectionRowItem
-{
-    public BannerCollectionRowItem(
-        string name,
-        string availability,
-        ImageSource? portraitSource,
-        Uri? characterUrl)
-    {
-        Name = name;
-        Availability = availability;
-        PortraitSource = portraitSource;
-        CharacterUrl = characterUrl;
-    }
-
-    public string Name { get; set; }
-    public string Availability { get; set; }
-    public ImageSource? PortraitSource { get; set; }
-    public Uri? CharacterUrl { get; set; }
-    public bool CanOpen => CharacterUrl is not null;
-    public string AccessibilityName => CanOpen
-        ? $"Open Pengo page for {Name}"
-        : Name;
-
-    public bool Matches(BannerCollectionRowItem other) =>
-        string.Equals(Name, other.Name, StringComparison.Ordinal)
-        && string.Equals(Availability, other.Availability, StringComparison.Ordinal)
-        && Equals(PortraitSource, other.PortraitSource)
-        && Equals(CharacterUrl, other.CharacterUrl);
 }
 
 public sealed class UpcomingBannerGroupItem : INotifyPropertyChanged

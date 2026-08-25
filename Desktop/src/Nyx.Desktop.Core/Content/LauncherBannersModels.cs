@@ -62,8 +62,7 @@ public sealed record LauncherBannersManifest
                     current,
                     game.News,
                     upcoming,
-                    game.Codes,
-                    game.Collections);
+                    game.Codes);
             },
             StringComparer.Ordinal);
         return new LauncherBannersManifest(SchemaVersion, Revision, GeneratedAt, Health, visibleGames);
@@ -116,8 +115,7 @@ public sealed record LauncherBannersGame
         LauncherBannersCurrentPhase? current,
         IReadOnlyList<LauncherBannersNewsItem> news,
         IReadOnlyList<LauncherBannersUpcomingPhase>? upcoming = null,
-        IReadOnlyList<LauncherRedemptionCode>? codes = null,
-        IReadOnlyList<LauncherBannersCollection>? collections = null)
+        IReadOnlyList<LauncherRedemptionCode>? codes = null)
     {
         if (gameId is not ("gi" or "hsr" or "zzz" or "wuwa" or "ae")) throw new ArgumentOutOfRangeException(nameof(gameId));
         if (region is not ("global" or "america" or "europe" or "asia")) throw new ArgumentOutOfRangeException(nameof(region));
@@ -144,11 +142,6 @@ public sealed record LauncherBannersGame
         }
         Upcoming = new ReadOnlyCollection<LauncherBannersUpcomingPhase>(future);
         Codes = new ReadOnlyCollection<LauncherRedemptionCode>((codes ?? []).ToArray());
-        var collectionCopy = (collections ?? []).ToArray();
-        if (collectionCopy.Select(collection => collection.Kind).Distinct(StringComparer.Ordinal).Count()
-            != collectionCopy.Length)
-            throw new InvalidDataException("Launcher banner collections must be unique.");
-        Collections = new ReadOnlyCollection<LauncherBannersCollection>(collectionCopy);
     }
 
     public string GameId { get; }
@@ -157,7 +150,6 @@ public sealed record LauncherBannersGame
     public IReadOnlyList<LauncherBannersNewsItem> News { get; }
     public IReadOnlyList<LauncherBannersUpcomingPhase> Upcoming { get; }
     public IReadOnlyList<LauncherRedemptionCode> Codes { get; }
-    public IReadOnlyList<LauncherBannersCollection> Collections { get; }
 
     public IReadOnlyList<LauncherBannersUpcomingPhase> UpcomingForDisplayAt(DateTimeOffset observedAt, int limit = int.MaxValue)
     {
@@ -169,33 +161,6 @@ public sealed record LauncherBannersGame
             .Take(limit)
             .ToArray();
     }
-}
-
-public sealed record LauncherBannersCollection
-{
-    public LauncherBannersCollection(
-        string kind,
-        string label,
-        string availability,
-        IReadOnlyList<LauncherBannersCharacter> characters)
-    {
-        if (kind is not ("permanent" or "collab")) throw new ArgumentOutOfRangeException(nameof(kind));
-        if (string.IsNullOrWhiteSpace(label) || label.Length > 32 || label.Any(char.IsControl)) throw new ArgumentOutOfRangeException(nameof(label));
-        if (string.IsNullOrWhiteSpace(availability) || availability.Length > 64 || availability.Any(char.IsControl)) throw new ArgumentOutOfRangeException(nameof(availability));
-        var copy = (characters ?? throw new ArgumentNullException(nameof(characters))).ToArray();
-        if (copy.Length is < 1 or > 40
-            || copy.Select(character => character.Id).Distinct(StringComparer.Ordinal).Count() != copy.Length)
-            throw new InvalidDataException("Launcher banner collection characters are invalid.");
-        Kind = kind;
-        Label = label;
-        Availability = availability;
-        Characters = new ReadOnlyCollection<LauncherBannersCharacter>(copy);
-    }
-
-    public string Kind { get; }
-    public string Label { get; }
-    public string Availability { get; }
-    public IReadOnlyList<LauncherBannersCharacter> Characters { get; }
 }
 
 public sealed record LauncherRedemptionCode(

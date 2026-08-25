@@ -124,7 +124,7 @@ public sealed class LauncherStateTests
         var merged = LauncherSettingsStateMerge.Apply(
             latest,
             opened,
-            SettingsEdit(opened, opened.RailOrder, 100) with
+            SettingsEdit(opened, opened.RailOrder) with
             {
                 OpenedPanelVisibility = new(),
                 PanelVisibility = new() { ShowRedemptionCodes = false },
@@ -201,8 +201,8 @@ public sealed class LauncherStateTests
         Assert.DoesNotContain("evil", state.RailOrder);
         Assert.DoesNotContain("custom-duplicate", state.RailOrder);
         Assert.DoesNotContain("custom-duplicate", state.Appearance.Keys);
-        Assert.Equal(120, state.Appearance["gi"].ArtScale);
-        Assert.Equal(170, state.Appearance["custom-good"].ArtScale);
+        Assert.Equal(new GameAppearanceState(), state.Appearance["gi"]);
+        Assert.Equal(new GameAppearanceState(), state.Appearance["custom-good"]);
         Assert.Equal("gi", state.SelectedGameId);
     }
 
@@ -231,8 +231,7 @@ public sealed class LauncherStateTests
         Assert.Equal(["custom-b", "gi", "hsr", "zzz", "wuwa", "ae", "custom-a"], result.State!.RailOrder);
         Assert.Equal("custom-b", result.State.SelectedGameId);
         Assert.Equal(["custom-a", "custom-b"], result.State.CustomGames.Select(static game => game.Id));
-        Assert.Equal(500, result.State.Appearance["gi"].ArtScale);
-        Assert.True(result.State.Appearance["gi"].ArtPinned);
+        Assert.Equal(new GameAppearanceState(), result.State.Appearance["gi"]);
         Assert.True(result.State.Export.IsArmed);
         Assert.Null(result.State.Export.OutputDirectory);
         Assert.Empty(result.State.Export.OutputPaths);
@@ -348,21 +347,19 @@ public sealed class LauncherStateTests
         {
             GameId = "gi",
             OpenedAppearance = new(),
-            Appearance = new() { ArtScale = 125 },
+            Appearance = new() { IconPath = @"C:\Edited\gi.png" },
             RailOrder = opened.RailOrder,
             OpenedManualInstallRoot = null,
             ManualInstallRoot = null,
             OpenedOfficialLaunchOptions = opened.OfficialLaunchOptions["gi"],
             OfficialLaunchOptions = opened.OfficialLaunchOptions["gi"],
             PublisherPasswordSavingEnabled = opened.Preferences.PublisherPasswordSavingEnabled,
-            AutomaticArt = opened.Preferences.FeatureFlags.AutomaticArt,
-            RemoteBannerManifest = opened.Preferences.FeatureFlags.RemoteBannerManifest,
         };
 
         var merged = LauncherSettingsStateMerge.Apply(latest, opened, edit);
 
         Assert.True(merged.Preferences.Hsr120FpsOnLaunch);
-        Assert.Equal(125, merged.Appearance["gi"].ArtScale);
+        Assert.Equal(@"C:\Edited\gi.png", merged.Appearance["gi"].IconPath);
     }
 
     [Fact]
@@ -410,53 +407,51 @@ public sealed class LauncherStateTests
     }
 
     [Fact]
-    public void Pinned_art_uses_only_a_safe_relative_content_address()
-    {
-        var hash = new string('a', 64);
-        var valid = LauncherStateMigrations.Read(
-            $"{{\"version\":1,\"appearance\":{{\"gi\":{{\"artPinned\":true,\"pinnedArtFile\":\"gi/{hash}.webp\"}}}}}}");
-        Assert.Equal(LauncherStateReadStatus.Migrated, valid.Status);
-        Assert.Equal(LauncherState.CurrentVersion, valid.State!.Version);
-        Assert.Equal($"gi/{hash}.webp", valid.State!.Appearance["gi"].PinnedArtFile);
-        Assert.Contains($"gi/{hash}.webp", LauncherStateMigrations.Write(valid.State), StringComparison.Ordinal);
-
-        var unsafeState = LauncherStateMigrations.Read("""
-        {"version":1,"appearance":{"gi":{"artPinned":true,"pinnedArtFile":"../outside.webp"}}}
-        """);
-        Assert.Null(unsafeState.State!.Appearance["gi"].PinnedArtFile);
-    }
-
-    [Fact]
-    public void Version_one_pinned_variant_is_preserved_for_lazy_protected_copy()
+    public void Legacy_global_and_per_game_art_settings_load_but_disappear_after_save()
     {
         var result = LauncherStateMigrations.Read("""
-        {"version":1,"appearance":{"gi":{"artPinned":true,"artVariant":"citlali-card"}}}
+        {
+          "version":1,
+          "appearance":{"gi":{
+            "iconPath":"C:\\User\\gi.png",
+            "backgroundPath":"C:\\User\\gi.jpg",
+            "automaticArt":false,
+            "artScale":325,
+            "artX":12,
+            "artY":-4,
+            "artVariant":"old-banner",
+            "artFit":"contain",
+            "artPinned":true,
+            "pinnedArtFile":"gi/old.webp"
+          }},
+          "preferences":{"featureFlags":{
+            "remoteBannerManifest":false,
+            "automaticArt":false,
+            "giPulls":false
+          }}
+        }
         """);
 
-        Assert.Equal(LauncherStateReadStatus.Migrated, result.Status);
-        Assert.Equal(LauncherState.CurrentVersion, result.State!.Version);
-        Assert.True(result.State.Appearance["gi"].ArtPinned);
-        Assert.Equal("citlali-card", result.State.Appearance["gi"].ArtVariant);
-        Assert.Null(result.State.Appearance["gi"].PinnedArtFile);
-    }
+        Assert.True(result.IsUsable);
+        Assert.Equal(@"C:\User\gi.png", result.State!.Appearance["gi"].IconPath);
+        Assert.Equal(@"C:\User\gi.jpg", result.State.Appearance["gi"].BackgroundPath);
+        Assert.Equal(new GameAppearanceState
+        {
+            IconPath = @"C:\User\gi.png",
+            BackgroundPath = @"C:\User\gi.jpg",
+        }, result.State.Appearance["gi"]);
 
-    [Fact]
-    public void Rolled_over_version_one_pin_stays_pending_until_its_exact_variant_returns()
-    {
-        var migrated = LauncherStateMigrations.Read("""
-        {"version":1,"appearance":{"gi":{"artPinned":true,"artVariant":"old-banner-art"}}}
-        """);
-        var appearance = migrated.State!.Appearance["gi"];
-
-        Assert.Equal(
-            LauncherPinnedArtMigrationStatus.Pending,
-            LauncherPinnedArtMigration.Evaluate(appearance, protectedFileValid: false, ["new-banner-art"]));
-        Assert.True(appearance.ArtPinned);
-        Assert.Equal("old-banner-art", appearance.ArtVariant);
-        Assert.Null(appearance.PinnedArtFile);
-        Assert.Equal(
-            LauncherPinnedArtMigrationStatus.AvailableForProtection,
-            LauncherPinnedArtMigration.Evaluate(appearance, protectedFileValid: false, ["old-banner-art"]));
+        var written = LauncherStateMigrations.Write(result.State);
+        foreach (var retired in new[]
+                 {
+                     "remoteBannerManifest", "automaticArt", "artScale", "artX", "artY",
+                     "artVariant", "artFit", "artPinned", "pinnedArtFile",
+                 })
+        {
+            Assert.DoesNotContain(retired, written, StringComparison.OrdinalIgnoreCase);
+        }
+        Assert.Contains("iconPath", written, StringComparison.Ordinal);
+        Assert.Contains("backgroundPath", written, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -888,7 +883,7 @@ public sealed class LauncherStateTests
     }
 
     [Fact]
-    public void Retired_official_news_flag_is_accepted_but_not_written_again()
+    public void Retired_feature_flags_are_accepted_but_not_written_again()
     {
         var result = LauncherStateMigrations.Read("""
         {"version":1,"preferences":{"featureFlags":{"officialNews":false,"remoteBannerManifest":true}}}
@@ -898,7 +893,9 @@ public sealed class LauncherStateTests
         var state = Assert.IsType<LauncherState>(result.State);
         var written = LauncherStateMigrations.Write(state);
         Assert.DoesNotContain("officialNews", written, StringComparison.OrdinalIgnoreCase);
-        Assert.True(state.Preferences.FeatureFlags.RemoteBannerManifest);
+        Assert.DoesNotContain("remoteBannerManifest", written, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("automaticArt", written, StringComparison.OrdinalIgnoreCase);
+        Assert.True(state.Preferences.FeatureFlags.GiPulls);
     }
 
     [Fact]
@@ -943,8 +940,8 @@ public sealed class LauncherStateTests
                 CustomGames = state.CustomGames.Append(concurrentGame).ToArray(),
                 RailOrder = state.RailOrder.Append(concurrentGame.Id).ToArray(),
                 Appearance = state.Appearance
-                    .Append(new KeyValuePair<string, GameAppearanceState>("gi", new() { ArtX = 88 }))
-                    .Append(new KeyValuePair<string, GameAppearanceState>("hsr", new() { ArtScale = 175 }))
+                    .Append(new KeyValuePair<string, GameAppearanceState>("gi", new() { BackgroundPath = @"C:\Concurrent\gi.jpg" }))
+                    .Append(new KeyValuePair<string, GameAppearanceState>("hsr", new() { IconPath = @"C:\Concurrent\hsr.png" }))
                     .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal),
                 Preferences = state.Preferences with
                 {
@@ -958,14 +955,14 @@ public sealed class LauncherStateTests
             settingsStore.Update(latest => LauncherSettingsStateMerge.Apply(
                 latest,
                 opened,
-                SettingsEdit(opened, opened.RailOrder, artScale: 140)));
+                SettingsEdit(opened, opened.RailOrder, iconPath: @"C:\Edited\gi.png")));
 
             var saved = settingsStore.Load().State!;
             Assert.Contains(saved.CustomGames, game => game.Id == concurrentGame.Id);
             Assert.Contains(concurrentGame.Id, saved.RailOrder);
-            Assert.Equal(175, saved.Appearance["hsr"].ArtScale);
-            Assert.Equal(140, saved.Appearance["gi"].ArtScale);
-            Assert.Equal(88, saved.Appearance["gi"].ArtX);
+            Assert.Equal(@"C:\Concurrent\hsr.png", saved.Appearance["hsr"].IconPath);
+            Assert.Equal(@"C:\Edited\gi.png", saved.Appearance["gi"].IconPath);
+            Assert.Equal(@"C:\Concurrent\gi.jpg", saved.Appearance["gi"].BackgroundPath);
             Assert.False(saved.Preferences.StayVisibleAfterLaunch);
             Assert.False(saved.Preferences.PublisherPasswordSavingEnabled);
             Assert.Equal(@"D:\NyxData", saved.Preferences.DataDirectory);
@@ -1048,8 +1045,6 @@ public sealed class LauncherStateTests
                 OpenedOfficialLaunchOptions = openedOptions["ae"],
                 OfficialLaunchOptions = editedOptions,
                 PublisherPasswordSavingEnabled = opened.Preferences.PublisherPasswordSavingEnabled,
-                AutomaticArt = opened.Preferences.FeatureFlags.AutomaticArt,
-                RemoteBannerManifest = opened.Preferences.FeatureFlags.RemoteBannerManifest,
             });
 
         Assert.Equal(@"D:\Edited\Endfield", merged.Preferences.ManualInstallRoots["ae"]);
@@ -1081,7 +1076,7 @@ public sealed class LauncherStateTests
             settingsStore.Update(latest => LauncherSettingsStateMerge.Apply(
                 latest,
                 opened,
-                SettingsEdit(opened, localOrder, artScale: 130)));
+                SettingsEdit(opened, localOrder)));
 
             var saved = settingsStore.Load().State!;
             Assert.Equal(localOrder, saved.RailOrder.Take(localOrder.Length));
@@ -1122,7 +1117,6 @@ public sealed class LauncherStateTests
                 SettingsEdit(
                     opened,
                     opened.RailOrder,
-                    artScale: 100,
                     gameId: custom.Id,
                     customGame: custom with { Name = "Locally edited name" })));
 
@@ -1193,7 +1187,6 @@ public sealed class LauncherStateTests
                     SettingsEdit(
                         opened,
                         opened.RailOrder,
-                        artScale: 100,
                         gameId: editedGame.Id,
                         customGame: editedGame with
                         {
@@ -1514,25 +1507,6 @@ public sealed class LauncherStateTests
         return Process.Start(start) ?? throw new InvalidOperationException("Could not start the state worker.");
     }
 
-    [Theory]
-    [InlineData(null, "cover")]
-    [InlineData("COVER", "cover")]
-    [InlineData("contain", "contain")]
-    [InlineData("fill", "fill")]
-    [InlineData("unsafe-fit", "cover")]
-    public void Pinned_art_fit_migrates_and_round_trips_safely(string? savedFit, string expected)
-    {
-        var fitJson = savedFit is null ? string.Empty : $",\"artFit\":\"{savedFit}\"";
-        var result = LauncherStateMigrations.Read(
-            $"{{\"version\":2,\"appearance\":{{\"gi\":{{\"artPinned\":true{fitJson}}}}}}}");
-
-        Assert.Equal(LauncherStateReadStatus.Migrated, result.Status);
-        Assert.Equal(expected, result.State!.Appearance["gi"].ArtFit);
-        var roundTrip = LauncherStateMigrations.Read(LauncherStateMigrations.Write(result.State));
-        Assert.Equal(LauncherStateReadStatus.Loaded, roundTrip.Status);
-        Assert.Equal(expected, roundTrip.State!.Appearance["gi"].ArtFit);
-    }
-
     [Fact]
     public void Reset_order_restores_official_then_custom_creation_order_without_deleting_data()
     {
@@ -1545,7 +1519,7 @@ public sealed class LauncherStateTests
             CustomGames = [second, first],
             Appearance = new Dictionary<string, GameAppearanceState>
             {
-                [second.Id] = new() { ArtScale = 325 },
+                [second.Id] = new() { BackgroundPath = @"C:\Art\second.jpg" },
             },
         };
 
@@ -1554,7 +1528,7 @@ public sealed class LauncherStateTests
         Assert.Equal(["gi", "hsr", "zzz", "wuwa", "ae", first.Id, second.Id], reset.RailOrder);
         Assert.Equal(second.Id, reset.SelectedGameId);
         Assert.Equal(state.CustomGames, reset.CustomGames);
-        Assert.Equal(325, reset.Appearance[second.Id].ArtScale);
+        Assert.Equal(@"C:\Art\second.jpg", reset.Appearance[second.Id].BackgroundPath);
     }
 
     [Fact]
@@ -1602,7 +1576,7 @@ public sealed class LauncherStateTests
     private static LauncherSettingsEdit SettingsEdit(
         LauncherState opened,
         IReadOnlyList<string> railOrder,
-        int artScale,
+        string? iconPath = null,
         string gameId = "gi",
         CustomGameDefinition? customGame = null) => new()
     {
@@ -1610,7 +1584,7 @@ public sealed class LauncherStateTests
         OpenedAppearance = opened.Appearance.TryGetValue(gameId, out var appearance)
             ? appearance
             : new GameAppearanceState(),
-        Appearance = new GameAppearanceState { ArtScale = artScale },
+        Appearance = new GameAppearanceState { IconPath = iconPath },
         CustomGame = customGame,
         RailOrder = railOrder,
         OpenedManualInstallRoot = opened.Preferences.ManualInstallRoots.TryGetValue(gameId, out var root)
@@ -1626,8 +1600,6 @@ public sealed class LauncherStateTests
             ? options
             : null,
         PublisherPasswordSavingEnabled = opened.Preferences.PublisherPasswordSavingEnabled,
-        AutomaticArt = opened.Preferences.FeatureFlags.AutomaticArt,
-        RemoteBannerManifest = opened.Preferences.FeatureFlags.RemoteBannerManifest,
     };
 
     private static string FindStateWorker()

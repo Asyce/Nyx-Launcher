@@ -144,14 +144,6 @@ public static class LauncherStateMigrations
                 {
                     IconPath = NullIfWhiteSpace(pair.Value?.IconPath),
                     BackgroundPath = NullIfWhiteSpace(pair.Value?.BackgroundPath),
-                    AutomaticArt = pair.Value?.AutomaticArt ?? true,
-                    ArtScale = Math.Clamp(pair.Value?.ArtScale ?? 100, 25, 500),
-                    ArtX = pair.Value?.ArtX ?? 0,
-                    ArtY = pair.Value?.ArtY ?? 0,
-                    ArtVariant = NullIfWhiteSpace(pair.Value?.ArtVariant),
-                    ArtFit = NormalizeArtFit(pair.Value?.ArtFit),
-                    ArtPinned = pair.Value?.ArtPinned ?? false,
-                    PinnedArtFile = NormalizePinnedArtFile(pair.Value?.PinnedArtFile),
                 };
             }
         }
@@ -263,14 +255,6 @@ public static class LauncherStateMigrations
             {
                 IconPath = pair.Value.IconPath,
                 BackgroundPath = pair.Value.BackgroundPath,
-                AutomaticArt = pair.Value.AutomaticArt,
-                ArtScale = pair.Value.ArtScale,
-                ArtX = pair.Value.ArtX,
-                ArtY = pair.Value.ArtY,
-                ArtVariant = pair.Value.ArtVariant,
-                ArtFit = NormalizeArtFit(pair.Value.ArtFit),
-                ArtPinned = pair.Value.ArtPinned,
-                PinnedArtFile = pair.Value.PinnedArtFile,
             }, StringComparer.Ordinal),
         Export = new ExportDto
         {
@@ -328,8 +312,6 @@ public static class LauncherStateMigrations
                 ? null
                 : new FeatureFlagsDto
                 {
-                    RemoteBannerManifest = state.Preferences.FeatureFlags.RemoteBannerManifest,
-                    AutomaticArt = state.Preferences.FeatureFlags.AutomaticArt,
                     GiPulls = state.Preferences.FeatureFlags.GiPulls,
                     GiAchievements = state.Preferences.FeatureFlags.GiAchievements,
                     HsrPulls = state.Preferences.FeatureFlags.HsrPulls,
@@ -355,8 +337,6 @@ public static class LauncherStateMigrations
             ? LauncherFeatureFlags.Defaults()
             : new LauncherFeatureFlags
         {
-            RemoteBannerManifest = dto.RemoteBannerManifest ?? true,
-            AutomaticArt = dto.AutomaticArt ?? true,
             GiPulls = dto.GiPulls ?? true,
             GiAchievements = dto.GiAchievements ?? true,
             HsrPulls = dto.HsrPulls ?? true,
@@ -394,13 +374,6 @@ public static class LauncherStateMigrations
 
         return element.GetBoolean();
     }
-
-    private static string NormalizeArtFit(string? value) => value?.Trim().ToLowerInvariant() switch
-    {
-        "contain" => "contain",
-        "fill" => "fill",
-        _ => "cover",
-    };
 
     private static string? NormalizeLocalRoot(string? value)
     {
@@ -568,20 +541,6 @@ public static class LauncherStateMigrations
         return new ReadOnlyDictionary<string, LauncherPanelVisibility>(normalized);
     }
 
-    private static string? NormalizePinnedArtFile(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value) || Path.IsPathRooted(value) || value.Length > 180) return null;
-        var parts = value.Replace('\\', '/').Split('/');
-        if (parts.Length != 2 || parts[0].Length == 0 || parts[0].Any(character => !char.IsAsciiLetterOrDigit(character) && character != '-')) return null;
-        var extension = Path.GetExtension(parts[1]);
-        var hash = Path.GetFileNameWithoutExtension(parts[1]);
-        return hash.Length == 64
-            && hash.All(Uri.IsHexDigit)
-            && extension is ".webp" or ".png"
-                ? $"{parts[0]}/{hash.ToLowerInvariant()}{extension}"
-                : null;
-    }
-
     private sealed class StateDto
     {
         [JsonPropertyName("version")] public int? Version { get; set; }
@@ -611,13 +570,23 @@ public static class LauncherStateMigrations
     {
         public string? IconPath { get; set; }
         public string? BackgroundPath { get; set; }
+        // Read-only legacy fields: old primary and backup state must still load,
+        // but current state never carries retired character splash/pin data.
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public bool? AutomaticArt { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? ArtScale { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? ArtX { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? ArtY { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? ArtVariant { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? ArtFit { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public bool? ArtPinned { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? PinnedArtFile { get; set; }
     }
 
@@ -663,10 +632,13 @@ public static class LauncherStateMigrations
 
     private sealed class FeatureFlagsDto
     {
+        // Read-only legacy fields: accepted for old state files, omitted on write.
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public bool? RemoteBannerManifest { get; set; }
         // Read and ignore the retired setting so older state files remain valid.
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public bool? OfficialNews { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public bool? AutomaticArt { get; set; }
         public bool? GiPulls { get; set; }
         public bool? GiAchievements { get; set; }

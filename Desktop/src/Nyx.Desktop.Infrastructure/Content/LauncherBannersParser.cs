@@ -174,29 +174,11 @@ public static class LauncherBannersManifestParser
         {
             codes = ParseCodes(codesElement);
         }
-        var collections = new List<LauncherBannersCollection>();
-        if (element.TryGetProperty("collections", out var collectionsElement))
-        {
-            if (collectionsElement.ValueKind is not JsonValueKind.Array
-                || collectionsElement.GetArrayLength() > 2)
-                throw new InvalidDataException("Invalid launcher banner collections.");
-            foreach (var collectionElement in collectionsElement.EnumerateArray())
-            {
-                RequireProperties(collectionElement, "kind", "label", "availability", "characters");
-                var charactersElement = collectionElement.GetProperty("characters");
-                if (charactersElement.ValueKind is not JsonValueKind.Array
-                    || charactersElement.GetArrayLength() is < 1 or > 40)
-                    throw new InvalidDataException("Invalid launcher banner collection characters.");
-                collections.Add(new LauncherBannersCollection(
-                    RequiredText(collectionElement, "kind", 16),
-                    RequiredText(collectionElement, "label", 32),
-                    RequiredText(collectionElement, "availability", 64),
-                    charactersElement.EnumerateArray()
-                        .Select(character => ParseCharacter(game, character))
-                        .ToArray()));
-            }
-        }
-        return new LauncherBannersGame(game, region, current, news, upcoming, codes, collections);
+        if (!element.TryGetProperty("collections", out var collectionsElement)
+            || collectionsElement.ValueKind is not JsonValueKind.Array
+            || collectionsElement.GetArrayLength() != 0)
+            throw new InvalidDataException("Launcher banner collections must be empty.");
+        return new LauncherBannersGame(game, region, current, news, upcoming, codes);
     }
 
     private static IReadOnlyList<LauncherRedemptionCode> ParseCodes(JsonElement codesElement)

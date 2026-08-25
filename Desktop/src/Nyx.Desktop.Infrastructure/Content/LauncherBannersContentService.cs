@@ -69,7 +69,7 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
         var observedAt = this.clock();
         bundledManifest = LauncherBannersManifestParser.Parse(this.bundledPayload, fallback: true, observedAt);
         var cached = cache.TryLoadLastKnownGood(observedAt, this.bundledAssetsDirectory);
-        current = ApplyBundledCollections(
+        current = ApplyBundledUpcomingFallback(
             cached is not null && cached.GeneratedAt >= bundledManifest.GeneratedAt
                 ? cached
                 : bundledManifest,
@@ -92,14 +92,6 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
 
     public string? TryResolveManagedAsset(LauncherBannersAsset asset) =>
         cache.TryResolveBundledAsset(asset, bundledAssetsDirectory) ?? cache.TryResolveManagedAsset(asset);
-
-    public string PinUserArt(string gameId, LauncherBannersAsset asset) =>
-        cache.PinUserArt(gameId, asset, TryResolveManagedAsset(asset)
-            ?? throw new FileNotFoundException("The validated launcher art is unavailable."));
-
-    public string? TryResolveUserArt(string? relative) => cache.TryResolveUserArt(relative);
-
-    public void ReleaseUserArt(string? relative) => cache.ReleaseUserArt(relative);
 
     public void Start()
         => SetAutomaticRefreshEnabled(true);
@@ -163,7 +155,7 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
             }
 
             var payload = await transport.GetManifestAsync(endpoint, LauncherBannersTransport.MaximumManifestBytes, shutdown.Token).ConfigureAwait(false);
-            var manifest = ApplyBundledCollections(
+            var manifest = ApplyBundledUpcomingFallback(
                 LauncherBannersManifestParser.Parse(payload, fallback: false, clock()),
                 bundledManifest);
             var promote = true;
@@ -277,8 +269,7 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
                 pair.Value.Current,
                 pair.Value.News,
                 pair.Value.Upcoming,
-                codesManifest.Games[pair.Key],
-                pair.Value.Collections),
+                codesManifest.Games[pair.Key]),
             StringComparer.Ordinal);
         return new LauncherBannersManifest(
             bannerManifest.SchemaVersion,
@@ -288,7 +279,7 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
             games);
     }
 
-    internal static LauncherBannersManifest ApplyBundledCollections(
+    internal static LauncherBannersManifest ApplyBundledUpcomingFallback(
         LauncherBannersManifest manifest,
         LauncherBannersManifest bundled)
     {
@@ -306,11 +297,10 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
                     return remoteGame;
                 }
 
-                var useBundledCollections = remoteGame.Collections.Count == 0 && bundledGame.Collections.Count > 0;
                 var useBundledUpcoming = manifest.GeneratedAt <= bundled.GeneratedAt
                     && remoteGame.Upcoming.Count == 0
                     && bundledGame.Upcoming.Count > 0;
-                if (!useBundledCollections && !useBundledUpcoming) return remoteGame;
+                if (!useBundledUpcoming) return remoteGame;
 
                 changed = true;
                 return new LauncherBannersGame(
@@ -319,8 +309,7 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
                     remoteGame.Current,
                     remoteGame.News,
                     useBundledUpcoming ? bundledGame.Upcoming : remoteGame.Upcoming,
-                    remoteGame.Codes,
-                    useBundledCollections ? bundledGame.Collections : remoteGame.Collections);
+                    remoteGame.Codes);
             },
             StringComparer.Ordinal);
 

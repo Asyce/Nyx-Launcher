@@ -202,38 +202,20 @@ public sealed class LauncherBannersContentTests
     }
 
     [Fact]
-    public void Display_projection_preserves_permanent_and_collab_collections()
+    public void Parser_requires_each_schema_v1_game_to_have_exactly_empty_collections()
     {
-        var character = new LauncherBannersCharacter("a", "Alpha", 5, true, null, []);
-        var games = new Dictionary<string, LauncherBannersGame>(StringComparer.Ordinal);
-        foreach (var game in new[] { "gi", "hsr", "zzz", "wuwa", "ae" })
-        {
-            var collections = game == "hsr"
-                ? new[]
-                {
-                    new LauncherBannersCollection("permanent", "Permanent", "Always available", [character]),
-                    new LauncherBannersCollection("collab", "Collab", "Collaboration pool", [character]),
-                }
-                : [new LauncherBannersCollection("permanent", "Permanent", "Always available", [character])];
-            games[game] = new LauncherBannersGame(game, "global", null, [], collections: collections);
-        }
-        var health = new LauncherBannersHealth(
-            "ok",
-            games.ToDictionary(
-                pair => pair.Key,
-                _ => new LauncherBannersGameHealth("ok", null, 0),
-                StringComparer.Ordinal));
-        var manifest = new LauncherBannersManifest(
-            1,
-            new string('a', 64),
-            DateTimeOffset.Parse("2026-07-17T00:00:00Z"),
-            health,
-            games);
+        var accepted = LauncherBannersManifestParser.Parse(ManifestJson(null), true, DateTimeOffset.UtcNow);
+        Assert.All(accepted.Games.Values, game => Assert.Empty(game.Upcoming));
 
-        var projected = manifest.ForDisplayAt(DateTimeOffset.Parse("2026-07-17T01:00:00Z"));
+        var missing = JsonNode.Parse(Encoding.UTF8.GetString(ManifestJson(null)))!.AsObject();
+        missing["games"]!["gi"]!.AsObject().Remove("collections");
+        Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.Parse(
+            JsonSerializer.SerializeToUtf8Bytes(missing), true, DateTimeOffset.UtcNow));
 
-        Assert.Equal(["permanent", "collab"], projected.Games["hsr"].Collections.Select(item => item.Kind));
-        Assert.Equal(["permanent"], projected.Games["gi"].Collections.Select(item => item.Kind));
+        var nonEmpty = JsonNode.Parse(Encoding.UTF8.GetString(ManifestJson(null)))!.AsObject();
+        nonEmpty["games"]!["gi"]!["collections"] = new JsonArray(new JsonObject());
+        Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.Parse(
+            JsonSerializer.SerializeToUtf8Bytes(nonEmpty), true, DateTimeOffset.UtcNow));
     }
 
     [Theory]
@@ -916,80 +898,6 @@ public sealed class LauncherBannersContentTests
     }
 
     [Fact]
-    public void Pinned_user_art_survives_manifest_pruning_and_rejects_tampering()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-cache-" + Guid.NewGuid().ToString("N"));
-        var source = Path.Combine(root, "source.webp");
-        Directory.CreateDirectory(root);
-        try
-        {
-            var bytes = WebpFixture(7);
-            File.WriteAllBytes(source, bytes);
-            var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-            var asset = new LauncherBannersAsset("asset", "test", "/launcher-art/test.webp", null, "image/webp", bytes.Length, new(1, 1), hash, new(0, 0, 1, 1), new("center", "contain", .7, .5));
-            var cache = new LauncherBannersCache(root);
-
-            var relative = cache.PinUserArt("gi", asset, source);
-            var pinned = Assert.IsType<string>(cache.TryResolveUserArt(relative));
-            cache.PruneManagedCache(1, activeManifest: null);
-            Assert.Equal(pinned, cache.TryResolveUserArt(relative));
-
-            File.WriteAllBytes(pinned, WebpFixture(8));
-            Assert.Null(cache.TryResolveUserArt(relative));
-            Assert.Equal(relative, cache.PinUserArt("gi", asset, source));
-            Assert.NotNull(cache.TryResolveUserArt(relative));
-        }
-        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
-    }
-
-    [Fact]
-    public void Pinned_user_art_remains_resolvable_when_state_recovers_its_backup()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "nyx-pinned-backup-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        try
-        {
-            var cache = new LauncherBannersCache(Path.Combine(root, "cache"));
-            var stateStore = new LauncherStateStore(Path.Combine(root, "state"));
-            var firstBytes = WebpFixture(11);
-            var secondBytes = WebpFixture(12);
-            var firstSource = Path.Combine(root, "first.webp");
-            var secondSource = Path.Combine(root, "second.webp");
-            File.WriteAllBytes(firstSource, firstBytes);
-            File.WriteAllBytes(secondSource, secondBytes);
-            var first = AssetFor("first", firstBytes);
-            var second = AssetFor("second", secondBytes);
-            var firstPin = cache.PinUserArt("gi", first, firstSource);
-            var secondPin = cache.PinUserArt("gi", second, secondSource);
-
-            stateStore.Save(StateWithPin(first.Id, firstPin));
-            stateStore.Save(StateWithPin(second.Id, secondPin));
-            File.WriteAllText(stateStore.StatePath, "{bad");
-
-            var recovered = stateStore.Load();
-            Assert.Equal(LauncherStateReadStatus.Recovered, recovered.Status);
-            Assert.Equal(firstPin, recovered.State!.Appearance["gi"].PinnedArtFile);
-            Assert.NotNull(cache.TryResolveUserArt(firstPin));
-        }
-        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
-
-        static LauncherBannersAsset AssetFor(string id, byte[] bytes)
-        {
-            var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-            return new(id, "test", $"/launcher-art/{id}.webp", null, "image/webp", bytes.Length,
-                new(1, 1), hash, new(0, 0, 1, 1), new("center", "contain", .7, .5));
-        }
-
-        static LauncherState StateWithPin(string variant, string pin) => LauncherState.Defaults() with
-        {
-            Appearance = new Dictionary<string, GameAppearanceState>(StringComparer.Ordinal)
-            {
-                ["gi"] = new() { ArtPinned = true, ArtVariant = variant, PinnedArtFile = pin },
-            },
-        };
-    }
-
-    [Fact]
     public void Bundled_asset_is_resolved_and_validated_before_managed_cache()
     {
         var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-cache-" + Guid.NewGuid().ToString("N"));
@@ -1053,93 +961,6 @@ public sealed class LauncherBannersContentTests
 
             Assert.Equal(LauncherBannersManifestParser.Parse(newerPayload, true, now).Revision, service.Current.Revision);
             Assert.Equal(now.AddHours(-1), service.Current.GeneratedAt);
-        }
-        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
-    }
-
-    [Fact]
-    public async Task Service_preserves_reviewed_bundled_collections_when_newer_remote_omits_them()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-cache-" + Guid.NewGuid().ToString("N"));
-        var now = DateTimeOffset.Parse("2026-07-17T02:00:00Z");
-        var bundled = ManifestWithHsrCollectionsJson(now.AddHours(-2), 'a', "Bundled permanent", includeCollab: true);
-        var remote = ManifestWithHsrCollectionsJson(now.AddHours(-1), 'b', null, includeCollab: false);
-        try
-        {
-            await using var service = new LauncherBannersContentService(
-                bundled,
-                root,
-                new Uri("http://127.0.0.1:32123/launcher-banners-v1.json"),
-                new FakeTransport(remote),
-                () => now,
-                TimeSpan.FromMinutes(15));
-
-            await service.RefreshAsync();
-
-            Assert.Equal(LauncherBannersManifestParser.Parse(remote, true, now).Revision, service.Current.Revision);
-            Assert.Equal(["permanent", "collab"], service.Current.Games["hsr"].Collections.Select(item => item.Kind));
-            Assert.Equal("Bundled permanent", service.Current.Games["hsr"].Collections[0].Label);
-        }
-        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
-    }
-
-    [Fact]
-    public async Task Service_uses_newer_remote_collections_when_the_remote_supplies_them()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-cache-" + Guid.NewGuid().ToString("N"));
-        var now = DateTimeOffset.Parse("2026-07-17T02:00:00Z");
-        var bundled = ManifestWithHsrCollectionsJson(now.AddHours(-2), 'a', "Bundled permanent", includeCollab: true);
-        var remote = ManifestWithHsrCollectionsJson(now.AddHours(-1), 'b', "Remote permanent", includeCollab: false);
-        try
-        {
-            await using var service = new LauncherBannersContentService(
-                bundled,
-                root,
-                new Uri("http://127.0.0.1:32123/launcher-banners-v1.json"),
-                new FakeTransport(remote),
-                () => now,
-                TimeSpan.FromMinutes(15));
-
-            await service.RefreshAsync();
-
-            var collection = Assert.Single(service.Current.Games["hsr"].Collections);
-            Assert.Equal("permanent", collection.Kind);
-            Assert.Equal("Remote permanent", collection.Label);
-        }
-        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
-    }
-
-    [Fact]
-    public async Task Service_reapplies_bundled_collections_to_cached_remote_after_restart()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-cache-" + Guid.NewGuid().ToString("N"));
-        var now = DateTimeOffset.Parse("2026-07-17T02:00:00Z");
-        var bundled = ManifestWithHsrCollectionsJson(now.AddHours(-2), 'a', "Bundled permanent", includeCollab: true);
-        var remote = ManifestWithHsrCollectionsJson(now.AddHours(-1), 'b', null, includeCollab: false);
-        try
-        {
-            await using (var service = new LauncherBannersContentService(
-                bundled,
-                root,
-                new Uri("http://127.0.0.1:32123/launcher-banners-v1.json"),
-                new FakeTransport(remote),
-                () => now,
-                TimeSpan.FromMinutes(15)))
-            {
-                await service.RefreshAsync();
-                Assert.Equal(["permanent", "collab"], service.Current.Games["hsr"].Collections.Select(item => item.Kind));
-            }
-
-            await using var restarted = new LauncherBannersContentService(
-                bundled,
-                root,
-                new Uri("http://127.0.0.1:32123/launcher-banners-v1.json"),
-                new FakeTransport(new HttpRequestException("offline")),
-                () => now,
-                TimeSpan.FromMinutes(15));
-
-            Assert.Equal(LauncherBannersManifestParser.Parse(remote, true, now).Revision, restarted.Current.Revision);
-            Assert.Equal(["permanent", "collab"], restarted.Current.Games["hsr"].Collections.Select(item => item.Kind));
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
@@ -1437,15 +1258,15 @@ public sealed class LauncherBannersContentTests
         var bundled = UpcomingManifest(now.AddHours(-2), 'a', bundledNames, now.AddHours(1), now.AddHours(2));
         var emptyRemote = UpcomingManifest(now.AddHours(-3), 'b', new Dictionary<string, string>(), now.AddHours(1), now.AddHours(2));
 
-        var merged = LauncherBannersContentService.ApplyBundledCollections(emptyRemote, bundled);
+        var merged = LauncherBannersContentService.ApplyBundledUpcomingFallback(emptyRemote, bundled);
         Assert.All(merged.Games, pair => Assert.Equal($"bundled-{pair.Key}", Assert.Single(Assert.Single(pair.Value.Upcoming).Characters).Name));
         Assert.Equal(
             merged.Games.Select(pair => Assert.Single(Assert.Single(pair.Value.Upcoming).Characters).Name),
-            LauncherBannersContentService.ApplyBundledCollections(emptyRemote, bundled).Games.Select(pair => Assert.Single(Assert.Single(pair.Value.Upcoming).Characters).Name));
+            LauncherBannersContentService.ApplyBundledUpcomingFallback(emptyRemote, bundled).Games.Select(pair => Assert.Single(Assert.Single(pair.Value.Upcoming).Characters).Name));
         Assert.All(merged.ForDisplayAt(now.AddHours(2)).Games.Values, game => Assert.Empty(game.Upcoming));
 
         var remoteNames = new Dictionary<string, string>(StringComparer.Ordinal) { ["hsr"] = "remote-hsr" };
-        var authoritative = LauncherBannersContentService.ApplyBundledCollections(
+        var authoritative = LauncherBannersContentService.ApplyBundledUpcomingFallback(
             UpcomingManifest(now.AddHours(-1), 'c', remoteNames, now.AddHours(1), now.AddHours(2)),
             bundled);
         Assert.Equal("remote-hsr", Assert.Single(Assert.Single(authoritative.Games["hsr"].Upcoming).Characters).Name);
@@ -1474,7 +1295,7 @@ public sealed class LauncherBannersContentTests
         var cache = new LauncherBannersCache(root);
         try
         {
-            var merged = LauncherBannersContentService.ApplyBundledCollections(newer, bundled);
+            var merged = LauncherBannersContentService.ApplyBundledUpcomingFallback(newer, bundled);
             Assert.Empty(merged.Games["ae"].Upcoming);
             Assert.Empty(merged.ForDisplayAt(now).Games["ae"].Upcoming);
 
@@ -1777,7 +1598,7 @@ public sealed class LauncherBannersContentTests
     private static byte[] ManifestJson(string? url)
     {
         var newsUrl = url is null ? "null" : $"\"{url}\"";
-        var games = string.Join(',', new[] { "gi", "hsr", "zzz", "wuwa", "ae" }.Select(game => $"\"{game}\":{{\"game\":\"{game}\",\"region\":\"global\",\"current\":null,\"news\":[{{\"id\":\"{game}-news\",\"title\":\"Official\",\"type\":\"event\",\"start\":null,\"end\":null,\"url\":{newsUrl}}}]}}"));
+        var games = string.Join(',', new[] { "gi", "hsr", "zzz", "wuwa", "ae" }.Select(game => $"\"{game}\":{{\"game\":\"{game}\",\"region\":\"global\",\"current\":null,\"collections\":[],\"news\":[{{\"id\":\"{game}-news\",\"title\":\"Official\",\"type\":\"event\",\"start\":null,\"end\":null,\"url\":{newsUrl}}}]}}"));
         var health = string.Join(',', new[] { "gi", "hsr", "zzz", "wuwa", "ae" }.Select(game => $"\"{game}\":{{\"status\":\"ok\",\"reason\":null,\"newsCount\":1}}"));
         return WithSemanticRevision(Encoding.UTF8.GetBytes($"{{\"schemaVersion\":1,\"revision\":\"{new string('a', 64)}\",\"generatedAt\":\"2026-07-17T00:00:00.000Z\",\"health\":{{\"status\":\"ok\",\"games\":{{{health}}}}},\"games\":{{{games}}}}}"));
     }
@@ -1795,46 +1616,6 @@ public sealed class LauncherBannersContentTests
         root["generatedAt"] = generatedAt.ToString("O");
         root["revision"] = new string(revision, 64);
         return WithSemanticRevision(JsonSerializer.SerializeToUtf8Bytes(root));
-    }
-
-    private static byte[] ManifestWithHsrCollectionsJson(
-        DateTimeOffset generatedAt,
-        char revision,
-        string? permanentLabel,
-        bool includeCollab)
-    {
-        var root = JsonNode.Parse(Encoding.UTF8.GetString(ManifestJson(null)))!.AsObject();
-        root["generatedAt"] = generatedAt.ToString("O");
-        root["revision"] = new string(revision, 64);
-        var collections = new JsonArray();
-        if (permanentLabel is not null)
-        {
-            collections.Add(Collection("permanent", permanentLabel, "Always available", "permanent-character"));
-        }
-        if (includeCollab)
-        {
-            collections.Add(Collection("collab", "Collab", "Always available", "collab-character"));
-        }
-        root["games"]!["hsr"]!["collections"] = collections;
-        return WithSemanticRevision(JsonSerializer.SerializeToUtf8Bytes(root));
-
-        static JsonObject Collection(string kind, string label, string availability, string characterId) => new()
-        {
-            ["kind"] = kind,
-            ["label"] = label,
-            ["availability"] = availability,
-            ["characters"] = new JsonArray(new JsonObject
-            {
-                ["id"] = characterId,
-                ["name"] = characterId,
-                ["rarity"] = 5,
-                ["limited"] = false,
-                ["debut"] = null,
-                ["characterUrl"] = null,
-                ["icon"] = null,
-                ["variants"] = new JsonArray(),
-            }),
-        };
     }
 
     private static byte[] CodesJson(DateTimeOffset generatedAt, string code, char revision)

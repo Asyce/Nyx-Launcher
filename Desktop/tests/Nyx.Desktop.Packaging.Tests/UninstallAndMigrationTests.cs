@@ -261,6 +261,7 @@ public sealed class UninstallAndMigrationTests
         Assert.True(defaults.RootElement.GetProperty("retainUserDataOnUninstall").GetBoolean());
         Assert.False(defaults.RootElement.GetProperty("exportPullsArmed").GetBoolean());
         Assert.False(defaults.RootElement.GetProperty("exportAchievementsArmed").GetBoolean());
+        Assert.False(defaults.RootElement.TryGetProperty("automaticArt", out _));
 
         var migrated = LauncherStateMigrations.Read("""
         {"version":0,"selectedGameId":"custom-a","railOrder":["custom-a","gi"],

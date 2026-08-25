@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": "bae7a79cbe04164401d4394d9495bbd0d03a28918f694c09f756db06a514cbf3",
+  "revision": "badf9c38350a1e81e777e26acd570020c5f96e9b218c2d9771ac24f0297e2ee4",
   "generatedAt": "2026-08-24T03:33:55.726Z",
   "health": {
     "status": "ok",
@@ -525,7 +525,8 @@
           "amount": 60,
           "currency": "Primogems"
         }
-      ]
+      ],
+      "collections": []
     },
     "hsr": {
       "game": "hsr",
@@ -1268,7 +1269,8 @@
           "amount": 60,
           "currency": "Stellar Jade"
         }
-      ]
+      ],
+      "collections": []
     },
     "zzz": {
       "game": "zzz",
@@ -2036,7 +2038,8 @@
           "amount": 60,
           "currency": "Polychrome"
         }
-      ]
+      ],
+      "collections": []
     },
     "wuwa": {
       "game": "wuwa",
@@ -2551,7 +2554,8 @@
           "amount": 100,
           "currency": "Astrite"
         }
-      ]
+      ],
+      "collections": []
     },
     "ae": {
       "game": "ae",
@@ -3038,7 +3042,8 @@
           "amount": 150,
           "currency": "Oroberyl"
         }
-      ]
+      ],
+      "collections": []
     }
   }
 }

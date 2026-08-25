@@ -30,52 +30,6 @@ public sealed class LauncherBannersCache
     public string LastKnownGoodManifestPath => Path.Combine(LastKnownGoodDirectory, "launcher-banners-v1.json");
     public string LastKnownGoodCodesPath => Path.Combine(LastKnownGoodDirectory, "launcher-codes-v1.json");
 
-    public string PinUserArt(string gameId, LauncherBannersAsset asset, string sourcePath)
-    {
-        ArgumentNullException.ThrowIfNull(asset);
-        if (string.IsNullOrWhiteSpace(gameId) || gameId.Any(character => !char.IsAsciiLetterOrDigit(character) && character != '-'))
-            throw new ArgumentException("A safe game id is required.", nameof(gameId));
-        var bytes = File.ReadAllBytes(Path.GetFullPath(sourcePath));
-        ValidateAssetBytes(asset, bytes);
-        Directory.CreateDirectory(UserArtDirectory);
-        if (!IsSafeUserArtPath(UserArtDirectory, mustExist: true)) throw new InvalidDataException("Unsafe user-art root.");
-        var gameDirectory = Path.Combine(UserArtDirectory, gameId);
-        Directory.CreateDirectory(gameDirectory);
-        if (!IsSafeUserArtPath(gameDirectory, mustExist: true)) throw new InvalidDataException("Unsafe user-art game directory.");
-        var relative = $"{gameId}/{asset.Sha256}{Extension(asset.Mime)}";
-        var destination = ResolveUserArtPath(relative, mustExist: false)
-            ?? throw new InvalidDataException("Unsafe pinned art destination.");
-        AtomicWrite(destination, bytes);
-        return relative;
-    }
-
-    public string? TryResolveUserArt(string? relative)
-    {
-        var path = ResolveUserArtPath(relative, mustExist: true);
-        if (path is null) return null;
-        try
-        {
-            var expectedHash = Path.GetFileNameWithoutExtension(path);
-            if (expectedHash.Length != 64 || expectedHash.Any(character => !Uri.IsHexDigit(character))) return null;
-            var bytes = File.ReadAllBytes(path);
-            var actualHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-            if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase)) return null;
-            var mime = Path.GetExtension(path).Equals(".png", StringComparison.OrdinalIgnoreCase) ? "image/png" : "image/webp";
-            var dimensions = ReadDimensions(bytes, mime);
-            return dimensions is { Width: > 0 and <= 4096, Height: > 0 and <= 4096 } ? path : null;
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
-
-    public void ReleaseUserArt(string? relative)
-    {
-        var path = ResolveUserArtPath(relative, mustExist: true);
-        if (path is not null) TryDelete(path);
-    }
-
     public string? TryResolveManagedAsset(LauncherBannersAsset asset)
     {
         ArgumentNullException.ThrowIfNull(asset);
@@ -525,9 +479,7 @@ public sealed class LauncherBannersCache
             .Concat((game.Current?.Characters ?? []).Select(character => character.Icon).OfType<LauncherBannersAsset>())
             .Concat(game.Current?.Characters.SelectMany(character => character.Variants) ?? [])
             .Concat(game.Upcoming.SelectMany(phase => phase.Characters).Select(character => character.Icon).OfType<LauncherBannersAsset>())
-            .Concat(game.Upcoming.SelectMany(phase => phase.Characters).SelectMany(character => character.Variants))
-            .Concat(game.Collections.SelectMany(collection => collection.Characters).Select(character => character.Icon).OfType<LauncherBannersAsset>())
-            .Concat(game.Collections.SelectMany(collection => collection.Characters).SelectMany(character => character.Variants)));
+            .Concat(game.Upcoming.SelectMany(phase => phase.Characters).SelectMany(character => character.Variants)));
 
     private async Task AtomicWriteOwnedAsync(string target, byte[] bytes, CancellationToken cancellationToken)
     {
@@ -551,25 +503,6 @@ public sealed class LauncherBannersCache
         finally
         {
             TryDeleteOwned(temp);
-        }
-    }
-
-    private static void AtomicWrite(string target, byte[] bytes)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-        var temp = Path.Combine(Path.GetDirectoryName(target)!, $".{Path.GetFileName(target)}.{Guid.NewGuid():N}.tmp");
-        try
-        {
-            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 64 * 1024, FileOptions.WriteThrough))
-            {
-                stream.Write(bytes);
-                stream.Flush(flushToDisk: true);
-            }
-            File.Move(temp, target, overwrite: true);
-        }
-        finally
-        {
-            TryDelete(temp);
         }
     }
 
@@ -648,48 +581,4 @@ public sealed class LauncherBannersCache
         catch (UnauthorizedAccessException) { }
     }
 
-    private string? ResolveUserArtPath(string? relative, bool mustExist)
-    {
-        if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative)) return null;
-        var parts = relative.Replace('\\', '/').Split('/');
-        if (parts.Any(part => part.Length == 0 || part is "." or "..")) return null;
-        var root = Path.GetFullPath(UserArtDirectory);
-        var path = Path.GetFullPath(Path.Combine(root, Path.Combine(parts)));
-        if (!path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return null;
-        return IsSafeUserArtPath(path, mustExist) ? path : null;
-    }
-
-    private bool IsSafeUserArtPath(string path, bool mustExist)
-    {
-        try
-        {
-            var root = Path.GetFullPath(UserArtDirectory);
-            var full = Path.GetFullPath(path);
-            if (!full.Equals(root, StringComparison.OrdinalIgnoreCase)
-                && !full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return false;
-            var current = root;
-            if (Directory.Exists(current) && File.GetAttributes(current).HasFlag(FileAttributes.ReparsePoint)) return false;
-            var relative = Path.GetRelativePath(root, full);
-            if (relative != ".")
-            {
-                foreach (var part in relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-                {
-                    current = Path.Combine(current, part);
-                    if (!File.Exists(current) && !Directory.Exists(current)) break;
-                    if (File.GetAttributes(current).HasFlag(FileAttributes.ReparsePoint)) return false;
-                }
-            }
-            return !mustExist || File.Exists(full) || Directory.Exists(full);
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            return false;
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { if (File.Exists(path)) File.Delete(path); } catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-    }
 }

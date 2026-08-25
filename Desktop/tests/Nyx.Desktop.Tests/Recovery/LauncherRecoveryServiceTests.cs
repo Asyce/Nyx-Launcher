@@ -19,7 +19,7 @@ public sealed class LauncherRecoveryServiceTests
             {
                 Appearance = new Dictionary<string, GameAppearanceState>
                 {
-                    ["gi"] = new() { ArtScale = 200 },
+                    ["gi"] = new() { IconPath = @"C:\Art\gi.png" },
                 },
             });
             store.Save(LauncherState.Defaults() with { SelectedGameId = "hsr" });
@@ -59,7 +59,7 @@ public sealed class LauncherRecoveryServiceTests
             {
                 Appearance = new Dictionary<string, GameAppearanceState>
                 {
-                    ["gi"] = new() { ArtScale = 200 },
+                    ["gi"] = new() { IconPath = @"C:\Art\gi.png" },
                 },
             });
             var service = new LauncherRecoveryService(store, new LauncherCacheService(root));
@@ -68,7 +68,7 @@ public sealed class LauncherRecoveryServiceTests
             {
                 SelectedGameId = "hsr",
                 Appearance = state.Appearance
-                    .Append(new KeyValuePair<string, GameAppearanceState>("hsr", new() { ArtScale = 165 }))
+                    .Append(new KeyValuePair<string, GameAppearanceState>("hsr", new() { IconPath = @"C:\Art\hsr.png" }))
                     .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal),
                 Preferences = state.Preferences with
                 {
@@ -82,7 +82,7 @@ public sealed class LauncherRecoveryServiceTests
             Assert.True(result.Succeeded);
             var saved = store.Load().State!;
             Assert.False(saved.Appearance.ContainsKey("gi"));
-            Assert.Equal(165, saved.Appearance["hsr"].ArtScale);
+            Assert.Equal(@"C:\Art\hsr.png", saved.Appearance["hsr"].IconPath);
             Assert.Equal("hsr", saved.SelectedGameId);
             Assert.Equal(@"D:\ConcurrentNyxData", saved.Preferences.DataDirectory);
             Assert.False(saved.Preferences.FeatureFlags.HsrAchievements);

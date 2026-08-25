@@ -208,7 +208,7 @@ public sealed class WuWaAccountStatusUiTests
         var root = FindRepositoryRoot();
         var code = File.ReadAllText(Path.Combine(root, "Desktop", "src", "Nyx.Desktop.App", "MainPage.xaml.cs"));
         var start = code.IndexOf("private void RenderLocalAccountTimeTick", StringComparison.Ordinal);
-        var end = code.IndexOf("private void BannerCategoryButton_Click", start, StringComparison.Ordinal);
+        var end = code.IndexOf("private async void CharacterLink_Click", start, StringComparison.Ordinal);
         Assert.True(start >= 0 && end > start);
         var tick = code[start..end];
         Assert.Contains("RenderPublisherAccountStatus(selected.Id)", tick, StringComparison.Ordinal);

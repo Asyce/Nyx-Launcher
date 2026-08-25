@@ -49,17 +49,6 @@ public sealed record GameAppearanceState
 {
     public string? IconPath { get; init; }
     public string? BackgroundPath { get; init; }
-    public bool AutomaticArt { get; init; } = true;
-    public int ArtScale { get; init; } = 100;
-    public int ArtX { get; init; }
-    public int ArtY { get; init; }
-    public string? ArtVariant { get; init; }
-    public string ArtFit { get; init; } = "cover";
-    public bool ArtPinned { get; init; }
-    public string? PinnedArtFile { get; init; }
-
-    public GameAppearanceState Normalize()
-        => this with { ArtScale = Math.Clamp(ArtScale, 25, 500) };
 }
 
 public sealed record ExportArmingState

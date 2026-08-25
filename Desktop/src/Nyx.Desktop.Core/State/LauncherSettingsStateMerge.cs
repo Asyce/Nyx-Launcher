@@ -19,8 +19,6 @@ public sealed record LauncherSettingsEdit
     public required OfficialGameLaunchOptions? OpenedOfficialLaunchOptions { get; init; }
     public required OfficialGameLaunchOptions? OfficialLaunchOptions { get; init; }
     public required bool PublisherPasswordSavingEnabled { get; init; }
-    public required bool AutomaticArt { get; init; }
-    public required bool RemoteBannerManifest { get; init; }
     public LauncherPanelVisibility? OpenedPanelVisibility { get; init; }
     public LauncherPanelVisibility? PanelVisibility { get; init; }
 }
@@ -161,17 +159,6 @@ public static class LauncherSettingsStateMerge
                     latest.Preferences.PublisherPasswordSavingEnabled,
                     opened.Preferences.PublisherPasswordSavingEnabled,
                     edit.PublisherPasswordSavingEnabled),
-                FeatureFlags = latest.Preferences.FeatureFlags with
-                {
-                    AutomaticArt = MergeValue(
-                        latest.Preferences.FeatureFlags.AutomaticArt,
-                        opened.Preferences.FeatureFlags.AutomaticArt,
-                        edit.AutomaticArt),
-                    RemoteBannerManifest = MergeValue(
-                        latest.Preferences.FeatureFlags.RemoteBannerManifest,
-                        opened.Preferences.FeatureFlags.RemoteBannerManifest,
-                        edit.RemoteBannerManifest),
-                },
             },
         };
     }
@@ -260,14 +247,6 @@ public static class LauncherSettingsStateMerge
     {
         IconPath = MergeValue(latest.IconPath, opened.IconPath, edited.IconPath),
         BackgroundPath = MergeValue(latest.BackgroundPath, opened.BackgroundPath, edited.BackgroundPath),
-        AutomaticArt = MergeValue(latest.AutomaticArt, opened.AutomaticArt, edited.AutomaticArt),
-        ArtScale = MergeValue(latest.ArtScale, opened.ArtScale, edited.ArtScale),
-        ArtX = MergeValue(latest.ArtX, opened.ArtX, edited.ArtX),
-        ArtY = MergeValue(latest.ArtY, opened.ArtY, edited.ArtY),
-        ArtVariant = MergeValue(latest.ArtVariant, opened.ArtVariant, edited.ArtVariant),
-        ArtFit = MergeValue(latest.ArtFit, opened.ArtFit, edited.ArtFit),
-        ArtPinned = MergeValue(latest.ArtPinned, opened.ArtPinned, edited.ArtPinned),
-        PinnedArtFile = MergeValue(latest.PinnedArtFile, opened.PinnedArtFile, edited.PinnedArtFile),
     };
 
     private static T MergeValue<T>(T latest, T opened, T edited) =>

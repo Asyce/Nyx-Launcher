@@ -94,7 +94,7 @@ public sealed class BannerCycleUiTests
     {
         var xaml = ReadAppFile("MainPage.xaml");
         var code = ReadAppFile("MainPage.xaml.cs");
-        var columns = Slice(xaml, "x:Name=\"BannerCycleColumns\"", "x:Name=\"BannerCollectionList\"");
+        var columns = Slice(xaml, "x:Name=\"BannerCycleColumns\"", "x:Name=\"LowerActionRegion\"");
         var bannerRegion = Slice(xaml, "x:Name=\"BannerCycleRegion\"", "x:Name=\"BannerCycleStack\"");
         var scrollViewer = Slice(xaml, "x:Name=\"BannerCycleScrollViewer\"", "x:Name=\"BannerCycleColumns\"");
 
@@ -307,28 +307,25 @@ public sealed class BannerCycleUiTests
     }
 
     [Fact]
-    public void Current_and_upcoming_banners_share_the_panel_and_empty_upcoming_collapses_fail_closed()
+    public void Current_and_upcoming_banners_share_the_panel_without_retired_collection_ui()
     {
         var xaml = ReadAppFile("MainPage.xaml");
         var code = ReadAppFile("MainPage.xaml.cs");
-        var categories = Slice(
-            code,
-            "private void RenderBannerCategories",
-            "private static string FormatCurrentBannerTiming");
-
-        Assert.DoesNotContain("PermanentBannerCategoryButton", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("PERMANENT", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"FATE COLLAB\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Style=\"{StaticResource NyxOfficialLauncherStyle}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("gameId == \"hsr\" && collab is not null", categories, StringComparison.Ordinal);
-        Assert.DoesNotContain("collection.Kind == \"permanent\"", categories, StringComparison.Ordinal);
-        Assert.DoesNotContain("category == \"permanent\"", categories, StringComparison.Ordinal);
-        Assert.Contains("var hasCurrent = BannerCharacterRows.Count > 0", categories, StringComparison.Ordinal);
-        Assert.Contains("CurrentBannerSection.Visibility = hasCurrent ? Visibility.Visible : Visibility.Collapsed", categories, StringComparison.Ordinal);
-        Assert.Contains("UpcomingBannerList.Visibility = hasUpcoming ? Visibility.Visible : Visibility.Collapsed", categories, StringComparison.Ordinal);
-        Assert.Contains("BannerCollectionList.Visibility = Visibility.Collapsed", categories, StringComparison.Ordinal);
-        Assert.DoesNotContain("GridLength", categories, StringComparison.Ordinal);
-        Assert.DoesNotContain("category == \"upcoming\" ? Visibility.Visible", categories, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"CurrentBannerSection\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"UpcomingBannerList\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("RenderBannerRows(selected.Id, current, now)", code, StringComparison.Ordinal);
+        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now)", code, StringComparison.Ordinal);
+        foreach (var symbol in new[]
+                 {
+                     "BannerCollection",
+                     "RenderBannerCategories",
+                     "BannerCategoryButton",
+                     "selectedBannerCategories",
+                     "FATE COLLAB",
+                 })
+        {
+            Assert.DoesNotContain(symbol, xaml + code, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
