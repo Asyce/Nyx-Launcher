@@ -227,7 +227,7 @@ public sealed class PublisherAccountHardeningTests
             "new Uri(\"https://game.skport.com/endfield/game-data?header=0\")",
             contracts,
             StringComparison.Ordinal);
-        Assert.Contains("\"Sanity\", true, false", contracts, StringComparison.Ordinal);
+        Assert.Equal("Sanity", PublisherAccountCatalog.Get("ae").ResourceName);
     }
 
     [Theory]
