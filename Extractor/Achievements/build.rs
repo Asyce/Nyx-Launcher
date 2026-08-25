@@ -7,9 +7,8 @@ fn catalog_ids(
     expected_hash: &str,
     expected_count: usize,
 ) -> Vec<u32> {
-    let path = PathBuf::from("../../Database/Achievements")
-        .join(game)
-        .join("catalog.json");
+    let path = PathBuf::from("../../contracts")
+        .join(format!("achievements-{game}-catalog.json"));
     println!("cargo:rerun-if-changed={}", path.display());
     let bytes =
         fs::read(&path).unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));

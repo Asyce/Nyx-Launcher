@@ -47,7 +47,7 @@
     <None Include="..\..\..\contracts\pengo-achievements-v1.fixture.json"
           Link="Contracts\pengo-achievements-v1.fixture.json"
           CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\..\Database\Achievements\hsr\catalog.json"
+    <None Include="..\..\..\contracts\achievements-hsr-catalog.json"
           Link="Catalog\hsr-catalog.json"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

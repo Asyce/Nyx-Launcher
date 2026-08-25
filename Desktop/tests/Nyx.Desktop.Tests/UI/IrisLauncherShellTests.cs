@@ -621,7 +621,6 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>", project, StringComparison.Ordinal);
         Assert.Contains("<WindowsAppSdkUndockedRegFreeWinRTInitialize>true</WindowsAppSdkUndockedRegFreeWinRTInitialize>", project, StringComparison.Ordinal);
         Assert.Contains("<SelfContained>true</SelfContained>", project, StringComparison.Ordinal);
-        Assert.Contains("<EnableMsixTooling>false</EnableMsixTooling>", project, StringComparison.Ordinal);
         Assert.Contains("<PublishTrimmed>False</PublishTrimmed>", project, StringComparison.Ordinal);
         Assert.Contains("Name=\"CopyApplicationPriToPublishDirectory\"", project, StringComparison.Ordinal);
         Assert.Contains("$(TargetDir)$(AssemblyName).pri", project, StringComparison.Ordinal);

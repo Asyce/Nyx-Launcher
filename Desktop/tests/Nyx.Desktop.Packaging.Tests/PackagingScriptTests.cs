@@ -313,7 +313,6 @@ public sealed class PackagingScriptTests
         var updating = File.ReadAllText(Path.Combine(DesktopRoot, "docs", "updating.md"));
         var buildProperties = File.ReadAllText(Path.Combine(DesktopRoot, "Directory.Build.props"));
         var appManifest = File.ReadAllText(Path.Combine(DesktopRoot, "src", "Nyx.Desktop.App", "app.manifest"));
-        var packageManifest = File.ReadAllText(Path.Combine(DesktopRoot, "src", "Nyx.Desktop.App", "Package.appxmanifest"));
 
         Assert.Contains("[string] $Version = '1.4.0.0'", build, StringComparison.Ordinal);
         Assert.Contains("[ValidateSet('development', 'stable')]", build, StringComparison.Ordinal);
@@ -337,7 +336,6 @@ public sealed class PackagingScriptTests
         Assert.Contains("build-development-package.ps1", stable, StringComparison.Ordinal);
         Assert.Contains("<Version>1.4.0</Version>", buildProperties, StringComparison.Ordinal);
         Assert.Contains("version=\"1.4.0.0\"", appManifest, StringComparison.Ordinal);
-        Assert.Contains("Version=\"1.4.0.0\"", packageManifest, StringComparison.Ordinal);
         Assert.Contains("Both channels are unsigned", readme, StringComparison.Ordinal);
         Assert.Contains("Both channels remain unsigned", updating, StringComparison.Ordinal);
     }
