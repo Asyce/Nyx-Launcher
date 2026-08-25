@@ -574,7 +574,7 @@ function Wait-CachedResourceMetric {
         try {
             $metric = Find-AutomationIdElement `
                 -Root $Root `
-                -AutomationId 'PublisherResourceMetricGrid'
+                -AutomationId 'LaunchResourceMetricsPanel'
             if ($null -ne $metric -and
                 [string] $metric.Current.Name -ceq 'ORIGINAL RESIN  137/200') {
                 $elapsed = $Stopwatch.Elapsed.TotalMilliseconds
@@ -810,7 +810,7 @@ public static class NyxNativeSmokeCapture
         Assert-UiDeadline
         $hsrMetric = Find-AutomationIdElement `
             -Root $window `
-            -AutomationId 'PublisherResourceMetricGrid'
+            -AutomationId 'LaunchResourceMetricsPanel'
         if ($hsrGame.Pattern.Current.IsSelected -and
             $null -ne $hsrMetric -and
             [string] $hsrMetric.Current.Name -ceq 'TRAILBLAZE POWER  211/300') { break }

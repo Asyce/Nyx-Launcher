@@ -24,7 +24,8 @@ public sealed class NativeSmokeScriptTests
         Assert.Contains("$publisherAccountFixture = 'not-seeded'", source, StringComparison.Ordinal);
         Assert.Contains("$script:publisherAccountFixture = 'synthetic-isolated-no-live-account'", source, StringComparison.Ordinal);
         Assert.Contains("publisherAccountFixture = $publisherAccountFixture", source, StringComparison.Ordinal);
-        Assert.Contains("PublisherResourceMetricGrid", source, StringComparison.Ordinal);
+        Assert.Contains("LaunchResourceMetricsPanel", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("PublisherResourceMetricGrid", source, StringComparison.Ordinal);
         Assert.Contains("ORIGINAL RESIN  137/200", source, StringComparison.Ordinal);
         Assert.Contains("TRAILBLAZE POWER  211/300", source, StringComparison.Ordinal);
         Assert.Contains("if ($hsrGame.Pattern.Current.IsSelected -and", source, StringComparison.Ordinal);
