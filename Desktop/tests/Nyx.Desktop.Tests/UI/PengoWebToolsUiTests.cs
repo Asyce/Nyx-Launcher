@@ -103,14 +103,19 @@ public sealed class PengoWebToolsUiTests
             "private async Task RefreshPublisherResourcesOnStartupAsync",
             "private async Task RefreshPublisherResourceAfterCheckInAsync");
 
-        Assert.Contains("new[] { selectedId, \"gi\", \"hsr\", \"zzz\" }", startup, StringComparison.Ordinal);
+        Assert.Contains("selectedId is \"gi\" or \"hsr\" or \"zzz\" ? selectedId : null", startup, StringComparison.Ordinal);
+        Assert.Contains(".Distinct(StringComparer.Ordinal)", startup, StringComparison.Ordinal);
+        var selectedFirst = startup.IndexOf("? selectedId : null,", StringComparison.Ordinal);
+        Assert.True(selectedFirst >= 0);
+        Assert.True(startup.IndexOf("\"gi\",", selectedFirst + 1, StringComparison.Ordinal) > selectedFirst);
         Assert.Contains("RefreshWuWaAccountStatusAsync", startup, StringComparison.Ordinal);
         Assert.Single(
             Regex.Matches(startup, "RefreshPublisherResourceAutomaticallyAsync", RegexOptions.CultureInvariant)
                 .Cast<Match>());
         Assert.Contains("foreach", startup, StringComparison.Ordinal);
         Assert.Contains("selected: gameId == selectedId", startup, StringComparison.Ordinal);
-        Assert.Contains("force: true", startup, StringComparison.Ordinal);
+        Assert.DoesNotContain("force:", startup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Task.WhenAll", startup, StringComparison.Ordinal);
         Assert.Contains("if (gameId == skipGameId) continue;", startup, StringComparison.Ordinal);
     }
 

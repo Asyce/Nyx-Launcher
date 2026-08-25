@@ -309,6 +309,11 @@ public sealed class HoyoLabAccountSlotServiceTests
             "if (!CanPublish(\"HoYoLAB\", operation)) return",
             "resources[gameId] = snapshot",
             "resourceStates[gameId] = state");
+        Assert.Contains("snapshot.ObservedAt > now", method, StringComparison.Ordinal);
+        Assert.Contains("PublisherResourceRefreshPolicy.IsFresh(snapshot.ObservedAt, now)", method, StringComparison.Ordinal);
+        Assert.Contains("snapshot with { IsStale = !fresh }", method, StringComparison.Ordinal);
+        Assert.Contains("PublisherResourceState.Fresh", method, StringComparison.Ordinal);
+        Assert.DoesNotContain("snapshot.IsStale", method, StringComparison.Ordinal);
     }
 
     private static string Slice(string start, string end)

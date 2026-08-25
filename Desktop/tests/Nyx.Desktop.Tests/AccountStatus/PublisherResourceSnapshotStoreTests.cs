@@ -93,6 +93,22 @@ public sealed class PublisherResourceSnapshotStoreTests
     }
 
     [Fact]
+    public void Freshness_policy_uses_the_five_minute_boundary_and_rejects_future_observations()
+    {
+        var now = new DateTimeOffset(2026, 7, 29, 10, 0, 0, TimeSpan.Zero);
+
+        Assert.True(PublisherResourceRefreshPolicy.IsFresh(
+            now - TimeSpan.FromMinutes(5) + TimeSpan.FromTicks(1),
+            now));
+        Assert.False(PublisherResourceRefreshPolicy.IsFresh(
+            now - TimeSpan.FromMinutes(5),
+            now));
+        Assert.False(PublisherResourceRefreshPolicy.IsFresh(
+            now + TimeSpan.FromTicks(1),
+            now));
+    }
+
+    [Fact]
     public void Ancestor_reparse_rejects_resource_load_save_and_delete()
     {
         var root = Path.Combine(Path.GetTempPath(), "nyx-resource-reparse-" + Guid.NewGuid());

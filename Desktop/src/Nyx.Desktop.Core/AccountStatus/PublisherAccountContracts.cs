@@ -379,6 +379,9 @@ public static class PublisherResourceRefreshPolicy
     public static readonly TimeSpan SelectedInterval = TimeSpan.FromMinutes(5);
     public static readonly TimeSpan BackgroundInterval = SelectedInterval;
 
+    public static bool IsFresh(DateTimeOffset observedAt, DateTimeOffset now) =>
+        observedAt <= now && now - observedAt < SelectedInterval;
+
     public static bool IsDue(
         DateTimeOffset? lastAttempt,
         DateTimeOffset now,

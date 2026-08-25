@@ -2183,30 +2183,28 @@ public sealed partial class MainPage : Page
     private async Task RefreshPublisherResourceAutomaticallyAsync(
         string gameId,
         SessionUiLease lease,
-        bool selected,
-        bool force = false)
+        bool selected)
     {
-        var entry = gameId is "gi" or "hsr" or "zzz"
-            ? PublisherAccountCatalog.Get(gameId)
-            : null;
+        if (gameId is not ("gi" or "hsr" or "zzz")) return;
+        var entry = PublisherAccountCatalog.Get(gameId);
+        var now = AccountDisplayClock();
         var summary = publisherAccounts.Current;
-        var connection = entry?.Provider == "HoYoLAB" ? summary.HoyoLab : summary.Skport;
-        if (gameId is not ("gi" or "hsr" or "zzz")
-            || entry?.SupportsNumericResource != true
-            || connection != PublisherConnectionState.Connected
+        var resource = summary.Resources.TryGetValue(gameId, out var snapshot) ? snapshot : null;
+        if (!entry.SupportsNumericResource
             || !HasPublisherConsent(gameId)
+            || (resource is not null
+                && PublisherResourceRefreshPolicy.IsFresh(resource.ObservedAt, now))
             || !PublisherResourceRefreshPolicy.IsDue(
                 publisherResourceAutomaticAttempts.TryGetValue(gameId, out var attemptedAt)
                     ? attemptedAt
                     : null,
-                AccountDisplayClock(),
-                selected,
-                force))
+                now,
+                selected))
         {
             return;
         }
 
-        publisherResourceAutomaticAttempts[gameId] = AccountDisplayClock();
+        publisherResourceAutomaticAttempts[gameId] = now;
         try
         {
             await publisherAccounts.RefreshResourceAsync(
@@ -2239,7 +2237,13 @@ public sealed partial class MainPage : Page
         if (lease.CancellationToken.IsCancellationRequested)
             return;
 
-        foreach (var gameId in new[] { selectedId, "gi", "hsr", "zzz" }
+        foreach (var gameId in new[]
+                 {
+                     selectedId is "gi" or "hsr" or "zzz" ? selectedId : null,
+                     "gi",
+                     "hsr",
+                     "zzz",
+                 }
                      .OfType<string>()
                      .Distinct(StringComparer.Ordinal))
         {
@@ -2247,8 +2251,7 @@ public sealed partial class MainPage : Page
             await RefreshPublisherResourceAutomaticallyAsync(
                 gameId,
                 lease,
-                selected: gameId == selectedId,
-                force: true);
+                selected: gameId == selectedId);
             if (lease.CancellationToken.IsCancellationRequested) return;
         }
 
@@ -5265,8 +5268,11 @@ public sealed partial class MainPage : Page
         WuWaAccountStatusStrip.Visibility = !selected.IsCustom
             ? Visibility.Visible
             : Visibility.Collapsed;
-        if (selected.Id == "wuwa") RenderWuWaAccountStatus();
-        else RenderPublisherAccountStatus(selected.Id);
+        if (!selected.IsCustom)
+        {
+            if (selected.Id == "wuwa") RenderWuWaAccountStatus();
+            else RenderPublisherAccountStatus(selected.Id);
+        }
         RedemptionCodeList.Visibility = Visibility.Visible;
         ApplyLayout();
         if (launcherState.Snapshot.SelectedGameId != selected.Id)
@@ -5453,7 +5459,6 @@ public sealed partial class MainPage : Page
         RenderLaunchResourceMetrics(
             selected.Id,
             consentEnabled
-                && connection == PublisherConnectionState.Connected
                 && resource is not null
                     ? LauncherResourceMetricsProjection.FromPublisher(resource, AccountDisplayClock())
                     : null);
@@ -6626,7 +6631,15 @@ public sealed partial class MainPage : Page
         if (lease is null) return;
 
         var selectedId = (GameSelector?.SelectedItem as GameLauncherItem)?.Id;
-        foreach (var gameId in new[] { "gi", "hsr", "zzz" })
+        foreach (var gameId in new[]
+                 {
+                     selectedId is "gi" or "hsr" or "zzz" ? selectedId : null,
+                     "gi",
+                     "hsr",
+                     "zzz",
+                 }
+                     .OfType<string>()
+                     .Distinct(StringComparer.Ordinal))
         {
             if (lease.CancellationToken.IsCancellationRequested) return;
             await RefreshPublisherResourceAutomaticallyAsync(
@@ -6653,6 +6666,7 @@ public sealed partial class MainPage : Page
     {
         if (WuWaAccountStatusStrip.Visibility is not Visibility.Visible
             || GameSelector?.SelectedItem is not GameLauncherItem selected
+            || selected.IsCustom
             || selected.Id == "wuwa")
             return;
 
@@ -7141,7 +7155,9 @@ public sealed partial class MainPage : Page
                 : $"Allow {entry.Provider} account access");
 
         var now = AccountDisplayClock();
-        var resource = summary.Resources.TryGetValue(gameId, out var value) ? value : null;
+        var resource = consentEnabled && summary.Resources.TryGetValue(gameId, out var value)
+            ? value
+            : null;
         var resourceState = summary.ResourceStates.TryGetValue(gameId, out var recordedResourceState)
             ? recordedResourceState
             : PublisherResourceState.NotStarted;

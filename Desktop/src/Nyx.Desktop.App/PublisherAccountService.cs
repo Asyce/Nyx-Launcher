@@ -2415,19 +2415,24 @@ public sealed class PublisherAccountService : IAsyncDisposable
         using var operation = CreateOperation("HoYoLAB", CancellationToken.None);
         var restoredResources = new Dictionary<string, PublisherResourceSnapshot>(StringComparer.Ordinal);
         var restoredStates = new Dictionary<string, PublisherResourceState>(StringComparer.Ordinal);
+        var now = DateTimeOffset.UtcNow;
         foreach (var gameId in new[] { "gi", "hsr", "zzz" })
         {
             var binding = TryLoadRoleRecord(gameId, operation)?.Binding;
             if (binding is null || !CanPublish("HoYoLAB", operation)) continue;
             var snapshot = TryLoadResourceSnapshot(gameId, binding, operation);
             if (snapshot is null
-                || DateTimeOffset.UtcNow - snapshot.ObservedAt > TimeSpan.FromDays(7))
+                || snapshot.ObservedAt > now
+                || now - snapshot.ObservedAt > TimeSpan.FromDays(7))
             {
                 resourceSnapshots.Delete(gameId);
                 continue;
             }
-            restoredResources[gameId] = snapshot with { IsStale = true };
-            restoredStates[gameId] = PublisherResourceState.Stale;
+            var fresh = PublisherResourceRefreshPolicy.IsFresh(snapshot.ObservedAt, now);
+            restoredResources[gameId] = snapshot with { IsStale = !fresh };
+            restoredStates[gameId] = fresh
+                ? PublisherResourceState.Fresh
+                : PublisherResourceState.Stale;
         }
         lock (sync)
         {

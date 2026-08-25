@@ -241,18 +241,23 @@ public sealed class HoyoLiveSessionUiTests
     }
 
     [Fact]
-    public void Login_required_hides_a_retained_resource_snapshot()
+    public void Consented_cached_resource_stays_visible_while_refresh_remains_connection_gated()
     {
         var page = ReadAppFile("MainPage.xaml.cs");
-        var render = Slice(
+        var cachedMetrics = Slice(
             page,
             "var resource = summary.Resources.TryGetValue(selected.Id, out var capturedResource)",
             "LaunchResourceRefreshButton.Visibility");
+        var refreshButton = Slice(
+            page,
+            "LaunchResourceRefreshButton.Visibility = entry.SupportsNumericResource",
+            "LaunchResourceRefreshButton.IsEnabled = !publisherAccountActionInFlight");
 
-        Assert.Contains("consentEnabled", render, StringComparison.Ordinal);
-        Assert.Contains("connection == PublisherConnectionState.Connected", render, StringComparison.Ordinal);
-        Assert.Contains("&& resource is not null", render, StringComparison.Ordinal);
-        Assert.Contains(": null);", render, StringComparison.Ordinal);
+        Assert.Contains("consentEnabled", cachedMetrics, StringComparison.Ordinal);
+        Assert.Contains("&& resource is not null", cachedMetrics, StringComparison.Ordinal);
+        Assert.DoesNotContain("connection == PublisherConnectionState.Connected", cachedMetrics, StringComparison.Ordinal);
+        Assert.Contains(": null);", cachedMetrics, StringComparison.Ordinal);
+        Assert.Contains("connection == PublisherConnectionState.Connected", refreshButton, StringComparison.Ordinal);
         Assert.Contains("PublisherConnectionState.LoginRequired => \"Sign In\"", page, StringComparison.Ordinal);
     }
 
@@ -310,11 +315,18 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("selectedGameId", postDailyRefresh, StringComparison.Ordinal);
         Assert.DoesNotContain("foreach", postDailyRefresh, StringComparison.Ordinal);
         Assert.DoesNotContain("selected: false", postDailyRefresh, StringComparison.Ordinal);
-        Assert.Contains("foreach (var gameId in new[] { \"gi\", \"hsr\", \"zzz\" })", periodicRefresh, StringComparison.Ordinal);
+        Assert.Contains("selectedId is \"gi\" or \"hsr\" or \"zzz\" ? selectedId : null", periodicRefresh, StringComparison.Ordinal);
+        Assert.Contains(".Distinct(StringComparer.Ordinal)", periodicRefresh, StringComparison.Ordinal);
+        var selectedFirst = periodicRefresh.IndexOf("? selectedId : null,", StringComparison.Ordinal);
+        Assert.True(selectedFirst >= 0);
+        Assert.True(periodicRefresh.IndexOf("\"gi\",", selectedFirst + 1, StringComparison.Ordinal) > selectedFirst);
         Assert.Contains("await RefreshPublisherResourceAutomaticallyAsync(", periodicRefresh, StringComparison.Ordinal);
         Assert.Contains("selected: string.Equals(selectedId, gameId", periodicRefresh, StringComparison.Ordinal);
         Assert.Contains("IsWuWaAccountStatusEnabled()", periodicRefresh, StringComparison.Ordinal);
         Assert.Contains("await RefreshWuWaAccountStatusAsync(lease)", periodicRefresh, StringComparison.Ordinal);
+        Assert.True(
+            periodicRefresh.IndexOf("await RefreshPublisherResourceAutomaticallyAsync(", StringComparison.Ordinal)
+            < periodicRefresh.IndexOf("await RefreshWuWaAccountStatusAsync(lease)", StringComparison.Ordinal));
         Assert.DoesNotContain("Task.WhenAll", periodicRefresh, StringComparison.Ordinal);
         Assert.DoesNotContain("\"ae\"", periodicRefresh, StringComparison.Ordinal);
         Assert.Contains("Interval = TimeSpan.FromMinutes(5)", page, StringComparison.Ordinal);
@@ -331,7 +343,7 @@ public sealed class HoyoLiveSessionUiTests
     }
 
     [Fact]
-    public void Automatic_energy_refresh_requires_connected_supported_accounts_and_only_renders_the_selected_game()
+    public void Automatic_energy_refresh_skips_fresh_cache_without_requiring_connected_ui_state()
     {
         var page = ReadAppFile("MainPage.xaml.cs");
         var refresh = Slice(
@@ -339,8 +351,14 @@ public sealed class HoyoLiveSessionUiTests
             "private async Task RefreshPublisherResourceAutomaticallyAsync",
             "private async Task RefreshPublisherResourcesOnStartupAsync");
 
-        Assert.Contains("entry?.SupportsNumericResource != true", refresh, StringComparison.Ordinal);
-        Assert.Contains("connection != PublisherConnectionState.Connected", refresh, StringComparison.Ordinal);
+        Assert.Contains("gameId is not (\"gi\" or \"hsr\" or \"zzz\")", refresh, StringComparison.Ordinal);
+        Assert.Contains("PublisherAccountCatalog.Get(gameId)", refresh, StringComparison.Ordinal);
+        Assert.True(
+            refresh.IndexOf("gameId is not (\"gi\" or \"hsr\" or \"zzz\")", StringComparison.Ordinal)
+            < refresh.IndexOf("PublisherAccountCatalog.Get(gameId)", StringComparison.Ordinal));
+        Assert.Contains("!entry.SupportsNumericResource", refresh, StringComparison.Ordinal);
+        Assert.DoesNotContain("PublisherConnectionState.Connected", refresh, StringComparison.Ordinal);
+        Assert.Contains("PublisherResourceRefreshPolicy.IsFresh(resource.ObservedAt, now)", refresh, StringComparison.Ordinal);
         Assert.Contains("PublisherResourceRefreshPolicy.IsDue(", refresh, StringComparison.Ordinal);
         Assert.Contains("await publisherAccounts.RefreshResourceAsync(", refresh, StringComparison.Ordinal);
         Assert.Contains("string.Equals(current.Id, gameId, StringComparison.Ordinal)", refresh, StringComparison.Ordinal);
@@ -705,6 +723,7 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("AutomationProperties.SetName(", render, StringComparison.Ordinal);
         Assert.Contains("compact.AutomationText", render, StringComparison.Ordinal);
         Assert.Contains("resourceGuidance is not null", render, StringComparison.Ordinal);
+        Assert.Contains("consentEnabled && summary.Resources.TryGetValue", render, StringComparison.Ordinal);
         Assert.Contains(
             "PublisherResourceState.Fresh when resource is not null",
             render,
@@ -759,6 +778,21 @@ public sealed class HoyoLiveSessionUiTests
             render,
             StringComparison.Ordinal);
         Assert.Contains("&& connection == PublisherConnectionState.Connected", render, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Custom_games_never_reach_the_publisher_account_catalog()
+    {
+        var page = ReadAppFile("MainPage.xaml.cs");
+        var selection = Slice(page, "private void RenderSelection()", "private void ApplySavedPanelVisibility");
+        var localTick = Slice(page, "private void RenderLocalAccountTimeTick", "private async void CharacterLink_Click");
+
+        Assert.Contains("if (!selected.IsCustom)", selection, StringComparison.Ordinal);
+        Assert.Contains("RenderPublisherAccountStatus(selected.Id)", selection, StringComparison.Ordinal);
+        Assert.True(
+            selection.IndexOf("if (!selected.IsCustom)", StringComparison.Ordinal)
+            < selection.IndexOf("RenderPublisherAccountStatus(selected.Id)", StringComparison.Ordinal));
+        Assert.Contains("|| selected.IsCustom", localTick, StringComparison.Ordinal);
     }
 
     [Fact]
