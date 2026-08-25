@@ -96,6 +96,7 @@ public sealed class BannerCycleUiTests
         var code = ReadAppFile("MainPage.xaml.cs");
         var columns = Slice(xaml, "x:Name=\"BannerCycleColumns\"", "x:Name=\"BannerCollectionList\"");
         var bannerRegion = Slice(xaml, "x:Name=\"BannerCycleRegion\"", "x:Name=\"BannerCycleStack\"");
+        var scrollViewer = Slice(xaml, "x:Name=\"BannerCycleScrollViewer\"", "x:Name=\"BannerCycleColumns\"");
 
         Assert.DoesNotContain(" Width=\"704\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain(" Height=\"390\"", xaml, StringComparison.Ordinal);
@@ -104,6 +105,12 @@ public sealed class BannerCycleUiTests
         Assert.Contains("BannerContentRegion.VerticalAlignment = VerticalAlignment.Top", code, StringComparison.Ordinal);
         Assert.DoesNotContain("BannerCycleRegion.Height =", code, StringComparison.Ordinal);
         Assert.Contains("BorderBrush=\"{ThemeResource DeckBorderBrush}\"", bannerRegion, StringComparison.Ordinal);
+        Assert.Contains("MaxHeight=\"330\"", scrollViewer, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Current and upcoming banner details\"", scrollViewer, StringComparison.Ordinal);
+        Assert.Contains("HorizontalScrollMode=\"Disabled\"", scrollViewer, StringComparison.Ordinal);
+        Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", scrollViewer, StringComparison.Ordinal);
+        Assert.Contains("VerticalScrollMode=\"Auto\"", scrollViewer, StringComparison.Ordinal);
+        Assert.DoesNotContain(" Height=", scrollViewer, StringComparison.Ordinal);
         Assert.Contains("Margin=\"14,0,14,10\"", columns, StringComparison.Ordinal);
         Assert.DoesNotContain("CurrentBannerColumn", xaml + code, StringComparison.Ordinal);
         Assert.DoesNotContain("UpcomingBannerColumn", xaml + code, StringComparison.Ordinal);

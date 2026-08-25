@@ -49,6 +49,35 @@ public sealed class HoyoMaintenanceUiTests
         Assert.Contains("PreInstallSurfaceBrush", render, StringComparison.Ordinal);
         Assert.Contains("new Thickness(available ? 2 : 1)", render, StringComparison.Ordinal);
         Assert.DoesNotContain("Storyboard", render, StringComparison.Ordinal);
+        var noticeEnabled = render.IndexOf(
+            "PreInstallNoticeButton.IsEnabled = available && StableOpenUpdaterButton.IsEnabled",
+            StringComparison.Ordinal);
+        var transitionKey = render.IndexOf("var key = message is null ? null", StringComparison.Ordinal);
+        var transitionReturn = render.IndexOf("return;", transitionKey, StringComparison.Ordinal);
+        Assert.True(noticeEnabled >= 0);
+        Assert.True(transitionKey > noticeEnabled);
+        Assert.True(transitionReturn > transitionKey);
+
+        var hoyoAdmission = page.IndexOf("if (updaterActionInFlight", StringComparison.Ordinal);
+        var hoyoNoticeDisable = page.IndexOf(
+            "PreInstallNoticeButton.IsEnabled = false",
+            hoyoAdmission,
+            StringComparison.Ordinal);
+        var hoyoActionStart = page.IndexOf("updaterActionInFlight = true", hoyoAdmission, StringComparison.Ordinal);
+        Assert.True(hoyoNoticeDisable > hoyoAdmission);
+        Assert.True(hoyoActionStart > hoyoNoticeDisable);
+        Assert.Contains("updaterActionInFlight = false", page, StringComparison.Ordinal);
+        Assert.Contains("RenderSelection();", page, StringComparison.Ordinal);
+
+        var wuwaAdmission = page.IndexOf("if (wuwaActionInFlight", StringComparison.Ordinal);
+        var wuwaNoticeDisable = page.IndexOf(
+            "PreInstallNoticeButton.IsEnabled = false",
+            wuwaAdmission,
+            StringComparison.Ordinal);
+        var wuwaActionStart = page.IndexOf("wuwaActionInFlight = true", wuwaAdmission, StringComparison.Ordinal);
+        Assert.True(wuwaNoticeDisable > wuwaAdmission);
+        Assert.True(wuwaActionStart > wuwaNoticeDisable);
+        Assert.Contains("wuwaActionInFlight = false", page, StringComparison.Ordinal);
 
         var launchStart = xaml.IndexOf("x:Name=\"LaunchStack\"", StringComparison.Ordinal);
         var launchEnd = xaml.IndexOf("x:Name=\"StableOpenScreenshotFolderButton\"", launchStart, StringComparison.Ordinal);

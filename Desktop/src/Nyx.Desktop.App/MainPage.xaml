@@ -274,7 +274,14 @@
                                     IsHitTestVisible="False" />
                             </StackPanel>
 
-                            <Grid Grid.Row="1">
+                            <ScrollViewer
+                                x:Name="BannerCycleScrollViewer"
+                                Grid.Row="1"
+                                MaxHeight="330"
+                                AutomationProperties.Name="Current and upcoming banner details"
+                                HorizontalScrollMode="Disabled"
+                                VerticalScrollBarVisibility="Auto"
+                                VerticalScrollMode="Auto">
                                 <Grid
                                     x:Name="BannerCycleColumns"
                                     Margin="14,0,14,10"
@@ -684,7 +691,7 @@
                                         Style="{StaticResource NyxOfficialLauncherStyle}" />
                                 </StackPanel>
                                 </Grid>
-                            </Grid>
+                            </ScrollViewer>
                         </Grid>
                     </Border>
                 </StackPanel>

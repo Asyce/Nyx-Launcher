@@ -2462,6 +2462,7 @@ public sealed partial class MainPage : Page
             return;
         }
 
+        PreInstallNoticeButton.IsEnabled = false;
         updaterActionInFlight = true;
         OpenUpdaterButton.IsEnabled = false;
         OpenUpdaterButton.Content = "Opening…";
@@ -2583,6 +2584,7 @@ public sealed partial class MainPage : Page
 
         var request = wuwaMaintenanceRequest;
         var generation = wuwaRefreshGeneration.Next();
+        PreInstallNoticeButton.IsEnabled = false;
         wuwaActionInFlight = true;
         OpenUpdaterButton.IsEnabled = false;
         OpenUpdaterButton.Content = "Opening…";
@@ -5350,6 +5352,8 @@ public sealed partial class MainPage : Page
                         _ => null,
                     }
                     : null;
+        var available = message is not null;
+        PreInstallNoticeButton.IsEnabled = available && StableOpenUpdaterButton.IsEnabled;
         var key = message is null ? null : $"{selected.Id}:{message}";
         if (string.Equals(preInstallNoticeKey, key, StringComparison.Ordinal))
         {
@@ -5357,7 +5361,6 @@ public sealed partial class MainPage : Page
         }
 
         preInstallNoticeKey = key;
-        var available = message is not null;
         PreInstallNoticeButton.Content = message ?? string.Empty;
         PreInstallNoticeButton.Visibility = available
             ? Visibility.Visible
