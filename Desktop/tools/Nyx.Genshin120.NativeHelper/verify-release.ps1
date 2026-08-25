@@ -42,7 +42,9 @@ Assert-True (Test-Path -LiteralPath $dumpbin -PathType Leaf) "dumpbin.exe was no
 
 Assert-True (Test-Path -LiteralPath $upstreamRoot) 'Pinned upstream checkout is missing.'
 Assert-True ((git -C $upstreamRoot rev-parse HEAD) -eq '2b85d61dd06f6e11ad86fdd6bd90339f9abc58eb') 'Pinned upstream commit changed.'
-Assert-True (-not (git -C $upstreamRoot status --short)) 'Pinned upstream checkout is dirty.'
+$upstreamStatus = @(git -C $upstreamRoot status --short)
+$upstreamStatusExitCode = $LASTEXITCODE
+Assert-True ($upstreamStatusExitCode -eq 0 -and $upstreamStatus.Count -eq 0) 'Pinned upstream checkout is dirty or Git status failed.'
 $upstreamHashes = @{
     'UnlockerStub\dllmain.cpp' = 'BE87F293E333BB7B931CADB4C3AEE15663190505B978C734400F0CA6755DF614'
     'UnlockerStub\Utils.cpp' = 'DB43539D87883686612CBC56E12C4D5E1CA4FCE981F56A234BC4B305095E2E7D'

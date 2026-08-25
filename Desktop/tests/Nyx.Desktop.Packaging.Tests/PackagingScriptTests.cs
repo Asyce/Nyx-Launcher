@@ -291,6 +291,9 @@ public sealed class PackagingScriptTests
         Assert.Contains("Microsoft.VisualStudio.Component.VC.Tools.x86.x64", nativeBuild, StringComparison.Ordinal);
         Assert.Contains("/IMPLIB:`\"$stubImportLibrary`\"", nativeBuild, StringComparison.Ordinal);
         Assert.Contains("Microsoft.VisualStudio.Component.VC.Tools.x86.x64", nativeVerify, StringComparison.Ordinal);
+        Assert.Contains("$upstreamStatus = @(git -C $upstreamRoot status --short)", nativeVerify, StringComparison.Ordinal);
+        Assert.Contains("$upstreamStatusExitCode = $LASTEXITCODE", nativeVerify, StringComparison.Ordinal);
+        Assert.Contains("$upstreamStatusExitCode -eq 0 -and $upstreamStatus.Count -eq 0", nativeVerify, StringComparison.Ordinal);
         Assert.DoesNotContain("Visual Studio\\2019", nativeBuild + nativeVerify, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("14.29.30133", nativeBuild + nativeVerify, StringComparison.Ordinal);
     }
