@@ -434,7 +434,7 @@ try {
         "-p:Genshin120HelperSha256=$genshin120HelperSha256",
         "-p:Genshin120LicenseSource=$genshin120License",
         "-p:Genshin120ProvenanceSource=$genshin120Provenance",
-        "-p:PublishDir=$publishRoot\"
+        "-p:PublishDir=$publishRoot"
     ) + $restoreArgument
     & $dotnet @appArguments
     if ($LASTEXITCODE -ne 0) { throw 'Nyx app publish failed.' }

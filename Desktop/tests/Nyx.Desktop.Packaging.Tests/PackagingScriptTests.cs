@@ -294,6 +294,8 @@ public sealed class PackagingScriptTests
 
         Assert.Contains("[switch] $NoRestore", build, StringComparison.Ordinal);
         Assert.Contains("$restoreArgument = if ($NoRestore) { @('--no-restore') } else { @() }", build, StringComparison.Ordinal);
+        Assert.Contains("\"-p:PublishDir=$publishRoot\"", build, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"-p:PublishDir=$publishRoot\\\"", build, StringComparison.Ordinal);
         Assert.DoesNotContain("[switch] $Restore", build, StringComparison.Ordinal);
         Assert.Contains("build-development-package.ps1 -Version 1.4.0.0", readme, StringComparison.Ordinal);
         Assert.Contains("Use `-NoRestore` only", readme, StringComparison.Ordinal);
