@@ -8,8 +8,16 @@ Runs the native Windows UI smoke test against a Nyx launcher package on PENGO.
 Verifies the outer ZIP with its SHA256 sidecar, verifies and extracts the inner
 payload, isolates both Nyx data folders, and drives only safe launcher controls.
 
+.PARAMETER StateWorker
+Full path to the prebuilt Release StateWorker DLL. Build it before running with:
+dotnet build Desktop/tests/Nyx.Desktop.StateWorker/Nyx.Desktop.StateWorker.csproj --configuration Release
+
 .EXAMPLE
-.\test-native-smoke.ps1 -PackageZip D:\NyxSmoke\Nyx-Desktop.zip -Sha256Sidecar D:\NyxSmoke\Nyx-Desktop.zip.sha256 -EvidenceDirectory D:\NyxSmoke\evidence
+.\test-native-smoke.ps1 `
+  -PackageZip D:\NyxSmoke\Nyx-Desktop.zip `
+  -Sha256Sidecar D:\NyxSmoke\Nyx-Desktop.zip.sha256 `
+  -EvidenceDirectory D:\NyxSmoke\evidence `
+  -StateWorker D:\Nyx\Desktop\tests\Nyx.Desktop.StateWorker\bin\Release\net10.0\Nyx.Desktop.StateWorker.dll
 #>
 
 [CmdletBinding()]
@@ -19,7 +27,9 @@ param(
     [Parameter(Mandatory)]
     [string] $Sha256Sidecar,
     [Parameter(Mandatory)]
-    [string] $EvidenceDirectory
+    [string] $EvidenceDirectory,
+    [Parameter(Mandatory)]
+    [string] $StateWorker
 )
 
 Set-StrictMode -Version Latest
@@ -31,9 +41,16 @@ $appProcess = $null
 $evidenceCreated = $false
 $failureCode = $null
 $restoreFailed = $false
+$restoreFailureCode = $null
+$pengoParentCleanupFailureCode = $null
 $screenshotEvidence = @()
 $retryControlObserved = $false
+$publisherAccountFixture = 'not-seeded'
+$uiDeadlineSeconds = 180
+$uiRuntime = $null
 $uiChecks = [ordered]@{
+    cachedResourceVisibleWithinOneSecondOfGameSwitch = $false
+    cachedResourceGameSwitchMilliseconds = $null
     shellControlsFound = $false
     secondInstanceSuppressed = $false
     gamesSelected = @()
@@ -106,6 +123,18 @@ function Assert-NoReparseComponents {
     }
 }
 
+function Test-PathsOverlap {
+    param(
+        [Parameter(Mandatory)] [string] $Left,
+        [Parameter(Mandatory)] [string] $Right
+    )
+    $leftFull = [IO.Path]::GetFullPath($Left).TrimEnd([IO.Path]::DirectorySeparatorChar)
+    $rightFull = [IO.Path]::GetFullPath($Right).TrimEnd([IO.Path]::DirectorySeparatorChar)
+    return [string]::Equals($leftFull, $rightFull, [StringComparison]::OrdinalIgnoreCase) -or
+        $leftFull.StartsWith($rightFull + '\', [StringComparison]::OrdinalIgnoreCase) -or
+        $rightFull.StartsWith($leftFull + '\', [StringComparison]::OrdinalIgnoreCase)
+}
+
 function Test-SafeRelativeFile {
     param([Parameter(Mandatory)] [string] $RelativePath)
     if ([string]::IsNullOrWhiteSpace($RelativePath) -or
@@ -166,6 +195,13 @@ function Stop-SmokeProcesses {
     }
     if (@(Get-Process -Name $processNames -ErrorAction SilentlyContinue).Count -ne 0) {
         Throw-SmokeFailure 'PROCESS_STOP_FAILED'
+    }
+}
+
+function Assert-UiDeadline {
+    if ($null -ne $script:uiRuntime -and
+        $script:uiRuntime.Elapsed.TotalSeconds -ge $uiDeadlineSeconds) {
+        Throw-SmokeFailure 'UI_DEADLINE_EXCEEDED'
     }
 }
 
@@ -343,8 +379,10 @@ function Initialize-DataRootIsolation {
         }
     }
     foreach ($state in $States) {
-        Assert-NoNyxProcesses
         if ($state.HadOriginal) {
+            Assert-NoReparseComponents -LiteralPath $state.Original
+            Assert-NoReparseComponents -LiteralPath $state.Backup
+            Assert-NoNyxProcesses
             [IO.Directory]::Move($state.Original, $state.Backup)
             $state.Moved = $true
         }
@@ -352,28 +390,114 @@ function Initialize-DataRootIsolation {
     }
 }
 
+function Assert-RestorePaths {
+    param([Parameter(Mandatory)] [object] $State)
+    Assert-NoReparseComponents -LiteralPath $State.Original
+    Assert-NoReparseComponents -LiteralPath $State.Backup
+    if (-not (Test-Path -LiteralPath $State.Backup -PathType Container)) {
+        Throw-SmokeFailure 'BACKUP_MISSING'
+    }
+    $backup = Get-Item -LiteralPath $State.Backup -Force -ErrorAction Stop
+    if (-not $backup.PSIsContainer -or (Test-ReparsePoint $backup)) {
+        Throw-SmokeFailure 'BACKUP_INVALID'
+    }
+    if (Test-Path -LiteralPath $State.Original) {
+        $original = Get-Item -LiteralPath $State.Original -Force -ErrorAction Stop
+        if (-not $original.PSIsContainer -or (Test-ReparsePoint $original)) {
+            Throw-SmokeFailure 'DATA_ROOT_INVALID'
+        }
+    }
+}
+
 function Restore-DataRoots {
     param([Parameter(Mandatory)] [object[]] $States)
-    if (@($States | Where-Object { $_.Isolated }).Count -eq 0) { return }
-    $failed = $false
+    $hasWork = @($States | Where-Object {
+        (Test-Path -LiteralPath $_.Backup) -or
+            ($_.Isolated -and -not $_.HadOriginal -and (Test-Path -LiteralPath $_.Original))
+    }).Count -ne 0
+    if (-not $hasWork) { return }
     try { Stop-SmokeProcesses }
-    catch { $failed = $true }
+    catch { Throw-SmokeFailure 'RESTORE_PROCESS_STOP_FAILED' }
+    $failed = $false
     for ($index = $States.Count - 1; $index -ge 0; $index--) {
         $state = $States[$index]
-        if (-not $state.Isolated) { continue }
         try {
-            Remove-SafeTree -LiteralPath $state.Original
-            if ($state.Moved) {
-                if (-not (Test-Path -LiteralPath $state.Backup -PathType Container) -or
-                    (Test-ReparsePoint (Get-Item -LiteralPath $state.Backup -Force))) {
-                    Throw-SmokeFailure 'BACKUP_MISSING'
+            $originalExists = Test-Path -LiteralPath $state.Original
+            $backupExists = Test-Path -LiteralPath $state.Backup
+            if (-not $backupExists) {
+                if ($originalExists -and $state.Isolated -and -not $state.HadOriginal) {
+                    Assert-NoReparseComponents -LiteralPath $state.Original
+                    Assert-NoReparseComponents -LiteralPath $state.Backup
+                    $original = Get-Item -LiteralPath $state.Original -Force -ErrorAction Stop
+                    if (-not $original.PSIsContainer -or (Test-ReparsePoint $original)) {
+                        Throw-SmokeFailure 'DATA_ROOT_INVALID'
+                    }
+                    Assert-NoNyxProcesses
+                    Remove-SafeTree -LiteralPath $state.Original
                 }
-                [IO.Directory]::Move($state.Backup, $state.Original)
+                continue
             }
+            Assert-RestorePaths -State $state
+            Assert-NoNyxProcesses
+            if ($originalExists) {
+                Remove-SafeTree -LiteralPath $state.Original
+                Assert-RestorePaths -State $state
+                Assert-NoNyxProcesses
+            }
+            [IO.Directory]::Move($state.Backup, $state.Original)
         }
         catch { $failed = $true }
     }
-    if ($failed) { Throw-SmokeFailure 'RESTORE_FAILED' }
+    if ($failed -or
+        @($States | Where-Object { Test-Path -LiteralPath $_.Backup }).Count -ne 0) {
+        Throw-SmokeFailure 'RESTORE_PATH_FAILED'
+    }
+}
+
+function Initialize-SyntheticCachedResourceFixture {
+    param(
+        [Parameter(Mandatory)] [object[]] $States,
+        [Parameter(Mandatory)] [string] $StateWorkerPath,
+        [Parameter(Mandatory)] [string] $DotNetPath
+    )
+    if ($States.Count -ne 2) { Throw-SmokeFailure 'SMOKE_ISOLATION_INVALID' }
+    Assert-NoNyxProcesses
+    foreach ($state in $States) {
+        if (-not $state.Isolated -or
+            $state.Moved -ne $state.HadOriginal -or
+            (Test-Path -LiteralPath $state.Original) -or
+            ($state.Moved -and -not (Test-Path -LiteralPath $state.Backup -PathType Container)) -or
+            (-not $state.Moved -and (Test-Path -LiteralPath $state.Backup))) {
+            Throw-SmokeFailure 'SMOKE_ISOLATION_INVALID'
+        }
+    }
+    $root = [IO.Path]::GetFullPath($States[0].Original)
+    if (-not [string]::Equals(
+            $root,
+            [IO.Path]::GetFullPath($canonicalDataRoot),
+            [StringComparison]::OrdinalIgnoreCase)) {
+        Throw-SmokeFailure 'SMOKE_ISOLATION_INVALID'
+    }
+
+    [void] [IO.Directory]::CreateDirectory($root)
+    $marker = Join-Path $root '.nyx-native-smoke-isolated-v1'
+    $markerBytes = [Text.Encoding]::UTF8.GetBytes("NYX_NATIVE_SMOKE_ISOLATED_V1:$runId")
+    $markerStream = [IO.File]::Open(
+        $marker,
+        [IO.FileMode]::CreateNew,
+        [IO.FileAccess]::Write,
+        [IO.FileShare]::None)
+    try {
+        $markerStream.Write($markerBytes, 0, $markerBytes.Length)
+        $markerStream.Flush($true)
+    }
+    finally { $markerStream.Dispose() }
+    Assert-NoReparseComponents -LiteralPath $marker
+
+    Assert-NoNyxProcesses
+    & $DotNetPath $StateWorkerPath 'seed-native-smoke' $root $marker $runId *> $null
+    if ($LASTEXITCODE -ne 0) { Throw-SmokeFailure 'SYNTHETIC_CACHE_FIXTURE_FAILED' }
+    $script:publisherAccountFixture = 'synthetic-isolated-no-live-account'
 }
 
 function Find-ExactElement {
@@ -404,6 +528,7 @@ function Wait-ExactElement {
     )
     $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
     do {
+        Assert-UiDeadline
         $element = Find-ExactElement -Root $Root -Name $Name
         if ($null -ne $element) { return $element }
         Start-Sleep -Milliseconds 100
@@ -418,6 +543,7 @@ function Wait-ExactElementGone {
     )
     $deadline = [DateTime]::UtcNow.AddSeconds(10)
     do {
+        Assert-UiDeadline
         if ($null -eq (Find-ExactElement -Root $Root -Name $Name)) { return }
         Start-Sleep -Milliseconds 100
     } while ([DateTime]::UtcNow -lt $deadline)
@@ -429,12 +555,41 @@ function Wait-Window {
     $condition = [System.Windows.Automation.PropertyCondition]::new(
         [System.Windows.Automation.AutomationElement]::NameProperty, 'Nyx - Pengo')
     do {
+        Assert-UiDeadline
         $window = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst(
             [System.Windows.Automation.TreeScope]::Children, $condition)
         if ($null -ne $window) { return $window }
         Start-Sleep -Milliseconds 200
     } while ([DateTime]::UtcNow -lt $deadline)
     Throw-SmokeFailure 'WINDOW_NOT_FOUND'
+}
+
+function Wait-CachedResourceMetric {
+    param(
+        [Parameter(Mandatory)] [object] $Root,
+        [Parameter(Mandatory)] [Diagnostics.Stopwatch] $Stopwatch
+    )
+    do {
+        Assert-UiDeadline
+        try {
+            $metric = Find-AutomationIdElement `
+                -Root $Root `
+                -AutomationId 'PublisherResourceMetricGrid'
+            if ($null -ne $metric -and
+                [string] $metric.Current.Name -ceq 'ORIGINAL RESIN  137/200') {
+                $elapsed = $Stopwatch.Elapsed.TotalMilliseconds
+                if ($elapsed -le 1000) {
+                    return [pscustomobject]@{
+                        ElapsedMilliseconds = $elapsed
+                    }
+                }
+            }
+        }
+        catch { }
+        if ($Stopwatch.Elapsed.TotalMilliseconds -ge 1000) { break }
+        Start-Sleep -Milliseconds 10
+    } while ($true)
+    Throw-SmokeFailure 'CACHED_RESOURCE_SWITCH_UI_TIMEOUT'
 }
 
 function Wait-GameItem {
@@ -444,6 +599,7 @@ function Wait-GameItem {
     )
     $deadline = [DateTime]::UtcNow.AddSeconds(20)
     do {
+        Assert-UiDeadline
         $elements = $Root.FindAll(
             [System.Windows.Automation.TreeScope]::Descendants,
             [System.Windows.Automation.Condition]::TrueCondition)
@@ -469,6 +625,7 @@ function Invoke-SafeElement {
         [Parameter(Mandatory)] [object] $Element,
         [Parameter(Mandatory)] [string] $ExpectedName
     )
+    Assert-UiDeadline
     $safeNames = @(
         'Settings',
         'Collapse Banners', 'Expand Banners',
@@ -493,6 +650,7 @@ function Assert-SideEffectControl {
     )
     $deadline = [DateTime]::UtcNow.AddSeconds(20)
     do {
+        Assert-UiDeadline
         $element = Find-AutomationIdElement -Root $Root -AutomationId $AutomationId
         if ($null -ne $element) { return $element }
         Start-Sleep -Milliseconds 100
@@ -508,6 +666,7 @@ function Test-IsDescendant {
     $ancestorId = $Ancestor.GetRuntimeId() -join ','
     $current = $Element
     while ($null -ne $current) {
+        Assert-UiDeadline
         if (($current.GetRuntimeId() -join ',') -ceq $ancestorId) { return $true }
         $current = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($current)
     }
@@ -523,6 +682,7 @@ function Get-ModalContainer {
     $windowId = $Window.GetRuntimeId() -join ','
     $candidate = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($Cancel)
     while ($null -ne $candidate -and ($candidate.GetRuntimeId() -join ',') -cne $windowId) {
+        Assert-UiDeadline
         if ($null -ne (Find-ExactElement -Root $candidate -Name $Title)) { return $candidate }
         $candidate = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($candidate)
     }
@@ -531,6 +691,7 @@ function Get-ModalContainer {
 
 function Send-SafeKey {
     param([Parameter(Mandatory)] [ValidateSet('Tab', 'ShiftTab', 'Enter', 'Escape')] [string] $Key)
+    Assert-UiDeadline
     $keys = @{ Tab = '{TAB}'; ShiftTab = '+{TAB}'; Enter = '{ENTER}'; Escape = '{ESC}' }
     [Windows.Forms.SendKeys]::SendWait($keys[$Key])
     Start-Sleep -Milliseconds 200
@@ -541,6 +702,7 @@ function Assert-FocusIs {
     $expectedId = $Expected.GetRuntimeId() -join ','
     $deadline = [DateTime]::UtcNow.AddSeconds(2)
     do {
+        Assert-UiDeadline
         $focused = [System.Windows.Automation.AutomationElement]::FocusedElement
         if ($null -ne $focused -and ($focused.GetRuntimeId() -join ',') -ceq $expectedId) { return }
         Start-Sleep -Milliseconds 50
@@ -554,6 +716,7 @@ function Save-SanitizedScreenshot {
         [Parameter(Mandatory)] [string] $FileName,
         [Parameter(Mandatory)] [string] $Surface
     )
+    Assert-UiDeadline
     $rect = $Window.Current.BoundingRectangle
     $width = [Math]::Min([int] $rect.Width, 1280)
     $height = [Math]::Min([int] $rect.Height, 720)
@@ -631,6 +794,7 @@ public static class NyxNativeSmokeCapture
 
     $entryPoint = Join-Path $AppRoot 'Nyx.Desktop.App.exe'
     if (-not (Test-Path -LiteralPath $entryPoint -PathType Leaf)) { Throw-SmokeFailure 'ENTRY_POINT_MISSING' }
+    $script:uiRuntime = [Diagnostics.Stopwatch]::StartNew()
     $script:appProcess = Start-Process -FilePath $entryPoint -WorkingDirectory $AppRoot -PassThru
     $window = Wait-Window
     [void] (Wait-ExactElement -Root $window -Name 'Games')
@@ -639,6 +803,37 @@ public static class NyxNativeSmokeCapture
     [void] (Wait-ExactElement -Root $window -Name 'Close')
     $script:uiChecks.shellControlsFound = $true
 
+    $hsrGame = Wait-GameItem -Root $window -GameName 'Honkai: Star Rail'
+    $hsrMetric = $null
+    $hsrMetricDeadline = [DateTime]::UtcNow.AddSeconds(20)
+    do {
+        Assert-UiDeadline
+        $hsrMetric = Find-AutomationIdElement `
+            -Root $window `
+            -AutomationId 'PublisherResourceMetricGrid'
+        if ($hsrGame.Pattern.Current.IsSelected -and
+            $null -ne $hsrMetric -and
+            [string] $hsrMetric.Current.Name -ceq 'TRAILBLAZE POWER  211/300') { break }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $hsrMetricDeadline)
+    if (-not $hsrGame.Pattern.Current.IsSelected -or
+        $null -eq $hsrMetric -or
+        [string] $hsrMetric.Current.Name -cne 'TRAILBLAZE POWER  211/300') {
+        Throw-SmokeFailure 'CACHED_RESOURCE_SWITCH_PRECONDITION_FAILED'
+    }
+
+    $giGame = Wait-GameItem -Root $window -GameName 'Genshin Impact'
+    if ($giGame.Pattern.Current.IsSelected) { Throw-SmokeFailure 'CACHED_RESOURCE_SWITCH_PRECONDITION_FAILED' }
+    $cachedResourceTimer = [Diagnostics.Stopwatch]::StartNew()
+    $giGame.Pattern.Select()
+    $cachedResource = Wait-CachedResourceMetric -Root $window -Stopwatch $cachedResourceTimer
+    $cachedResourceTimer.Stop()
+    $script:uiChecks.cachedResourceVisibleWithinOneSecondOfGameSwitch = $true
+    $script:uiChecks.cachedResourceGameSwitchMilliseconds = [Math]::Round(
+        $cachedResource.ElapsedMilliseconds,
+        2)
+
+    Assert-UiDeadline
     $primaryWindowId = $window.GetRuntimeId() -join ','
     $secondaryProcess = Start-Process -FilePath $entryPoint -WorkingDirectory $AppRoot -PassThru
     if (-not $secondaryProcess.WaitForExit(10000)) {
@@ -655,6 +850,7 @@ public static class NyxNativeSmokeCapture
     $script:uiChecks.secondInstanceSuppressed = $true
 
     foreach ($gameName in $gameNames) {
+        Assert-UiDeadline
         $game = Wait-GameItem -Root $window -GameName $gameName
         $game.Pattern.Select()
         Start-Sleep -Milliseconds 250
@@ -748,12 +944,17 @@ public static class NyxNativeSmokeCapture
     Send-SafeKey -Key Escape
     Wait-ExactElementGone -Root $window -Name $title
     $script:uiChecks.settingsCanceledWithEscape = $true
+    Assert-UiDeadline
+    $script:uiRuntime.Stop()
 }
 
 $localAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
 $pengoParent = Join-Path $localAppData 'Pengo'
+$canonicalDataRoot = Join-Path $pengoParent 'Nyx'
+$desktopRoot = Split-Path -Parent $PSScriptRoot
+$expectedStateWorker = Join-Path $desktopRoot 'tests\Nyx.Desktop.StateWorker\bin\Release\net10.0\Nyx.Desktop.StateWorker.dll'
 $dataStates = @(
-    (New-DataRootState -Original (Join-Path $pengoParent 'Nyx') -Backup (Join-Path $pengoParent ("Nyx.native-smoke-backup-$runId"))),
+    (New-DataRootState -Original $canonicalDataRoot -Backup (Join-Path $pengoParent ("Nyx.native-smoke-backup-$runId"))),
     (New-DataRootState -Original (Join-Path $localAppData 'Nyx') -Backup (Join-Path $localAppData ("Nyx.native-smoke-backup-$runId")))
 )
 $pengoParentCreated = $false
@@ -763,6 +964,26 @@ try {
         -not [Environment]::MachineName.Equals('PENGO', [StringComparison]::OrdinalIgnoreCase)) {
         Throw-SmokeFailure 'INTERACTIVE_PENGO_REQUIRED'
     }
+    try { $stateWorkerPath = Assert-ExistingNormalFile -LiteralPath $StateWorker }
+    catch { Throw-SmokeFailure 'STATE_WORKER_INVALID' }
+    if (-not [string]::Equals(
+            $stateWorkerPath,
+            [IO.Path]::GetFullPath($expectedStateWorker),
+            [StringComparison]::OrdinalIgnoreCase)) {
+        Throw-SmokeFailure 'STATE_WORKER_INVALID'
+    }
+    $dotnet = Get-Command dotnet -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($null -eq $dotnet) { Throw-SmokeFailure 'STATE_WORKER_RUNTIME_INVALID' }
+    try { $dotnetPath = Assert-ExistingNormalFile -LiteralPath $dotnet.Source }
+    catch { Throw-SmokeFailure 'STATE_WORKER_RUNTIME_INVALID' }
+    $workerProbe = @(& $dotnetPath $stateWorkerPath 'probe-native-smoke' 2>&1)
+    if ($LASTEXITCODE -ne 0 -or
+        $workerProbe.Count -ne 1 -or
+        ([string] $workerProbe[0]) -cne 'NYX_STATE_WORKER=READY') {
+        Throw-SmokeFailure 'STATE_WORKER_PROBE_FAILED'
+    }
+
     $packagePath = Assert-ExistingNormalFile -LiteralPath $PackageZip
     $sidecarPath = Assert-ExistingNormalFile -LiteralPath $Sha256Sidecar
     if ((Get-Item -LiteralPath $sidecarPath).Length -gt 512) { Throw-SmokeFailure 'SIDECAR_INVALID' }
@@ -779,6 +1000,13 @@ try {
     }
     $evidenceFull = [IO.Path]::GetFullPath($EvidenceDirectory)
     $evidenceParent = Split-Path -Parent $evidenceFull
+    foreach ($state in $dataStates) {
+        foreach ($dataPath in @($state.Original, $state.Backup)) {
+            if (Test-PathsOverlap -Left $evidenceFull -Right $dataPath) {
+                Throw-SmokeFailure 'EVIDENCE_DATA_PATH_OVERLAP'
+            }
+        }
+    }
     if (-not (Test-Path -LiteralPath $evidenceParent -PathType Container) -or
         (Test-Path -LiteralPath $evidenceFull)) {
         Throw-SmokeFailure 'EVIDENCE_PATH_INVALID'
@@ -822,6 +1050,10 @@ try {
     $updaterOutput = @(& $updater verify --manifest $manifestPath --package $payload 2>&1)
     if ($LASTEXITCODE -ne 0) { Throw-SmokeFailure 'UPDATER_VERIFY_FAILED' }
     Expand-ManifestPayload -Manifest $manifest -ArchivePath $payload -Destination $appRoot
+    Initialize-SyntheticCachedResourceFixture `
+        -States $dataStates `
+        -StateWorkerPath $stateWorkerPath `
+        -DotNetPath $dotnetPath
     Test-NativeUi -AppRoot $appRoot
 }
 catch {
@@ -829,14 +1061,22 @@ catch {
 }
 finally {
     try { Restore-DataRoots -States $dataStates }
-    catch { $restoreFailed = $true }
-    if ($pengoParentCreated -and (Test-Path -LiteralPath $pengoParent -PathType Container)) {
+    catch {
+        $restoreFailed = $true
+        $restoreFailureCode = Get-FailureCode -ErrorRecord $_
+    }
+    if (-not $restoreFailed -and
+        $pengoParentCreated -and
+        (Test-Path -LiteralPath $pengoParent -PathType Container)) {
         try {
             if (@(Get-ChildItem -LiteralPath $pengoParent -Force).Count -eq 0) {
                 [IO.Directory]::Delete($pengoParent, $false)
             }
         }
-        catch { $restoreFailed = $true }
+        catch {
+            $pengoParentCleanupFailureCode = 'PENGO_PARENT_CLEANUP_FAILED'
+            if ($null -eq $failureCode) { $failureCode = $pengoParentCleanupFailureCode }
+        }
     }
     if ($null -ne $temporaryRoot) {
         try { Remove-SafeTree -LiteralPath $temporaryRoot }
@@ -847,13 +1087,28 @@ finally {
             $result = [ordered]@{
                 schemaVersion = 1
                 status = if ($null -eq $failureCode -and -not $restoreFailed) { 'passed' } else { 'failed' }
-                failureCode = if ($restoreFailed) { 'RESTORE_FAILED' } else { $failureCode }
+                failureCode = if ($restoreFailed) {
+                    if ($null -ne $restoreFailureCode) { $restoreFailureCode } else { 'RESTORE_FAILED' }
+                } else { $failureCode }
                 gamesSelected = @($uiChecks.gamesSelected).Count
                 sideEffectControlsInvoked = $false
                 retryControlObserved = $retryControlObserved
+                publisherAccountFixture = $publisherAccountFixture
+                uiDeadlineSeconds = $uiDeadlineSeconds
                 uiChecks = $uiChecks
                 screenshots = @($screenshotEvidence)
                 dataRootsRestored = -not $restoreFailed
+                pengoParentCleanupFailureCode = $pengoParentCleanupFailureCode
+                dataRootRecovery = @(
+                    $dataStates | Where-Object { Test-Path -LiteralPath $_.Backup } | ForEach-Object {
+                        [ordered]@{
+                            restoreTo = $_.Original
+                            preservedAt = $_.Backup
+                            restoreTargetExists = Test-Path -LiteralPath $_.Original
+                            preservedBackupExists = Test-Path -LiteralPath $_.Backup
+                        }
+                    }
+                )
             }
             [IO.File]::WriteAllText(
                 (Join-Path $EvidenceDirectory 'evidence.json'),
@@ -865,7 +1120,12 @@ finally {
 }
 
 if ($restoreFailed) {
-    [Console]::Error.WriteLine('NYX_NATIVE_SMOKE=FAILED CODE=RESTORE_FAILED')
+    $reportedRestoreFailure = if ($null -ne $restoreFailureCode) {
+        $restoreFailureCode
+    } else {
+        'RESTORE_FAILED'
+    }
+    [Console]::Error.WriteLine("NYX_NATIVE_SMOKE=FAILED CODE=$reportedRestoreFailure")
     exit 2
 }
 if ($null -ne $failureCode) {
