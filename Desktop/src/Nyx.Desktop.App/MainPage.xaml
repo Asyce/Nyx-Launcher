@@ -328,7 +328,7 @@
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
                                                                 <Grid
-                                                                    Width="132"
+                                                                    Width="160"
                                                                     MinHeight="38"
                                                                     Margin="0,0,0,2"
                                                                     HorizontalAlignment="Left"
@@ -481,7 +481,7 @@
                                                                     <ItemsControl.ItemTemplate>
                                                                         <DataTemplate>
                                                                             <Grid
-                                                                                Width="132"
+                                                                                Width="160"
                                                                                 MinHeight="38"
                                                                                 Margin="0,0,0,2"
                                                                                 HorizontalAlignment="Left"

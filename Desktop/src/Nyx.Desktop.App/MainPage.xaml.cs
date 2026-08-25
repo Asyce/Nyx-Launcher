@@ -6574,7 +6574,7 @@ public sealed partial class MainPage : Page
                 characters.Skip(namedCount).Select(CreateBannerPortrait).ToArray()));
         }
 
-        foreach (var row in rows.Chunk(5))
+        foreach (var row in rows.Chunk(4))
         {
             BannerCharacterRows.Add(row);
         }
@@ -7428,7 +7428,7 @@ public sealed class UpcomingBannerGroupItem : INotifyPropertyChanged
         StableKey = stableKey;
         Timing = timing;
         Characters = characters.ToArray();
-        CharacterRows = Characters.Chunk(5).ToArray();
+        CharacterRows = Characters.Chunk(4).ToArray();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

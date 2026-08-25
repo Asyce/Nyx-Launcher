@@ -116,7 +116,8 @@ public sealed class BannerCycleUiTests
         Assert.Contains("ItemsSource=\"{Binding CharacterRows}\"", columns, StringComparison.Ordinal);
         Assert.Contains("Orientation=\"Vertical\"", columns, StringComparison.Ordinal);
         Assert.Contains("Orientation=\"Horizontal\"", columns, StringComparison.Ordinal);
-        Assert.Contains("Width=\"132\"", columns, StringComparison.Ordinal);
+        Assert.Equal(2, columns.Split("Width=\"160\"", StringSplitOptions.None).Length - 1);
+        Assert.DoesNotContain("Width=\"132\"", columns, StringComparison.Ordinal);
         Assert.Contains("MinHeight=\"38\"", columns, StringComparison.Ordinal);
         Assert.Contains("Width=\"38\"", columns, StringComparison.Ordinal);
         Assert.Contains("Height=\"38\"", columns, StringComparison.Ordinal);
@@ -134,8 +135,8 @@ public sealed class BannerCycleUiTests
         Assert.Contains("OrderBannerCharacters(phase.Characters)", code, StringComparison.Ordinal);
         Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now)", code, StringComparison.Ordinal);
         Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 5)", code, StringComparison.Ordinal);
-        Assert.Contains("rows.Chunk(5)", code, StringComparison.Ordinal);
-        Assert.Contains("CharacterRows = Characters.Chunk(5).ToArray()", code, StringComparison.Ordinal);
+        Assert.Contains("rows.Chunk(4)", code, StringComparison.Ordinal);
+        Assert.Contains("CharacterRows = Characters.Chunk(4).ToArray()", code, StringComparison.Ordinal);
         Assert.Contains("CreateOverflow", code, StringComparison.Ordinal);
         Assert.DoesNotContain("x:Name=\"UpcomingPhaseDivider\"", columns, StringComparison.Ordinal);
     }
