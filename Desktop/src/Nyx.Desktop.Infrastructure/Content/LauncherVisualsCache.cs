@@ -14,7 +14,7 @@ public sealed record LauncherVisualSelection(
     string? Character,
     IReadOnlyList<string> Files);
 
-public sealed class LauncherVisualsCache
+public sealed class LauncherVisualsCache : IAsyncDisposable
 {
     public static readonly Uri DefaultManifestUri = new("https://assets.pengo.gg/launcher-visuals-v1.json");
     private static readonly Uri HoyoVisualsUri = new("https://sg-hyp-api.hoyoverse.com/hyp/hyp-connect/api/getAllGameBasicInfo?launcher_id=VYTpXlbWo8&language=en-us");
@@ -50,7 +50,13 @@ public sealed class LauncherVisualsCache
     private readonly string dataRoot;
     private readonly string root;
     private readonly HttpClient http;
+    private readonly bool ownsHttp;
     private readonly Uri manifestUri;
+    private readonly object admissionSync = new();
+    private Task? disposal;
+    private TaskCompletionSource? operationsDrained;
+    private int activeOperations;
+    private bool admissionClosed;
     public string? LastFailure { get; private set; }
 
     public LauncherVisualsCache(string dataDirectory, HttpClient? http = null, Uri? manifestUri = null)
@@ -58,6 +64,7 @@ public sealed class LauncherVisualsCache
         ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
         dataRoot = Path.GetFullPath(dataDirectory);
         root = Path.Combine(dataRoot, "ContentCache", "LauncherVisuals");
+        ownsHttp = http is null;
         this.http = http ?? new HttpClient(new HttpClientHandler
         {
             AllowAutoRedirect = false,
@@ -74,25 +81,33 @@ public sealed class LauncherVisualsCache
         string gameId,
         CancellationToken cancellationToken = default)
     {
-        if (!Games.Contains(gameId)) return null;
-        LastFailure = null;
+        EnterOperation();
         try
         {
-            if (gameId == "gi")
-                return await RefreshGenshinAsync(
-                    ReadOfficialHoyoAssetsAsync(cancellationToken),
-                    ReadManifestFallbackAsync(cancellationToken),
-                    cancellationToken);
-            if (gameId == "ae") return await RefreshOfficialEndfieldAsync(cancellationToken);
-            var asset = gameId == "wuwa"
-                ? await ReadOfficialWuwaAssetAsync(cancellationToken)
-                : (await ReadOfficialHoyoAssetsAsync(cancellationToken))[gameId];
-            return await AcquireOfficialVisualSelectionAsync(gameId, asset, cancellationToken);
+            if (!Games.Contains(gameId)) return null;
+            LastFailure = null;
+            try
+            {
+                if (gameId == "gi")
+                    return await RefreshGenshinAsync(
+                        ReadOfficialHoyoAssetsAsync(cancellationToken),
+                        ReadManifestFallbackAsync(cancellationToken),
+                        cancellationToken);
+                if (gameId == "ae") return await RefreshOfficialEndfieldAsync(cancellationToken);
+                var asset = gameId == "wuwa"
+                    ? await ReadOfficialWuwaAssetAsync(cancellationToken)
+                    : (await ReadOfficialHoyoAssetsAsync(cancellationToken))[gameId];
+                return await AcquireOfficialVisualSelectionAsync(gameId, asset, cancellationToken);
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
+            {
+                LastFailure = exception.GetType().Name + ": " + exception.Message;
+                return await RefreshManifestFallbackAsync(gameId, cancellationToken);
+            }
         }
-        catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
+        finally
         {
-            LastFailure = exception.GetType().Name + ": " + exception.Message;
-            return await RefreshManifestFallbackAsync(gameId, cancellationToken);
+            ReleaseOperation();
         }
     }
 
@@ -100,62 +115,118 @@ public sealed class LauncherVisualsCache
         Action<LauncherVisualSelection>? selectionReady = null,
         CancellationToken cancellationToken = default)
     {
-        LastFailure = null;
-        var hoyoAssets = ReadOfficialHoyoAssetsAsync(cancellationToken);
-        Task<Manifest?>? fallbackManifest = null;
-        var fallbackGate = new object();
-        var tasks = GameOrder.Select(gameId => NotifyAsync(RefreshOneAsync(gameId))).ToArray();
-        var selections = await Task.WhenAll(tasks);
-        return selections.Where(static selection => selection is not null)
-            .ToDictionary(static selection => selection!.GameId, static selection => selection!, StringComparer.Ordinal);
-
-        async Task<LauncherVisualSelection?> RefreshOneAsync(string gameId)
+        EnterOperation();
+        try
         {
-            try
+            LastFailure = null;
+            var hoyoAssets = ReadOfficialHoyoAssetsAsync(cancellationToken);
+            Task<Manifest?>? fallbackManifest = null;
+            var fallbackGate = new object();
+            var tasks = GameOrder.Select(gameId => NotifyAsync(RefreshOneAsync(gameId))).ToArray();
+            var selections = await Task.WhenAll(tasks);
+            return selections.Where(static selection => selection is not null)
+                .ToDictionary(static selection => selection!.GameId, static selection => selection!, StringComparer.Ordinal);
+
+            async Task<LauncherVisualSelection?> RefreshOneAsync(string gameId)
             {
-                if (gameId == "gi")
+                try
                 {
+                    if (gameId == "gi")
+                    {
+                        Task<Manifest?> pending;
+                        lock (fallbackGate)
+                        {
+                            pending = fallbackManifest ??= ReadManifestFallbackAsync(cancellationToken);
+                        }
+                        return await RefreshGenshinAsync(hoyoAssets, pending, cancellationToken);
+                    }
+                    if (gameId == "ae") return await RefreshOfficialEndfieldAsync(cancellationToken);
+                    var asset = gameId == "wuwa"
+                        ? await ReadOfficialWuwaAssetAsync(cancellationToken)
+                        : (await hoyoAssets)[gameId];
+                    return await AcquireOfficialVisualSelectionAsync(gameId, asset, cancellationToken);
+                }
+                catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
+                {
+                    LastFailure = exception.GetType().Name + ": " + exception.Message;
                     Task<Manifest?> pending;
                     lock (fallbackGate)
                     {
                         pending = fallbackManifest ??= ReadManifestFallbackAsync(cancellationToken);
                     }
-                    return await RefreshGenshinAsync(hoyoAssets, pending, cancellationToken);
-                }
-                if (gameId == "ae") return await RefreshOfficialEndfieldAsync(cancellationToken);
-                var asset = gameId == "wuwa"
-                    ? await ReadOfficialWuwaAssetAsync(cancellationToken)
-                    : (await hoyoAssets)[gameId];
-                return await AcquireOfficialVisualSelectionAsync(gameId, asset, cancellationToken);
-            }
-            catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
-            {
-                LastFailure = exception.GetType().Name + ": " + exception.Message;
-                Task<Manifest?> pending;
-                lock (fallbackGate)
-                {
-                    pending = fallbackManifest ??= ReadManifestFallbackAsync(cancellationToken);
-                }
-                var manifest = await pending;
-                if (manifest?.Games.TryGetValue(gameId, out var entry) == true)
-                {
-                    try { return await AcquireSelectionAsync(gameId, manifest.Revision, entry, cancellationToken); }
-                    catch (Exception fallbackException) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(fallbackException))
+                    var manifest = await pending;
+                    if (manifest?.Games.TryGetValue(gameId, out var entry) == true)
                     {
-                        LastFailure = fallbackException.GetType().Name + ": " + fallbackException.Message;
+                        try { return await AcquireSelectionAsync(gameId, manifest.Revision, entry, cancellationToken); }
+                        catch (Exception fallbackException) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(fallbackException))
+                        {
+                            LastFailure = fallbackException.GetType().Name + ": " + fallbackException.Message;
+                        }
                     }
+                    return TryLoadLastGood(gameId);
                 }
-                return TryLoadLastGood(gameId);
+            }
+
+            async Task<LauncherVisualSelection?> NotifyAsync(Task<LauncherVisualSelection?> pending)
+            {
+                var selection = await pending;
+                cancellationToken.ThrowIfCancellationRequested();
+                if (selection is not null) selectionReady?.Invoke(selection);
+                return selection;
+            }
+        }
+        finally
+        {
+            ReleaseOperation();
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        lock (admissionSync)
+        {
+            disposal ??= DisposeCoreAsync();
+            return new(disposal);
+        }
+    }
+
+    private void EnterOperation()
+    {
+        lock (admissionSync)
+        {
+            ObjectDisposedException.ThrowIf(admissionClosed, this);
+            activeOperations++;
+        }
+    }
+
+    private void ReleaseOperation()
+    {
+        TaskCompletionSource? drained = null;
+        lock (admissionSync)
+        {
+            activeOperations--;
+            if (admissionClosed && activeOperations == 0)
+            {
+                drained = operationsDrained;
             }
         }
 
-        async Task<LauncherVisualSelection?> NotifyAsync(Task<LauncherVisualSelection?> pending)
+        drained?.TrySetResult();
+    }
+
+    private async Task DisposeCoreAsync()
+    {
+        Task drain;
+        lock (admissionSync)
         {
-            var selection = await pending;
-            cancellationToken.ThrowIfCancellationRequested();
-            if (selection is not null) selectionReady?.Invoke(selection);
-            return selection;
+            admissionClosed = true;
+            drain = activeOperations == 0
+                ? Task.CompletedTask
+                : (operationsDrained ??= new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
         }
+
+        await drain.ConfigureAwait(false);
+        if (ownsHttp) http.Dispose();
     }
 
     private async Task<LauncherVisualSelection?> RefreshGenshinAsync(

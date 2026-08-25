@@ -138,6 +138,31 @@ public sealed class Genshin120FpsProcessStarterTests
             starter.StartValidatedGenshin120Fps(Request(), cancellation.Token));
     }
 
+    [Fact]
+    public async Task Disposal_drains_an_active_launch_and_is_idempotent()
+    {
+        var starter = new Genshin120FpsProcessStarter(
+            Path.Combine(@"C:\Nyx\Assets\Tools", Genshin120FpsProcessStarter.ExpectedHelperFileName),
+            new string('0', 64));
+        var enter = typeof(Genshin120FpsProcessStarter).GetMethod(
+            "EnterLaunch",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var release = typeof(Genshin120FpsProcessStarter).GetMethod(
+            "ReleaseLaunch",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        enter.Invoke(starter, null);
+
+        var disposal = starter.DisposeAsync().AsTask();
+        var disposalAgain = starter.DisposeAsync().AsTask();
+        Assert.Same(disposal, disposalAgain);
+        await Task.Delay(40);
+        Assert.False(disposal.IsCompleted);
+
+        release.Invoke(starter, null);
+        await disposal.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.Throws<ObjectDisposedException>(() => starter.StartValidatedGenshin120Fps(Request(), default));
+    }
+
     private static ValidatedGenshin120FpsRequest Request() => new(Specification([]));
 
     private static LaunchSpecification Specification(IReadOnlyList<string> arguments) => new(

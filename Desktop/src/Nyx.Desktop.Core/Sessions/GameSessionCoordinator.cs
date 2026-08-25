@@ -23,7 +23,16 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
     private readonly TimeSpan absenceConfirmationInterval;
     private readonly CancellationTokenSource lifetime = new();
     private readonly object admissionSync = new();
+    private readonly object disposalSync = new();
+    private readonly List<SessionEntry> retiredEntries = [];
+    private readonly TaskCompletionSource lifetimeCancellationCompleted = new(
+        TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly IGameSessionCoordinatorHooks? hooks;
+    private Task? disposal;
+    private TaskCompletionSource? invocationsDrained;
+    private int activeInvocations;
+    private bool admissionClosed;
+    private int cancellationStarted;
     private int stopped;
 
     public GameSessionCoordinator(
@@ -127,12 +136,17 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
     public bool TryRegisterCustomAdapter(IGameSessionAdapter adapter)
     {
         ArgumentNullException.ThrowIfNull(adapter);
-        if (IsStopped || !CustomGameId.IsValid(adapter.GameId))
+        if (!CustomGameId.IsValid(adapter.GameId))
         {
             return false;
         }
 
-        return entries.TryAdd(adapter.GameId, new SessionEntry(adapter.GameId, adapter));
+        lock (admissionSync)
+        {
+            return !admissionClosed
+                && !IsStopped
+                && entries.TryAdd(adapter.GameId, new SessionEntry(adapter.GameId, adapter));
+        }
     }
 
     public bool TryRemoveCustomAdapter(string gameId)
@@ -142,7 +156,16 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
             return false;
         }
 
-        return entries.TryRemove(gameId, out _);
+        lock (admissionSync)
+        {
+            if (admissionClosed || IsStopped || !entries.TryRemove(gameId, out var entry))
+            {
+                return false;
+            }
+
+            retiredEntries.Add(entry);
+            return true;
+        }
     }
 
     public async ValueTask<GameLaunchRequestResult> RequestLaunchAsync(
@@ -150,18 +173,9 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         var entry = GetEntry(gameId);
-        if (IsStopped)
+        if (!TryAdmitInvocation())
         {
             return Result(GameLaunchRequestOutcome.CoordinatorStopped, entry);
-        }
-
-        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            lifetime.Token);
-        var gateEntered = await TryEnterGateAsync(entry, linkedCancellation.Token).ConfigureAwait(false);
-        if (!gateEntered)
-        {
-            return Result(CancellationOutcome(cancellationToken), entry);
         }
 
         try
@@ -171,104 +185,125 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
                 return Result(GameLaunchRequestOutcome.CoordinatorStopped, entry);
             }
 
-            ApplyPendingResumeReset(entry);
-            var observationResumeGeneration = GetRequestedResumeGeneration(entry);
-
-            var current = Read(entry);
-            if (current.Status is LocalGameStatus.Running)
+            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
+                lifetime.Token);
+            var gateEntered = await TryEnterGateAsync(entry, linkedCancellation.Token).ConfigureAwait(false);
+            if (!gateEntered)
             {
-                return new(GameLaunchRequestOutcome.AlreadyRunning, current);
+                return Result(CancellationOutcome(cancellationToken), entry);
             }
 
-            if (current.Status is LocalGameStatus.Starting)
+            try
             {
-                return new(GameLaunchRequestOutcome.AlreadyStarting, current);
-            }
+                if (IsStopped)
+                {
+                    return Result(GameLaunchRequestOutcome.CoordinatorStopped, entry);
+                }
 
-            var observation = await ObserveAsync(
-                entry,
-                linkedCancellation.Token,
-                cancellationToken).ConfigureAwait(false);
-            if (observation.Status is ObservationAttemptStatus.CallerCanceled)
-            {
-                return Result(GameLaunchRequestOutcome.Canceled, entry);
-            }
+                ApplyPendingResumeReset(entry);
+                var observationResumeGeneration = GetRequestedResumeGeneration(entry);
 
-            if (observation.Status is ObservationAttemptStatus.CoordinatorStopped)
-            {
-                return Result(GameLaunchRequestOutcome.CoordinatorStopped, entry);
-            }
+                var current = Read(entry);
+                if (current.Status is LocalGameStatus.Running)
+                {
+                    return new(GameLaunchRequestOutcome.AlreadyRunning, current);
+                }
 
-            if (observation.Status is ObservationAttemptStatus.Unavailable)
-            {
-                if (!TryApplyUnavailableEvidence(
+                if (current.Status is LocalGameStatus.Starting)
+                {
+                    return new(GameLaunchRequestOutcome.AlreadyStarting, current);
+                }
+
+                var observation = await ObserveAsync(
+                    entry,
+                    linkedCancellation.Token,
+                    cancellationToken).ConfigureAwait(false);
+                if (observation.Status is ObservationAttemptStatus.CallerCanceled)
+                {
+                    return Result(GameLaunchRequestOutcome.Canceled, entry);
+                }
+
+                if (observation.Status is ObservationAttemptStatus.CoordinatorStopped)
+                {
+                    return Result(GameLaunchRequestOutcome.CoordinatorStopped, entry);
+                }
+
+                if (observation.Status is ObservationAttemptStatus.Unavailable)
+                {
+                    if (!TryApplyUnavailableEvidence(
+                            entry,
+                            observationResumeGeneration,
+                            out var unavailable))
+                    {
+                        ApplyPendingResumeReset(entry);
+                        return Result(GameLaunchRequestOutcome.NeedsReview, entry);
+                    }
+
+                    return new(GameLaunchRequestOutcome.NeedsReview, unavailable);
+                }
+
+                if (!TryApplyEvidence(
                         entry,
+                        observation.Evidence!,
                         observationResumeGeneration,
-                        out var unavailable))
+                        out var observed))
                 {
                     ApplyPendingResumeReset(entry);
                     return Result(GameLaunchRequestOutcome.NeedsReview, entry);
                 }
 
-                return new(GameLaunchRequestOutcome.NeedsReview, unavailable);
-            }
+                if (observation.Evidence!.Overall is ExactProcessPresence.Present)
+                {
+                    return new(GameLaunchRequestOutcome.AlreadyRunning, observed);
+                }
 
-            if (!TryApplyEvidence(
+                if (observation.Evidence.Overall is ExactProcessPresence.Uncertain
+                    || observed.Status is LocalGameStatus.NeedsReview)
+                {
+                    return new(GameLaunchRequestOutcome.NeedsReview, observed);
+                }
+
+                if (observed.Status is LocalGameStatus.NotFound)
+                {
+                    return new(GameLaunchRequestOutcome.NotReady, observed);
+                }
+
+                if (observed.Readiness is not LocalReadinessEvidence.Ready)
+                {
+                    return new(GameLaunchRequestOutcome.NotReady, observed);
+                }
+
+                if (hooks is not null)
+                {
+                    await hooks.BeforeDispatchAdmissionAsync().ConfigureAwait(false);
+                }
+
+                var admission = AdmitDispatchAtomically(
                     entry,
-                    observation.Evidence!,
                     observationResumeGeneration,
-                    out var observed))
-            {
-                ApplyPendingResumeReset(entry);
-                return Result(GameLaunchRequestOutcome.NeedsReview, entry);
-            }
+                    linkedCancellation.Token,
+                    cancellationToken);
+                if (!admission.Admitted)
+                {
+                    ApplyPendingResumeReset(entry);
+                    return Result(admission.Outcome, entry);
+                }
 
-            if (observation.Evidence!.Overall is ExactProcessPresence.Present)
-            {
-                return new(GameLaunchRequestOutcome.AlreadyRunning, observed);
+                return await AwaitAdmittedDispatchAsync(
+                    entry,
+                    admission.DispatchTask,
+                    linkedCancellation.Token,
+                    cancellationToken).ConfigureAwait(false);
             }
-
-            if (observation.Evidence.Overall is ExactProcessPresence.Uncertain
-                || observed.Status is LocalGameStatus.NeedsReview)
+            finally
             {
-                return new(GameLaunchRequestOutcome.NeedsReview, observed);
+                entry.Gate.Release();
             }
-
-            if (observed.Status is LocalGameStatus.NotFound)
-            {
-                return new(GameLaunchRequestOutcome.NotReady, observed);
-            }
-
-            if (observed.Readiness is not LocalReadinessEvidence.Ready)
-            {
-                return new(GameLaunchRequestOutcome.NotReady, observed);
-            }
-
-            if (hooks is not null)
-            {
-                await hooks.BeforeDispatchAdmissionAsync().ConfigureAwait(false);
-            }
-
-            var admission = AdmitDispatchAtomically(
-                entry,
-                observationResumeGeneration,
-                linkedCancellation.Token,
-                cancellationToken);
-            if (!admission.Admitted)
-            {
-                ApplyPendingResumeReset(entry);
-                return Result(admission.Outcome, entry);
-            }
-
-            return await AwaitAdmittedDispatchAsync(
-                entry,
-                admission.DispatchTask,
-                linkedCancellation.Token,
-                cancellationToken).ConfigureAwait(false);
         }
         finally
         {
-            entry.Gate.Release();
+            ReleaseInvocation();
         }
     }
 
@@ -277,16 +312,7 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         var entry = GetEntry(gameId);
-        if (IsStopped)
-        {
-            return Read(entry);
-        }
-
-        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            lifetime.Token);
-        var gateEntered = await TryEnterGateAsync(entry, linkedCancellation.Token).ConfigureAwait(false);
-        if (!gateEntered)
+        if (!TryAdmitInvocation())
         {
             return Read(entry);
         }
@@ -298,46 +324,67 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
                 return Read(entry);
             }
 
-            ApplyPendingResumeReset(entry);
-            var observationResumeGeneration = GetRequestedResumeGeneration(entry);
-
-            var observation = await ObserveAsync(
-                entry,
-                linkedCancellation.Token,
-                cancellationToken).ConfigureAwait(false);
-            if (observation.Status is ObservationAttemptStatus.Succeeded && !IsStopped)
+            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
+                lifetime.Token);
+            var gateEntered = await TryEnterGateAsync(entry, linkedCancellation.Token).ConfigureAwait(false);
+            if (!gateEntered)
             {
-                if (TryApplyEvidence(
-                        entry,
-                        observation.Evidence!,
-                        observationResumeGeneration,
-                        out var observed))
-                {
-                    return observed;
-                }
-
-                ApplyPendingResumeReset(entry);
                 return Read(entry);
             }
 
-            if (observation.Status is ObservationAttemptStatus.Unavailable && !IsStopped)
+            try
             {
-                if (TryApplyUnavailableEvidence(
-                        entry,
-                        observationResumeGeneration,
-                        out var unavailable))
+                if (IsStopped)
                 {
-                    return unavailable;
+                    return Read(entry);
                 }
 
                 ApplyPendingResumeReset(entry);
-            }
+                var observationResumeGeneration = GetRequestedResumeGeneration(entry);
 
-            return Read(entry);
+                var observation = await ObserveAsync(
+                    entry,
+                    linkedCancellation.Token,
+                    cancellationToken).ConfigureAwait(false);
+                if (observation.Status is ObservationAttemptStatus.Succeeded && !IsStopped)
+                {
+                    if (TryApplyEvidence(
+                            entry,
+                            observation.Evidence!,
+                            observationResumeGeneration,
+                            out var observed))
+                    {
+                        return observed;
+                    }
+
+                    ApplyPendingResumeReset(entry);
+                    return Read(entry);
+                }
+
+                if (observation.Status is ObservationAttemptStatus.Unavailable && !IsStopped)
+                {
+                    if (TryApplyUnavailableEvidence(
+                            entry,
+                            observationResumeGeneration,
+                            out var unavailable))
+                    {
+                        return unavailable;
+                    }
+
+                    ApplyPendingResumeReset(entry);
+                }
+
+                return Read(entry);
+            }
+            finally
+            {
+                entry.Gate.Release();
+            }
         }
         finally
         {
-            entry.Gate.Release();
+            ReleaseInvocation();
         }
     }
 
@@ -376,6 +423,7 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
 
     public void Shutdown()
     {
+        var startCancellation = false;
         lock (admissionSync)
         {
             if (Interlocked.Exchange(ref stopped, 1) != 0)
@@ -383,22 +431,31 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
                 return;
             }
 
-            foreach (var entry in entries.Values)
+            admissionClosed = true;
+            foreach (var entry in GetEntriesUnsafe())
             {
                 lock (entry.Sync)
                 {
                     entry.Snapshot = entry.Snapshot with { CoordinatorStopped = true };
                 }
             }
+
+            startCancellation = true;
         }
 
-        _ = CancelLifetimeSafelyAsync();
+        if (startCancellation && Interlocked.Exchange(ref cancellationStarted, 1) == 0)
+        {
+            _ = CancelLifetimeAndSignalAsync();
+        }
     }
 
     public ValueTask DisposeAsync()
     {
-        Shutdown();
-        return ValueTask.CompletedTask;
+        lock (disposalSync)
+        {
+            disposal ??= DisposeCoreAsync();
+            return new(disposal);
+        }
     }
 
     private bool IsStopped => Volatile.Read(ref stopped) != 0;
@@ -413,7 +470,7 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         return value;
     }
 
-    private async Task CancelLifetimeSafelyAsync()
+    private async Task CancelLifetimeAndSignalAsync()
     {
         try
         {
@@ -423,6 +480,93 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         {
             // Adapter cancellation callbacks are outside Core's trust boundary.
             // State is already stopped, and callback faults must not escape Shutdown.
+        }
+        finally
+        {
+            lifetimeCancellationCompleted.TrySetResult();
+        }
+    }
+
+    private async Task DisposeCoreAsync()
+    {
+        Shutdown();
+        var drain = CloseAdmission();
+
+        await lifetimeCancellationCompleted.Task.ConfigureAwait(false);
+        await drain.ConfigureAwait(false);
+
+        var entriesToDispose = GetEntriesForDisposal();
+        var resumeWorkers = entriesToDispose
+            .Select(static entry => entry.ResumeWorkerTask)
+            .Where(static task => task is not null)
+            .Select(static task => task!)
+            .ToArray();
+        if (resumeWorkers.Length > 0)
+        {
+            await Task.WhenAll(resumeWorkers).ConfigureAwait(false);
+        }
+
+        foreach (var entry in entriesToDispose)
+        {
+            entry.Gate.Dispose();
+        }
+
+        lifetime.Dispose();
+    }
+
+    private SessionEntry[] GetEntriesForDisposal()
+    {
+        lock (admissionSync)
+        {
+            return GetEntriesUnsafe().ToArray();
+        }
+    }
+
+    private IEnumerable<SessionEntry> GetEntriesUnsafe() =>
+        entries.Values.Concat(retiredEntries);
+
+    private bool TryAdmitInvocation()
+    {
+        lock (admissionSync)
+        {
+            if (admissionClosed)
+            {
+                return false;
+            }
+
+            activeInvocations++;
+            return true;
+        }
+    }
+
+    private void ReleaseInvocation()
+    {
+        TaskCompletionSource? drained = null;
+        lock (admissionSync)
+        {
+            activeInvocations--;
+            if (activeInvocations == 0 && admissionClosed)
+            {
+                drained = invocationsDrained;
+            }
+        }
+
+        drained?.TrySetResult();
+    }
+
+    private Task CloseAdmission()
+    {
+        lock (admissionSync)
+        {
+            admissionClosed = true;
+            if (activeInvocations == 0)
+            {
+                return Task.CompletedTask;
+            }
+
+            invocationsDrained ??= new(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            return invocationsDrained.Task;
         }
     }
 
@@ -1019,34 +1163,50 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
     private void RequestResumeReset(SessionEntry entry)
     {
         hooks?.BeforeResumeAdmission(entry.Snapshot.GameId);
-        var startWorker = false;
-        lock (admissionSync)
+        if (!TryAdmitInvocation())
         {
-            lock (entry.Sync)
-            {
-                if (IsStopped)
-                {
-                    return;
-                }
-
-                var requested = entry.RequestedResumeGeneration + 1;
-                entry.RequestedResumeGeneration = requested;
-                entry.Snapshot = entry.Snapshot with { RequestedResumeGeneration = requested };
-                if (!entry.ResumeWorkerRunning)
-                {
-                    entry.ResumeWorkerRunning = true;
-                    startWorker = true;
-                }
-            }
+            return;
         }
 
-        if (startWorker)
+        TaskCompletionSource? workerCompletion = null;
+        try
         {
-            _ = ProcessPendingResumeResetsAsync(entry);
+            lock (admissionSync)
+            {
+                lock (entry.Sync)
+                {
+                    if (IsStopped)
+                    {
+                        return;
+                    }
+
+                    var requested = entry.RequestedResumeGeneration + 1;
+                    entry.RequestedResumeGeneration = requested;
+                    entry.Snapshot = entry.Snapshot with { RequestedResumeGeneration = requested };
+                    if (!entry.ResumeWorkerRunning)
+                    {
+                        entry.ResumeWorkerRunning = true;
+                        workerCompletion = new(
+                            TaskCreationOptions.RunContinuationsAsynchronously);
+                        entry.ResumeWorkerTask = workerCompletion.Task;
+                    }
+                }
+            }
+
+            if (workerCompletion is not null)
+            {
+                _ = ProcessPendingResumeResetsAsync(entry, workerCompletion);
+            }
+        }
+        finally
+        {
+            ReleaseInvocation();
         }
     }
 
-    private async Task ProcessPendingResumeResetsAsync(SessionEntry entry)
+    private async Task ProcessPendingResumeResetsAsync(
+        SessionEntry entry,
+        TaskCompletionSource workerCompletion)
     {
         try
         {
@@ -1074,7 +1234,6 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
                 {
                     if (entry.AppliedResumeGeneration >= entry.RequestedResumeGeneration)
                     {
-                        entry.ResumeWorkerRunning = false;
                         return;
                     }
                 }
@@ -1085,10 +1244,14 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
             // The durable request remains visible. A later foreground operation or
             // resume event can apply it; background worker faults never escape.
         }
-
-        lock (entry.Sync)
+        finally
         {
-            entry.ResumeWorkerRunning = false;
+            lock (entry.Sync)
+            {
+                entry.ResumeWorkerRunning = false;
+            }
+
+            workerCompletion.TrySetResult();
         }
     }
 
@@ -1213,6 +1376,8 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         public long AppliedResumeGeneration { get; set; }
 
         public bool ResumeWorkerRunning { get; set; }
+
+        public Task? ResumeWorkerTask { get; set; }
     }
 }
 

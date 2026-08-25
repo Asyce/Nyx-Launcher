@@ -67,22 +67,104 @@ public interface IHoyoPlayProcessStarter
     void Start(HoyoPlayHandoffRequest request);
 }
 
-public sealed class OfficialLauncherFamilyAdmission
+public sealed class OfficialLauncherFamilyAdmission : IAsyncDisposable
 {
     private readonly SemaphoreSlim gate = new(1, 1);
+    private readonly object admissionSync = new();
+    private readonly CancellationTokenSource shutdown = new();
+    private Task? disposal;
+    private TaskCompletionSource? operationsDrained;
+    private int activeOperations;
+    private bool admissionClosed;
 
-    public OfficialLauncherFamilyLease? TryEnter() =>
-        gate.Wait(0)
-            ? new(this)
-            : null;
+    public OfficialLauncherFamilyLease? TryEnter()
+    {
+        lock (admissionSync)
+        {
+            ObjectDisposedException.ThrowIf(admissionClosed, this);
+            if (!gate.Wait(0)) return null;
+            activeOperations++;
+            return new(this);
+        }
+    }
 
     public async Task<OfficialLauncherFamilyLease> EnterAsync(CancellationToken cancellationToken)
     {
-        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        return new(this);
+        lock (admissionSync)
+        {
+            ObjectDisposedException.ThrowIf(admissionClosed, this);
+            activeOperations++;
+        }
+
+        try
+        {
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
+                shutdown.Token);
+            await gate.WaitAsync(linked.Token).ConfigureAwait(false);
+            lock (admissionSync)
+            {
+                if (admissionClosed)
+                {
+                    gate.Release();
+                    throw new ObjectDisposedException(nameof(OfficialLauncherFamilyAdmission));
+                }
+            }
+            return new(this);
+        }
+        catch
+        {
+            ReleaseOperation();
+            throw;
+        }
     }
 
-    internal void Release() => gate.Release();
+    internal void Release()
+    {
+        gate.Release();
+        ReleaseOperation();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        lock (admissionSync)
+        {
+            disposal ??= DisposeCoreAsync();
+            return new(disposal);
+        }
+    }
+
+    private void ReleaseOperation()
+    {
+        TaskCompletionSource? drained = null;
+        lock (admissionSync)
+        {
+            activeOperations--;
+            if (admissionClosed && activeOperations == 0)
+            {
+                drained = operationsDrained;
+            }
+        }
+
+        drained?.TrySetResult();
+    }
+
+    private async Task DisposeCoreAsync()
+    {
+        Task drain;
+        lock (admissionSync)
+        {
+            admissionClosed = true;
+            drain = activeOperations == 0
+                ? Task.CompletedTask
+                : (operationsDrained ??= new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+        }
+
+        await shutdown.CancelAsync().ConfigureAwait(false);
+        await drain.ConfigureAwait(false);
+        gate.Dispose();
+        shutdown.Dispose();
+    }
 }
 
 public sealed class OfficialLauncherFamilyLease : IDisposable

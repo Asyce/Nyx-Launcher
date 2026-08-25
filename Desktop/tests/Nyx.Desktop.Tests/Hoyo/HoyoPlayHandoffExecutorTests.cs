@@ -266,6 +266,28 @@ public sealed class HoyoPlayHandoffExecutorTests
         Assert.NotNull(admission.TryEnter());
     }
 
+    [Fact]
+    public async Task Disposing_family_admission_cancels_a_queued_waiter_before_draining_the_lease()
+    {
+        var admission = new OfficialLauncherFamilyAdmission();
+        var held = admission.TryEnter();
+        Assert.NotNull(held);
+
+        var waiter = admission.EnterAsync(CancellationToken.None);
+        await Task.Delay(40);
+        Assert.False(waiter.IsCompleted);
+
+        var disposal = admission.DisposeAsync().AsTask();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            async () => await waiter.WaitAsync(TimeSpan.FromSeconds(1)));
+        Assert.False(disposal.IsCompleted);
+
+        held.Dispose();
+        await disposal.WaitAsync(TimeSpan.FromSeconds(1));
+        await admission.DisposeAsync();
+        Assert.Throws<ObjectDisposedException>(() => admission.TryEnter());
+    }
+
     [Theory]
     [InlineData("wuwa")]
     [InlineData("ae")]
@@ -283,6 +305,44 @@ public sealed class HoyoPlayHandoffExecutorTests
 
         Assert.Equal(HoyoPlayOpenStatus.NeedsReview, result.Status);
         Assert.Empty(starter.Requests);
+    }
+
+    [Fact]
+    public async Task Disposal_drains_owned_admission_and_does_not_dispose_injected_admission()
+    {
+        using var fixture = FakeHoyoPlay.Create("1.8.0.0");
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var starter = new FakeStarter(entered: entered, release: release);
+        var ownedExecutor = new HoyoPlayHandoffExecutor(
+            fixture.CreateValidator(),
+            new FakeProcessInspector(),
+            starter);
+
+        var open = Task.Run(() => ownedExecutor.Open("hsr", fixture.Root));
+        Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+        var disposal = ownedExecutor.DisposeAsync().AsTask();
+        await Task.Delay(40);
+        Assert.False(disposal.IsCompleted);
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => Task.Run(() => ownedExecutor.Open("zzz", fixture.Root)));
+
+        release.Set();
+        Assert.Equal(HoyoPlayOpenStatus.Opened, (await open).Status);
+        await disposal.WaitAsync(TimeSpan.FromSeconds(1));
+        await ownedExecutor.DisposeAsync();
+
+        var injectedAdmission = new OfficialLauncherFamilyAdmission();
+        var injectedExecutor = new HoyoPlayHandoffExecutor(
+            fixture.CreateValidator(),
+            new FakeProcessInspector(),
+            new FakeStarter(),
+            injectedAdmission);
+        await injectedExecutor.DisposeAsync();
+        using var lease = injectedAdmission.TryEnter();
+        Assert.NotNull(lease);
+        lease.Dispose();
+        await injectedAdmission.DisposeAsync();
     }
 
     private sealed class FakeProcessInspector : IStrictRunningProcessInspector

@@ -156,7 +156,7 @@ internal sealed class LimitedInformationWindowsProcessPathQuery : IWindowsProces
         ref uint size);
 }
 
-public sealed class Genshin120FpsProcessStarter : IGenshin120FpsProcessStarter
+public sealed class Genshin120FpsProcessStarter : IGenshin120FpsProcessStarter, IAsyncDisposable
 {
     public const string ExpectedHelperFileName = "Nyx.Genshin120.Helper.exe";
     private const string PipePrefix = "Pengo.Nyx.Genshin120.";
@@ -174,6 +174,11 @@ public sealed class Genshin120FpsProcessStarter : IGenshin120FpsProcessStarter
     private readonly byte[] expectedHelperSha256;
     private readonly TimeSpan responseTimeout;
     private readonly SemaphoreSlim launchGate = new(1, 1);
+    private readonly object admissionSync = new();
+    private Task? disposal;
+    private TaskCompletionSource? launchesDrained;
+    private int activeLaunches;
+    private bool admissionClosed;
 
     public Genshin120FpsProcessStarter(string helperPath, string expectedHelperSha256)
         : this(helperPath, expectedHelperSha256, DefaultResponseTimeout)
@@ -213,17 +218,73 @@ public sealed class Genshin120FpsProcessStarter : IGenshin120FpsProcessStarter
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        if (!launchGate.Wait(0)) return Genshin120FpsStartStatus.Failed;
+        EnterLaunch();
         try
         {
-            return StartCoreAsync(request.Specification, cancellationToken)
-                .GetAwaiter()
-                .GetResult();
+            if (!launchGate.Wait(0)) return Genshin120FpsStartStatus.Failed;
+            try
+            {
+                return StartCoreAsync(request.Specification, cancellationToken)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            finally
+            {
+                launchGate.Release();
+            }
         }
         finally
         {
-            launchGate.Release();
+            ReleaseLaunch();
         }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        lock (admissionSync)
+        {
+            disposal ??= DisposeCoreAsync();
+            return new(disposal);
+        }
+    }
+
+    private void EnterLaunch()
+    {
+        lock (admissionSync)
+        {
+            ObjectDisposedException.ThrowIf(admissionClosed, this);
+            activeLaunches++;
+        }
+    }
+
+    private void ReleaseLaunch()
+    {
+        TaskCompletionSource? drained = null;
+        lock (admissionSync)
+        {
+            activeLaunches--;
+            if (admissionClosed && activeLaunches == 0)
+            {
+                drained = launchesDrained;
+            }
+        }
+
+        drained?.TrySetResult();
+    }
+
+    private async Task DisposeCoreAsync()
+    {
+        Task drain;
+        lock (admissionSync)
+        {
+            admissionClosed = true;
+            drain = activeLaunches == 0
+                ? Task.CompletedTask
+                : (launchesDrained ??= new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+        }
+
+        await drain.ConfigureAwait(false);
+        launchGate.Dispose();
     }
 
     private async Task<Genshin120FpsStartStatus> StartCoreAsync(

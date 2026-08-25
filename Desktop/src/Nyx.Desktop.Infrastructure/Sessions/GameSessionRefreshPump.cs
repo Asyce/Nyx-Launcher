@@ -244,6 +244,7 @@ public sealed class GameSessionRefreshPump : IAsyncDisposable
         }
 
         await drain.ConfigureAwait(false);
+        refreshGate.Dispose();
         lifetime.Dispose();
     }
 

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using Nyx.Desktop.Core.Features;
@@ -285,9 +284,10 @@ public sealed class ExportCoordinator : IAsyncDisposable
     private readonly IAchievementExportProvider achievements;
     private readonly IExportStatusSink statusSink;
     private readonly TimeSpan achievementPrepareTimeout;
-    private readonly ConcurrentDictionary<Guid, JobEntry> jobs = new();
+    private readonly Dictionary<string, JobEntry> jobs = new(StringComparer.Ordinal);
     private readonly object lifetimeSync = new();
-    private readonly TaskCompletionSource shutdownCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private Task? launcherCloseTask;
+    private Task? fullDisposeTask;
     private int closed;
 
     public ExportCoordinator(
@@ -303,20 +303,25 @@ public sealed class ExportCoordinator : IAsyncDisposable
         if (this.achievementPrepareTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(achievementPrepareTimeout));
     }
 
-    public ExportJobSnapshot GetSnapshot(Guid jobId) => jobs.TryGetValue(jobId, out var entry)
-        ? entry.Snapshot
-        : throw new KeyNotFoundException("Unknown export job.");
+    public ExportJobSnapshot GetSnapshot(Guid jobId)
+    {
+        var entry = FindJob(jobId)
+            ?? throw new KeyNotFoundException("Unknown export job.");
+        return entry.Snapshot;
+    }
 
-    public bool IsLauncherIndependentAchievementJob(Guid jobId) =>
-        jobs.TryGetValue(jobId, out var entry)
-        && entry.IsLauncherIndependentAchievementJob;
+    public bool IsLauncherIndependentAchievementJob(Guid jobId)
+    {
+        var entry = FindJob(jobId);
+        return entry is not null && entry.IsLauncherIndependentAchievementJob;
+    }
 
     public async ValueTask<ExportJobSnapshot> WaitForCompletionAsync(
         Guid jobId,
         CancellationToken cancellationToken = default)
     {
-        if (!jobs.TryGetValue(jobId, out var entry))
-            throw new KeyNotFoundException("Unknown export job.");
+        var entry = FindJob(jobId)
+            ?? throw new KeyNotFoundException("Unknown export job.");
         await entry.Completion.WaitAsync(cancellationToken).ConfigureAwait(false);
         return entry.Snapshot;
     }
@@ -331,20 +336,45 @@ public sealed class ExportCoordinator : IAsyncDisposable
         var capability = ExportProviderCatalog.Get(arm.GameId);
         var requested = arm.RequestedKinds & capability.SupportedKinds;
         var unsupported = arm.RequestedKinds & ~capability.SupportedKinds;
-        var entry = new JobEntry(Guid.NewGuid(), arm.GameId, arm, requested, unsupported);
+        var retain = requested != ExportKind.None;
+        JobEntry? entry = null;
+        JobEntry? previous = null;
+        JobEntry? active = null;
         lock (lifetimeSync)
         {
             ObjectDisposedException.ThrowIf(closed != 0, this);
-            jobs[entry.Snapshot.JobId] = entry;
+            if (retain)
+            {
+                if (jobs.TryGetValue(arm.GameId, out var existing)
+                    && !existing.Completion.IsCompleted)
+                {
+                    active = existing;
+                }
+                else
+                {
+                    previous = existing;
+                    entry = new JobEntry(Guid.NewGuid(), arm.GameId, arm, requested, unsupported);
+                    jobs[arm.GameId] = entry;
+                }
+            }
         }
-        await PublishAsync(entry, "job", ExportJobState.PendingLaunch.ToString(), null, cancellationToken).ConfigureAwait(false);
+        if (active is not null)
+        {
+            return new(false, active.Snapshot.JobId, active.Snapshot);
+        }
+        entry ??= new JobEntry(Guid.NewGuid(), arm.GameId, arm, requested, unsupported);
+        if (previous is not null)
+            await previous.DisposeAsync().ConfigureAwait(false);
+
+        try
+        {
+            await PublishAsync(entry, "job", ExportJobState.PendingLaunch.ToString(), null, cancellationToken).ConfigureAwait(false);
 
         // Pull baseline and achievement preparation are independent preflights.
         // Neither can veto launch or the other export lane.
         IPullExportSession? pullSession = null;
         if ((requested & ExportKind.Pulls) != 0)
         {
-            entry.BeginWorkers();
             entry.SetPulls(ExportTaskState.Preparing);
             await PublishAsync(entry, "pulls", ExportTaskState.Preparing.ToString(), null, CancellationToken.None).ConfigureAwait(false);
             try
@@ -363,7 +393,6 @@ public sealed class ExportCoordinator : IAsyncDisposable
         IAchievementExportSession? achievementSession = null;
         if ((requested & ExportKind.Achievements) != 0)
         {
-            entry.BeginWorkers();
             entry.SetAchievements(ExportTaskState.Preparing);
             await PublishAsync(entry, "achievements", ExportTaskState.Preparing.ToString(), null, CancellationToken.None).ConfigureAwait(false);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(entry.Token, cancellationToken);
@@ -410,65 +439,135 @@ public sealed class ExportCoordinator : IAsyncDisposable
         }
 
         entry.MarkRunning();
-        entry.SetLaunchSettled(true);
+        entry.SetLaunchSettled(
+            admitted: true,
+            emptyState: requested == ExportKind.None
+                ? unsupported != ExportKind.None
+                    ? ExportJobState.Unsupported
+                    : ExportJobState.Completed
+                : null);
         if (achievementSession is not null)
             _ = Task.Run(() => CompleteAchievementsAsync(entry, achievementSession));
         if (requested == ExportKind.None)
         {
-            entry.Finish(unsupported != ExportKind.None ? ExportJobState.Unsupported : ExportJobState.Completed);
             await PublishAsync(entry, "job", entry.Snapshot.State.ToString(), null, CancellationToken.None).ConfigureAwait(false);
             return new(true, entry.Snapshot.JobId, entry.Snapshot);
         }
 
         if (pullSession is not null) _ = Task.Run(() => RunPullsAsync(entry, pullSession));
         return new(true, entry.Snapshot.JobId, entry.Snapshot);
+        }
+        finally
+        {
+            if (!retain)
+                await entry.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     public bool Cancel(Guid jobId)
     {
-        if (!jobs.TryGetValue(jobId, out var entry) || entry.Snapshot.IsFinished) return false;
+        var entry = FindJob(jobId);
+        if (entry is null || entry.Completion.IsCompleted) return false;
         entry.Cancel();
         return true;
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        await ShutDownAsync(preserveLauncherIndependentAchievements: false).ConfigureAwait(false);
-    }
-
-    public async ValueTask ShutDownForLauncherCloseAsync()
-    {
-        await ShutDownAsync(preserveLauncherIndependentAchievements: true).ConfigureAwait(false);
-    }
-
-    private async ValueTask ShutDownAsync(bool preserveLauncherIndependentAchievements)
-    {
+        Task task;
         JobEntry[]? entries = null;
+        TaskCompletionSource? starter = null;
         lock (lifetimeSync)
         {
-            if (closed == 0)
+            if (fullDisposeTask is null)
             {
                 closed = 1;
                 entries = jobs.Values.ToArray();
+                starter = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                fullDisposeTask = starter.Task;
+            }
+            task = fullDisposeTask;
+        }
+        if (starter is not null)
+            _ = DrainFullAsync(entries!, starter);
+        return new ValueTask(task);
+    }
+
+    public ValueTask ShutDownForLauncherCloseAsync()
+    {
+        Task task;
+        JobEntry[]? entries = null;
+        TaskCompletionSource? starter = null;
+        lock (lifetimeSync)
+        {
+            if (fullDisposeTask is not null)
+            {
+                task = fullDisposeTask;
+            }
+            else if (launcherCloseTask is null)
+            {
+                closed = 1;
+                entries = jobs.Values.ToArray();
+                starter = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                launcherCloseTask = starter.Task;
+                task = starter.Task;
+            }
+            else
+            {
+                task = launcherCloseTask;
             }
         }
-        if (entries is null)
-        {
-            await shutdownCompleted.Task.ConfigureAwait(false);
-            return;
-        }
+        if (starter is not null)
+            _ = DrainCloseAsync(entries!, starter);
+        return new ValueTask(task);
+    }
+
+    private async Task DrainCloseAsync(
+        JobEntry[] entries,
+        TaskCompletionSource completion)
+    {
         try
         {
             var canceled = entries
-                .Where(entry => !entry.Completion.IsCompleted
-                    && (!preserveLauncherIndependentAchievements
-                        || !entry.CanOutliveLauncher))
+                .Where(entry => !entry.Completion.IsCompleted && !entry.CanOutliveLauncher)
                 .ToArray();
             foreach (var entry in canceled) entry.Cancel();
-            var pending = canceled.Select(static entry => entry.Completion).ToArray();
-            if (pending.Length != 0) await Task.WhenAll(pending).ConfigureAwait(false);
+            if (canceled.Length != 0)
+                await Task.WhenAll(canceled.Select(static entry => entry.Completion)).ConfigureAwait(false);
+            completion.TrySetResult();
         }
-        finally { shutdownCompleted.TrySetResult(); }
+        catch (Exception exception)
+        {
+            completion.TrySetException(exception);
+        }
+    }
+
+    private async Task DrainFullAsync(
+        JobEntry[] entries,
+        TaskCompletionSource completion)
+    {
+        try
+        {
+            var pending = entries.Where(static entry => !entry.Completion.IsCompleted).ToArray();
+            foreach (var entry in pending) entry.Cancel();
+            if (pending.Length != 0)
+                await Task.WhenAll(pending.Select(static entry => entry.Completion)).ConfigureAwait(false);
+
+            lock (lifetimeSync) jobs.Clear();
+            foreach (var entry in entries)
+                await entry.DisposeAsync().ConfigureAwait(false);
+            completion.TrySetResult();
+        }
+        catch (Exception exception)
+        {
+            completion.TrySetException(exception);
+        }
+    }
+
+    private JobEntry? FindJob(Guid jobId)
+    {
+        lock (lifetimeSync)
+            return jobs.Values.FirstOrDefault(entry => entry.JobId == jobId);
     }
 
     private async Task RunPullsAsync(JobEntry entry, IPullExportSession session)
@@ -536,17 +635,24 @@ public sealed class ExportCoordinator : IAsyncDisposable
         private readonly object sync = new();
         private readonly CancellationTokenSource cancellation = new();
         private int remaining;
+        private int cancellationRequested;
+        private int disposed;
         private ExportJobSnapshot snapshot;
 
         public JobEntry(Guid id, string gameId, ExportArmSnapshot arm, ExportKind requested, ExportKind unsupported)
         {
-            GameId = gameId; Arm = arm; remaining = BitCount(requested);
+            JobId = id;
+            GameId = gameId;
+            Arm = arm;
+            remaining = BitCount(requested);
+            workersStarted = remaining != 0;
             var unsupportedState = unsupported != ExportKind.None ? ExportTaskState.Unsupported : ExportTaskState.NotRequested;
             snapshot = new(id, gameId, ExportJobState.PendingLaunch,
                 requested.HasFlag(ExportKind.Pulls) ? new(ExportTaskState.NotRequested) : new(unsupportedState),
                 requested.HasFlag(ExportKind.Achievements) ? new(ExportTaskState.NotRequested) : new(unsupportedState), DateTimeOffset.UtcNow);
         }
 
+        public Guid JobId { get; }
         public string GameId { get; }
         public ExportArmSnapshot Arm { get; }
         public CancellationToken Token => cancellation.Token;
@@ -595,30 +701,57 @@ public sealed class ExportCoordinator : IAsyncDisposable
                         && snapshot.Achievements.State == ExportTaskState.Running
                         && snapshot.Pulls.State is not ExportTaskState.Preparing
                             and not ExportTaskState.Running
-                        && !cancellation.IsCancellationRequested;
+                        && Volatile.Read(ref cancellationRequested) == 0;
             }
         }
         public void MarkRunning() { lock (sync) snapshot = snapshot with { State = ExportJobState.Running }; }
         private bool workersStarted;
-        public void BeginWorkers() { lock (sync) workersStarted = true; }
         public void SetAchievementLauncherIndependent(bool value)
         {
             lock (sync) achievementLauncherIndependent = value;
         }
         private bool launchSettled;
-        public void SetLaunchSettled(bool admitted)
+        public void SetLaunchSettled(bool admitted, ExportJobState? emptyState = null)
         {
             lock (sync) launchSettled = true;
             if (!admitted) Finish(ExportJobState.Canceled);
+            else if (emptyState is not null) Finish(emptyState.Value);
             else TryFinishIfReady();
         }
         public void Cancel(bool forceComplete = false)
         {
-            cancellation.Cancel();
-            lock (sync) snapshot = snapshot with { State = ExportJobState.Canceled, FinishedAt = DateTimeOffset.UtcNow };
-            lock (sync) if (forceComplete || !workersStarted) completion.TrySetResult();
+            if (completion.Task.IsCompleted) return;
+            if (Interlocked.Exchange(ref cancellationRequested, 1) == 0)
+            {
+                try { cancellation.Cancel(); }
+                catch (ObjectDisposedException) { }
+                catch (Exception) { }
+            }
+            lock (sync)
+            {
+                if (completion.Task.IsCompleted) return;
+                snapshot = snapshot with { State = ExportJobState.Canceled, FinishedAt = DateTimeOffset.UtcNow };
+                if (forceComplete || !workersStarted) completion.TrySetResult();
+            }
         }
-        public void Finish(ExportJobState state) { lock (sync) snapshot = snapshot with { State = state, FinishedAt = DateTimeOffset.UtcNow }; completion.TrySetResult(); }
+        public ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref disposed, 1) == 0)
+                cancellation.Dispose();
+            return ValueTask.CompletedTask;
+        }
+        public void Finish(ExportJobState state)
+        {
+            lock (sync)
+            {
+                if (completion.Task.IsCompleted) return;
+                if (Volatile.Read(ref cancellationRequested) != 0
+                    && state != ExportJobState.Canceled)
+                    state = ExportJobState.Canceled;
+                snapshot = snapshot with { State = state, FinishedAt = DateTimeOffset.UtcNow };
+                completion.TrySetResult();
+            }
+        }
         public void SetPulls(ExportTaskState state, ExportArtifactMetadata? artifact = null, string? errorCode = null) { lock (sync) snapshot = snapshot with { Pulls = new(state, errorCode, artifact) }; }
         public void SetAchievements(ExportTaskState state, ExportArtifactMetadata? artifact = null, string? errorCode = null) { lock (sync) snapshot = snapshot with { Achievements = new(state, errorCode, artifact) }; }
         public void TryComplete()
@@ -631,7 +764,11 @@ public sealed class ExportCoordinator : IAsyncDisposable
             lock (sync) if (!launchSettled || remaining != 0) return;
             var pullsFailed = Snapshot.Pulls.State is ExportTaskState.Failed or ExportTaskState.Canceled;
             var achievementsFailed = Snapshot.Achievements.State is ExportTaskState.Failed or ExportTaskState.Canceled;
-            Finish(cancellation.IsCancellationRequested ? ExportJobState.Canceled : pullsFailed || achievementsFailed ? ExportJobState.Failed : ExportJobState.Completed);
+            Finish(Volatile.Read(ref cancellationRequested) != 0
+                ? ExportJobState.Canceled
+                : pullsFailed || achievementsFailed
+                    ? ExportJobState.Failed
+                    : ExportJobState.Completed);
         }
         private static int BitCount(ExportKind kind) => (kind.HasFlag(ExportKind.Pulls) ? 1 : 0) + (kind.HasFlag(ExportKind.Achievements) ? 1 : 0);
     }

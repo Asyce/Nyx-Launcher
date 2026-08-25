@@ -193,6 +193,30 @@ public sealed class GameSessionRefreshPumpTests
         Assert.All(disposals, task => Assert.True(task.IsCompletedSuccessfully));
     }
 
+    [Fact]
+    public async Task Dispose_waits_for_refresh_gate_release_rejects_later_work_and_is_repeatable()
+    {
+        var adapter = new BlockingObservationAdapter("gi");
+        await using var coordinator = CreateCoordinator(CreateAdapters(adapter));
+        var pump = new GameSessionRefreshPump(coordinator, TimeSpan.FromHours(1));
+
+        var refresh = Task.Run(async () => await pump.RefreshNowAsync());
+        await adapter.ObservationEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        var disposal = pump.DisposeAsync().AsTask();
+        await Task.Delay(40);
+        Assert.False(disposal.IsCompleted);
+
+        adapter.ReleaseObservation.TrySetResult();
+        await refresh.WaitAsync(TimeSpan.FromSeconds(1));
+        await disposal.WaitAsync(TimeSpan.FromSeconds(1));
+
+        var later = await pump.RefreshNowAsync();
+        await pump.DisposeAsync();
+
+        Assert.Contains("gi", later.Keys);
+    }
+
     private static IReadOnlyList<IGameSessionAdapter> CreateAdapters(IGameSessionAdapter selected) =>
         GameCatalog.All.Select(game => game.Id == selected.GameId
             ? selected
@@ -282,6 +306,23 @@ public sealed class GameSessionRefreshPumpTests
                     return;
                 }
             }
+        }
+    }
+
+    private sealed class BlockingObservationAdapter(string gameId) : SequenceAdapter(gameId)
+    {
+        public TaskCompletionSource ObservationEntered { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource ReleaseObservation { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override ValueTask<GameSessionEvidence> ObserveSessionAsync(
+            CancellationToken cancellationToken)
+        {
+            ObservationEntered.TrySetResult();
+            ReleaseObservation.Task.GetAwaiter().GetResult();
+            return ValueTask.FromResult(GameSessionEvidence.ReadyAndAbsent);
         }
     }
 

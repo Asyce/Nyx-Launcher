@@ -253,6 +253,40 @@ public sealed class ExportCoordinatorTests
     }
 
     [Fact]
+    public async Task Dispose_during_initial_publish_waits_for_retained_job_cleanup()
+    {
+        var statuses = new BlockingStatusSink();
+        var pulls = new FakePullProvider();
+        var coordinator = new ExportCoordinator(
+            pulls,
+            new FakeAchievementProvider(),
+            statusSink: statuses);
+        var launching = coordinator.RunForLaunchAsync(
+            new ExportArmSnapshot("gi", true, false),
+            static _ => ValueTask.FromResult(true)).AsTask();
+
+        await statuses.Entered.Task;
+        var disposing = coordinator.DisposeAsync().AsTask();
+        Assert.False(disposing.IsCompleted);
+
+        try
+        {
+            statuses.Release.TrySetResult();
+            var result = await launching;
+            await disposing;
+
+            Assert.False(result.LaunchAdmitted);
+            Assert.Equal(ExportJobState.Canceled, result.Snapshot.State);
+            Assert.Equal(1, pulls.Disposed);
+        }
+        finally
+        {
+            statuses.Release.TrySetResult();
+            await coordinator.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task Unsupported_slots_never_invoke_providers()
     {
         var pulls = new FakePullProvider();
@@ -266,6 +300,128 @@ public sealed class ExportCoordinatorTests
         Assert.Equal(ExportTaskState.Unsupported, result.Snapshot.Achievements.State);
         Assert.Equal(0, pulls.Calls);
         Assert.Equal(0, achievements.Calls);
+        Assert.Throws<KeyNotFoundException>(() => coordinator.GetSnapshot(result.JobId));
+        await Assert.ThrowsAsync<KeyNotFoundException>(async () => await coordinator.WaitForCompletionAsync(result.JobId));
+    }
+
+    [Fact]
+    public async Task Retains_only_the_latest_completed_job_for_a_game()
+    {
+        var pulls = new FakePullProvider();
+        await using var coordinator = new ExportCoordinator(pulls, new FakeAchievementProvider());
+        var firstId = Guid.Empty;
+        ExportLaunchResult latest = default!;
+
+        for (var i = 0; i < 100; i++)
+        {
+            latest = await coordinator.RunForLaunchAsync(
+                new ExportArmSnapshot("gi", true, false),
+                static _ => ValueTask.FromResult(true));
+            await WaitForFinishedAsync(coordinator, latest.JobId);
+            if (i == 0) firstId = latest.JobId;
+        }
+
+        Assert.NotEqual(firstId, latest.JobId);
+        Assert.Equal(latest.JobId, coordinator.GetSnapshot(latest.JobId).JobId);
+        Assert.Throws<KeyNotFoundException>(() => coordinator.GetSnapshot(firstId));
+    }
+
+    [Fact]
+    public async Task In_progress_same_game_job_is_rejected_until_completion()
+    {
+        var pulls = new FakePullProvider { Block = true };
+        var coordinator = new ExportCoordinator(pulls, new FakeAchievementProvider());
+        var first = await coordinator.RunForLaunchAsync(
+            new ExportArmSnapshot("gi", true, false),
+            static _ => ValueTask.FromResult(true));
+        await EventuallyAsync(() => pulls.Calls == 1);
+
+        var second = await coordinator.RunForLaunchAsync(
+            new ExportArmSnapshot("gi", true, false),
+            static _ => ValueTask.FromResult(true));
+
+        Assert.False(second.LaunchAdmitted);
+        Assert.Equal(first.JobId, second.JobId);
+        Assert.Equal(1, pulls.PrepareCalls);
+        await coordinator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task A_waiter_captured_before_replacement_still_completes()
+    {
+        var completion = new TaskCompletionSource<ExportArtifactMetadata>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var achievements = new FakeAchievementProvider { CompletionGate = completion };
+        await using var coordinator = new ExportCoordinator(new FakePullProvider(), achievements);
+        var first = await coordinator.RunForLaunchAsync(
+            new ExportArmSnapshot("gi", false, true),
+            static _ => ValueTask.FromResult(true));
+        var waiter = coordinator.WaitForCompletionAsync(first.JobId).AsTask();
+        await EventuallyAsync(() => !waiter.IsCompleted);
+
+        completion.SetResult(new("achievements", 1, 1, "ndjson", DateTimeOffset.UtcNow));
+        var firstFinal = await waiter;
+        var second = await coordinator.RunForLaunchAsync(
+            new ExportArmSnapshot("gi", false, true),
+            static _ => ValueTask.FromResult(true));
+
+        Assert.Equal(first.JobId, firstFinal.JobId);
+        Assert.NotEqual(first.JobId, second.JobId);
+        Assert.Throws<KeyNotFoundException>(() => coordinator.GetSnapshot(first.JobId));
+    }
+
+    [Fact]
+    public async Task Cancellation_cleanup_gate_keeps_replacement_rejected()
+    {
+        var allowCleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var achievements = new FakeAchievementProvider
+        {
+            BlockCompletion = true,
+            AllowCleanup = allowCleanup.Task,
+        };
+        var coordinator = new ExportCoordinator(new FakePullProvider(), achievements);
+        var first = await coordinator.RunForLaunchAsync(
+            new ExportArmSnapshot("gi", false, true),
+            static _ => ValueTask.FromResult(true));
+        await EventuallyAsync(() => achievements.Calls == 1);
+        Assert.True(coordinator.Cancel(first.JobId));
+
+        var second = await coordinator.RunForLaunchAsync(
+            new ExportArmSnapshot("gi", false, true),
+            static _ => ValueTask.FromResult(true));
+        Assert.False(second.LaunchAdmitted);
+        Assert.Equal(first.JobId, second.JobId);
+
+        allowCleanup.SetResult();
+        await coordinator.WaitForCompletionAsync(first.JobId);
+        var replacement = await coordinator.RunForLaunchAsync(
+            new ExportArmSnapshot("gi", false, true),
+            static _ => ValueTask.FromResult(true));
+        Assert.True(replacement.LaunchAdmitted);
+        await coordinator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Full_dispose_drains_native_job_after_launcher_close()
+    {
+        var achievements = new FakeAchievementProvider
+        {
+            LauncherIndependent = true,
+            CompletionGate = new TaskCompletionSource<ExportArtifactMetadata>(
+                TaskCreationOptions.RunContinuationsAsynchronously),
+        };
+        var coordinator = new ExportCoordinator(new FakePullProvider(), achievements);
+        var result = await coordinator.RunForLaunchAsync(
+            new ExportArmSnapshot("gi", false, true),
+            static _ => ValueTask.FromResult(true));
+
+        await coordinator.ShutDownForLauncherCloseAsync();
+        Assert.Equal(ExportJobState.Running, coordinator.GetSnapshot(result.JobId).State);
+        await coordinator.DisposeAsync();
+
+        Assert.Equal(1, achievements.Canceled);
+        Assert.Equal(1, achievements.Disposed);
+        Assert.Throws<KeyNotFoundException>(() => coordinator.GetSnapshot(result.JobId));
     }
 
     [Fact]
@@ -278,9 +434,13 @@ public sealed class ExportCoordinatorTests
         var second = await coordinator.RunForLaunchAsync(new ExportArmSnapshot("hsr", true, true), _ => ValueTask.FromResult(true));
         await EventuallyAsync(() => pulls.Calls == 2 && achievements.Calls == 2);
 
+        var firstWait = coordinator.WaitForCompletionAsync(first.JobId).AsTask();
+        var secondWait = coordinator.WaitForCompletionAsync(second.JobId).AsTask();
         await coordinator.DisposeAsync();
-        Assert.Equal(ExportJobState.Canceled, coordinator.GetSnapshot(first.JobId).State);
-        Assert.Equal(ExportJobState.Canceled, coordinator.GetSnapshot(second.JobId).State);
+        Assert.Equal(ExportJobState.Canceled, (await firstWait).State);
+        Assert.Equal(ExportJobState.Canceled, (await secondWait).State);
+        Assert.Throws<KeyNotFoundException>(() => coordinator.GetSnapshot(first.JobId));
+        Assert.Throws<KeyNotFoundException>(() => coordinator.GetSnapshot(second.JobId));
         Assert.Equal(2, pulls.Canceled);
         Assert.Equal(2, achievements.Canceled);
         Assert.Equal(2, pulls.Disposed);
@@ -669,6 +829,22 @@ public sealed class ExportCoordinatorTests
         {
             Lines.Add(status.ToNdjson());
             return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class BlockingStatusSink : IExportStatusSink
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int calls;
+
+        public async ValueTask PublishAsync(ExportStatusEvent status, CancellationToken cancellationToken)
+        {
+            if (Interlocked.Increment(ref calls) == 1)
+            {
+                Entered.TrySetResult();
+                await Release.Task.ConfigureAwait(false);
+            }
         }
     }
 

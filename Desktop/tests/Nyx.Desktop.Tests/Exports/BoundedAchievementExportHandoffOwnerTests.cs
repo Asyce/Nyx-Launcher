@@ -159,6 +159,88 @@ public sealed class BoundedAchievementExportHandoffOwnerTests
         await coordinator.DisposeAsync();
     }
 
+    [Fact]
+    public async Task Completed_registration_is_pruned_and_can_be_registered_again()
+    {
+        using var temp = new TemporaryDirectory();
+        var provider = new NativeProvider();
+        var launcher = new FakeLauncher { Deliver = true };
+        var coordinator = new ExportCoordinator(new NoPullProvider(), provider);
+        var result = await coordinator.RunForLaunchAsync(
+            new ExportArmSnapshot("gi", false, true),
+            static _ => ValueTask.FromResult(true));
+        var owner = new BoundedAchievementExportHandoffOwner(
+            coordinator,
+            new AchievementImportBridge(),
+            launcher);
+        provider.Complete(Artifact(temp.Write("gi")));
+
+        var first = owner.TrackAsync("gi", result.JobId);
+        Assert.Equal(AchievementExportHandoffOutcome.Delivered, await first);
+        var second = owner.TrackAsync("gi", result.JobId);
+
+        Assert.NotSame(first, second);
+        Assert.Equal(AchievementExportHandoffOutcome.Delivered, await second);
+        await owner.DisposeAsync();
+        await coordinator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Multiple_same_game_handoffs_remain_active_by_job_id()
+    {
+        using var temp = new TemporaryDirectory();
+        var provider = new NativeProvider();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var launcher = new FakeLauncher { Deliver = true, BrowserGate = gate.Task };
+        var coordinator = new ExportCoordinator(new NoPullProvider(), provider);
+        var firstJob = await coordinator.RunForLaunchAsync(
+            new ExportArmSnapshot("gi", false, true),
+            static _ => ValueTask.FromResult(true));
+        var owner = new BoundedAchievementExportHandoffOwner(
+            coordinator,
+            new AchievementImportBridge(),
+            launcher);
+        provider.Complete(Artifact(temp.Write("gi")));
+        var first = owner.TrackAsync("gi", firstJob.JobId);
+        await EventuallyAsync(() => launcher.BrowserCalls == 1);
+
+        var secondJob = await coordinator.RunForLaunchAsync(
+            new ExportArmSnapshot("gi", false, true),
+            static _ => ValueTask.FromResult(true));
+        var second = owner.TrackAsync("gi", secondJob.JobId);
+        await EventuallyAsync(() => launcher.BrowserCalls == 2);
+        Assert.False(first.IsCompleted);
+        Assert.False(second.IsCompleted);
+
+        var disposal = owner.DisposeAsync().AsTask();
+        Assert.False(disposal.IsCompleted);
+        gate.SetResult();
+        Assert.Equal(AchievementExportHandoffOutcome.Delivered, await first);
+        Assert.Equal(AchievementExportHandoffOutcome.Delivered, await second);
+        await disposal;
+        await coordinator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Dispose_closes_admission_and_concurrent_repeats_are_safe()
+    {
+        var coordinator = new ExportCoordinator(new NoPullProvider(), new NativeProvider());
+        var owner = new BoundedAchievementExportHandoffOwner(
+            coordinator,
+            new AchievementImportBridge(),
+            new FakeLauncher());
+
+        var disposals = Enumerable.Range(0, 12)
+            .Select(_ => owner.DisposeAsync().AsTask())
+            .ToArray();
+        await Task.WhenAll(disposals);
+        await owner.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            async () => await owner.TrackAsync("gi", Guid.NewGuid()));
+        await coordinator.DisposeAsync();
+    }
+
     private static ExportArtifactMetadata Artifact(string outputPath) => new(
         "achievements",
         1,
@@ -166,6 +248,12 @@ public sealed class BoundedAchievementExportHandoffOwnerTests
         "pengo-achievements-v1",
         DateTimeOffset.UtcNow,
         outputPath);
+
+    private static async Task EventuallyAsync(Func<bool> predicate)
+    {
+        for (var i = 0; i < 100 && !predicate(); i++) await Task.Delay(10);
+        Assert.True(predicate());
+    }
 
     private sealed class NativeProvider : IAchievementExportProvider
     {
@@ -259,14 +347,17 @@ public sealed class BoundedAchievementExportHandoffOwnerTests
         public int BrowserCalls;
         public int FallbackCalls;
         public Uri? LastBrowserUri;
+        public Task? BrowserGate;
 
         public async ValueTask<bool> OpenBrowserAsync(
             Uri browserUri,
             CancellationToken cancellationToken)
         {
-            BrowserCalls++;
+            Interlocked.Increment(ref BrowserCalls);
             LastBrowserUri = browserUri;
             if (!Deliver) return false;
+            if (BrowserGate is not null)
+                await BrowserGate.WaitAsync(cancellationToken);
             var capability = ParseCapability(browserUri);
             using var client = new TcpClient();
             await client.ConnectAsync(
@@ -290,7 +381,7 @@ public sealed class BoundedAchievementExportHandoffOwnerTests
 
         public ValueTask<bool> OpenFallbackAsync(CancellationToken cancellationToken)
         {
-            FallbackCalls++;
+            Interlocked.Increment(ref FallbackCalls);
             return ValueTask.FromResult(true);
         }
 
@@ -305,6 +396,7 @@ public sealed class BoundedAchievementExportHandoffOwnerTests
                     StringComparer.Ordinal);
             return (int.Parse(values["port"]), values["nonce"]);
         }
+
     }
 
     private sealed class TemporaryDirectory : IDisposable

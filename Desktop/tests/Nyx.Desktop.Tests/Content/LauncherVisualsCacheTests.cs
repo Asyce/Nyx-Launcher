@@ -1043,6 +1043,50 @@ public sealed class LauncherVisualsCacheTests
     }
 
     [Fact]
+    public async Task Disposal_drains_canceled_preload_and_disposes_only_the_default_client()
+    {
+        await WithRoot(async root =>
+        {
+            var owned = new LauncherVisualsCache(root);
+            var ownedHttp = (HttpClient)typeof(LauncherVisualsCache)
+                .GetField("http", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(owned)!;
+            await owned.DisposeAsync();
+            await Assert.ThrowsAsync<ObjectDisposedException>(
+                () => ownedHttp.GetAsync("https://example.invalid/"));
+
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var requests = 0;
+            using var injected = new HttpClient(new RecordingHandler(async (_, _) =>
+            {
+                if (Interlocked.Increment(ref requests) == 1)
+                {
+                    entered.SetResult();
+                    await release.Task;
+                    throw new OperationCanceledException();
+                }
+                return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+            }));
+            var cache = new LauncherVisualsCache(root, injected);
+            using var canceled = new CancellationTokenSource();
+            var preload = cache.RefreshAsync("ae", canceled.Token);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+            var disposal = cache.DisposeAsync().AsTask();
+            canceled.Cancel();
+            await Task.Delay(40);
+            Assert.False(disposal.IsCompleted);
+            release.SetResult();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => preload);
+            await disposal.WaitAsync(TimeSpan.FromSeconds(1));
+
+            using var response = await injected.GetAsync("https://example.invalid/");
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        });
+    }
+
+    [Fact]
     public async Task Endfield_keeps_old_gallery_and_partial_downloads_out_until_official_promotion_succeeds()
     {
         await WithRoot(async root =>

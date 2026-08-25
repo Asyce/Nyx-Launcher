@@ -80,6 +80,31 @@ public sealed class PublisherProfilePrivacyOrchestratorTests
     }
 
     [Fact]
+    public async Task Disposal_waits_for_password_preparation_and_rejects_later_admission()
+    {
+        var gate = new PublisherPasswordNavigationGate();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var preparation = gate.ClearSavedPasswordsAsync(async (_, _) =>
+        {
+            entered.SetResult();
+            await release.Task;
+        });
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        var disposal = gate.DisposeAsync().AsTask();
+        await Task.Delay(40);
+        Assert.False(disposal.IsCompleted);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => gate.ClearSavedPasswordsAsync((_, _) => Task.CompletedTask));
+
+        release.SetResult();
+        await preparation;
+        await disposal.WaitAsync(TimeSpan.FromSeconds(1));
+        await gate.DisposeAsync();
+    }
+
+    [Fact]
     public async Task Disconnect_requires_and_performs_recursive_full_profile_cleanup()
     {
         var policy = new PublisherPasswordStoragePolicy(

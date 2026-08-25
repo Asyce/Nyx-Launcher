@@ -265,8 +265,6 @@ public sealed class PengoWebToolsUiTests
         var launcher = ReadAppFile("WindowsAchievementExportHandoffLauncher.cs");
 
         Assert.Contains("IsLauncherIndependentAchievementJob(jobId)", owner, StringComparison.Ordinal);
-        Assert.Contains("active.GetOrAdd(", owner, StringComparison.Ordinal);
-        Assert.Contains("LazyThreadSafetyMode.ExecutionAndPublication", owner, StringComparison.Ordinal);
         Assert.Contains("WaitForCompletionAsync", owner, StringComparison.Ordinal);
         Assert.Contains("AchievementImportBridge", owner, StringComparison.Ordinal);
         Assert.Contains("exports.Cancel(jobId)", owner, StringComparison.Ordinal);
