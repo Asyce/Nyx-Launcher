@@ -142,8 +142,8 @@ public sealed class DesktopStartReadinessTests
     public void Fixture_accepts_the_direct_WinUI_component_package()
     {
         using var fixture = StartFixture.Create("winui component fixture");
-        fixture.WriteMinimumProject("10.0.100", "Microsoft.WindowsAppSDK.WinUI", "2.2.1");
-        fixture.WriteRunAssets("Microsoft.WindowsAppSDK.WinUI", "2.2.1");
+        fixture.WriteMinimumProject("10.0.100", "Microsoft.WindowsAppSDK.WinUI", "2.3.6");
+        fixture.WriteRunAssets("Microsoft.WindowsAppSDK.WinUI", "2.3.6");
 
         var result = RunPowerShell(fixture.StartScript, "-CheckOnly");
 
