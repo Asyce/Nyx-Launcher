@@ -79,6 +79,27 @@ public sealed class PackagingScriptTests
     }
 
     [Fact]
+    public void Windows_workflow_uses_pinned_cargo_audit_and_only_the_reviewed_ignore()
+    {
+        var repositoryRoot = Path.GetFullPath(Path.Combine(DesktopRoot, ".."));
+        var workflow = File.ReadAllText(Path.Combine(
+            repositoryRoot,
+            ".github",
+            "workflows",
+            "launcher-windows.yml"));
+        const string install = "cargo install cargo-audit --version 0.22.1 --locked";
+        const string audit = "cargo audit --file Extractor\\Achievements\\Cargo.lock --ignore RUSTSEC-2023-0071";
+
+        Assert.Contains(install, workflow, StringComparison.Ordinal);
+        Assert.Contains(audit, workflow, StringComparison.Ordinal);
+        Assert.Equal(1, workflow.Split("--ignore", StringSplitOptions.None).Length - 1);
+        Assert.DoesNotContain("--deny warnings", workflow, StringComparison.Ordinal);
+        Assert.True(
+            workflow.IndexOf(install, StringComparison.Ordinal) <
+            workflow.IndexOf(audit, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Development_package_verifies_and_stamps_the_exact_embedded_achievement_helper()
     {
         var build = File.ReadAllText(Path.Combine(PackagingRoot, "build-development-package.ps1"));

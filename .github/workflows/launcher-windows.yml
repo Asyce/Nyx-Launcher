@@ -28,6 +28,12 @@ jobs:
         shell: pwsh
         run: dotnet restore Desktop\Nyx.Desktop.slnx -p:NuGetAudit=true -p:NuGetAuditMode=all '-warnAsError:NU1901;NU1902;NU1903;NU1904'
 
+      - name: Run pinned RustSec audit
+        shell: pwsh
+        run: |
+          cargo install cargo-audit --version 0.22.1 --locked
+          cargo audit --file Extractor\Achievements\Cargo.lock --ignore RUSTSEC-2023-0071
+
       - name: Build Release
         shell: pwsh
         run: dotnet build Desktop\Nyx.Desktop.slnx --configuration Release --no-restore --verbosity minimal

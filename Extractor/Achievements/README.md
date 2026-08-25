@@ -165,6 +165,8 @@ this executable yet.
 Run:
 
 ```powershell
+cargo install cargo-audit --version 0.22.1 --locked
+cargo audit --file Cargo.lock --ignore RUSTSEC-2023-0071
 cargo fmt --all -- --check
 cargo check --all-targets --locked
 cargo clippy --all-targets --locked -- -D warnings
@@ -173,6 +175,14 @@ cargo build --release --locked
 python -m pip install --require-hashes -r tools/requirements.txt
 python tools/verify_release.py target/release/pengo-achievements-launcher.exe
 ```
+
+The audit is pinned to cargo-audit 0.22.1 because the repository's Rust 1.86
+cannot install 0.22.2. The sole ignore is RUSTSEC-2023-0071: its vulnerable
+RSA operation is local packet decryption on the user's own computer, with no
+attacker-observable timing oracle here, and the advisory has no patched
+version. cargo-audit 0.22.1 already fails on vulnerabilities; `--deny warnings`
+also fails unmaintained, unsound, or yanked findings, so it is not
+part of this narrower gate.
 
 The package build remaps source paths, verifies this exact release image, and
 records its SHA-256 in the generated package identity instead of relying on a
