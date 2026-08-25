@@ -31,8 +31,25 @@ public sealed class NativeSmokeScriptTests
         Assert.Contains("if ($hsrGame.Pattern.Current.IsSelected -and", source, StringComparison.Ordinal);
         Assert.Contains("if ($elapsed -le 1000)", source, StringComparison.Ordinal);
         Assert.Contains("if ($Stopwatch.Elapsed.TotalMilliseconds -ge 1000)", source, StringComparison.Ordinal);
+        Assert.Contains("cachedResourceSelectionMilliseconds = $null", source, StringComparison.Ordinal);
+        Assert.Contains("cachedResourceLastObservedState = 'not-observed'", source, StringComparison.Ordinal);
+        var cachedResourceMetric = ExtractPowerShellFunction(source, "Wait-CachedResourceMetric");
         Assert.Matches(
-            new Regex(@"\$cachedResourceTimer = \[Diagnostics\.Stopwatch\]::StartNew\(\)\r?\n\s*\$giGame\.Pattern\.Select\(\)", RegexOptions.CultureInvariant),
+            new Regex(@"do \{\r?\n\s*Assert-UiDeadline\r?\n\s*\$script:uiChecks\.cachedResourceLastObservedState = 'missing'\r?\n\s*try \{", RegexOptions.CultureInvariant),
+            cachedResourceMetric);
+        Assert.Matches(
+            new Regex(@"if \(\[string\] \$metric\.Current\.Name -ceq 'ORIGINAL RESIN  137/200'\) \{\r?\n\s*\$script:uiChecks\.cachedResourceLastObservedState = 'genshin'\r?\n\s*\}\r?\n\s*elseif \(\[string\] \$metric\.Current\.Name -ceq 'TRAILBLAZE POWER  211/300'\) \{\r?\n\s*\$script:uiChecks\.cachedResourceLastObservedState = 'star-rail'\r?\n\s*\}\r?\n\s*else \{\r?\n\s*\$script:uiChecks\.cachedResourceLastObservedState = 'other'", RegexOptions.CultureInvariant),
+            cachedResourceMetric);
+        Assert.Equal(
+            new[] { "missing", "genshin", "star-rail", "other" },
+            Regex.Matches(
+                    cachedResourceMetric,
+                    @"\$script:uiChecks\.cachedResourceLastObservedState = '(?<state>[^']+)'",
+                    RegexOptions.CultureInvariant)
+                .Cast<Match>()
+                .Select(match => match.Groups["state"].Value));
+        Assert.Matches(
+            new Regex(@"\$cachedResourceTimer = \[Diagnostics\.Stopwatch\]::StartNew\(\)\r?\n\s*\$giGame\.Pattern\.Select\(\)\r?\n\s*\$script:uiChecks\.cachedResourceSelectionMilliseconds = \[Math\]::Round\(\r?\n\s*\$cachedResourceTimer\.Elapsed\.TotalMilliseconds,\r?\n\s*2\)\r?\n\s*\$cachedResource = Wait-CachedResourceMetric -Root \$window -Stopwatch \$cachedResourceTimer", RegexOptions.CultureInvariant),
             source);
         Assert.Contains("$uiDeadlineSeconds = 180", source, StringComparison.Ordinal);
         Assert.Contains("$script:uiRuntime.Elapsed.TotalSeconds -ge $uiDeadlineSeconds", source, StringComparison.Ordinal);
@@ -123,7 +140,10 @@ public sealed class NativeSmokeScriptTests
         var hsrSelected = source.IndexOf(
             "$hsrGame = Wait-GameItem -Root $window -GameName 'Honkai: Star Rail'",
             StringComparison.Ordinal);
-        var hsrMetric = source.IndexOf("TRAILBLAZE POWER  211/300", StringComparison.Ordinal);
+        var hsrMetric = source.IndexOf(
+            "TRAILBLAZE POWER  211/300",
+            hsrSelected,
+            StringComparison.Ordinal);
         var giSelected = source.IndexOf(
             "$giGame = Wait-GameItem -Root $window -GameName 'Genshin Impact'",
             StringComparison.Ordinal);

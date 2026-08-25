@@ -51,6 +51,8 @@ $uiRuntime = $null
 $uiChecks = [ordered]@{
     cachedResourceVisibleWithinOneSecondOfGameSwitch = $false
     cachedResourceGameSwitchMilliseconds = $null
+    cachedResourceSelectionMilliseconds = $null
+    cachedResourceLastObservedState = 'not-observed'
     shellControlsFound = $false
     secondInstanceSuppressed = $false
     gamesSelected = @()
@@ -571,12 +573,23 @@ function Wait-CachedResourceMetric {
     )
     do {
         Assert-UiDeadline
+        $script:uiChecks.cachedResourceLastObservedState = 'missing'
         try {
             $metric = Find-AutomationIdElement `
                 -Root $Root `
                 -AutomationId 'LaunchResourceMetricsPanel'
-            if ($null -ne $metric -and
-                [string] $metric.Current.Name -ceq 'ORIGINAL RESIN  137/200') {
+            if ($null -ne $metric) {
+                if ([string] $metric.Current.Name -ceq 'ORIGINAL RESIN  137/200') {
+                    $script:uiChecks.cachedResourceLastObservedState = 'genshin'
+                }
+                elseif ([string] $metric.Current.Name -ceq 'TRAILBLAZE POWER  211/300') {
+                    $script:uiChecks.cachedResourceLastObservedState = 'star-rail'
+                }
+                else {
+                    $script:uiChecks.cachedResourceLastObservedState = 'other'
+                }
+            }
+            if ($script:uiChecks.cachedResourceLastObservedState -ceq 'genshin') {
                 $elapsed = $Stopwatch.Elapsed.TotalMilliseconds
                 if ($elapsed -le 1000) {
                     return [pscustomobject]@{
@@ -826,6 +839,9 @@ public static class NyxNativeSmokeCapture
     if ($giGame.Pattern.Current.IsSelected) { Throw-SmokeFailure 'CACHED_RESOURCE_SWITCH_PRECONDITION_FAILED' }
     $cachedResourceTimer = [Diagnostics.Stopwatch]::StartNew()
     $giGame.Pattern.Select()
+    $script:uiChecks.cachedResourceSelectionMilliseconds = [Math]::Round(
+        $cachedResourceTimer.Elapsed.TotalMilliseconds,
+        2)
     $cachedResource = Wait-CachedResourceMetric -Root $window -Stopwatch $cachedResourceTimer
     $cachedResourceTimer.Stop()
     $script:uiChecks.cachedResourceVisibleWithinOneSecondOfGameSwitch = $true
