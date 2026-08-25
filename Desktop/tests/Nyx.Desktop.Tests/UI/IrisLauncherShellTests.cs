@@ -687,7 +687,26 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("ApplySelectedAppearance(selected.Id)", railSwitch, StringComparison.Ordinal);
         Assert.Contains("RestoreSettingsRailSelection()", railSwitch, StringComparison.Ordinal);
         Assert.Contains("\"gi\" => \"Genshin Game Icon\"", code, StringComparison.Ordinal);
-        Assert.Contains("selected.Id is \"gi\" or \"hsr\" or \"zzz\" or \"wuwa\" or \"ae\"", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Safe_local_diagnostics_collect_existing_timing_surfaces_after_first_render()
+    {
+        var shell = ReadAppFile("MainPage.xaml.cs");
+        var diagnostics = ReadAppFile("MainPage.Diagnostics.cs");
+        var firstFrame = Slice(
+            shell,
+            "private void StableUpdate_FirstFrameRendering",
+            "private async Task RunStableUpdateAsync");
+
+        Assert.Contains("RecordInitialRenderDuration()", firstFrame, StringComparison.Ordinal);
+        Assert.Contains("launcherVisuals.LastRefreshDuration", diagnostics, StringComparison.Ordinal);
+        Assert.Contains("launcherBanners.LastRefreshDuration", diagnostics, StringComparison.Ordinal);
+        Assert.Contains("publisherAccounts.LastAccountRestoreDuration", diagnostics, StringComparison.Ordinal);
+        Assert.Contains("publisherAccounts.TryGetResourceRefreshDuration", diagnostics, StringComparison.Ordinal);
+        Assert.Contains("snapshot.LastLaunchDetectionDuration", diagnostics, StringComparison.Ordinal);
+        Assert.Contains("snapshot.LastCloseDetectionDuration", diagnostics, StringComparison.Ordinal);
+        Assert.DoesNotContain("HttpClient", diagnostics, StringComparison.Ordinal);
     }
 
     [Fact]

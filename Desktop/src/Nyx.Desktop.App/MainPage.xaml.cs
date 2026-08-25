@@ -2958,79 +2958,6 @@ public sealed partial class MainPage : Page
     private async void AddGameButton_Click(object sender, RoutedEventArgs e) =>
         await ShowAddGameDialogAsync();
 
-    private LauncherDiagnosticsSnapshot BuildDiagnosticsSnapshot()
-    {
-        var state = launcherState.Snapshot;
-        var games = Games.Select(game =>
-        {
-            GameSessionSnapshot snapshot;
-            try
-            {
-                snapshot = sessions.GetSnapshot(game.Id);
-            }
-            catch (Exception)
-            {
-                snapshot = new GameSessionSnapshot(
-                    game.Id,
-                    LocalReadinessEvidence.Unknown,
-                    LocalGameStatus.NeedsReview,
-                    ExactProcessPresence.Uncertain,
-                    false,
-                    false,
-                    0,
-                    0,
-                    null,
-                    null,
-                    null,
-                    null,
-                    0,
-                    0,
-                    GameSessionFailureReason.EvidenceUnavailable,
-                    false);
-            }
-
-            var discovery = snapshot.Readiness switch
-            {
-                LocalReadinessEvidence.Ready => LauncherDiscoveryResultCategory.Ready,
-                LocalReadinessEvidence.NotFound => LauncherDiscoveryResultCategory.Missing,
-                LocalReadinessEvidence.NeedsReview => LauncherDiscoveryResultCategory.Invalid,
-                _ => LauncherDiscoveryResultCategory.Uncertain,
-            };
-            var export = state.Export.Games.TryGetValue(game.Id, out var arm)
-                ? $"pulls={(arm.PullsArmed ? "armed" : "off")},achievements={(arm.AchievementsArmed ? "armed" : "off")}"
-                : "off";
-            return new LauncherDiagnosticGame(
-                game.Id,
-                snapshot.Status.ToString(),
-                export,
-                discovery,
-                snapshot.FailureReason is GameSessionFailureReason.None
-                    ? null
-                    : snapshot.FailureReason.ToString());
-        });
-
-        var cache = app.Cache.GetTotals();
-        var manifest = launcherBanners.Current;
-        return new LauncherDiagnosticsSnapshot(
-            typeof(App).Assembly.GetName().Version?.ToString() ?? "dev",
-            state.Preferences.FeatureFlags,
-            games,
-            manifest.Revision,
-            manifest.Health.Status,
-            cache);
-    }
-
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes < 1024) return $"{bytes} B";
-        var value = bytes / 1024d;
-        return value < 1024
-            ? $"{value:0.0} KB"
-            : value / 1024 < 1024
-                ? $"{value / 1024:0.0} MB"
-                : $"{value / 1024 / 1024:0.0} GB";
-    }
-
     private async Task OpenFolderAsync(LauncherRecoveryAction action, TextBlock message)
     {
         try
@@ -5477,6 +5404,7 @@ public sealed partial class MainPage : Page
     {
         CompositionTarget.Rendering -= StableUpdate_FirstFrameRendering;
         stableUpdateFramePending = false;
+        RecordInitialRenderDuration();
         _ = DispatcherQueue.TryEnqueue(
             DispatcherQueuePriority.Low,
             () => app.StartStableUpdate(RunStableUpdateAsync));
