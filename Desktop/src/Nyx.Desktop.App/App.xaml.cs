@@ -771,6 +771,14 @@ public partial class App : Application
         _pullExports = null;
         _achievementExportHandoffs = null;
         _accountShutdownComplete = true;
+        try
+        {
+            _currentInstance?.UnregisterKey();
+        }
+        catch (Exception)
+        {
+            // Explicit unregistration is best effort; shutdown must still close the window.
+        }
         _window?.Close();
     }
 

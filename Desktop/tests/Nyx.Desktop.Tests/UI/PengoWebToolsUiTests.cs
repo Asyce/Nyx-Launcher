@@ -375,6 +375,16 @@ public sealed class PengoWebToolsUiTests
         Assert.True(
             launch.IndexOf("return;", launch.IndexOf("if (!mainInstance.IsCurrent)", StringComparison.Ordinal), StringComparison.Ordinal)
             < launch.IndexOf("var stateStore = new LauncherStateStore()", StringComparison.Ordinal));
+
+        var shutdown = Slice(app, "private async Task ShutDownAccountsAndCloseAsync", "private void Window_Closed");
+        var unregister = shutdown.IndexOf("_currentInstance?.UnregisterKey()", StringComparison.Ordinal);
+        var close = shutdown.IndexOf("_window?.Close()", StringComparison.Ordinal);
+        var unregisterFailure = shutdown.IndexOf("catch (Exception)", unregister, StringComparison.Ordinal);
+
+        Assert.True(unregister >= 0 && unregisterFailure > unregister && unregisterFailure < close);
+        Assert.True(shutdown.IndexOf("await Task.WhenAll", StringComparison.Ordinal) < unregister);
+        Assert.True(shutdown.IndexOf("await exportShutdown", StringComparison.Ordinal) < unregister);
+        Assert.True(shutdown.IndexOf("await achievementHandoffShutdown", StringComparison.Ordinal) < unregister);
     }
 
     [Fact]
