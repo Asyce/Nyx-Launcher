@@ -349,7 +349,10 @@ public sealed class PackagingScriptTests
         Assert.Contains("private readonly CancellationTokenSource _stableUpdateCancellation", app, StringComparison.Ordinal);
         Assert.Contains("private Task _stableUpdateTask = Task.CompletedTask", app, StringComparison.Ordinal);
         Assert.Contains("if (!_stableUpdateHandoffCommitted) _stableUpdateCancellation.Cancel();", app, StringComparison.Ordinal);
-        Assert.Contains("publisherAccountShutdown, _stableUpdateTask", app, StringComparison.Ordinal);
+        var shutdownStart = app.IndexOf("private async Task ShutDownAccountsAndCloseAsync", StringComparison.Ordinal);
+        var stableWait = app.IndexOf("_stableUpdateTask", shutdownStart, StringComparison.Ordinal);
+        var cancellationDispose = app.IndexOf("_stableUpdateCancellation.Dispose()", shutdownStart, StringComparison.Ordinal);
+        Assert.True(stableWait >= 0 && stableWait < cancellationDispose);
         Assert.True(
             app.IndexOf("_stableUpdateHandoffCommitted = true;", StringComparison.Ordinal)
             < app.IndexOf("_window?.Close();", app.IndexOf("internal void BeginStableUpdateShutdown", StringComparison.Ordinal), StringComparison.Ordinal));

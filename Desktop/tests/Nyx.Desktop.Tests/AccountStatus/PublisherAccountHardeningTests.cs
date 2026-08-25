@@ -4549,6 +4549,12 @@ public sealed class PublisherAccountHardeningTests
             StringComparison.Ordinal);
         Assert.Contains("finally", disposal, StringComparison.Ordinal);
         Assert.Contains("DetachBrowserProcessExitHandler();", disposal, StringComparison.Ordinal);
+        var gate = disposal.IndexOf("await passwordNavigationGate.DisposeAsync();", StringComparison.Ordinal);
+        var lifetime = disposal.IndexOf("lifetime.Dispose();", StringComparison.Ordinal);
+        Assert.True(waitForExit < gate && gate < lifetime);
+        Assert.Equal(
+            1,
+            disposal.Split("passwordNavigationGate.DisposeAsync", StringSplitOptions.None).Length - 1);
         Assert.Contains(
             "throw new PublisherSessionTeardownException(teardownFailure);",
             disposal,
@@ -4690,7 +4696,15 @@ public sealed class PublisherAccountHardeningTests
         Assert.Contains("args.Cancel = true", app, StringComparison.Ordinal);
         Assert.Contains("DisposeWuWaAccountStatusAsync(_wuwaAccountStatus)", app, StringComparison.Ordinal);
         Assert.Contains("DisposePublisherAccountsAsync(_publisherAccounts)", app, StringComparison.Ordinal);
-        Assert.Contains("await Task.WhenAll(wuwaAccountShutdown, publisherAccountShutdown, _stableUpdateTask)", app, StringComparison.Ordinal);
+        var shutdown = Slice(app, "private async Task ShutDownAccountsAndCloseAsync", "private void Window_Closed");
+        var page = shutdown.IndexOf("await DisposeMainPageAsync(mainWindow)", StringComparison.Ordinal);
+        var wuwaStart = shutdown.IndexOf("DisposeWuWaAccountStatusAsync(_wuwaAccountStatus)", StringComparison.Ordinal);
+        var publisherStart = shutdown.IndexOf("DisposePublisherAccountsAsync(_publisherAccounts)", StringComparison.Ordinal);
+        var providers = shutdown.IndexOf("await Task.WhenAll(", StringComparison.Ordinal);
+        Assert.True(page >= 0 && page < wuwaStart && page < publisherStart && publisherStart < providers);
+        Assert.Contains("wuwaAccountShutdown", shutdown, StringComparison.Ordinal);
+        Assert.Contains("publisherAccountShutdown", shutdown, StringComparison.Ordinal);
+        Assert.Contains("_stableUpdateTask", shutdown, StringComparison.Ordinal);
         Assert.Contains("_accountShutdownComplete = true", app, StringComparison.Ordinal);
         Assert.DoesNotContain("publisherAccounts.DisposeAsync().AsTask().GetAwaiter().GetResult()", app, StringComparison.Ordinal);
         Assert.DoesNotContain("accountStatus.DisposeAsync().AsTask().GetAwaiter().GetResult()", app, StringComparison.Ordinal);

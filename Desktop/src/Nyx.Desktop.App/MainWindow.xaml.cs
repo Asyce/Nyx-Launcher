@@ -165,6 +165,11 @@ public sealed partial class MainWindow : Window
             presenter.Minimize();
     }
 
+    internal Task ShutDownAsync() =>
+        RootFrame.Content is MainPage page
+            ? page.ShutDownAsync()
+            : Task.CompletedTask;
+
     internal void BeginDrag()
     {
         ReleaseCapture();

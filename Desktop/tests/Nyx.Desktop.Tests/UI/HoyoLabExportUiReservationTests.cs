@@ -5,6 +5,42 @@ namespace Nyx.Desktop.Tests.UI;
 public sealed class HoyoLabExportUiReservationTests
 {
     [Fact]
+    public void Latest_export_replacements_prune_auxiliary_state_and_reject_old_callbacks()
+    {
+        var latest = new Dictionary<string, Guid>(StringComparer.Ordinal);
+        var immediate = new HashSet<Guid>();
+        var handoffs = new Dictionary<Guid, int>();
+        var previous = Guid.Empty;
+
+        for (var index = 0; index < 100; index++)
+        {
+            var jobId = Guid.NewGuid();
+            ExportUiJobRetention.RememberLatest(latest, immediate, handoffs, "hsr", jobId);
+            immediate.Add(jobId);
+            handoffs[jobId] = index;
+
+            if (previous != Guid.Empty)
+            {
+                Assert.False(ExportUiJobRetention.TrySetHandoff(
+                    latest,
+                    handoffs,
+                    "hsr",
+                    previous,
+                    -1));
+            }
+
+            previous = jobId;
+        }
+
+        Assert.Single(latest);
+        Assert.Single(immediate);
+        Assert.Single(handoffs);
+        Assert.Equal(previous, latest["hsr"]);
+        Assert.Contains(previous, immediate);
+        Assert.Equal(99, handoffs[previous]);
+    }
+
+    [Fact]
     public async Task Delayed_first_workflow_rejects_second_acquire_until_release()
     {
         var reservation = new HoyoLabExportUiReservation();

@@ -185,6 +185,13 @@ public sealed partial class MainPage : Page
     private readonly Dictionary<string, Guid> latestExportJobs = new(StringComparer.Ordinal);
     private readonly HashSet<Guid> hoyoLabImmediateExportJobs = [];
     private readonly Dictionary<Guid, AchievementHandoffUiState> achievementHandoffs = new();
+    private readonly object exportRegistrationAdmissionSync = new();
+    private TaskCompletionSource? exportRegistrationsDrained;
+    private int activeExportRegistrations;
+    private bool exportRegistrationAdmissionClosed;
+    private readonly TaskCompletionSource shutdownCompletion =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int shutdownStarted;
     private readonly AchievementImportBridge achievementImportBridge = new();
     private string? displayedBackgroundSource;
     private bool updaterActionInFlight;
@@ -754,6 +761,78 @@ public sealed partial class MainPage : Page
         }
     }
 
+    internal Task ShutDownAsync()
+    {
+        if (Interlocked.Exchange(ref shutdownStarted, 1) == 0)
+        {
+            _ = ShutDownCoreAsync();
+        }
+
+        return shutdownCompletion.Task;
+    }
+
+    private async Task ShutDownCoreAsync()
+    {
+        try
+        {
+            var registrations = CloseExportRegistrationAdmission();
+            sessionUiLifetime.Terminate();
+            await registrations;
+
+            try
+            {
+                if (launcherVisualPreloadTask is not null)
+                    await launcherVisualPreloadTask;
+            }
+            catch (Exception)
+            {
+                // Visual preload is optional; disposal still owns its final drain.
+            }
+
+            await launcherVisuals.DisposeAsync();
+            shutdownCompletion.TrySetResult();
+        }
+        catch (Exception exception)
+        {
+            shutdownCompletion.TrySetException(exception);
+        }
+    }
+
+    private bool TryEnterExportRegistration()
+    {
+        lock (exportRegistrationAdmissionSync)
+        {
+            if (exportRegistrationAdmissionClosed) return false;
+            activeExportRegistrations++;
+            return true;
+        }
+    }
+
+    private Task CloseExportRegistrationAdmission()
+    {
+        lock (exportRegistrationAdmissionSync)
+        {
+            exportRegistrationAdmissionClosed = true;
+            return activeExportRegistrations == 0
+                ? Task.CompletedTask
+                : (exportRegistrationsDrained ??=
+                    new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+        }
+    }
+
+    private void ReleaseExportRegistration()
+    {
+        TaskCompletionSource? drained = null;
+        lock (exportRegistrationAdmissionSync)
+        {
+            activeExportRegistrations--;
+            if (exportRegistrationAdmissionClosed && activeExportRegistrations == 0)
+                drained = exportRegistrationsDrained;
+        }
+
+        drained?.TrySetResult();
+    }
+
     private HoyoMaintenanceUiSnapshot DiscoverHoyoMaintenance()
     {
         var roots = discovery.Discover();
@@ -1051,11 +1130,16 @@ public sealed partial class MainPage : Page
         }
         var hsr120FpsPreparationFailed = false;
         string? genshin120FpsStatus = null;
-        RenderExportTools(selected);
-        ShowGameActionInProgress("Checking the game once more");
+        if (!TryEnterExportRegistration())
+        {
+            gameActionsInFlight.Remove(gameId);
+            return;
+        }
 
         try
         {
+            RenderExportTools(selected);
+            ShowGameActionInProgress("Checking the game once more");
             var state = launcherState.Snapshot;
             var arm = ExportArmSnapshot.From(state.Export, gameId, state.Preferences.FeatureFlags);
             if (latestExportJobs.TryGetValue(gameId, out var activeJobId)
@@ -1121,7 +1205,13 @@ public sealed partial class MainPage : Page
                 lease.CancellationToken);
             if (arm.RequestedKinds != ExportKind.None)
             {
-                latestExportJobs[gameId] = exportResult.JobId;
+                var completion = exports.WaitForCompletionAsync(exportResult.JobId).AsTask();
+                ExportUiJobRetention.RememberLatest(
+                    latestExportJobs,
+                    hoyoLabImmediateExportJobs,
+                    achievementHandoffs,
+                    gameId,
+                    exportResult.JobId);
                 var nativeHandoff = exportResult.LaunchAdmitted
                     && arm.AchievementsArmed
                     && GetAchievementSource(gameId) == AchievementExportSources.Game
@@ -1132,6 +1222,7 @@ public sealed partial class MainPage : Page
                 _ = TrackExportJobAsync(
                     gameId,
                     exportResult.JobId,
+                    completion,
                     lease,
                     nativeHandoff);
             }
@@ -1160,21 +1251,28 @@ public sealed partial class MainPage : Page
         }
         finally
         {
-            _ = sessionUiLifetime.TryRun(lease, () =>
+            try
             {
-                gameActionsInFlight.Remove(gameId);
-                RenderSelection();
-                if (hsr120FpsPreparationFailed)
+                _ = sessionUiLifetime.TryRun(lease, () =>
                 {
-                    SetOfficialLauncherStatus(
-                        gameId,
-                        "120 FPS safety check failed. Star Rail was not started.");
-                }
-                else if (genshin120FpsStatus is not null)
-                {
-                    SetOfficialLauncherStatus(gameId, genshin120FpsStatus);
-                }
-            });
+                    gameActionsInFlight.Remove(gameId);
+                    RenderSelection();
+                    if (hsr120FpsPreparationFailed)
+                    {
+                        SetOfficialLauncherStatus(
+                            gameId,
+                            "120 FPS safety check failed. Star Rail was not started.");
+                    }
+                    else if (genshin120FpsStatus is not null)
+                    {
+                        SetOfficialLauncherStatus(gameId, genshin120FpsStatus);
+                    }
+                });
+            }
+            finally
+            {
+                ReleaseExportRegistration();
+            }
         }
     }
 
@@ -4516,6 +4614,11 @@ public sealed partial class MainPage : Page
         {
             return;
         }
+        if (!TryEnterExportRegistration())
+        {
+            reservation.Dispose();
+            return;
+        }
         try
         {
             RenderSelection();
@@ -4526,9 +4629,15 @@ public sealed partial class MainPage : Page
                 new ExportArmSnapshot("hsr", PullsArmed: false, AchievementsArmed: true),
                 static _ => ValueTask.FromResult(true),
                 lease.CancellationToken);
-            latestExportJobs["hsr"] = result.JobId;
+            var completion = exports.WaitForCompletionAsync(result.JobId).AsTask();
+            ExportUiJobRetention.RememberLatest(
+                latestExportJobs,
+                hoyoLabImmediateExportJobs,
+                achievementHandoffs,
+                "hsr",
+                result.JobId);
             hoyoLabImmediateExportJobs.Add(result.JobId);
-            _ = TrackExportJobAsync("hsr", result.JobId, lease);
+            _ = TrackExportJobAsync("hsr", result.JobId, completion, lease);
         }
         catch (OperationCanceledException) when (lease.CancellationToken.IsCancellationRequested)
         {
@@ -4540,7 +4649,14 @@ public sealed partial class MainPage : Page
         finally
         {
             reservation.Dispose();
-            _ = sessionUiLifetime.TryRun(lease, RenderSelection);
+            try
+            {
+                _ = sessionUiLifetime.TryRun(lease, RenderSelection);
+            }
+            finally
+            {
+                ReleaseExportRegistration();
+            }
         }
     }
 
@@ -4647,67 +4763,68 @@ public sealed partial class MainPage : Page
     private async Task TrackExportJobAsync(
         string gameId,
         Guid jobId,
+        Task<ExportJobSnapshot> completion,
         SessionUiLease lease,
         Task<AchievementExportHandoffOutcome>? nativeHandoff = null)
     {
-        while (!lease.CancellationToken.IsCancellationRequested)
+        while (!lease.CancellationToken.IsCancellationRequested && !completion.IsCompleted)
         {
-            ExportJobSnapshot snapshot;
-            try { snapshot = exports.GetSnapshot(jobId); }
-            catch (KeyNotFoundException) { return; }
             _ = DispatcherQueue.TryEnqueue(() =>
             {
                 if (GameSelector?.SelectedItem is GameLauncherItem { Id: var selectedId } && selectedId == gameId)
                 {
-                    if (snapshot.IsFinished) RenderSelection();
-                    else RenderExportTools((GameLauncherItem)GameSelector.SelectedItem);
+                    RenderExportTools((GameLauncherItem)GameSelector.SelectedItem);
                 }
             });
-            if (snapshot.IsFinished)
+            await Task.WhenAny(completion, Task.Delay(400, lease.CancellationToken));
+        }
+
+        ExportJobSnapshot final;
+        try { final = await completion.WaitAsync(lease.CancellationToken); }
+        catch (OperationCanceledException) when (lease.CancellationToken.IsCancellationRequested) { return; }
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            if (GameSelector?.SelectedItem is GameLauncherItem { Id: var selectedId } && selectedId == gameId)
+                RenderSelection();
+        });
+        SanitizedExportDiagnosticWriter.TryWrite(
+            launcherState.DataDirectory,
+            final);
+        if (final.Pulls.State is ExportTaskState.Succeeded)
+            await TryOpenExportsFolderAsync();
+        if (nativeHandoff is not null
+            && final.Achievements.State is ExportTaskState.Succeeded)
+        {
+            await ObserveNativeAchievementHandoffAsync(
+                gameId,
+                jobId,
+                nativeHandoff,
+                lease);
+        }
+        else if (final.Achievements.State is ExportTaskState.Succeeded
+            && final.Achievements.Artifact is
             {
-                SanitizedExportDiagnosticWriter.TryWrite(
-                    launcherState.DataDirectory,
-                    snapshot);
-                if (snapshot.Pulls.State is ExportTaskState.Succeeded)
-                    await TryOpenExportsFolderAsync();
-                if (nativeHandoff is not null
-                    && snapshot.Achievements.State is ExportTaskState.Succeeded)
-                {
-                    await ObserveNativeAchievementHandoffAsync(
-                        jobId,
-                        nativeHandoff,
-                        lease);
-                }
-                else if (snapshot.Achievements.State is ExportTaskState.Succeeded
-                    && snapshot.Achievements.Artifact is
-                    {
-                        IsHandoffCurrent: true,
-                        OutputPath: { Length: > 0 } outputPath,
-                    })
-                {
-                    await DeliverAchievementExportAsync(
-                        gameId,
-                        jobId,
-                        outputPath,
-                        lease);
-                }
-                return;
-            }
-            try { await Task.Delay(400, lease.CancellationToken); }
-            catch (OperationCanceledException) { return; }
+                IsHandoffCurrent: true,
+                OutputPath: { Length: > 0 } outputPath,
+            })
+        {
+            await DeliverAchievementExportAsync(
+                gameId,
+                jobId,
+                outputPath,
+                lease);
         }
     }
 
     private async Task ObserveNativeAchievementHandoffAsync(
+        string gameId,
         Guid jobId,
         Task<AchievementExportHandoffOutcome> handoff,
         SessionUiLease lease)
     {
-        _ = sessionUiLifetime.TryRun(lease, () =>
-        {
-            achievementHandoffs[jobId] = AchievementHandoffUiState.Opening;
-            RenderSelection();
-        });
+        _ = sessionUiLifetime.TryRun(
+            lease,
+            () => SetAchievementHandoffIfLatest(gameId, jobId, AchievementHandoffUiState.Opening));
         AchievementExportHandoffOutcome outcome;
         try
         {
@@ -4721,14 +4838,14 @@ public sealed partial class MainPage : Page
         {
             outcome = AchievementExportHandoffOutcome.Fallback;
         }
-        _ = sessionUiLifetime.TryRun(lease, () =>
-        {
-            achievementHandoffs[jobId] =
+        _ = sessionUiLifetime.TryRun(
+            lease,
+            () => SetAchievementHandoffIfLatest(
+                gameId,
+                jobId,
                 outcome == AchievementExportHandoffOutcome.Delivered
                     ? AchievementHandoffUiState.Delivered
-                    : AchievementHandoffUiState.Fallback;
-            RenderSelection();
-        });
+                    : AchievementHandoffUiState.Fallback));
     }
 
     private async Task DeliverAchievementExportAsync(
@@ -4737,11 +4854,9 @@ public sealed partial class MainPage : Page
         string outputPath,
         SessionUiLease lease)
     {
-        _ = sessionUiLifetime.TryRun(lease, () =>
-        {
-            achievementHandoffs[jobId] = AchievementHandoffUiState.Opening;
-            RenderSelection();
-        });
+        _ = sessionUiLifetime.TryRun(
+            lease,
+            () => SetAchievementHandoffIfLatest(gameId, jobId, AchievementHandoffUiState.Opening));
         try
         {
             await using var bridge = await achievementImportBridge.StartAsync(
@@ -4751,38 +4866,46 @@ public sealed partial class MainPage : Page
             var opened = await Windows.System.Launcher.LaunchUriAsync(bridge.BrowserUri);
             if (!opened)
             {
-                _ = sessionUiLifetime.TryRun(lease, () =>
-                {
-                    achievementHandoffs[jobId] = AchievementHandoffUiState.Fallback;
-                    RenderSelection();
-                });
+                _ = sessionUiLifetime.TryRun(
+                    lease,
+                    () => SetAchievementHandoffIfLatest(gameId, jobId, AchievementHandoffUiState.Fallback));
                 return;
             }
-            _ = sessionUiLifetime.TryRun(lease, () =>
-            {
-                achievementHandoffs[jobId] = AchievementHandoffUiState.Waiting;
-                RenderSelection();
-            });
+            _ = sessionUiLifetime.TryRun(
+                lease,
+                () => SetAchievementHandoffIfLatest(gameId, jobId, AchievementHandoffUiState.Waiting));
             var result = await bridge.Completion.WaitAsync(lease.CancellationToken);
-            _ = sessionUiLifetime.TryRun(lease, () =>
-            {
-                achievementHandoffs[jobId] = result is AchievementImportDeliveryState.Delivered
-                    ? AchievementHandoffUiState.Delivered
-                    : AchievementHandoffUiState.Fallback;
-                RenderSelection();
-            });
+            _ = sessionUiLifetime.TryRun(
+                lease,
+                () => SetAchievementHandoffIfLatest(
+                    gameId,
+                    jobId,
+                    result is AchievementImportDeliveryState.Delivered
+                        ? AchievementHandoffUiState.Delivered
+                        : AchievementHandoffUiState.Fallback));
         }
         catch (OperationCanceledException) when (lease.CancellationToken.IsCancellationRequested)
         {
         }
         catch (Exception)
         {
-            _ = sessionUiLifetime.TryRun(lease, () =>
-            {
-                achievementHandoffs[jobId] = AchievementHandoffUiState.Fallback;
-                RenderSelection();
-            });
+            _ = sessionUiLifetime.TryRun(
+                lease,
+                () => SetAchievementHandoffIfLatest(gameId, jobId, AchievementHandoffUiState.Fallback));
         }
+    }
+
+    private void SetAchievementHandoffIfLatest(
+        string gameId,
+        Guid jobId,
+        AchievementHandoffUiState state)
+    {
+        if (ExportUiJobRetention.TrySetHandoff(
+            latestExportJobs,
+            achievementHandoffs,
+            gameId,
+            jobId,
+            state)) RenderSelection();
     }
 
     private void SessionRefresh_Refreshed(object? sender, GameSessionsRefreshedEventArgs e)

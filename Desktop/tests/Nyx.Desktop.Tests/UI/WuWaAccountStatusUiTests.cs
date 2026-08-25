@@ -119,12 +119,15 @@ public sealed class WuWaAccountStatusUiTests
         var closeEnd = app.IndexOf("private async Task RefreshAfterActivationAsync", closeStart, StringComparison.Ordinal);
         var close = app[closeStart..closeEnd];
         var disposeStart = app.IndexOf("private static async Task DisposeWuWaAccountStatusAsync", StringComparison.Ordinal);
-        var disposeEnd = app.IndexOf("private static async Task DisposeExportsAsync", disposeStart, StringComparison.Ordinal);
+        var disposeEnd = app.IndexOf("private static async Task DisposePublisherAccountsAsync", disposeStart, StringComparison.Ordinal);
         var dispose = app[disposeStart..disposeEnd];
 
         Assert.Contains("args.Cancel = true", close, StringComparison.Ordinal);
         Assert.Contains("DisposeWuWaAccountStatusAsync(_wuwaAccountStatus)", close, StringComparison.Ordinal);
-        Assert.Contains("await Task.WhenAll(wuwaAccountShutdown, publisherAccountShutdown, _stableUpdateTask)", close, StringComparison.Ordinal);
+        Assert.Contains("await Task.WhenAll(", close, StringComparison.Ordinal);
+        Assert.Contains("wuwaAccountShutdown", close, StringComparison.Ordinal);
+        Assert.Contains("publisherAccountShutdown", close, StringComparison.Ordinal);
+        Assert.Contains("_stableUpdateTask", close, StringComparison.Ordinal);
         Assert.Contains("_accountShutdownComplete = true", close, StringComparison.Ordinal);
         Assert.Contains("await accountStatus.DisposeAsync()", dispose, StringComparison.Ordinal);
         Assert.DoesNotContain("GetAwaiter().GetResult()", dispose, StringComparison.Ordinal);

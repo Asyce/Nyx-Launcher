@@ -286,7 +286,15 @@ public sealed class EndfieldSiblingDiscoveryStartupTests
         Assert.True(activation >= 0 && startRequest > activation);
         Assert.Contains("Task.Run(", app, StringComparison.Ordinal);
         Assert.Contains("_endfieldDiscoveryCancellation", app, StringComparison.Ordinal);
-        Assert.Contains("Interlocked.Exchange(ref _endfieldDiscoveryCancellation, null)?.Cancel()", app, StringComparison.Ordinal);
+        Assert.Contains("_endfieldDiscoveryTask = DiscoverEndfieldSiblingAfterActivationAsync", app, StringComparison.Ordinal);
+        var shutdown = Slice(
+            app,
+            "private async Task AwaitEndfieldSiblingDiscoveryAsync",
+            "private async Task DiscoverEndfieldSiblingAfterActivationAsync");
+        var awaitDiscovery = shutdown.IndexOf("await discovery", StringComparison.Ordinal);
+        var disposeCancellation = shutdown.IndexOf("cancellation?.Dispose()", StringComparison.Ordinal);
+        Assert.True(awaitDiscovery >= 0 && awaitDiscovery < disposeCancellation);
+        Assert.Contains("CancelEndfieldSiblingDiscovery()", app, StringComparison.Ordinal);
         Assert.Contains("_sessionRefresh.RefreshNowAsync(cancellationToken)", app, StringComparison.Ordinal);
         Assert.Contains("EndfieldRootAutoDiscovered?.Invoke(this, EventArgs.Empty)", app, StringComparison.Ordinal);
         Assert.True(

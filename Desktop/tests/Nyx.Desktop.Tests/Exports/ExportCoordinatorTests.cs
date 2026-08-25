@@ -360,10 +360,11 @@ public sealed class ExportCoordinatorTests
         await EventuallyAsync(() => !waiter.IsCompleted);
 
         completion.SetResult(new("achievements", 1, 1, "ndjson", DateTimeOffset.UtcNow));
-        var firstFinal = await waiter;
+        await EventuallyAsync(() => waiter.IsCompleted);
         var second = await coordinator.RunForLaunchAsync(
             new ExportArmSnapshot("gi", false, true),
             static _ => ValueTask.FromResult(true));
+        var firstFinal = await waiter;
 
         Assert.Equal(first.JobId, firstFinal.JobId);
         Assert.NotEqual(first.JobId, second.JobId);
@@ -465,6 +466,8 @@ public sealed class ExportCoordinatorTests
             new ExportArmSnapshot("gi", false, true),
             _ => ValueTask.FromResult(true));
 
+        Assert.True(result.LaunchAdmitted);
+        Assert.True(coordinator.IsLauncherIndependentAchievementJob(result.JobId));
         await coordinator.ShutDownForLauncherCloseAsync();
 
         Assert.Equal(ExportJobState.Running, coordinator.GetSnapshot(result.JobId).State);

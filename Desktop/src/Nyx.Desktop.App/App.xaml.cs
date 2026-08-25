@@ -47,13 +47,15 @@ public partial class App : Application
     private PublisherAccountService? _publisherAccounts;
     private Hsr120FpsSetting? _hsr120FpsSetting;
     private GameScreenshotFolderResolver? _screenshotFolders;
+    private Genshin120FpsProcessStarter? _genshin120FpsProcessStarter;
     private readonly CancellationTokenSource _stableUpdateCancellation = new();
     private Task _stableUpdateTask = Task.CompletedTask;
     private int _stableUpdateStarted;
     private bool _stableUpdateHandoffCommitted;
-    private bool _accountShutdownStarted;
+    private volatile bool _accountShutdownStarted;
     private bool _accountShutdownComplete;
     private CancellationTokenSource? _endfieldDiscoveryCancellation;
+    private Task _endfieldDiscoveryTask = Task.CompletedTask;
     private string? _diagnosticsRoot;
     private string _launchStage = "app-construction";
 
@@ -151,13 +153,14 @@ public partial class App : Application
             "Assets",
             "Tools",
             Genshin120HelperPackageIdentity.FileName);
+        _genshin120FpsProcessStarter = new Genshin120FpsProcessStarter(
+            genshin120HelperPath,
+            Genshin120HelperPackageIdentity.Sha256);
         GenshinLaunchService = new GenshinLaunchService(
             new GenshinLaunchIdentityValidator(GenshinInspection),
             new WindowsRunningProcessInspector(),
             new DotNetLaunchProcessStarter(),
-            new Genshin120FpsProcessStarter(
-                genshin120HelperPath,
-                Genshin120HelperPackageIdentity.Sha256));
+            _genshin120FpsProcessStarter);
         GenshinSession = new GenshinGameSessionAdapter(
             GenshinDiscovery,
             GenshinInspection,
@@ -343,19 +346,48 @@ public partial class App : Application
 
     private void CurrentInstance_Activated(object? sender, AppActivationArguments args)
     {
+        if (_accountShutdownStarted) return;
         var window = _window;
         if (window is null) return;
 
-        _ = window.DispatcherQueue.TryEnqueue(window.Activate);
+        _ = window.DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!_accountShutdownStarted) window.Activate();
+        });
     }
 
     private void StartEndfieldSiblingDiscovery(WuWaInstallRootLocator wuwaRootLocator)
     {
         var cancellation = new CancellationTokenSource();
         _endfieldDiscoveryCancellation = cancellation;
-        _ = DiscoverEndfieldSiblingAfterActivationAsync(
+        _endfieldDiscoveryTask = DiscoverEndfieldSiblingAfterActivationAsync(
             wuwaRootLocator,
             cancellation.Token);
+    }
+
+    private void CancelEndfieldSiblingDiscovery()
+    {
+        try { _endfieldDiscoveryCancellation?.Cancel(); }
+        catch (Exception) { }
+    }
+
+    private async Task AwaitEndfieldSiblingDiscoveryAsync()
+    {
+        var cancellation = Interlocked.Exchange(ref _endfieldDiscoveryCancellation, null);
+        var discovery = _endfieldDiscoveryTask;
+        try
+        {
+            await discovery;
+        }
+        catch (Exception)
+        {
+            // Automatic discovery is optional and was already canceled.
+        }
+        finally
+        {
+            cancellation?.Dispose();
+            _endfieldDiscoveryTask = Task.CompletedTask;
+        }
     }
 
     private async Task DiscoverEndfieldSiblingAfterActivationAsync(
@@ -665,7 +697,8 @@ public partial class App : Application
 
     private void Window_Activated(object sender, WindowActivatedEventArgs args)
     {
-        if (args.WindowActivationState is not WindowActivationState.Deactivated)
+        if (!_accountShutdownStarted
+            && args.WindowActivationState is not WindowActivationState.Deactivated)
         {
             _ = RefreshAfterActivationAsync();
         }
@@ -746,10 +779,14 @@ public partial class App : Application
         args.Cancel = true;
         if (_accountShutdownStarted) return;
         _accountShutdownStarted = true;
+        if (_currentInstance is not null)
+            _currentInstance.Activated -= CurrentInstance_Activated;
+        if (_window is not null)
+            _window.Activated -= Window_Activated;
         if (!_stableUpdateHandoffCommitted) _stableUpdateCancellation.Cancel();
         sender.Hide();
         SessionUiLifetime.Terminate();
-        Interlocked.Exchange(ref _endfieldDiscoveryCancellation, null)?.Cancel();
+        CancelEndfieldSiblingDiscovery();
         _sessionRefresh?.Stop();
         _sessions?.Shutdown();
         _ = ShutDownAccountsAndCloseAsync();
@@ -757,24 +794,60 @@ public partial class App : Application
 
     private async Task ShutDownAccountsAndCloseAsync()
     {
+        if (_window is MainWindow mainWindow)
+            await DisposeMainPageAsync(mainWindow);
+
+        var bannerShutdown = _launcherBanners is null
+            ? Task.CompletedTask
+            : DisposeLauncherBannersAsync(_launcherBanners);
+        var publisherStatusShutdown = _hoyoPublisherStatus is null
+            ? Task.CompletedTask
+            : DisposePublisherStatusAsync(_hoyoPublisherStatus);
         var wuwaAccountShutdown = _wuwaAccountStatus is null
             ? Task.CompletedTask
             : DisposeWuWaAccountStatusAsync(_wuwaAccountStatus);
         var publisherAccountShutdown = _publisherAccounts is null
             ? Task.CompletedTask
             : DisposePublisherAccountsAsync(_publisherAccounts);
-        var exportShutdown = _exports is null
+        var exportClose = _exports is null
             ? Task.CompletedTask
-            : DisposeExportsAsync(_exports, _pullExports);
-        var achievementHandoffShutdown = _achievementExportHandoffs is null
-            ? Task.CompletedTask
-            : _achievementExportHandoffs.WaitForActiveAsync();
-        await Task.WhenAll(wuwaAccountShutdown, publisherAccountShutdown, _stableUpdateTask);
-        await exportShutdown;
-        await achievementHandoffShutdown;
+            : CloseExportsForLauncherAsync(_exports);
+
+        await AwaitEndfieldSiblingDiscoveryAsync();
+        if (_sessionRefresh is not null)
+            await DisposeRefreshAsync(_sessionRefresh);
+        if (_sessions is not null)
+            await DisposeSessionsAsync(_sessions);
+        _sessionRefresh = null;
+        _sessions = null;
+
+        await Task.WhenAll(
+            bannerShutdown,
+            publisherStatusShutdown,
+            wuwaAccountShutdown,
+            publisherAccountShutdown,
+            _stableUpdateTask,
+            exportClose);
+
+        if (_achievementExportHandoffs is not null)
+            await DisposeAchievementHandoffsAsync(_achievementExportHandoffs);
+        if (_exports is not null)
+            await DisposeExportCoordinatorAsync(_exports);
+        try { _pullExports?.Dispose(); }
+        catch (Exception) { }
+        if (_genshin120FpsProcessStarter is not null)
+            await DisposeGenshin120FpsStarterAsync(_genshin120FpsProcessStarter);
+        await DisposeHoyoPlayExecutorAsync(HoyoPlayExecutor);
+
+        _launcherBanners = null;
+        _hoyoPublisherStatus = null;
+        _wuwaAccountStatus = null;
+        _publisherAccounts = null;
         _exports = null;
         _pullExports = null;
         _achievementExportHandoffs = null;
+        _genshin120FpsProcessStarter = null;
+        _stableUpdateCancellation.Dispose();
         _accountShutdownComplete = true;
         try
         {
@@ -809,7 +882,7 @@ public partial class App : Application
 
         LauncherState.Changed -= LauncherState_Changed;
         SessionUiLifetime.Terminate();
-        Interlocked.Exchange(ref _endfieldDiscoveryCancellation, null)?.Cancel();
+        CancelEndfieldSiblingDiscovery();
 
         if (_window is not null)
         {
@@ -820,25 +893,11 @@ public partial class App : Application
 
         _sessionRefresh?.Stop();
         _sessions?.Shutdown();
-        if (_sessionRefresh is not null)
-        {
-            _ = DisposeRefreshAsync(_sessionRefresh);
-        }
-
-        if (_launcherBanners is not null)
-        {
-            _ = DisposeLauncherBannersAsync(_launcherBanners);
-        }
-
-        if (_hoyoPublisherStatus is not null)
-        {
-            _ = DisposePublisherStatusAsync(_hoyoPublisherStatus);
-        }
-
     }
 
     private async Task RefreshAfterActivationAsync()
     {
+        if (_accountShutdownStarted) return;
         WindowReactivated?.Invoke(this, EventArgs.Empty);
 
         try
@@ -863,6 +922,18 @@ public partial class App : Application
         catch (Exception)
         {
             // Shutdown already blocked new coordinator work.
+        }
+    }
+
+    private static async Task DisposeSessionsAsync(GameSessionCoordinator sessions)
+    {
+        try
+        {
+            await sessions.DisposeAsync();
+        }
+        catch (Exception)
+        {
+            // Admission is closed; adapter cleanup cannot reopen launch work.
         }
     }
 
@@ -914,12 +985,41 @@ public partial class App : Application
         }
     }
 
-    private static async Task DisposeExportsAsync(
-        ExportCoordinator exports,
-        RoutedPullExportProvider? pulls)
+    private static async Task DisposeMainPageAsync(MainWindow window)
+    {
+        try { await window.ShutDownAsync(); }
+        catch (Exception) { }
+    }
+
+    private static async Task CloseExportsForLauncherAsync(ExportCoordinator exports)
     {
         try { await exports.ShutDownForLauncherCloseAsync(); }
         catch (Exception) { }
-        pulls?.Dispose();
+    }
+
+    private static async Task DisposeAchievementHandoffsAsync(
+        BoundedAchievementExportHandoffOwner handoffs)
+    {
+        try { await handoffs.DisposeAsync(); }
+        catch (Exception) { }
+    }
+
+    private static async Task DisposeExportCoordinatorAsync(ExportCoordinator exports)
+    {
+        try { await exports.DisposeAsync(); }
+        catch (Exception) { }
+    }
+
+    private static async Task DisposeGenshin120FpsStarterAsync(
+        Genshin120FpsProcessStarter starter)
+    {
+        try { await starter.DisposeAsync(); }
+        catch (Exception) { }
+    }
+
+    private static async Task DisposeHoyoPlayExecutorAsync(HoyoPlayHandoffExecutor executor)
+    {
+        try { await executor.DisposeAsync(); }
+        catch (Exception) { }
     }
 }

@@ -3144,6 +3144,14 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
             {
                 teardownFailure ??= exception;
             }
+            try
+            {
+                await passwordNavigationGate.DisposeAsync();
+            }
+            catch (Exception exception)
+            {
+                teardownFailure ??= exception;
+            }
             lifetime.Dispose();
         }
         if (teardownFailure is not null)
