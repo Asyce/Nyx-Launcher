@@ -402,7 +402,7 @@ try {
     [void] (New-Item -ItemType Directory -Path (Split-Path -Parent $genshin120PrivateUpstreamRoot) -Force)
     & $git -c core.longpaths=true clone --quiet --depth 1 --branch $genshin120UpstreamTag $genshin120UpstreamUrl $genshin120PrivateUpstreamRoot
     if ($LASTEXITCODE -ne 0) { throw 'Pinned Genshin FPS upstream checkout failed.' }
-    $checkedOutCommit = (& $git -C $genshin120PrivateUpstreamRoot rev-parse HEAD).Trim()
+    $checkedOutCommit = (& $git -c core.longpaths=true -C $genshin120PrivateUpstreamRoot rev-parse --verify 'HEAD^{commit}').Trim()
     if ($LASTEXITCODE -ne 0 -or $checkedOutCommit -cne $genshin120UpstreamCommit) {
         throw 'Pinned Genshin FPS upstream commit changed.'
     }

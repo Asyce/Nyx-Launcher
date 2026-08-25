@@ -271,6 +271,7 @@ public sealed class PackagingScriptTests
         Assert.Contains("2b85d61dd06f6e11ad86fdd6bd90339f9abc58eb", build, StringComparison.Ordinal);
         Assert.Contains("$genshin120VerificationRoot = Join-Path $workRoot", build, StringComparison.Ordinal);
         Assert.Contains("git -c core.longpaths=true clone --quiet --depth 1 --branch", build, StringComparison.Ordinal);
+        Assert.Contains("git -c core.longpaths=true -C $genshin120PrivateUpstreamRoot rev-parse --verify 'HEAD^{commit}'", build, StringComparison.Ordinal);
         Assert.Contains("verify-release.ps1", build, StringComparison.Ordinal);
         Assert.Contains("Get-FileHash -LiteralPath $genshin120Helper -Algorithm SHA256", build, StringComparison.Ordinal);
         Assert.True(
@@ -291,7 +292,10 @@ public sealed class PackagingScriptTests
         Assert.Contains("Microsoft.VisualStudio.Component.VC.Tools.x86.x64", nativeBuild, StringComparison.Ordinal);
         Assert.Contains("/IMPLIB:`\"$stubImportLibrary`\"", nativeBuild, StringComparison.Ordinal);
         Assert.Contains("Microsoft.VisualStudio.Component.VC.Tools.x86.x64", nativeVerify, StringComparison.Ordinal);
-        Assert.Contains("$upstreamStatus = @(git -C $upstreamRoot status --short)", nativeVerify, StringComparison.Ordinal);
+        Assert.Contains("git -c core.longpaths=true -C $upstreamRoot rev-parse --verify 'HEAD^{commit}'", nativeVerify, StringComparison.Ordinal);
+        Assert.Contains("$upstreamCommitExitCode = $LASTEXITCODE", nativeVerify, StringComparison.Ordinal);
+        Assert.Contains("$upstreamCommitExitCode -eq 0 -and $upstreamCommit.Count -eq 1", nativeVerify, StringComparison.Ordinal);
+        Assert.Contains("$upstreamStatus = @(git -c core.longpaths=true -C $upstreamRoot status --short)", nativeVerify, StringComparison.Ordinal);
         Assert.Contains("$upstreamStatusExitCode = $LASTEXITCODE", nativeVerify, StringComparison.Ordinal);
         Assert.Contains("$upstreamStatusExitCode -eq 0 -and $upstreamStatus.Count -eq 0", nativeVerify, StringComparison.Ordinal);
         Assert.DoesNotContain("Visual Studio\\2019", nativeBuild + nativeVerify, StringComparison.OrdinalIgnoreCase);

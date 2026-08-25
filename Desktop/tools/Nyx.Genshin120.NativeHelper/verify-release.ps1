@@ -41,8 +41,10 @@ $dumpbin = ($dumpbinCandidates | Sort-Object -Property @{Expression='Version';De
 Assert-True (Test-Path -LiteralPath $dumpbin -PathType Leaf) "dumpbin.exe was not found: $dumpbin"
 
 Assert-True (Test-Path -LiteralPath $upstreamRoot) 'Pinned upstream checkout is missing.'
-Assert-True ((git -C $upstreamRoot rev-parse HEAD) -eq '2b85d61dd06f6e11ad86fdd6bd90339f9abc58eb') 'Pinned upstream commit changed.'
-$upstreamStatus = @(git -C $upstreamRoot status --short)
+$upstreamCommit = @(git -c core.longpaths=true -C $upstreamRoot rev-parse --verify 'HEAD^{commit}')
+$upstreamCommitExitCode = $LASTEXITCODE
+Assert-True ($upstreamCommitExitCode -eq 0 -and $upstreamCommit.Count -eq 1 -and $upstreamCommit[0] -eq '2b85d61dd06f6e11ad86fdd6bd90339f9abc58eb') 'Pinned upstream commit changed or is unreadable.'
+$upstreamStatus = @(git -c core.longpaths=true -C $upstreamRoot status --short)
 $upstreamStatusExitCode = $LASTEXITCODE
 Assert-True ($upstreamStatusExitCode -eq 0 -and $upstreamStatus.Count -eq 0) 'Pinned upstream checkout is dirty or Git status failed.'
 $upstreamHashes = @{
