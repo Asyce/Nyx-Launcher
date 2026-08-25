@@ -35,8 +35,8 @@ impl Game {
 
     pub const fn catalog_version(self) -> &'static str {
         match self {
-            Self::Gi => "gi-6.7",
-            Self::Hsr => "hsr-4.4",
+            Self::Gi => GI_CATALOG_VERSION,
+            Self::Hsr => HSR_CATALOG_VERSION,
         }
     }
 

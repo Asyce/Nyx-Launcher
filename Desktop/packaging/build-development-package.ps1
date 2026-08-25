@@ -230,7 +230,50 @@ function Get-StableReleaseIdentity {
     }
 }
 
+function Get-CanonicalAchievementCatalogVersions {
+    $versions = @{}
+    foreach ($game in @('gi', 'hsr')) {
+        $path = Join-Path $repositoryRoot "contracts\achievements-$game-catalog.json"
+        $catalog = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
+        foreach ($name in @('game', 'catalogVersion', 'releasedVersion')) {
+            if (@($catalog.PSObject.Properties | Where-Object Name -CEQ $name).Count -ne 1) {
+                throw "The $game achievement catalog is missing an exact $name field."
+            }
+        }
+        if ($catalog.game -cne $game -or
+            $catalog.catalogVersion -isnot [string] -or
+            $catalog.catalogVersion -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' -or
+            $catalog.releasedVersion -cne $catalog.catalogVersion) {
+            throw "The $game achievement catalog has an invalid game/catalogVersion/releasedVersion shape."
+        }
+        $versions[$game] = "$game-$($catalog.catalogVersion)"
+    }
+    return $versions
+}
+
+function Assert-AchievementCatalogAgreement {
+    param(
+        [Parameter(Mandatory)] [Collections.IDictionary] $Versions,
+        [Parameter(Mandatory)] [string] $RustTargetRoot,
+        [Parameter(Mandatory)] [string] $CSharpSource
+    )
+
+    $rustSources = @(Get-ChildItem -LiteralPath $RustTargetRoot -Filter 'catalog_ids.rs' -File -Recurse)
+    if ($rustSources.Count -ne 1 -or -not (Test-Path -LiteralPath $CSharpSource -PathType Leaf)) {
+        throw 'Generated achievement catalog version sources are missing or ambiguous.'
+    }
+    $rust = [IO.File]::ReadAllText($rustSources[0].FullName)
+    $csharp = [IO.File]::ReadAllText($CSharpSource)
+    if ($rust.IndexOf("pub const GI_CATALOG_VERSION: &str = `"$($Versions['gi'])`";", [StringComparison]::Ordinal) -lt 0 -or
+        $rust.IndexOf("pub const HSR_CATALOG_VERSION: &str = `"$($Versions['hsr'])`";", [StringComparison]::Ordinal) -lt 0 -or
+        $csharp.IndexOf("public const string Genshin = `"$($Versions['gi'])`";", [StringComparison]::Ordinal) -lt 0 -or
+        $csharp.IndexOf("public const string StarRail = `"$($Versions['hsr'])`";", [StringComparison]::Ordinal) -lt 0) {
+        throw 'Canonical, Rust, and C# achievement catalog versions disagree.'
+    }
+}
+
 Assert-SafePackagingRoot
+$achievementCatalogVersions = Get-CanonicalAchievementCatalogVersions
 $git = (Get-Command git -ErrorAction Stop).Source
 $stableIdentity = $null
 if ($Channel -eq 'stable') {
@@ -263,6 +306,7 @@ $workRoot = Join-Path $workParent ([guid]::NewGuid().ToString('N'))
 $publishRoot = Join-Path $workRoot 'app'
 $toolRoot = Join-Path $workRoot 'tool'
 $helperBuildRoot = Join-Path $workRoot 'achievement-helper-target'
+$csharpAchievementCatalogSource = Join-Path $workRoot 'AchievementCatalogVersions.g.cs'
 $genshin120VerificationRoot = Join-Path $workRoot 'genshin120-verification'
 $genshin120PrivateHelperRoot = Join-Path $genshin120VerificationRoot 'Desktop\tools\Nyx.Genshin120.NativeHelper'
 $genshin120PrivateUpstreamRoot = Join-Path $genshin120VerificationRoot '.verification-build\upstream-genshin-fps-v3.5.0'
@@ -431,6 +475,7 @@ try {
         "-p:ApplicationManifest=$generatedAppManifest",
         "-p:AchievementHelperSource=$builtHelper",
         "-p:AchievementHelperSha256=$helperSha256",
+        "-p:AchievementCatalogVersionsSource=$csharpAchievementCatalogSource",
         "-p:Genshin120HelperSource=$genshin120Helper",
         "-p:Genshin120HelperSha256=$genshin120HelperSha256",
         "-p:Genshin120LicenseSource=$genshin120License",
@@ -439,6 +484,10 @@ try {
     ) + $restoreArgument
     & $dotnet @appArguments
     if ($LASTEXITCODE -ne 0) { throw 'Nyx app publish failed.' }
+    Assert-AchievementCatalogAgreement `
+        -Versions $achievementCatalogVersions `
+        -RustTargetRoot $helperBuildRoot `
+        -CSharpSource $csharpAchievementCatalogSource
 
     $toolProject = Join-Path $desktopRoot 'tools\Nyx.Desktop.Update\Nyx.Desktop.Update.csproj'
     $toolArguments = @(

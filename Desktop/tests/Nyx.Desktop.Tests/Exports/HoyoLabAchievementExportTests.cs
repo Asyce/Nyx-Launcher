@@ -203,7 +203,9 @@ public sealed class HoyoLabAchievementExportTests
         else if (failureKind == "stale")
             await File.WriteAllTextAsync(catalogPath, Catalog("4.3", 4010101));
         else if (failureKind == "unknown-id")
-            await File.WriteAllTextAsync(catalogPath, Catalog("4.4", 4010101));
+            await File.WriteAllTextAsync(
+                catalogPath,
+                Catalog(AchievementCatalogVersions.StarRail["hsr-".Length..], 4010101));
 
         var writer = new PengoAchievementExportWriter(
             new PengoAchievementCatalogReader(catalogPath),

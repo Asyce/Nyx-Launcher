@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Nyx.Desktop.Core.Exports;
 using Nyx.Desktop.Infrastructure.Exports;
@@ -10,7 +11,7 @@ public sealed class ProcessAchievementHelperRunnerTests
 {
     private const string JobId = "0123456789abcdef0123456789abcdef";
     private const string Proof = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
-    private const string ContractFixtureSha256 = "707b2c45f3751c3a617f380895ec1ab338258bd1bc3b031b67dedf2aa208c3ad";
+    private const string ContractFixtureSha256 = "500b2e05a75bf5b721132723af1153f16d7512657cbe25ef1773747e712945dd";
 
     [Fact]
     public void Canonical_contract_fixture_is_hash_pinned_and_accepted_by_the_launcher()
@@ -26,7 +27,12 @@ public sealed class ProcessAchievementHelperRunnerTests
         var gameRoot = temp.Combine("Genshin Impact");
         Directory.CreateDirectory(gameRoot);
         const string fileName = "20260717T120000Z-abc123.json";
-        File.WriteAllBytes(Path.Combine(gameRoot, fileName), bytes);
+        var acceptedBytes = Encoding.UTF8.GetBytes(
+            Encoding.UTF8.GetString(bytes).Replace(
+                "gi-fixture",
+                AchievementCatalogVersions.Genshin,
+                StringComparison.Ordinal));
+        File.WriteAllBytes(Path.Combine(gameRoot, fileName), acceptedBytes);
         var artifact = ProcessAchievementHelperRunner.ValidateCompletedOutput(
             Invocation(temp.Path, "gi"),
             0,
@@ -111,11 +117,11 @@ public sealed class ProcessAchievementHelperRunnerTests
 
     [Theory]
     [InlineData("{\"hsr_achievements\":[1,2]}")]
-    [InlineData("{\"kind\":\"pengo-achievements\",\"version\":1,\"game\":\"hsr\",\"catalogVersion\":\"hsr-4.4\",\"exportedAt\":\"2026-07-26T12:00:00Z\",\"achievements\":[{\"id\":2,\"status\":\"complete\"},{\"id\":1,\"status\":\"complete\"}]}")]
-    [InlineData("{\"kind\":\"pengo-achievements\",\"version\":1,\"game\":\"hsr\",\"catalogVersion\":\"hsr-4.4\",\"exportedAt\":\"2026-07-26T12:00:00Z\",\"achievements\":[{\"id\":1,\"status\":\"partial\"}]}")]
-    [InlineData("{\"kind\":\"pengo-achievements\",\"version\":1,\"game\":\"gi\",\"catalogVersion\":\"hsr-4.4\",\"exportedAt\":\"2026-07-26T12:00:00Z\",\"achievements\":[{\"id\":1,\"status\":\"complete\"}]}")]
-    [InlineData("{\"kind\":\"pengo-achievements\",\"version\":1,\"game\":\"hsr\",\"catalogVersion\":\"hsr-4.4\",\"exportedAt\":\"not-a-date\",\"achievements\":[{\"id\":1,\"status\":\"complete\"}]}")]
-    [InlineData("{\"kind\":\"pengo-achievements\",\"version\":1,\"game\":\"hsr\",\"catalogVersion\":\"hsr-4.4\",\"exportedAt\":\"2026-07-26T12:00:00Z\",\"achievements\":[{\"id\":1,\"status\":\"complete\"}],\"extra\":[]}")]
+    [InlineData("{\"kind\":\"pengo-achievements\",\"version\":1,\"game\":\"hsr\",\"catalogVersion\":\"hsr-fixture\",\"exportedAt\":\"2026-07-26T12:00:00Z\",\"achievements\":[{\"id\":2,\"status\":\"complete\"},{\"id\":1,\"status\":\"complete\"}]}")]
+    [InlineData("{\"kind\":\"pengo-achievements\",\"version\":1,\"game\":\"hsr\",\"catalogVersion\":\"hsr-fixture\",\"exportedAt\":\"2026-07-26T12:00:00Z\",\"achievements\":[{\"id\":1,\"status\":\"partial\"}]}")]
+    [InlineData("{\"kind\":\"pengo-achievements\",\"version\":1,\"game\":\"gi\",\"catalogVersion\":\"hsr-fixture\",\"exportedAt\":\"2026-07-26T12:00:00Z\",\"achievements\":[{\"id\":1,\"status\":\"complete\"}]}")]
+    [InlineData("{\"kind\":\"pengo-achievements\",\"version\":1,\"game\":\"hsr\",\"catalogVersion\":\"hsr-fixture\",\"exportedAt\":\"not-a-date\",\"achievements\":[{\"id\":1,\"status\":\"complete\"}]}")]
+    [InlineData("{\"kind\":\"pengo-achievements\",\"version\":1,\"game\":\"hsr\",\"catalogVersion\":\"hsr-fixture\",\"exportedAt\":\"2026-07-26T12:00:00Z\",\"achievements\":[{\"id\":1,\"status\":\"complete\"}],\"extra\":[]}")]
     [InlineData("not-json")]
     public void Malformed_or_wrong_shape_export_fails_closed(string json)
     {
@@ -123,7 +129,12 @@ public sealed class ProcessAchievementHelperRunnerTests
         var gameRoot = temp.Combine("Honkai Star Rail");
         Directory.CreateDirectory(gameRoot);
         const string fileName = "20260717T120000Z-abc123.json";
-        File.WriteAllText(Path.Combine(gameRoot, fileName), json);
+        File.WriteAllText(
+            Path.Combine(gameRoot, fileName),
+            json.Replace(
+                "hsr-fixture",
+                AchievementCatalogVersions.StarRail,
+                StringComparison.Ordinal));
         var final = Status("exported", itemCount: 2, outputFile: "Honkai Star Rail/" + fileName);
 
         var error = Assert.Throws<ExportProviderException>(() =>

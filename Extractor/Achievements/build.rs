@@ -1,17 +1,18 @@
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeSet, env, fs, path::PathBuf};
+use std::{
+    collections::BTreeSet,
+    env, fs,
+    path::{Path, PathBuf},
+};
 
-fn catalog_ids(
-    game: &str,
-    expected_version: &str,
+pub(crate) fn catalog_data(
+    path: &Path,
+    expected_game: &str,
     expected_hash: &str,
     expected_count: usize,
-) -> Vec<u32> {
-    let path = PathBuf::from("../../contracts")
-        .join(format!("achievements-{game}-catalog.json"));
-    println!("cargo:rerun-if-changed={}", path.display());
+) -> (String, Vec<u32>) {
     let bytes =
-        fs::read(&path).unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
+        fs::read(path).unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
     // Git may materialize the reviewed JSON with CRLF on Windows. Pin the
     // exact repository content while making that one transport-only newline
     // conversion irrelevant. Bare CR bytes are never accepted.
@@ -36,10 +37,28 @@ fn catalog_ids(
     );
     let value: serde_json::Value = serde_json::from_slice(&bytes)
         .unwrap_or_else(|error| panic!("invalid {}: {error}", path.display()));
-    assert_eq!(
-        value["catalogVersion"].as_str(),
-        Some(expected_version),
-        "{} version changed",
+    let object = value
+        .as_object()
+        .unwrap_or_else(|| panic!("{} must contain a JSON object", path.display()));
+    let game = object.get("game").and_then(serde_json::Value::as_str);
+    let version = object
+        .get("catalogVersion")
+        .and_then(serde_json::Value::as_str);
+    let released_version = object
+        .get("releasedVersion")
+        .and_then(serde_json::Value::as_str);
+    let valid_version = version.is_some_and(|version| {
+        version.split_once('.').is_some_and(|(major, minor)| {
+            [major, minor].into_iter().all(|part| {
+                !part.is_empty()
+                    && part.bytes().all(|byte| byte.is_ascii_digit())
+                    && (part == "0" || !part.starts_with('0'))
+            })
+        })
+    });
+    assert!(
+        game == Some(expected_game) && valid_version && released_version == version,
+        "{} has an invalid game/catalogVersion/releasedVersion shape",
         path.display()
     );
     let rows = value["achievements"]
@@ -65,7 +84,27 @@ fn catalog_ids(
         "{} count changed",
         path.display()
     );
-    seen.into_iter().collect()
+    (
+        format!(
+            "{expected_game}-{}",
+            version.expect("validated version missing")
+        ),
+        seen.into_iter().collect(),
+    )
+}
+
+pub(crate) fn generated_source(
+    gi_version: &str,
+    gi_ids: &[u32],
+    hsr_version: &str,
+    hsr_ids: &[u32],
+) -> String {
+    format!(
+        "pub const GI_CATALOG_VERSION: &str = {gi_version:?};\n\
+         pub const HSR_CATALOG_VERSION: &str = {hsr_version:?};\n\
+         pub const GI_IDS: &[u32] = &{gi_ids:?};\n\
+         pub const HSR_IDS: &[u32] = &{hsr_ids:?};\n"
+    )
 }
 
 fn main() {
@@ -97,20 +136,24 @@ fn main() {
             manifest.display()
         );
     }
-    let gi = catalog_ids(
+    let catalog_root = PathBuf::from("../../contracts");
+    let gi_path = catalog_root.join("achievements-gi-catalog.json");
+    let hsr_path = catalog_root.join("achievements-hsr-catalog.json");
+    println!("cargo:rerun-if-changed={}", gi_path.display());
+    println!("cargo:rerun-if-changed={}", hsr_path.display());
+    let (gi_version, gi_ids) = catalog_data(
+        &gi_path,
         "gi",
-        "6.7",
         "5608dd41a26a06639c6455d65de7abdd2a7e5e997f55c6ed93dec6d08dc673b5",
         1759,
     );
-    let hsr = catalog_ids(
+    let (hsr_version, hsr_ids) = catalog_data(
+        &hsr_path,
         "hsr",
-        "4.4",
         "1686a1deb2a03e758e1047684acc9e760d5c793b2e2717bb4d1bc9eeb7c60502",
         1869,
     );
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR missing"));
-    let source =
-        format!("pub const GI_IDS: &[u32] = &{gi:?};\npub const HSR_IDS: &[u32] = &{hsr:?};\n");
+    let source = generated_source(&gi_version, &gi_ids, &hsr_version, &hsr_ids);
     fs::write(out.join("catalog_ids.rs"), source).expect("cannot write embedded catalogs");
 }

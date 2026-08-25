@@ -27,11 +27,8 @@ public sealed record ExportProviderCapability(string GameId, ExportKind Supporte
     public bool Supports(ExportKind kind) => (SupportedKinds & kind) == kind;
 }
 
-public static class AchievementCatalogVersions
+public static partial class AchievementCatalogVersions
 {
-    public const string Genshin = "gi-6.7";
-    public const string StarRail = "hsr-4.4";
-
     public static string Get(string gameId) => gameId switch
     {
         "gi" => Genshin,

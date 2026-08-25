@@ -140,7 +140,7 @@ public sealed class AchievementImportBridgeTests
         var path = Path.Combine(temp.Path, "extra.json");
         File.WriteAllText(
             path,
-            """{"kind":"pengo-achievements","version":1,"game":"hsr","catalogVersion":"hsr-4.4","exportedAt":"2026-07-27T00:00:00Z","achievements":[],"secret":"must-not-leak"}""");
+            $$"""{"kind":"pengo-achievements","version":1,"game":"hsr","catalogVersion":"{{AchievementCatalogVersions.StarRail}}","exportedAt":"2026-07-27T00:00:00Z","achievements":[],"secret":"must-not-leak"}""");
 
         var failure = await Assert.ThrowsAsync<ExportProviderException>(
             async () => await new AchievementImportBridge().StartAsync("hsr", path));

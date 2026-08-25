@@ -124,6 +124,55 @@ public sealed class PackagingScriptTests
         Assert.Contains("$workRoot=C:\\_build\\package", build, StringComparison.Ordinal);
         Assert.Contains("Assert-NoPrivateBuildStrings -Root $publishRoot", build, StringComparison.Ordinal);
         Assert.Contains("'.cargo'", build, StringComparison.Ordinal);
+        Assert.Contains("Assert-AchievementCatalogAgreement", build, StringComparison.Ordinal);
+        Assert.Contains("-p:AchievementCatalogVersionsSource=$csharpAchievementCatalogSource", build, StringComparison.Ordinal);
+        Assert.Contains("GI_CATALOG_VERSION", build, StringComparison.Ordinal);
+        Assert.Contains("HSR_CATALOG_VERSION", build, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Core_catalog_generator_tracks_redirected_catalogs_and_fails_closed()
+    {
+        var project = Path.Combine(
+            DesktopRoot,
+            "src",
+            "Nyx.Desktop.Core",
+            "Nyx.Desktop.Core.csproj");
+        var root = Path.Combine(Path.GetTempPath(), "Nyx.Catalog.Generation.Tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var gi = Path.Combine(root, "gi.json");
+            var hsr = Path.Combine(root, "hsr.json");
+            var output = Path.Combine(root, "AchievementCatalogVersions.g.cs");
+            WriteCatalog(gi, "gi", "9.9", "9.9");
+            WriteCatalog(hsr, "hsr", "8.8", "8.8");
+
+            var generated = RunCatalogGeneration(project, gi, hsr, output);
+            Assert.Equal(0, generated.ExitCode);
+            var source = File.ReadAllText(output);
+            Assert.Contains("Genshin = \"gi-9.9\"", source, StringComparison.Ordinal);
+            Assert.Contains("StarRail = \"hsr-8.8\"", source, StringComparison.Ordinal);
+
+            var unchangedTimestamp = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            File.SetLastWriteTimeUtc(output, unchangedTimestamp);
+            Assert.Equal(0, RunCatalogGeneration(project, gi, hsr, output).ExitCode);
+            Assert.Equal(unchangedTimestamp, File.GetLastWriteTimeUtc(output));
+
+            WriteCatalog(gi, "gi", "9.10", "9.10");
+            Assert.Equal(0, RunCatalogGeneration(project, gi, hsr, output).ExitCode);
+            Assert.Contains("Genshin = \"gi-9.10\"", File.ReadAllText(output), StringComparison.Ordinal);
+            Assert.NotEqual(unchangedTimestamp, File.GetLastWriteTimeUtc(output));
+
+            WriteCatalog(hsr, "hsr", "8.8", "8.7");
+            var rejected = RunCatalogGeneration(project, gi, hsr, output);
+            Assert.NotEqual(0, rejected.ExitCode);
+            Assert.Contains("invalid game/catalogVersion/releasedVersion shape", rejected.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     [Fact]
@@ -489,6 +538,49 @@ public sealed class PackagingScriptTests
     }
 
     [Fact]
+    public void Packaging_catalog_agreement_gate_rejects_generated_source_mismatch()
+    {
+        var build = File.ReadAllText(Path.Combine(PackagingRoot, "build-development-package.ps1"));
+        const string functionName = "function Assert-AchievementCatalogAgreement";
+        var functionStart = build.IndexOf(functionName, StringComparison.Ordinal);
+        var functionEnd = build.IndexOf("Assert-SafePackagingRoot", functionStart, StringComparison.Ordinal);
+        Assert.True(functionStart >= 0 && functionEnd > functionStart);
+
+        var root = Path.Combine(Path.GetTempPath(), "Nyx.Catalog.Agreement.Tests", Guid.NewGuid().ToString("N"));
+        var rustRoot = Path.Combine(root, "rust");
+        Directory.CreateDirectory(rustRoot);
+        try
+        {
+            var csharp = Path.Combine(root, "AchievementCatalogVersions.g.cs");
+            var rust = Path.Combine(rustRoot, "catalog_ids.rs");
+            File.WriteAllText(
+                rust,
+                "pub const GI_CATALOG_VERSION: &str = \"gi-9.9\";\n" +
+                "pub const HSR_CATALOG_VERSION: &str = \"hsr-8.8\";\n");
+            File.WriteAllText(
+                csharp,
+                "public const string Genshin = \"gi-9.9\";\n" +
+                "public const string StarRail = \"hsr-8.8\";\n");
+            var probe = Path.Combine(root, "agreement-probe.ps1");
+            File.WriteAllText(
+                probe,
+                build[functionStart..functionEnd] + "\n" +
+                "$versions = @{ gi = 'gi-9.9'; hsr = 'hsr-8.8' }\n" +
+                "Assert-AchievementCatalogAgreement -Versions $versions -RustTargetRoot $args[0] -CSharpSource $args[1]\n");
+
+            Assert.Equal(0, RunPowerShellFile(probe, rustRoot, csharp).ExitCode);
+            File.WriteAllText(csharp, "public const string Genshin = \"gi-9.8\";\n");
+            var rejected = RunPowerShellFile(probe, rustRoot, csharp);
+            Assert.NotEqual(0, rejected.ExitCode);
+            Assert.Contains("Canonical, Rust, and C# achievement catalog versions disagree", rejected.Output, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Release_bundle_includes_every_verified_launcher_art_asset_and_excludes_optional_publish_diagnostics()
     {
         var build = File.ReadAllText(Path.Combine(PackagingRoot, "build-development-package.ps1"));
@@ -660,6 +752,48 @@ public sealed class PackagingScriptTests
         var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
         Assert.True(process.WaitForExit(30_000));
         return (process.ExitCode, output);
+    }
+
+    private static void WriteCatalog(
+        string path,
+        string game,
+        string catalogVersion,
+        string releasedVersion) =>
+        File.WriteAllText(
+            path,
+            $$"""{"game":"{{game}}","catalogVersion":"{{catalogVersion}}","releasedVersion":"{{releasedVersion}}"}""");
+
+    private static (int ExitCode, string Output) RunCatalogGeneration(
+        string project,
+        string giCatalog,
+        string hsrCatalog,
+        string output)
+    {
+        var start = new ProcessStartInfo
+        {
+            FileName = "dotnet.exe",
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        foreach (var argument in new[]
+        {
+            "msbuild",
+            project,
+            "-nologo",
+            "-t:GenerateAchievementCatalogVersions",
+            $"-p:AchievementGiCatalogPath={giCatalog}",
+            $"-p:AchievementHsrCatalogPath={hsrCatalog}",
+            $"-p:AchievementCatalogVersionsSource={output}",
+        })
+        {
+            start.ArgumentList.Add(argument);
+        }
+        using var process = Process.Start(start)!;
+        var commandOutput = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+        Assert.True(process.WaitForExit(30_000));
+        return (process.ExitCode, commandOutput);
     }
 
     private static (int ExitCode, string Output) RunGenshinPackageValidation(
