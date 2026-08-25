@@ -6036,10 +6036,51 @@ public sealed partial class MainPage : Page
         }
     }
 
+    private void RenderOfficialTools(GameLauncherItem selected)
+    {
+        OfficialToolsMenuFlyout.Items.Clear();
+        OfficialToolsButton.Visibility = Visibility.Collapsed;
+        if (selected.IsCustom || selected.Id == "wuwa") return;
+
+        foreach (var tool in launcherBanners.OfficialToolsFor(selected.Id))
+        {
+            var item = new MenuFlyoutItem
+            {
+                Text = tool.Label,
+                Tag = tool,
+            };
+            AutomationProperties.SetName(item, $"Open {tool.Label} for {selected.DisplayName}");
+            item.Click += OfficialTool_Click;
+            OfficialToolsMenuFlyout.Items.Add(item);
+        }
+        if (OfficialToolsMenuFlyout.Items.Count == 0) return;
+
+        AutomationProperties.SetName(OfficialToolsButton, $"Official Tools for {selected.DisplayName}");
+        OfficialToolsButton.Visibility = Visibility.Visible;
+    }
+
+    private async void OfficialTool_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem { Tag: LauncherOfficialTool requested }
+            || GameSelector?.SelectedItem is not GameLauncherItem { IsCustom: false } selected
+            || selected.Id == "wuwa"
+            || !string.Equals(selected.Id, requested.Game, StringComparison.Ordinal)) return;
+
+        var current = launcherBanners.OfficialToolsFor(selected.Id).SingleOrDefault(tool =>
+            string.Equals(tool.Game, requested.Game, StringComparison.Ordinal)
+            && string.Equals(tool.Id, requested.Id, StringComparison.Ordinal)
+            && string.Equals(tool.Label, requested.Label, StringComparison.Ordinal)
+            && string.Equals(tool.Url.OriginalString, requested.Url.OriginalString, StringComparison.Ordinal));
+        if (current is null) return;
+        if (!LauncherBannersManifestParser.IsApprovedOfficialTool(current.Game, current.Id, current.Label, current.Url)) return;
+        await OpenFixedDestinationAsync(current.Url, current.Label);
+    }
+
     private void RenderExportTools(GameLauncherItem selected)
     {
         NyxToolsPanel.Visibility = Visibility.Collapsed;
         ApplySavedPanelVisibility(selected);
+        RenderOfficialTools(selected);
         if (selected.IsCustom) return;
         var definition = GameCatalog.GetRequired(selected.Id);
         var armed = launcherState.Snapshot.Export.Games.TryGetValue(selected.Id, out var saved)

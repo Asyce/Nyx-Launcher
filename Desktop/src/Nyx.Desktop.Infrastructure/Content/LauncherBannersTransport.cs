@@ -14,6 +14,7 @@ public sealed class LauncherBannersTransport : ILauncherBannersTransport, IDispo
 {
     public const string ProductionEndpoint = "https://pengo.gg/dist/launcher-banners-v1.json";
     public const string ProductionCodesEndpoint = "https://pengo.gg/dist/launcher-codes-v1.json";
+    public const string ProductionToolsEndpoint = "https://pengo.gg/dist/launcher-tools-v1.json";
     public const int MaximumManifestBytes = 2 * 1024 * 1024;
     public const int MaximumAssetBytes = 8 * 1024 * 1024;
     private readonly HttpClient client;
@@ -74,6 +75,7 @@ public sealed class LauncherBannersTransport : ILauncherBannersTransport, IDispo
             var approved = requireJson
                 ? string.Equals(endpoint.AbsoluteUri, ProductionEndpoint, StringComparison.Ordinal)
                     || string.Equals(endpoint.AbsoluteUri, ProductionCodesEndpoint, StringComparison.Ordinal)
+                    || string.Equals(endpoint.AbsoluteUri, ProductionToolsEndpoint, StringComparison.Ordinal)
                 : IsApprovedManifestAssetEndpoint(endpoint);
             if (!approved) throw new InvalidOperationException(requireJson ? "Launcher manifest endpoint is not approved." : "Launcher asset endpoint is not approved.");
         }

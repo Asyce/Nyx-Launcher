@@ -181,6 +181,28 @@ public sealed record LauncherCodesManifest(
     DateTimeOffset GeneratedAt,
     IReadOnlyDictionary<string, IReadOnlyList<LauncherRedemptionCode>> Games);
 
+public sealed record LauncherOfficialTool(string Game, string Id, string Label, Uri Url);
+
+public sealed record LauncherToolsManifest
+{
+    public LauncherToolsManifest(
+        int schemaVersion,
+        DateTimeOffset generatedAt,
+        IReadOnlyList<LauncherOfficialTool> tools)
+    {
+        if (schemaVersion != 1) throw new ArgumentOutOfRangeException(nameof(schemaVersion));
+        var copy = (tools ?? throw new ArgumentNullException(nameof(tools))).ToArray();
+        if (copy.Any(static tool => tool is null)) throw new InvalidDataException("Launcher tools cannot contain null entries.");
+        SchemaVersion = schemaVersion;
+        GeneratedAt = generatedAt;
+        Tools = new ReadOnlyCollection<LauncherOfficialTool>(copy);
+    }
+
+    public int SchemaVersion { get; }
+    public DateTimeOffset GeneratedAt { get; }
+    public IReadOnlyList<LauncherOfficialTool> Tools { get; }
+}
+
 public sealed record LauncherBannersUpcomingPhase
 {
     public LauncherBannersUpcomingPhase(

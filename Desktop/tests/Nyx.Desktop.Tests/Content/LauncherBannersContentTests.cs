@@ -66,15 +66,314 @@ public sealed class LauncherBannersContentTests
     [Theory]
     [InlineData("https://pengo.gg/dist/launcher-banners-v1.json", true)]
     [InlineData("https://pengo.gg/dist/launcher-codes-v1.json", true)]
+    [InlineData("https://pengo.gg/dist/launcher-tools-v1.json", true)]
     [InlineData("https://pengo.gg/dist/other.json", false)]
     [InlineData("https://pengo.gg/dist/launcher-banners-v1.json?x=1", false)]
     [InlineData("https://pengo.gg:444/dist/launcher-banners-v1.json", false)]
     [InlineData("https://user@pengo.gg/dist/launcher-banners-v1.json", false)]
     [InlineData("https://pengo.gg/dist/launcher-banners-v1.json#x", false)]
-    public void Json_transport_allows_only_the_two_fixed_production_feeds(string url, bool allowed)
+    public void Json_transport_allows_only_the_three_fixed_production_feeds(string url, bool allowed)
     {
         var action = () => LauncherBannersTransport.ValidateEndpoint(new Uri(url), allowConfigured: true, requireJson: true);
         if (allowed) action(); else Assert.Throws<InvalidOperationException>(action);
+    }
+
+    [Fact]
+    public void Tools_parser_accepts_full_subset_and_empty_feeds_in_canonical_order()
+    {
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        var full = LauncherBannersManifestParser.ParseTools(
+            ToolsJson(now.AddMinutes(-10), OfficialToolRows.Reverse()),
+            observedAt: now);
+
+        Assert.Equal(
+            OfficialToolRows,
+            full.Tools.Select(static tool => (tool.Game, tool.Id, tool.Label, tool.Url.OriginalString)));
+        Assert.Equal(13, full.Tools.Count);
+        Assert.DoesNotContain(full.Tools, static tool => tool.Game == "wuwa");
+        Assert.All(full.Tools, tool => Assert.True(LauncherBannersManifestParser.IsApprovedOfficialTool(
+            tool.Game,
+            tool.Id,
+            tool.Label,
+            tool.Url)));
+
+        var subsetRows = new[] { OfficialToolRows[^1], OfficialToolRows[0] };
+        var subset = LauncherBannersManifestParser.ParseTools(
+            ToolsJson(now.AddMinutes(-9), subsetRows),
+            observedAt: now);
+        Assert.Equal(
+            new[] { OfficialToolRows[0], OfficialToolRows[^1] },
+            subset.Tools.Select(static tool => (tool.Game, tool.Id, tool.Label, tool.Url.OriginalString)));
+
+        Assert.Empty(LauncherBannersManifestParser.ParseTools(
+            ToolsJson(now.AddMinutes(-8), []),
+            observedAt: now).Tools);
+    }
+
+    [Fact]
+    public void Tools_parser_rejects_unknown_duplicate_extra_missing_and_malformed_content()
+    {
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        var valid = JsonNode.Parse(ToolsJson(now.AddMinutes(-10), [OfficialToolRows[0]]))!.AsObject();
+
+        var unknown = JsonNode.Parse(ToolsJson(
+            now.AddMinutes(-10),
+            [("wuwa", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/genshin/home")]))!.AsObject();
+        AssertInvalid(unknown);
+
+        var duplicate = valid.DeepClone().AsObject();
+        duplicate["tools"]!.AsArray().Add(duplicate["tools"]![0]!.DeepClone());
+        AssertInvalid(duplicate);
+
+        var extraRowField = valid.DeepClone().AsObject();
+        extraRowField["tools"]![0]!["revision"] = "not-allowed";
+        AssertInvalid(extraRowField);
+
+        var missingRowField = valid.DeepClone().AsObject();
+        missingRowField["tools"]![0]!.AsObject().Remove("label");
+        AssertInvalid(missingRowField);
+
+        var extraRootField = valid.DeepClone().AsObject();
+        extraRootField["revision"] = new string('a', 64);
+        AssertInvalid(extraRootField);
+
+        var missingRootField = valid.DeepClone().AsObject();
+        missingRootField.Remove("tools");
+        AssertInvalid(missingRootField);
+
+        Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.ParseTools(
+            Encoding.UTF8.GetBytes("{"),
+            observedAt: now));
+
+        void AssertInvalid(JsonObject root) => Assert.Throws<InvalidDataException>(() =>
+            LauncherBannersManifestParser.ParseTools(JsonSerializer.SerializeToUtf8Bytes(root), observedAt: now));
+    }
+
+    [Theory]
+    [InlineData("gi", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/genshin/home", true)]
+    [InlineData("gi", "wiki", "Wiki", "http://wiki.hoyolab.com/pc/genshin/home", false)]
+    [InlineData("gi", "wiki", "Wiki", "https://wiki.hoyolab.com:443/pc/genshin/home", false)]
+    [InlineData("gi", "wiki", "Wiki", "https://user@wiki.hoyolab.com/pc/genshin/home", false)]
+    [InlineData("gi", "wiki", "Wiki", "https://evil.hoyolab.com/pc/genshin/home", false)]
+    [InlineData("gi", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/genshin/other", false)]
+    [InlineData("gi", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/genshin/home?x=1", false)]
+    [InlineData("gi", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/genshin/home#x", false)]
+    [InlineData("gi", "wiki", "Official Wiki", "https://wiki.hoyolab.com/pc/genshin/home", false)]
+    [InlineData("hsr", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/genshin/home", false)]
+    [InlineData("gi", "other", "Wiki", "https://wiki.hoyolab.com/pc/genshin/home", false)]
+    public void Official_tool_authority_and_parser_require_the_exact_canonical_tuple(
+        string game,
+        string id,
+        string label,
+        string url,
+        bool approved)
+    {
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        Assert.Equal(
+            approved,
+            LauncherBannersManifestParser.IsApprovedOfficialTool(game, id, label, new Uri(url)));
+        var parse = () => LauncherBannersManifestParser.ParseTools(
+            ToolsJson(now.AddMinutes(-10), [(game, id, label, url)]),
+            observedAt: now);
+        if (approved) parse(); else Assert.Throws<InvalidDataException>(parse);
+    }
+
+    [Fact]
+    public void Tools_parser_rejects_stale_or_future_remote_data_but_allows_an_older_cached_fallback()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-tools-fallback-" + Guid.NewGuid().ToString("N"));
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        var stale = ToolsJson(now - LauncherBannersManifestParser.MaximumRemoteAge - TimeSpan.FromSeconds(1));
+        var future = ToolsJson(now + LauncherBannersManifestParser.MaximumFutureSkew + TimeSpan.FromSeconds(1));
+
+        try
+        {
+            Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.ParseTools(stale, observedAt: now));
+            Assert.Equal(13, LauncherBannersManifestParser.ParseTools(stale, fallback: true, observedAt: now).Tools.Count);
+            Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.ParseTools(future, observedAt: now));
+            Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.ParseTools(future, fallback: true, observedAt: now));
+
+            var cache = new LauncherBannersCache(root);
+            Directory.CreateDirectory(cache.LastKnownGoodDirectory);
+            File.WriteAllBytes(cache.LastKnownGoodToolsPath, stale);
+            Assert.Equal(13, cache.TryLoadLastKnownGoodTools(now)!.Tools.Count);
+            File.WriteAllBytes(cache.LastKnownGoodToolsPath, future);
+            Assert.Null(cache.TryLoadLastKnownGoodTools(now));
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task Tools_cache_reparses_atomic_promotions_and_preserves_the_last_good_on_replay_or_tamper()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-tools-cache-" + Guid.NewGuid().ToString("N"));
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        var firstPayload = ToolsJson(now.AddMinutes(-30), [OfficialToolRows[0], OfficialToolRows[4]]);
+        var first = LauncherBannersManifestParser.ParseTools(firstPayload, observedAt: now);
+        var newerPayload = ToolsJson(now.AddMinutes(-20), [OfficialToolRows[1]]);
+        var newer = LauncherBannersManifestParser.ParseTools(newerPayload, observedAt: now);
+        try
+        {
+            var cache = new LauncherBannersCache(root);
+            await cache.PromoteToolsAsync(first, firstPayload);
+            var saved = File.ReadAllBytes(cache.LastKnownGoodToolsPath);
+            Assert.Equal(first.Tools, cache.TryLoadLastKnownGoodTools(now)!.Tools);
+
+            await Assert.ThrowsAsync<InvalidDataException>(() => cache.PromoteToolsAsync(first, newerPayload));
+            Assert.Equal(saved, File.ReadAllBytes(cache.LastKnownGoodToolsPath));
+
+            var tampered = JsonNode.Parse(newerPayload)!.AsObject();
+            tampered["tools"]![0]!["label"] = "Tampered";
+            await Assert.ThrowsAsync<InvalidDataException>(() => cache.PromoteToolsAsync(
+                newer,
+                JsonSerializer.SerializeToUtf8Bytes(tampered)));
+            Assert.Equal(saved, File.ReadAllBytes(cache.LastKnownGoodToolsPath));
+
+            var replayPayload = ToolsJson(now.AddMinutes(-40), [OfficialToolRows[0]]);
+            var replay = LauncherBannersManifestParser.ParseTools(replayPayload, observedAt: now);
+            await Assert.ThrowsAsync<InvalidDataException>(() => cache.PromoteToolsAsync(replay, replayPayload));
+            Assert.Equal(saved, File.ReadAllBytes(cache.LastKnownGoodToolsPath));
+
+            var replacementPayload = ToolsJson(first.GeneratedAt, [OfficialToolRows[1]]);
+            var replacement = LauncherBannersManifestParser.ParseTools(replacementPayload, observedAt: now);
+            await Assert.ThrowsAsync<InvalidDataException>(() => cache.PromoteToolsAsync(replacement, replacementPayload));
+            Assert.Equal(saved, File.ReadAllBytes(cache.LastKnownGoodToolsPath));
+
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cache.PromoteToolsAsync(
+                newer,
+                newerPayload,
+                cancellation.Token));
+            Assert.Equal(saved, File.ReadAllBytes(cache.LastKnownGoodToolsPath));
+
+            await cache.PromoteToolsAsync(newer, newerPayload);
+            Assert.Equal(newerPayload, File.ReadAllBytes(cache.LastKnownGoodToolsPath));
+            Assert.Equal(newer.Tools, cache.TryLoadLastKnownGoodTools(now)!.Tools);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task Service_fetches_restores_revalidates_and_immediately_applies_tool_removal()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-tools-service-" + Guid.NewGuid().ToString("N"));
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        var bannerEndpoint = new Uri("http://127.0.0.1:32123/launcher-banners-v1.json");
+        var codesEndpoint = new Uri("http://127.0.0.1:32123/launcher-codes-v1.json");
+        var toolsEndpoint = new Uri("http://127.0.0.1:32123/launcher-tools-v1.json");
+        var firstPayload = ToolsJson(now.AddMinutes(-10), [OfficialToolRows[0]]);
+        var olderPayload = ToolsJson(now.AddMinutes(-20), []);
+        var replacementPayload = ToolsJson(now.AddMinutes(-10), [OfficialToolRows[1]]);
+        try
+        {
+            var transport = new RoutedToolsTransport(
+                tools: [firstPayload, firstPayload, olderPayload, replacementPayload]);
+            await using (var service = new LauncherBannersContentService(
+                ManifestJson(null),
+                root,
+                bannerEndpoint,
+                transport,
+                () => now,
+                TimeSpan.FromMinutes(15),
+                codesEndpoint: codesEndpoint,
+                toolsEndpoint: toolsEndpoint))
+            {
+                var updates = 0;
+                service.Updated += (_, _) => updates++;
+                Assert.Empty(service.OfficialToolsFor("gi"));
+
+                await service.RefreshAsync();
+                var firstRead = service.OfficialToolsFor("gi");
+                Assert.Equal("wiki", Assert.Single(firstRead).Id);
+                Assert.NotSame(firstRead, service.OfficialToolsFor("gi"));
+                Assert.Empty(service.OfficialToolsFor("hsr"));
+                Assert.Empty(service.OfficialToolsFor("wuwa"));
+
+                await service.RefreshAsync();
+                await service.RefreshAsync();
+                await service.RefreshAsync();
+
+                Assert.Equal("wiki", Assert.Single(service.OfficialToolsFor("gi")).Id);
+                Assert.Equal(1, updates);
+                Assert.Equal(4, transport.ToolsRequests);
+                Assert.Equal(toolsEndpoint, transport.ToolsEndpoint);
+                Assert.Equal(firstPayload, File.ReadAllBytes(new LauncherBannersCache(root).LastKnownGoodToolsPath));
+            }
+
+            await using (var restarted = new LauncherBannersContentService(
+                ManifestJson(null),
+                root,
+                bannerEndpoint,
+                new RoutedToolsTransport(),
+                () => now,
+                TimeSpan.FromMinutes(15),
+                codesEndpoint: codesEndpoint,
+                toolsEndpoint: toolsEndpoint))
+            {
+                Assert.Equal("wiki", Assert.Single(restarted.OfficialToolsFor("gi")).Id);
+            }
+
+            var removedPayload = ToolsJson(now.AddMinutes(-5), []);
+            await using var removal = new LauncherBannersContentService(
+                ManifestJson(null),
+                root,
+                bannerEndpoint,
+                new RoutedToolsTransport(tools: [removedPayload]),
+                () => now,
+                TimeSpan.FromMinutes(15),
+                codesEndpoint: codesEndpoint,
+                toolsEndpoint: toolsEndpoint);
+            var removalUpdates = 0;
+            removal.Updated += (_, _) => removalUpdates++;
+            Assert.Single(removal.OfficialToolsFor("gi"));
+
+            await removal.RefreshAsync();
+
+            Assert.Empty(removal.OfficialToolsFor("gi"));
+            Assert.Equal(1, removalUpdates);
+            Assert.Empty(new LauncherBannersCache(root).TryLoadLastKnownGoodTools(now)!.Tools);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task Tool_failure_cannot_suppress_independent_banner_or_code_refreshes()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-tools-independent-" + Guid.NewGuid().ToString("N"));
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        var bannerPayload = ManifestIdentityJson(now.AddMinutes(-20), 'b');
+        var codesPayload = CodesJson(now.AddMinutes(-10), "INDEPENDENT", 'c');
+        var transport = new RoutedToolsTransport(
+            banners: [bannerPayload],
+            codes: [codesPayload],
+            tools: [Encoding.UTF8.GetBytes("{")]);
+        try
+        {
+            await using var service = new LauncherBannersContentService(
+                ManifestJson(null),
+                root,
+                new Uri("http://127.0.0.1:32123/launcher-banners-v1.json"),
+                transport,
+                () => now,
+                TimeSpan.FromMinutes(15),
+                codesEndpoint: new Uri("http://127.0.0.1:32123/launcher-codes-v1.json"),
+                toolsEndpoint: new Uri("http://127.0.0.1:32123/launcher-tools-v1.json"));
+            var updates = 0;
+            service.Updated += (_, _) => updates++;
+
+            await service.RefreshAsync();
+
+            Assert.Equal(now.AddMinutes(-20), service.Current.GeneratedAt);
+            Assert.Equal("INDEPENDENT", Assert.Single(service.Current.Games["gi"].Codes).Code);
+            Assert.Empty(service.OfficialToolsFor("gi"));
+            Assert.Equal(1, updates);
+            var cache = new LauncherBannersCache(root);
+            Assert.True(File.Exists(cache.LastKnownGoodManifestPath));
+            Assert.True(File.Exists(cache.LastKnownGoodCodesPath));
+            Assert.False(File.Exists(cache.LastKnownGoodToolsPath));
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
 
     [Fact]
@@ -1624,6 +1923,41 @@ public sealed class LauncherBannersContentTests
         return new LauncherBannersManifest(1, new string(revision, 64), generatedAt, health, games);
     }
 
+    private static readonly (string Game, string Id, string Label, string Url)[] OfficialToolRows =
+    [
+        ("gi", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/genshin/home"),
+        ("gi", "material-calculator", "Material Calculator", "https://act.hoyolab.com/ys/event/calculator-sea/index.html"),
+        ("gi", "battle-records", "Battle Records", "https://act.hoyolab.com/app/community-game-records-sea/index.html?gid=2#/ys"),
+        ("gi", "upgrade-guide", "Upgrade Guide", "https://act.hoyolab.com/ys/event/bbs-lineup-ys-sea/index.html"),
+        ("hsr", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/hsr/home"),
+        ("hsr", "material-calculator", "Material Calculator", "https://act.hoyolab.com/sr/event/calculator/index.html"),
+        ("hsr", "battle-records", "Battle Records", "https://act.hoyolab.com/app/community-game-records-sea/index.html?gid=6#/hsr"),
+        ("hsr", "upgrade-guide", "Upgrade Guide", "https://act.hoyolab.com/sr/event/cultivation-tool/#/tools/suggestion"),
+        ("zzz", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/zzz/home"),
+        ("zzz", "battle-records", "Battle Records", "https://act.hoyolab.com/app/zzz-game-record/index.html"),
+        ("ae", "wiki", "Wiki", "https://wiki.skport.com/endfield"),
+        ("ae", "material-calculator", "Material Calculator", "https://game.skport.com/tools/endfield/cost-calculator?header=0"),
+        ("ae", "team-recommendations", "Team Recommendations", "https://game.skport.com/tools/endfield/rec-team"),
+    ];
+
+    private static byte[] ToolsJson(
+        DateTimeOffset generatedAt,
+        IEnumerable<(string Game, string Id, string Label, string Url)>? rows = null) =>
+        JsonSerializer.SerializeToUtf8Bytes(new JsonObject
+        {
+            ["schemaVersion"] = 1,
+            ["generatedAt"] = generatedAt.ToString("O"),
+            ["tools"] = new JsonArray((rows ?? OfficialToolRows)
+                .Select(static row => (JsonNode)new JsonObject
+                {
+                    ["game"] = row.Game,
+                    ["id"] = row.Id,
+                    ["label"] = row.Label,
+                    ["url"] = row.Url,
+                })
+                .ToArray()),
+        });
+
     private static byte[] ManifestJson(string? url)
     {
         var newsUrl = url is null ? "null" : $"\"{url}\"";
@@ -1861,6 +2195,54 @@ public sealed class LauncherBannersContentTests
 
         public Task<byte[]> GetAssetAsync(Uri endpoint, int maximumBytes, CancellationToken cancellationToken) =>
             Task.FromException<byte[]>(new InvalidOperationException("Launcher art was not requested."));
+    }
+
+    private sealed class RoutedToolsTransport(
+        IEnumerable<object>? banners = null,
+        IEnumerable<object>? codes = null,
+        IEnumerable<object>? tools = null) : ILauncherBannersTransport
+    {
+        private readonly Queue<object> bannerResponses = new(banners ?? []);
+        private readonly Queue<object> codeResponses = new(codes ?? []);
+        private readonly Queue<object> toolResponses = new(tools ?? []);
+
+        public int BannerRequests { get; private set; }
+        public int CodesRequests { get; private set; }
+        public int ToolsRequests { get; private set; }
+        public Uri? ToolsEndpoint { get; private set; }
+
+        public Task<byte[]> GetManifestAsync(Uri endpoint, int maximumBytes, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (endpoint.AbsolutePath.EndsWith("/launcher-tools-v1.json", StringComparison.Ordinal))
+            {
+                ToolsRequests++;
+                ToolsEndpoint = endpoint;
+                return Next(toolResponses);
+            }
+            if (endpoint.AbsolutePath.EndsWith("/launcher-codes-v1.json", StringComparison.Ordinal))
+            {
+                CodesRequests++;
+                return Next(codeResponses);
+            }
+            BannerRequests++;
+            return Next(bannerResponses);
+        }
+
+        public Task<byte[]> GetAssetAsync(Uri endpoint, int maximumBytes, CancellationToken cancellationToken) =>
+            Task.FromException<byte[]>(new InvalidOperationException("Launcher art was not requested."));
+
+        private static async Task<byte[]> Next(Queue<object> responses)
+        {
+            await Task.Yield();
+            if (responses.Count == 0) throw new HttpRequestException("offline");
+            return responses.Dequeue() switch
+            {
+                byte[] payload => payload,
+                Exception exception => throw exception,
+                _ => throw new InvalidDataException("Unexpected test response."),
+            };
+        }
     }
 
     private sealed class BlockingCodesTransport : ILauncherBannersTransport

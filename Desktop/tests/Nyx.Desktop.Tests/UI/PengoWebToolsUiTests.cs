@@ -30,6 +30,59 @@ public sealed class PengoWebToolsUiTests
     }
 
     [Fact]
+    public void Official_tools_are_an_accessible_current_game_menu_with_click_time_revalidation()
+    {
+        var xaml = ReadAppFile("MainPage.xaml");
+        var code = ReadAppFile("MainPage.xaml.cs");
+        var app = ReadAppFile("App.xaml.cs");
+        var parser = ReadInfrastructureFile("Content", "LauncherBannersParser.cs");
+        var account = Slice(xaml, "x:Name=\"AccountSectionContent\"", "x:Name=\"LaunchStack\"");
+        var button = Slice(account, "x:Name=\"OfficialToolsButton\"", "</Button>");
+        var render = Slice(code, "private void RenderOfficialTools", "private async void OfficialTool_Click");
+        var handler = Slice(code, "private async void OfficialTool_Click", "private void RenderExportTools");
+        var exportRender = Slice(code, "private void RenderExportTools", "private static string FormatExportStatus");
+
+        Assert.Single(Regex.Matches(xaml, "x:Name=\"OfficialToolsButton\"").Cast<Match>());
+        Assert.Single(Regex.Matches(xaml, "x:Name=\"OfficialToolsMenuFlyout\"").Cast<Match>());
+        Assert.Contains("Grid.Row=\"4\"", button, StringComparison.Ordinal);
+        Assert.Contains("HorizontalAlignment=\"Stretch\"", button, StringComparison.Ordinal);
+        Assert.Contains("Height=\"28\"", button, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Official Tools for the selected game\"", button, StringComparison.Ordinal);
+        Assert.Contains("IsTabStop=\"True\"", button, StringComparison.Ordinal);
+        Assert.Contains("ToolTipService.ToolTip=", button, StringComparison.Ordinal);
+        Assert.Contains("Style=\"{StaticResource NyxOfficialLauncherStyle}\"", button, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"Collapsed\"", button, StringComparison.Ordinal);
+        Assert.Contains("<MenuFlyout x:Name=\"OfficialToolsMenuFlyout\" />", button, StringComparison.Ordinal);
+
+        Assert.Contains("OfficialToolsMenuFlyout.Items.Clear()", render, StringComparison.Ordinal);
+        Assert.Contains("OfficialToolsButton.Visibility = Visibility.Collapsed", render, StringComparison.Ordinal);
+        Assert.Contains("selected.IsCustom || selected.Id == \"wuwa\"", render, StringComparison.Ordinal);
+        Assert.Contains("launcherBanners.OfficialToolsFor(selected.Id)", render, StringComparison.Ordinal);
+        Assert.Contains("Tag = tool", render, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.SetName(item", render, StringComparison.Ordinal);
+        Assert.Contains("if (OfficialToolsMenuFlyout.Items.Count == 0) return;", render, StringComparison.Ordinal);
+        Assert.Contains("OfficialToolsButton.Visibility = Visibility.Visible", render, StringComparison.Ordinal);
+        Assert.True(
+            exportRender.IndexOf("RenderOfficialTools(selected);", StringComparison.Ordinal)
+            < exportRender.IndexOf("if (selected.IsCustom) return;", StringComparison.Ordinal));
+
+        Assert.Contains("GameLauncherItem { IsCustom: false } selected", handler, StringComparison.Ordinal);
+        Assert.Contains("selected.Id == \"wuwa\"", handler, StringComparison.Ordinal);
+        Assert.Contains("string.Equals(selected.Id, requested.Game, StringComparison.Ordinal)", handler, StringComparison.Ordinal);
+        Assert.Contains("launcherBanners.OfficialToolsFor(selected.Id).SingleOrDefault", handler, StringComparison.Ordinal);
+        Assert.Contains("string.Equals(tool.Id, requested.Id, StringComparison.Ordinal)", handler, StringComparison.Ordinal);
+        Assert.Contains("string.Equals(tool.Label, requested.Label, StringComparison.Ordinal)", handler, StringComparison.Ordinal);
+        Assert.Contains("string.Equals(tool.Url.OriginalString, requested.Url.OriginalString, StringComparison.Ordinal)", handler, StringComparison.Ordinal);
+        Assert.Matches(
+            @"if \(!LauncherBannersManifestParser\.IsApprovedOfficialTool\(current\.Game, current\.Id, current\.Label, current\.Url\)\) return;\s*await OpenFixedDestinationAsync\(current\.Url, current\.Label\);",
+            handler);
+        Assert.DoesNotContain("ContentDialog", handler, StringComparison.Ordinal);
+        Assert.DoesNotContain("LaunchUriAsync", handler, StringComparison.Ordinal);
+        Assert.Contains("public static bool IsApprovedOfficialTool", parser, StringComparison.Ordinal);
+        Assert.Contains("toolsEndpoint: new Uri(LauncherBannersTransport.ProductionToolsEndpoint)", app, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Elevated_capture_failure_is_honest_for_both_supported_games()
     {
         var code = ReadAppFile("MainPage.xaml.cs");

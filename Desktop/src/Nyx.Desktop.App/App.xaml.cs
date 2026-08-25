@@ -264,7 +264,8 @@ public partial class App : Application
                 "launcher-banners-v1.json")),
             Path.Combine(LauncherState.DataDirectory, "ContentCache"),
             new Uri(LauncherBannersTransport.ProductionEndpoint),
-            codesEndpoint: new Uri(LauncherBannersTransport.ProductionCodesEndpoint));
+            codesEndpoint: new Uri(LauncherBannersTransport.ProductionCodesEndpoint),
+            toolsEndpoint: new Uri(LauncherBannersTransport.ProductionToolsEndpoint));
         var accountFlags = LauncherState.Snapshot.Preferences.FeatureFlags;
         _publisherAccounts = new PublisherAccountService(
             Path.Combine(LauncherState.DataDirectory, "PublisherProfiles"),

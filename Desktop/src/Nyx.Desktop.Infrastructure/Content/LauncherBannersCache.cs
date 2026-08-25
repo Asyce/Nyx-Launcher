@@ -29,6 +29,7 @@ public sealed class LauncherBannersCache
 
     public string LastKnownGoodManifestPath => Path.Combine(LastKnownGoodDirectory, "launcher-banners-v1.json");
     public string LastKnownGoodCodesPath => Path.Combine(LastKnownGoodDirectory, "launcher-codes-v1.json");
+    public string LastKnownGoodToolsPath => Path.Combine(LastKnownGoodDirectory, "launcher-tools-v1.json");
 
     public string? TryResolveManagedAsset(LauncherBannersAsset asset)
     {
@@ -90,6 +91,21 @@ public sealed class LauncherBannersCache
         }
     }
 
+    public LauncherToolsManifest? TryLoadLastKnownGoodTools(DateTimeOffset observedAt)
+    {
+        try
+        {
+            if (!IsSafeOwnedCachePath(LastKnownGoodToolsPath, mustExist: true)) return null;
+            var payload = File.ReadAllBytes(LastKnownGoodToolsPath);
+            if (!IsSafeOwnedCachePath(LastKnownGoodToolsPath, mustExist: true)) return null;
+            return LauncherBannersManifestParser.ParseTools(payload, fallback: true, observedAt);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException or JsonException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
     public async Task PromoteCodesAsync(
         LauncherCodesManifest manifest,
         byte[] payload,
@@ -103,6 +119,32 @@ public sealed class LauncherBannersCache
         if (existing is not null && manifest.GeneratedAt <= existing.GeneratedAt)
             throw new InvalidDataException("Launcher codes generation did not advance.");
         await AtomicWriteOwnedAsync(LastKnownGoodCodesPath, payload, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task PromoteToolsAsync(
+        LauncherToolsManifest manifest,
+        byte[] payload,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(manifest);
+        ArgumentNullException.ThrowIfNull(payload);
+        var parsed = LauncherBannersManifestParser.ParseTools(payload, fallback: false, manifest.GeneratedAt);
+        if (!ToolsMatch(parsed, manifest))
+            throw new InvalidDataException("Launcher tools do not match their parsed content.");
+        var existing = TryLoadLastKnownGoodTools(
+            DateTimeOffset.MaxValue - LauncherBannersManifestParser.MaximumFutureSkew);
+        if (existing is not null)
+        {
+            if (manifest.GeneratedAt < existing.GeneratedAt)
+                throw new InvalidDataException("Launcher tools generation moved backwards.");
+            if (manifest.GeneratedAt == existing.GeneratedAt)
+            {
+                if (!ToolsMatch(manifest, existing))
+                    throw new InvalidDataException("Launcher tools changed without a newer generation.");
+                throw new InvalidDataException("Launcher tools generation did not advance.");
+            }
+        }
+        await AtomicWriteOwnedAsync(LastKnownGoodToolsPath, payload, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task PromoteAsync(
@@ -375,6 +417,16 @@ public sealed class LauncherBannersCache
     }
 
     private static string Extension(string mime) => mime == "image/png" ? ".png" : ".webp";
+
+    private static bool ToolsMatch(LauncherToolsManifest left, LauncherToolsManifest right) =>
+        left.SchemaVersion == right.SchemaVersion
+        && left.GeneratedAt == right.GeneratedAt
+        && left.Tools.Count == right.Tools.Count
+        && left.Tools.Zip(right.Tools).All(pair =>
+            string.Equals(pair.First.Game, pair.Second.Game, StringComparison.Ordinal)
+            && string.Equals(pair.First.Id, pair.Second.Id, StringComparison.Ordinal)
+            && string.Equals(pair.First.Label, pair.Second.Label, StringComparison.Ordinal)
+            && string.Equals(pair.First.Url.OriginalString, pair.Second.Url.OriginalString, StringComparison.Ordinal));
 
     internal static string ComputeSemanticRevision(byte[] payload)
     {

@@ -1452,6 +1452,24 @@
                             Text=""
                             TextWrapping="Wrap"
                             Visibility="Collapsed" />
+                        <Button
+                            x:Name="OfficialToolsButton"
+                            Grid.Row="4"
+                            Height="28"
+                            MinHeight="28"
+                            Margin="12,0"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center"
+                            AutomationProperties.Name="Official Tools for the selected game"
+                            Content="Official Tools"
+                            IsTabStop="True"
+                            Style="{StaticResource NyxOfficialLauncherStyle}"
+                            ToolTipService.ToolTip="Open an official tool for the selected game"
+                            Visibility="Collapsed">
+                            <Button.Flyout>
+                                <MenuFlyout x:Name="OfficialToolsMenuFlyout" />
+                            </Button.Flyout>
+                        </Button>
                         </Grid>
                     </Grid>
 

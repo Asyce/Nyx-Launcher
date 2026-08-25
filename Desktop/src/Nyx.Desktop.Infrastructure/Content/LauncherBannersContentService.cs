@@ -14,11 +14,13 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
     private readonly string bundledAssetsDirectory;
     private readonly Uri endpoint;
     private readonly Uri codesEndpoint;
+    private readonly Uri? toolsEndpoint;
     private readonly Func<DateTimeOffset> clock;
     private readonly TimeSpan interval;
     private readonly CancellationTokenSource shutdown = new();
     private LauncherBannersManifest current;
     private LauncherCodesManifest? currentCodes;
+    private LauncherToolsManifest? currentTools;
     private Task? refresh;
     private Task<CodesRefreshResult>? codesRefresh;
     private Task? pump;
@@ -34,7 +36,8 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
         Func<DateTimeOffset>? clock = null,
         TimeSpan? interval = null,
         string? bundledAssetsDirectory = null,
-        Uri? codesEndpoint = null)
+        Uri? codesEndpoint = null,
+        Uri? toolsEndpoint = null)
         : this(
             bundledPayload,
             new LauncherBannersCache(cacheDirectory),
@@ -43,7 +46,8 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
             clock,
             interval,
             bundledAssetsDirectory,
-            codesEndpoint)
+            codesEndpoint,
+            toolsEndpoint)
     {
     }
 
@@ -55,7 +59,8 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
         Func<DateTimeOffset>? clock,
         TimeSpan? interval,
         string? bundledAssetsDirectory,
-        Uri? codesEndpoint = null)
+        Uri? codesEndpoint = null,
+        Uri? toolsEndpoint = null)
     {
         this.bundledPayload = bundledPayload?.ToArray() ?? throw new ArgumentNullException(nameof(bundledPayload));
         this.cache = cache ?? throw new ArgumentNullException(nameof(cache));
@@ -64,6 +69,9 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
         LauncherBannersTransport.ValidateEndpoint(this.endpoint, allowConfigured: true, requireJson: true);
         this.codesEndpoint = codesEndpoint ?? new Uri(LauncherBannersTransport.ProductionCodesEndpoint);
         LauncherBannersTransport.ValidateEndpoint(this.codesEndpoint, allowConfigured: true, requireJson: true);
+        this.toolsEndpoint = toolsEndpoint;
+        if (this.toolsEndpoint is not null)
+            LauncherBannersTransport.ValidateEndpoint(this.toolsEndpoint, allowConfigured: true, requireJson: true);
         this.transport = transport ?? new LauncherBannersTransport();
         this.clock = clock ?? (() => DateTimeOffset.UtcNow);
         this.interval = interval ?? TimeSpan.FromHours(6);
@@ -78,6 +86,7 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
             bundledManifest);
         currentCodes = cache.TryLoadLastKnownGoodCodes(this.clock());
         if (currentCodes is not null) current = ApplyCodes(current, currentCodes);
+        currentTools = cache.TryLoadLastKnownGoodTools(observedAt);
     }
 
     public LauncherBannersManifest Current
@@ -100,6 +109,15 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
     }
 
     public event EventHandler? Updated;
+
+    public IReadOnlyList<LauncherOfficialTool> OfficialToolsFor(string gameId)
+    {
+        if (string.IsNullOrEmpty(gameId)) return [];
+        lock (sync)
+            return (currentTools?.Tools ?? [])
+                .Where(tool => string.Equals(tool.Game, gameId, StringComparison.Ordinal))
+                .ToArray();
+    }
 
     public string? TryResolveManagedAsset(LauncherBannersAsset asset) =>
         cache.TryResolveBundledAsset(asset, bundledAssetsDirectory) ?? cache.TryResolveManagedAsset(asset);
@@ -197,6 +215,48 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
             {
                 // Keep the current snapshot. If startup loaded a corrupt cache, the
                 // bundled parser already supplied the complete last-resort payload.
+            }
+            if (toolsEndpoint is not null)
+            {
+                try
+                {
+                    var payload = await transport.GetManifestAsync(
+                        toolsEndpoint,
+                        LauncherBannersTransport.MaximumManifestBytes,
+                        shutdown.Token).ConfigureAwait(false);
+                    var tools = LauncherBannersManifestParser.ParseTools(payload, fallback: false, clock());
+                    var unchanged = false;
+                    lock (sync)
+                    {
+                        if (currentTools is not null)
+                        {
+                            if (tools.GeneratedAt < currentTools.GeneratedAt)
+                                throw new InvalidDataException("Launcher tools generation moved backwards.");
+                            if (tools.GeneratedAt == currentTools.GeneratedAt)
+                            {
+                                if (!tools.Tools.SequenceEqual(currentTools.Tools))
+                                    throw new InvalidDataException("Launcher tools changed without a newer generation.");
+                                unchanged = true;
+                            }
+                        }
+                    }
+                    if (!unchanged)
+                    {
+                        await cache.PromoteToolsAsync(tools, payload, shutdown.Token).ConfigureAwait(false);
+                        if (!shutdown.IsCancellationRequested)
+                        {
+                            lock (sync)
+                            {
+                                changed |= !(currentTools?.Tools ?? []).SequenceEqual(tools.Tools);
+                                currentTools = tools;
+                            }
+                        }
+                    }
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException || !shutdown.IsCancellationRequested)
+                {
+                    // Keep the last approved tools snapshot.
+                }
             }
             try
             {

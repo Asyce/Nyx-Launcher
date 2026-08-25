@@ -13,6 +13,22 @@ public static class LauncherBannersManifestParser
     public static readonly TimeSpan MaximumFutureSkew = TimeSpan.FromMinutes(5);
     private static readonly string[] Games = ["gi", "hsr", "zzz", "wuwa", "ae"];
     private static readonly string[] Regions = ["global", "america", "europe", "asia"];
+    private static readonly LauncherOfficialTool[] ApprovedOfficialTools =
+    [
+        new("gi", "wiki", "Wiki", new Uri("https://wiki.hoyolab.com/pc/genshin/home")),
+        new("gi", "material-calculator", "Material Calculator", new Uri("https://act.hoyolab.com/ys/event/calculator-sea/index.html")),
+        new("gi", "battle-records", "Battle Records", new Uri("https://act.hoyolab.com/app/community-game-records-sea/index.html?gid=2#/ys")),
+        new("gi", "upgrade-guide", "Upgrade Guide", new Uri("https://act.hoyolab.com/ys/event/bbs-lineup-ys-sea/index.html")),
+        new("hsr", "wiki", "Wiki", new Uri("https://wiki.hoyolab.com/pc/hsr/home")),
+        new("hsr", "material-calculator", "Material Calculator", new Uri("https://act.hoyolab.com/sr/event/calculator/index.html")),
+        new("hsr", "battle-records", "Battle Records", new Uri("https://act.hoyolab.com/app/community-game-records-sea/index.html?gid=6#/hsr")),
+        new("hsr", "upgrade-guide", "Upgrade Guide", new Uri("https://act.hoyolab.com/sr/event/cultivation-tool/#/tools/suggestion")),
+        new("zzz", "wiki", "Wiki", new Uri("https://wiki.hoyolab.com/pc/zzz/home")),
+        new("zzz", "battle-records", "Battle Records", new Uri("https://act.hoyolab.com/app/zzz-game-record/index.html")),
+        new("ae", "wiki", "Wiki", new Uri("https://wiki.skport.com/endfield")),
+        new("ae", "material-calculator", "Material Calculator", new Uri("https://game.skport.com/tools/endfield/cost-calculator?header=0")),
+        new("ae", "team-recommendations", "Team Recommendations", new Uri("https://game.skport.com/tools/endfield/rec-team")),
+    ];
     private static readonly IReadOnlyDictionary<string, string[]> OfficialHosts = new Dictionary<string, string[]>(StringComparer.Ordinal)
     {
         ["gi"] = ["genshin.hoyoverse.com", "sg-hk4e-api.hoyoverse.com", "sg-hk4e-api.hoyolab.com"],
@@ -89,6 +105,51 @@ public static class LauncherBannersManifestParser
             throw new InvalidDataException("Launcher codes contain an unknown game.");
         return new LauncherCodesManifest(version, revision.ToLowerInvariant(), generatedAt, new ReadOnlyDictionary<string, IReadOnlyList<LauncherRedemptionCode>>(games));
     }
+
+    public static LauncherToolsManifest ParseTools(byte[] payload, bool fallback = false, DateTimeOffset? observedAt = null)
+    {
+        using var document = ParseJson(payload);
+        var root = document.RootElement;
+        RequireProperties(root, "schemaVersion", "generatedAt", "tools");
+        var version = RequiredInt(root, "schemaVersion");
+        if (version != 1) throw new InvalidDataException("Unsupported launcher tools schema.");
+        var generatedAt = RequiredDate(root, "generatedAt");
+        var observed = observedAt ?? DateTimeOffset.UtcNow;
+        if (generatedAt > observed + MaximumFutureSkew
+            || (!fallback && generatedAt < observed - MaximumRemoteAge))
+            throw new InvalidDataException("Launcher tools are outside the freshness window.");
+        if (!root.TryGetProperty("tools", out var toolsElement)
+            || toolsElement.ValueKind is not JsonValueKind.Array
+            || toolsElement.GetArrayLength() > ApprovedOfficialTools.Length)
+            throw new InvalidDataException("Invalid launcher tools.");
+
+        var selected = new HashSet<(string Game, string Id)>();
+        foreach (var item in toolsElement.EnumerateArray())
+        {
+            RequireProperties(item, "game", "id", "label", "url");
+            var game = RequiredExactText(item, "game", 8);
+            var id = RequiredExactText(item, "id", 64);
+            var label = RequiredExactText(item, "label", 80);
+            var rawUrl = RequiredExactText(item, "url", 2048);
+            if (!Uri.TryCreate(rawUrl, UriKind.Absolute, out var url)
+                || !IsApprovedOfficialTool(game, id, label, url))
+                throw new InvalidDataException("Launcher tool is not approved.");
+            if (!selected.Add((game, id))) throw new InvalidDataException("Duplicate launcher tool.");
+        }
+
+        return new LauncherToolsManifest(
+            version,
+            generatedAt,
+            ApprovedOfficialTools.Where(tool => selected.Contains((tool.Game, tool.Id))).ToArray());
+    }
+
+    public static bool IsApprovedOfficialTool(string game, string id, string label, Uri url) =>
+        url is not null
+        && ApprovedOfficialTools.Any(tool =>
+            string.Equals(tool.Game, game, StringComparison.Ordinal)
+            && string.Equals(tool.Id, id, StringComparison.Ordinal)
+            && string.Equals(tool.Label, label, StringComparison.Ordinal)
+            && string.Equals(tool.Url.OriginalString, url.OriginalString, StringComparison.Ordinal));
 
     private static LauncherBannersHealth ParseHealth(JsonElement element)
     {
@@ -503,6 +564,7 @@ public static class LauncherBannersManifestParser
     }
 
     private static string RequiredText(JsonElement element, string name, int max) { if (!element.TryGetProperty(name, out var value) || value.ValueKind is not JsonValueKind.String) throw new InvalidDataException($"Missing launcher field: {name}."); var text = value.GetString()?.Trim() ?? ""; if (text.Length == 0 || text.Length > max || text.Any(char.IsControl)) throw new InvalidDataException($"Invalid launcher field: {name}."); return text; }
+    private static string RequiredExactText(JsonElement element, string name, int max) { var text = RequiredText(element, name, max); if (!string.Equals(element.GetProperty(name).GetString(), text, StringComparison.Ordinal)) throw new InvalidDataException($"Invalid launcher field: {name}."); return text; }
     private static string? NullableText(JsonElement element, string name, int max) { if (!element.TryGetProperty(name, out var value) || value.ValueKind is JsonValueKind.Null) return null; var text = RequiredText(element, name, max); return text; }
     private static int RequiredInt(JsonElement element, string name) { if (!element.TryGetProperty(name, out var value) || !value.TryGetInt32(out var result)) throw new InvalidDataException($"Invalid launcher integer: {name}."); return result; }
     private static long RequiredLong(JsonElement element, string name) { if (!element.TryGetProperty(name, out var value) || !value.TryGetInt64(out var result)) throw new InvalidDataException($"Invalid launcher integer: {name}."); return result; }
