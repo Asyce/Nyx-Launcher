@@ -8,6 +8,7 @@ public sealed class GameDefinition
         string railProvider,
         string? accountProvider,
         bool supportsDailyCheckIn,
+        bool supportsNumericResource,
         bool supports120Fps,
         bool supportsPulls,
         bool supportsAchievements,
@@ -19,6 +20,7 @@ public sealed class GameDefinition
         RailProvider = railProvider;
         AccountProvider = accountProvider;
         SupportsDailyCheckIn = supportsDailyCheckIn;
+        SupportsNumericResource = supportsNumericResource;
         Supports120Fps = supports120Fps;
         SupportsPulls = supportsPulls;
         SupportsAchievements = supportsAchievements;
@@ -35,6 +37,8 @@ public sealed class GameDefinition
     public string? AccountProvider { get; }
 
     public bool SupportsDailyCheckIn { get; }
+
+    public bool SupportsNumericResource { get; }
 
     public bool Supports120Fps { get; }
 

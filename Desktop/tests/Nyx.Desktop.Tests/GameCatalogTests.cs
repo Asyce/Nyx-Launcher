@@ -11,16 +11,17 @@ public sealed class GameCatalogTests
     }
 
     [Theory]
-    [InlineData("gi", "HoYoPlay", "HoYoLAB", true, true, true, true, true, true)]
-    [InlineData("hsr", "HoYoPlay", "HoYoLAB", true, true, true, true, true, true)]
-    [InlineData("zzz", "HoYoPlay", "HoYoLAB", true, false, true, false, true, true)]
-    [InlineData("wuwa", "KURO GAMES", null, false, false, true, false, true, true)]
-    [InlineData("ae", "GRYPHLINK", "SKPORT", true, false, false, false, true, true)]
+    [InlineData("gi", "HoYoPlay", "HoYoLAB", true, true, true, true, true, true, true)]
+    [InlineData("hsr", "HoYoPlay", "HoYoLAB", true, true, true, true, true, true, true)]
+    [InlineData("zzz", "HoYoPlay", "HoYoLAB", true, true, false, true, false, true, true)]
+    [InlineData("wuwa", "KURO GAMES", "KURO GAMES", false, true, false, true, false, true, true)]
+    [InlineData("ae", "GRYPHLINK", "SKPORT", true, false, false, false, false, true, true)]
     public void Catalog_contains_the_approved_capability_matrix(
         string gameId,
         string railProvider,
         string? accountProvider,
         bool supportsDailyCheckIn,
+        bool supportsNumericResource,
         bool supports120Fps,
         bool supportsPulls,
         bool supportsAchievements,
@@ -32,6 +33,7 @@ public sealed class GameCatalogTests
         Assert.Equal(railProvider, game.RailProvider);
         Assert.Equal(accountProvider, game.AccountProvider);
         Assert.Equal(supportsDailyCheckIn, game.SupportsDailyCheckIn);
+        Assert.Equal(supportsNumericResource, game.SupportsNumericResource);
         Assert.Equal(supports120Fps, game.Supports120Fps);
         Assert.Equal(supportsPulls, game.SupportsPulls);
         Assert.Equal(supportsAchievements, game.SupportsAchievements);

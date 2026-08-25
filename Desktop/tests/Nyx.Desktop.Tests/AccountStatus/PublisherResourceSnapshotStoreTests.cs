@@ -85,11 +85,6 @@ public sealed class PublisherResourceSnapshotStoreTests
             now - TimeSpan.FromMinutes(4),
             now,
             selected: false));
-        Assert.True(PublisherResourceRefreshPolicy.IsDue(
-            now,
-            now,
-            selected: false,
-            force: true));
     }
 
     [Fact]

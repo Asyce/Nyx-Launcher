@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Nyx.Desktop.Core.Games;
 
 namespace Nyx.Desktop.Core.AccountStatus;
 
@@ -83,12 +84,17 @@ public sealed record PublisherAccountSummary(
 
 public sealed record PublisherAccountCatalogEntry(
     string GameId,
-    string Provider,
     Uri? CheckInUri,
     Uri? ResourceUri,
-    string ResourceName,
-    bool SupportsDailyCheckIn,
-    bool SupportsNumericResource);
+    string ResourceName)
+{
+    public string Provider => GameCatalog.GetRequired(GameId).AccountProvider
+        ?? throw new InvalidOperationException($"Game '{GameId}' has no account provider.");
+
+    public bool SupportsDailyCheckIn => GameCatalog.GetRequired(GameId).SupportsDailyCheckIn;
+
+    public bool SupportsNumericResource => GameCatalog.GetRequired(GameId).SupportsNumericResource;
+}
 
 public sealed record PublisherEndfieldAccountIdentity(string Uid, string Region)
 {
@@ -385,10 +391,8 @@ public static class PublisherResourceRefreshPolicy
     public static bool IsDue(
         DateTimeOffset? lastAttempt,
         DateTimeOffset now,
-        bool selected,
-        bool force = false) =>
-        force
-        || lastAttempt is null
+        bool selected) =>
+        lastAttempt is null
         || now - lastAttempt >= (selected ? SelectedInterval : BackgroundInterval);
 }
 
@@ -1752,23 +1756,23 @@ public static class PublisherAccountCatalog
         new ReadOnlyDictionary<string, PublisherAccountCatalogEntry>(
             new Dictionary<string, PublisherAccountCatalogEntry>(StringComparer.Ordinal)
             {
-                ["gi"] = new("gi", "HoYoLAB",
+                ["gi"] = new("gi",
                     new Uri("https://act.hoyolab.com/ys/event/signin-sea-v3/index.html?act_id=e202102251931481"),
                     new Uri("https://act.hoyolab.com/app/community-game-records-sea/index.html#/ys/realtime"),
-                    "Original Resin", true, true),
-                ["hsr"] = new("hsr", "HoYoLAB",
+                    "Original Resin"),
+                ["hsr"] = new("hsr",
                     new Uri("https://act.hoyolab.com/bbs/event/signin/hkrpg/e202303301540311.html?act_id=e202303301540311&lang=en-us"),
                     new Uri("https://act.hoyolab.com/app/community-game-records-sea/rpg/index.html#/hsr"),
-                    "Trailblaze Power", true, true),
-                ["zzz"] = new("zzz", "HoYoLAB",
+                    "Trailblaze Power"),
+                ["zzz"] = new("zzz",
                     new Uri("https://act.hoyolab.com/bbs/event/signin/zzz/e202406031448091.html?act_id=e202406031448091&lang=en-us"),
                     new Uri("https://act.hoyolab.com/app/zzz-game-record/index.html#/zzz"),
-                    "Battery Charge", true, true),
-                ["wuwa"] = new("wuwa", "KURO GAMES", null, null, "Waveplates", false, true),
-                ["ae"] = new("ae", "SKPORT",
+                    "Battery Charge"),
+                ["wuwa"] = new("wuwa", null, null, "Waveplates"),
+                ["ae"] = new("ae",
                     new Uri("https://game.skport.com/endfield/sign-in"),
                     new Uri("https://game.skport.com/endfield/game-data?header=0"),
-                    "Sanity", true, false),
+                    "Sanity"),
             });
 
     public static IReadOnlyCollection<PublisherAccountCatalogEntry> All => Entries.Values.ToArray();
