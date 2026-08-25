@@ -136,6 +136,10 @@ public sealed record GameSessionSnapshot(
     public bool WasObservedRunning => WasBootstrapObserved || WasRuntimeObserved;
 
     public bool ResumeResetPending => RequestedResumeGeneration > AppliedResumeGeneration;
+
+    public TimeSpan? LastLaunchDetectionDuration { get; init; }
+
+    public TimeSpan? LastCloseDetectionDuration { get; init; }
 }
 
 public enum GameLaunchDispatchStatus

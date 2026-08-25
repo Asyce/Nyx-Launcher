@@ -88,10 +88,13 @@ public sealed class LauncherVisualsCacheTests
                 _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable),
             }));
             using var http = new HttpClient(handler);
+            var cache = new LauncherVisualsCache(root, http);
+            Assert.Null(cache.LastRefreshDuration);
 
-            var selection = await new LauncherVisualsCache(root, http).RefreshAsync(gameId);
+            var selection = await cache.RefreshAsync(gameId);
 
             Assert.NotNull(selection);
+            Assert.NotNull(cache.LastRefreshDuration);
             Assert.Equal("image", selection.Kind);
             Assert.EndsWith(".webp", Assert.Single(selection.Files), StringComparison.Ordinal);
             Assert.Contains(handler.Requests, request => request.Uri == officialImage);
@@ -950,6 +953,7 @@ public sealed class LauncherVisualsCacheTests
             var cache = new LauncherVisualsCache(root, http);
 
             Assert.Null(await cache.RefreshAsync("ae"));
+            Assert.NotNull(cache.LastRefreshDuration);
             Assert.DoesNotContain(rawMarker, cache.LastFailure, StringComparison.Ordinal);
         });
     }
@@ -972,8 +976,10 @@ public sealed class LauncherVisualsCacheTests
             canceled.Cancel();
             using var canceledHttp = new HttpClient(new RecordingHandler((_, cancellationToken) =>
                 Task.FromCanceled<HttpResponseMessage>(cancellationToken)));
+            var canceledCache = new LauncherVisualsCache(root, canceledHttp);
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-                new LauncherVisualsCache(root, canceledHttp).RefreshAsync("ae", canceled.Token));
+                canceledCache.RefreshAsync("ae", canceled.Token));
+            Assert.NotNull(canceledCache.LastRefreshDuration);
             Assert.DoesNotContain(Directory.Exists(CacheRoot(root, "ae"))
                     ? Directory.EnumerateFiles(CacheRoot(root, "ae"))
                     : [],

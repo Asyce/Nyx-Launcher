@@ -316,6 +316,40 @@ public sealed class HoyoLabAccountSlotServiceTests
         Assert.DoesNotContain("snapshot.IsStale", method, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Account_restore_and_resource_refresh_durations_are_local_fail_closed_surfaces()
+    {
+        var surface = Slice(
+            "public TimeSpan? LastAccountRestoreDuration",
+            "public HoyoLabAccountSlotManagerState HoyoLabAccounts");
+        Assert.Contains("Volatile.Read(ref lastAccountRestoreDurationTicks)", surface, StringComparison.Ordinal);
+        Assert.Contains("public bool TryGetResourceRefreshDuration(string? gameId, out TimeSpan duration)", surface, StringComparison.Ordinal);
+        Assert.Contains("\"gi\" => Volatile.Read(ref giResourceRefreshDurationTicks)", surface, StringComparison.Ordinal);
+        Assert.Contains("\"hsr\" => Volatile.Read(ref hsrResourceRefreshDurationTicks)", surface, StringComparison.Ordinal);
+        Assert.Contains("\"zzz\" => Volatile.Read(ref zzzResourceRefreshDurationTicks)", surface, StringComparison.Ordinal);
+        Assert.Contains("_ => -1", surface, StringComparison.Ordinal);
+        Assert.Contains("return ticks >= 0", surface, StringComparison.Ordinal);
+
+        var refresh = Slice(
+            "private async Task<PublisherResourceSnapshot?> RefreshResourceCoreAsync",
+            "public Task<DailyCheckInResult> CheckInAsync");
+        AssertOrdered(
+            refresh,
+            "var started = Stopwatch.GetTimestamp()",
+            "try",
+            "finally",
+            "SetResourceRefreshDuration(entry.GameId, Stopwatch.GetElapsedTime(started))");
+
+        var restore = Slice("private void RestoreCachedResources()", "private void TrySetCanceledConnectState");
+        AssertOrdered(
+            restore,
+            "var started = Stopwatch.GetTimestamp()",
+            "try",
+            "finally",
+            "Volatile.Write(",
+            "Stopwatch.GetElapsedTime(started).Ticks");
+    }
+
     private static string Slice(string start, string end)
     {
         var startIndex = Service.IndexOf(start, StringComparison.Ordinal);

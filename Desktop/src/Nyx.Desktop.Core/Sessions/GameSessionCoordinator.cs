@@ -855,6 +855,7 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
                 WasRuntimeObserved = false,
                 LaunchRequestedAt = timeProvider.GetUtcNow(),
                 BootstrapObservedAt = null,
+                LastLaunchDetectionDuration = null,
                 FailureReason = GameSessionFailureReason.LaunchOutcomeUncertain,
             };
         }
@@ -950,8 +951,9 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         GameSessionSnapshot current,
         GameSessionEvidence evidence)
     {
-        var runtimeObserved = current.WasRuntimeObserved
-            || evidence.Runtime is ExactProcessPresence.Present;
+        var runtimeFirstConfirmed = !current.WasRuntimeObserved
+            && evidence.Runtime is ExactProcessPresence.Present;
+        var runtimeObserved = current.WasRuntimeObserved || runtimeFirstConfirmed;
         var bootstrapObserved = current.WasBootstrapObserved
             || evidence.Bootstrap is ExactProcessPresence.Present;
         var failureReason = current.FailureReason is GameSessionFailureReason.LaunchNeedsReview
@@ -972,6 +974,10 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
             BootstrapObservedAt = bootstrapObserved && !runtimeObserved
                 ? current.BootstrapObservedAt ?? timeProvider.GetUtcNow()
                 : current.BootstrapObservedAt,
+            LastLaunchDetectionDuration = runtimeFirstConfirmed
+                && current.LaunchRequestedAt is { } requestedAt
+                    ? timeProvider.GetUtcNow() - requestedAt
+                    : current.LastLaunchDetectionDuration,
             FailureReason = failureReason,
         };
     }
@@ -1130,7 +1136,10 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
                 LocalReadinessEvidence.NotFound => LocalGameStatus.NotFound,
                 _ => LocalGameStatus.NeedsReview,
             };
-        var idle = ResetToIdle(current, idleStatus);
+        var idle = ResetToIdle(current, idleStatus) with
+        {
+            LastCloseDetectionDuration = observedAt - current.FirstAbsentAt.Value,
+        };
         return current.FailureReason is GameSessionFailureReason.LaunchNeedsReview
             ? idle with { FailureReason = GameSessionFailureReason.LaunchNeedsReview }
             : idle;

@@ -932,7 +932,9 @@ public sealed class LauncherBannersContentTests
                 new FakeTransport(new HttpRequestException("offline")),
                 () => DateTimeOffset.Parse("2026-07-17T00:00:00Z"),
                 TimeSpan.FromMinutes(15));
+            Assert.Null(service.LastRefreshDuration);
             await service.RefreshAsync();
+            Assert.NotNull(service.LastRefreshDuration);
             Assert.Equal(bundled.Revision, service.Current.Revision);
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
@@ -1131,7 +1133,9 @@ public sealed class LauncherBannersContentTests
                 () => now,
                 TimeSpan.FromMinutes(15));
             Assert.Equal(LauncherBannersManifestParser.Parse(bundled, true, now).Revision, service.Current.Revision);
+            Assert.Null(service.LastRefreshDuration);
             await service.RefreshAsync();
+            Assert.NotNull(service.LastRefreshDuration);
             Assert.Equal(LauncherBannersManifestParser.Parse(healthy, true, now).Revision, service.Current.Revision);
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
@@ -1493,6 +1497,31 @@ public sealed class LauncherBannersContentTests
             var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
             Assert.DoesNotContain(LauncherBannersTransport.ProductionCodesEndpoint, exception.ToString(), StringComparison.Ordinal);
             Assert.Equal(0, transport.BannerRequests);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task Service_records_whole_refresh_duration_when_shutdown_cancels_it()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-duration-" + Guid.NewGuid().ToString("N"));
+        var transport = new BlockingCodesTransport();
+        try
+        {
+            await using var service = CodesService(
+                root,
+                DateTimeOffset.Parse("2026-07-17T01:00:00Z"),
+                transport);
+            var refresh = service.RefreshAsync();
+            await transport.Started.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+            await service.DisposeAsync();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresh);
+            Assert.NotNull(service.LastRefreshDuration);
         }
         finally
         {

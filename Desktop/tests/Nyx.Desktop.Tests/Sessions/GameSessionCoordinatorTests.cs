@@ -240,6 +240,45 @@ public sealed class GameSessionCoordinatorTests
     }
 
     [Fact]
+    public async Task Launch_and_two_sample_close_durations_preserve_until_an_admitted_relaunch()
+    {
+        var fixture = new SessionFixture();
+        fixture["gi"].EnqueueObservations(
+            ReadyAbsent,
+            ReadyRuntime,
+            ReadyRuntime,
+            ReadyAbsent,
+            ReadyAbsent,
+            ReadyAbsent);
+        await using var coordinator = fixture.CreateCoordinator();
+
+        var launched = await coordinator.RequestLaunchAsync("gi");
+        Assert.Equal(GameLaunchRequestOutcome.Accepted, launched.Outcome);
+        Assert.Null(launched.Snapshot.LastLaunchDetectionDuration);
+
+        fixture.Time.Advance(TimeSpan.FromSeconds(4));
+        var firstRuntime = await coordinator.RefreshAsync("gi");
+        Assert.Equal(TimeSpan.FromSeconds(4), firstRuntime.LastLaunchDetectionDuration);
+
+        fixture.Time.Advance(TimeSpan.FromSeconds(2));
+        var repeatedRuntime = await coordinator.RefreshAsync("gi");
+        Assert.Equal(TimeSpan.FromSeconds(4), repeatedRuntime.LastLaunchDetectionDuration);
+
+        var firstAbsence = await coordinator.RefreshAsync("gi");
+        Assert.Null(firstAbsence.LastCloseDetectionDuration);
+        fixture.Time.Advance(TimeSpan.FromSeconds(1));
+        var closed = await coordinator.RefreshAsync("gi");
+        Assert.Equal(LocalGameStatus.Ready, closed.Status);
+        Assert.Equal(TimeSpan.FromSeconds(1), closed.LastCloseDetectionDuration);
+        Assert.Equal(TimeSpan.FromSeconds(4), closed.LastLaunchDetectionDuration);
+
+        var relaunched = await coordinator.RequestLaunchAsync("gi");
+        Assert.Equal(GameLaunchRequestOutcome.Accepted, relaunched.Outcome);
+        Assert.Null(relaunched.Snapshot.LastLaunchDetectionDuration);
+        Assert.Equal(TimeSpan.FromSeconds(1), relaunched.Snapshot.LastCloseDetectionDuration);
+    }
+
+    [Fact]
     public async Task Bootstrap_without_runtime_fails_only_after_handoff_timeout()
     {
         var fixture = new SessionFixture();
@@ -274,6 +313,7 @@ public sealed class GameSessionCoordinatorTests
         Assert.Equal(1, tooSoon.ConsecutiveAbsentSamples);
         Assert.True(tooSoon.ObservationGeneration > first.ObservationGeneration);
         Assert.Equal(LocalGameStatus.Ready, closed.Status);
+        Assert.Equal(TimeSpan.FromSeconds(1), closed.LastCloseDetectionDuration);
     }
 
     [Fact]

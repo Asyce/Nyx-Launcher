@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using Nyx.Desktop.Core.Content;
 
 namespace Nyx.Desktop.Infrastructure.Content;
@@ -23,6 +24,7 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
     private Task? pump;
     private bool automaticRefreshEnabled;
     private bool disposed;
+    private long lastRefreshDurationTicks = -1;
 
     public LauncherBannersContentService(
         byte[] bundledPayload,
@@ -88,6 +90,15 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
         }
     }
 
+    public TimeSpan? LastRefreshDuration
+    {
+        get
+        {
+            var ticks = Volatile.Read(ref lastRefreshDurationTicks);
+            return ticks < 0 ? null : TimeSpan.FromTicks(ticks);
+        }
+    }
+
     public event EventHandler? Updated;
 
     public string? TryResolveManagedAsset(LauncherBannersAsset asset) =>
@@ -136,63 +147,71 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
 
     private async Task RunRefreshAsync()
     {
-        var changed = false;
+        var started = Stopwatch.GetTimestamp();
         try
         {
-            LauncherBannersManifest selected;
-            lock (sync) selected = current;
+            var changed = false;
             try
             {
-                changed |= await cache.HydrateAssetsAsync(
-                    selected,
-                    transport,
-                    bundledAssetsDirectory,
-                    shutdown.Token).ConfigureAwait(false);
+                LauncherBannersManifest selected;
+                lock (sync) selected = current;
+                try
+                {
+                    changed |= await cache.HydrateAssetsAsync(
+                        selected,
+                        transport,
+                        bundledAssetsDirectory,
+                        shutdown.Token).ConfigureAwait(false);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException || !shutdown.IsCancellationRequested)
+                {
+                    // Stale art must not prevent fetching a newer manifest.
+                }
+
+                var payload = await transport.GetManifestAsync(endpoint, LauncherBannersTransport.MaximumManifestBytes, shutdown.Token).ConfigureAwait(false);
+                var manifest = ApplyBundledUpcomingFallback(
+                    LauncherBannersManifestParser.Parse(payload, fallback: false, clock()),
+                    bundledManifest);
+                var promote = true;
+                lock (sync)
+                {
+                    if (manifest.GeneratedAt < current.GeneratedAt)
+                        throw new InvalidDataException("Launcher banner generation moved backwards.");
+                    if (manifest.GeneratedAt == current.GeneratedAt)
+                    {
+                        if (!string.Equals(manifest.Revision, current.Revision, StringComparison.Ordinal))
+                            throw new InvalidDataException("Launcher banner revision changed without a newer generation.");
+                    }
+                }
+                if (promote)
+                {
+                    await cache.PromoteAsync(manifest, payload, transport, bundledAssetsDirectory, shutdown.Token).ConfigureAwait(false);
+                    if (!shutdown.IsCancellationRequested)
+                    {
+                        lock (sync) current = currentCodes is null ? manifest : ApplyCodes(manifest, currentCodes);
+                        changed = true;
+                    }
+                }
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !shutdown.IsCancellationRequested)
             {
-                // Stale art must not prevent fetching a newer manifest.
+                // Keep the current snapshot. If startup loaded a corrupt cache, the
+                // bundled parser already supplied the complete last-resort payload.
             }
-
-            var payload = await transport.GetManifestAsync(endpoint, LauncherBannersTransport.MaximumManifestBytes, shutdown.Token).ConfigureAwait(false);
-            var manifest = ApplyBundledUpcomingFallback(
-                LauncherBannersManifestParser.Parse(payload, fallback: false, clock()),
-                bundledManifest);
-            var promote = true;
-            lock (sync)
+            try
             {
-                if (manifest.GeneratedAt < current.GeneratedAt)
-                    throw new InvalidDataException("Launcher banner generation moved backwards.");
-                if (manifest.GeneratedAt == current.GeneratedAt)
-                {
-                    if (!string.Equals(manifest.Revision, current.Revision, StringComparison.Ordinal))
-                        throw new InvalidDataException("Launcher banner revision changed without a newer generation.");
-                }
+                var codesResult = await StartCodesRefreshAsync(publishEvent: false).ConfigureAwait(false);
+                changed |= codesResult.Changed;
             }
-            if (promote)
+            finally
             {
-                await cache.PromoteAsync(manifest, payload, transport, bundledAssetsDirectory, shutdown.Token).ConfigureAwait(false);
-                if (!shutdown.IsCancellationRequested)
-                {
-                    lock (sync) current = currentCodes is null ? manifest : ApplyCodes(manifest, currentCodes);
-                    changed = true;
-                }
+                if (changed) Updated?.Invoke(this, EventArgs.Empty);
+                lock (sync) refresh = null;
             }
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException || !shutdown.IsCancellationRequested)
-        {
-            // Keep the current snapshot. If startup loaded a corrupt cache, the
-            // bundled parser already supplied the complete last-resort payload.
-        }
-        try
-        {
-            var codesResult = await StartCodesRefreshAsync(publishEvent: false).ConfigureAwait(false);
-            changed |= codesResult.Changed;
         }
         finally
         {
-            if (changed) Updated?.Invoke(this, EventArgs.Empty);
-            lock (sync) refresh = null;
+            Volatile.Write(ref lastRefreshDurationTicks, Stopwatch.GetElapsedTime(started).Ticks);
         }
     }
 

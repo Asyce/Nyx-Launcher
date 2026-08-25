@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -57,7 +58,17 @@ public sealed class LauncherVisualsCache : IAsyncDisposable
     private TaskCompletionSource? operationsDrained;
     private int activeOperations;
     private bool admissionClosed;
+    private long lastRefreshDurationTicks = -1;
     public string? LastFailure { get; private set; }
+
+    public TimeSpan? LastRefreshDuration
+    {
+        get
+        {
+            var ticks = Volatile.Read(ref lastRefreshDurationTicks);
+            return ticks < 0 ? null : TimeSpan.FromTicks(ticks);
+        }
+    }
 
     public LauncherVisualsCache(string dataDirectory, HttpClient? http = null, Uri? manifestUri = null)
     {
@@ -82,6 +93,7 @@ public sealed class LauncherVisualsCache : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         EnterOperation();
+        var started = Stopwatch.GetTimestamp();
         try
         {
             if (!Games.Contains(gameId)) return null;
@@ -107,6 +119,7 @@ public sealed class LauncherVisualsCache : IAsyncDisposable
         }
         finally
         {
+            Volatile.Write(ref lastRefreshDurationTicks, Stopwatch.GetElapsedTime(started).Ticks);
             ReleaseOperation();
         }
     }
@@ -116,6 +129,7 @@ public sealed class LauncherVisualsCache : IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         EnterOperation();
+        var started = Stopwatch.GetTimestamp();
         try
         {
             LastFailure = null;
@@ -177,6 +191,7 @@ public sealed class LauncherVisualsCache : IAsyncDisposable
         }
         finally
         {
+            Volatile.Write(ref lastRefreshDurationTicks, Stopwatch.GetElapsedTime(started).Ticks);
             ReleaseOperation();
         }
     }

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using Nyx.Desktop.Core.AccountStatus;
 using Nyx.Desktop.Core.Exports;
 using Nyx.Desktop.Infrastructure.AccountStatus;
@@ -66,6 +67,10 @@ public sealed class PublisherAccountService : IAsyncDisposable
     private bool hoyoLegacyCompatibilityAvailable;
     private HoyoLabAccountSlot? activeHoyoSlot;
     private bool disposed;
+    private long lastAccountRestoreDurationTicks = -1;
+    private long giResourceRefreshDurationTicks = -1;
+    private long hsrResourceRefreshDurationTicks = -1;
+    private long zzzResourceRefreshDurationTicks = -1;
 
     public PublisherAccountService(
         string root,
@@ -133,6 +138,28 @@ public sealed class PublisherAccountService : IAsyncDisposable
     }
 
     public event EventHandler? Updated;
+
+    public TimeSpan? LastAccountRestoreDuration
+    {
+        get
+        {
+            var ticks = Volatile.Read(ref lastAccountRestoreDurationTicks);
+            return ticks < 0 ? null : TimeSpan.FromTicks(ticks);
+        }
+    }
+
+    public bool TryGetResourceRefreshDuration(string? gameId, out TimeSpan duration)
+    {
+        var ticks = gameId switch
+        {
+            "gi" => Volatile.Read(ref giResourceRefreshDurationTicks),
+            "hsr" => Volatile.Read(ref hsrResourceRefreshDurationTicks),
+            "zzz" => Volatile.Read(ref zzzResourceRefreshDurationTicks),
+            _ => -1,
+        };
+        duration = ticks < 0 ? default : TimeSpan.FromTicks(ticks);
+        return ticks >= 0;
+    }
 
     public HoyoLabAccountSlotManagerState HoyoLabAccounts
     {
@@ -883,6 +910,25 @@ public sealed class PublisherAccountService : IAsyncDisposable
     }
 
     private async Task<PublisherResourceSnapshot?> RefreshResourceCoreAsync(
+        PublisherAccountCatalogEntry entry,
+        Func<IReadOnlyList<PublisherRoleChoice>, CancellationToken, Task<PublisherRoleBinding?>>? rolePicker,
+        CancellationToken cancellationToken)
+    {
+        var started = Stopwatch.GetTimestamp();
+        try
+        {
+            return await RunResourceRefreshAsync(
+                entry,
+                rolePicker,
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            SetResourceRefreshDuration(entry.GameId, Stopwatch.GetElapsedTime(started));
+        }
+    }
+
+    private async Task<PublisherResourceSnapshot?> RunResourceRefreshAsync(
         PublisherAccountCatalogEntry entry,
         Func<IReadOnlyList<PublisherRoleChoice>, CancellationToken, Task<PublisherRoleBinding?>>? rolePicker,
         CancellationToken cancellationToken)
@@ -2411,6 +2457,21 @@ public sealed class PublisherAccountService : IAsyncDisposable
 
     private void RestoreCachedResources()
     {
+        var started = Stopwatch.GetTimestamp();
+        try
+        {
+            RestoreCachedResourcesCore();
+        }
+        finally
+        {
+            Volatile.Write(
+                ref lastAccountRestoreDurationTicks,
+                Stopwatch.GetElapsedTime(started).Ticks);
+        }
+    }
+
+    private void RestoreCachedResourcesCore()
+    {
         if (!consent.IsEnabled("HoYoLAB") || !HasUsableHoyoAccount()) return;
         using var operation = CreateOperation("HoYoLAB", CancellationToken.None);
         var restoredResources = new Dictionary<string, PublisherResourceSnapshot>(StringComparer.Ordinal);
@@ -2446,6 +2507,22 @@ public sealed class PublisherAccountService : IAsyncDisposable
                 if (restoredStates.TryGetValue(gameId, out var state))
                     resourceStates[gameId] = state;
             }
+        }
+    }
+
+    private void SetResourceRefreshDuration(string gameId, TimeSpan duration)
+    {
+        switch (gameId)
+        {
+            case "gi":
+                Volatile.Write(ref giResourceRefreshDurationTicks, duration.Ticks);
+                break;
+            case "hsr":
+                Volatile.Write(ref hsrResourceRefreshDurationTicks, duration.Ticks);
+                break;
+            case "zzz":
+                Volatile.Write(ref zzzResourceRefreshDurationTicks, duration.Ticks);
+                break;
         }
     }
 
