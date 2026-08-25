@@ -12,6 +12,9 @@
     <ProjectReference Include="..\..\src\Nyx.Desktop.Core\Nyx.Desktop.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <Using Include="Nyx.Desktop.Core.Updating" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="Nyx.Desktop.Packaging.Tests" />
   </ItemGroup>
 </Project>

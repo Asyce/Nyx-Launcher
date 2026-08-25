@@ -15,7 +15,7 @@ public static class NyxInstaller
     {
         var safeBundle = SafePaths.RequireExistingDirectory(bundleRoot);
         var manifestPath = SafePaths.CombineUnder(safeBundle, "release.json");
-        var manifest = UpdateManifestReader.Read(manifestPath);
+        var manifest = UpdateManifestFile.Read(manifestPath);
         var packagePath = SafePaths.CombineUnder(safeBundle, $"payload/{manifest.PackageFile}");
         SafePaths.RequireExistingFile(packagePath);
 

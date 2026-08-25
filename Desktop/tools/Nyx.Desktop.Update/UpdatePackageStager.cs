@@ -3,6 +3,11 @@ using System.Security.Cryptography;
 
 namespace Nyx.Desktop.Update;
 
+internal enum StableUpdateStageCheckpoint
+{
+    ReadyPublished,
+}
+
 public static class UpdatePackageStager
 {
     public static void VerifyDownload(UpdateReleaseManifest manifest, string packagePath)
@@ -30,11 +35,47 @@ public static class UpdatePackageStager
     public static string Stage(
         UpdateReleaseManifest manifest,
         string packagePath,
-        string stagingRoot)
+        string stagingRoot) =>
+        StageCore(
+            manifest,
+            packagePath,
+            stagingRoot,
+            $"ready-{manifest.Version}",
+            requirePackageFileName: true,
+            temporaryDirectoryName: null,
+            checkpoint: null);
+
+    internal static string StageStable(
+        UpdateReleaseManifest manifest,
+        string packagePath,
+        string stagingRoot,
+        string artifactId,
+        Action<StableUpdateStageCheckpoint>? checkpoint = null)
+    {
+        var names = StableUpdateArtifactContract.CreateNames(artifactId, manifest.Version);
+        return StageCore(
+            manifest,
+            packagePath,
+            stagingRoot,
+            names.ReadyDirectoryName,
+            requirePackageFileName: false,
+            names.IncomingDirectoryName,
+            checkpoint);
+    }
+
+    private static string StageCore(
+        UpdateReleaseManifest manifest,
+        string packagePath,
+        string stagingRoot,
+        string readyDirectoryName,
+        bool requirePackageFileName,
+        string? temporaryDirectoryName,
+        Action<StableUpdateStageCheckpoint>? checkpoint)
     {
         UpdateManifestReader.Validate(manifest);
         var safePackage = SafePaths.RequireExistingFile(packagePath);
-        if (!string.Equals(Path.GetFileName(safePackage), manifest.PackageFile, StringComparison.Ordinal)
+        if (requirePackageFileName
+                && !string.Equals(Path.GetFileName(safePackage), manifest.PackageFile, StringComparison.Ordinal)
             || new FileInfo(safePackage).Length != manifest.PackageSize
             || !string.Equals(SafePaths.ComputeSha256(safePackage), manifest.PackageSha256, StringComparison.Ordinal))
         {
@@ -42,9 +83,12 @@ public static class UpdatePackageStager
         }
 
         var safeStagingRoot = SafePaths.CreateDirectoryTree(stagingRoot);
-        var temporary = Path.Combine(safeStagingRoot, $"incoming-{Guid.NewGuid():N}");
-        var ready = Path.Combine(safeStagingRoot, $"ready-{manifest.Version}");
-        if (Directory.Exists(ready) || File.Exists(ready))
+        var temporary = SafePaths.CombineUnder(
+            safeStagingRoot,
+            temporaryDirectoryName ?? $"incoming-{Guid.NewGuid():N}");
+        var ready = SafePaths.CombineUnder(safeStagingRoot, readyDirectoryName);
+        if (Directory.Exists(temporary) || File.Exists(temporary)
+            || Directory.Exists(ready) || File.Exists(ready))
         {
             throw new UpdateContractException("StageAlreadyExists");
         }
@@ -54,6 +98,7 @@ public static class UpdatePackageStager
         {
             ExtractAndVerify(manifest, safePackage, temporary);
             Directory.Move(temporary, ready);
+            checkpoint?.Invoke(StableUpdateStageCheckpoint.ReadyPublished);
             return ready;
         }
         catch

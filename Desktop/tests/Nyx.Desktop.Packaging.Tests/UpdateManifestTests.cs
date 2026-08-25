@@ -10,7 +10,7 @@ public sealed class UpdateManifestTests
         using var fixture = new PackageFixture();
         var expected = fixture.CreatePackage();
 
-        var actual = UpdateManifestReader.Read(fixture.ManifestPath);
+        var actual = UpdateManifestReader.Parse(File.ReadAllBytes(fixture.ManifestPath));
 
         Assert.Equal(expected.Version, actual.Version);
         Assert.Equal(expected.PackageSha256, actual.PackageSha256);

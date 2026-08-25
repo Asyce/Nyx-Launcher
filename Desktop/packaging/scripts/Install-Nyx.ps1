@@ -32,11 +32,13 @@ if ($LASTEXITCODE -ne 0) {
 
 $installRoot = Join-Path $env:LOCALAPPDATA 'Programs\Pengo Nyx'
 $app = Join-Path $installRoot 'app\Nyx.Desktop.App.exe'
+$controlUpdater = Join-Path $installRoot 'control\Nyx.Desktop.Update.exe'
 $startMenuDirectory = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Pengo'
 $shortcutPath = Join-Path $startMenuDirectory 'Nyx Desktop.lnk'
 try {
-    if (-not (Test-Path -LiteralPath $app -PathType Leaf)) {
-        throw 'Installed app entry point is missing.'
+    if (-not (Test-Path -LiteralPath $app -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $controlUpdater -PathType Leaf)) {
+        throw 'Installed app or control updater is missing.'
     }
 
     if (Test-Path -LiteralPath $startMenuDirectory) {
@@ -51,8 +53,9 @@ try {
 
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($shortcutPath)
-    $shortcut.TargetPath = $app
-    $shortcut.WorkingDirectory = Split-Path -Parent $app
+    $shortcut.TargetPath = $controlUpdater
+    $shortcut.Arguments = 'launch'
+    $shortcut.WorkingDirectory = Split-Path -Parent $controlUpdater
     $shortcut.IconLocation = "$app,0"
     $shortcut.Description = 'Nyx Desktop'
     $shortcut.Save()

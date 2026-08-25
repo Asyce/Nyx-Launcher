@@ -4690,7 +4690,7 @@ public sealed class PublisherAccountHardeningTests
         Assert.Contains("args.Cancel = true", app, StringComparison.Ordinal);
         Assert.Contains("DisposeWuWaAccountStatusAsync(_wuwaAccountStatus)", app, StringComparison.Ordinal);
         Assert.Contains("DisposePublisherAccountsAsync(_publisherAccounts)", app, StringComparison.Ordinal);
-        Assert.Contains("await Task.WhenAll(wuwaAccountShutdown, publisherAccountShutdown)", app, StringComparison.Ordinal);
+        Assert.Contains("await Task.WhenAll(wuwaAccountShutdown, publisherAccountShutdown, _stableUpdateTask)", app, StringComparison.Ordinal);
         Assert.Contains("_accountShutdownComplete = true", app, StringComparison.Ordinal);
         Assert.DoesNotContain("publisherAccounts.DisposeAsync().AsTask().GetAwaiter().GetResult()", app, StringComparison.Ordinal);
         Assert.DoesNotContain("accountStatus.DisposeAsync().AsTask().GetAwaiter().GetResult()", app, StringComparison.Ordinal);

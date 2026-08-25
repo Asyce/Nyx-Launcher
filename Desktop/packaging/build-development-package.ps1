@@ -427,6 +427,7 @@ try {
         '-p:ContinuousIntegrationBuild=true',
         "-p:PathMap=$repositoryRoot=C:\_src\Nyx",
         "-p:Version=$Version",
+        "-p:NyxReleaseChannel=$Channel",
         "-p:ApplicationManifest=$generatedAppManifest",
         "-p:AchievementHelperSource=$builtHelper",
         "-p:AchievementHelperSha256=$helperSha256",

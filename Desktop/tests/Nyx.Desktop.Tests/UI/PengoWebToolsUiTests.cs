@@ -228,7 +228,7 @@ public sealed class PengoWebToolsUiTests
         var shutdown = Slice(app, "private async Task ShutDownAccountsAndCloseAsync", "private void Window_Closed");
 
         Assert.Contains("DisposeExportsAsync(_exports, _pullExports)", shutdown, StringComparison.Ordinal);
-        Assert.Contains("await Task.WhenAll(wuwaAccountShutdown, publisherAccountShutdown)", shutdown, StringComparison.Ordinal);
+        Assert.Contains("await Task.WhenAll(wuwaAccountShutdown, publisherAccountShutdown, _stableUpdateTask)", shutdown, StringComparison.Ordinal);
         Assert.Contains("await exportShutdown", shutdown, StringComparison.Ordinal);
         Assert.Contains("_achievementExportHandoffs.WaitForActiveAsync()", shutdown, StringComparison.Ordinal);
         Assert.Contains("await achievementHandoffShutdown", shutdown, StringComparison.Ordinal);

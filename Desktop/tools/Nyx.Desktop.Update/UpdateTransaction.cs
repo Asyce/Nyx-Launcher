@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Security.Cryptography;
 using Nyx.Desktop.Core.State;
 
 namespace Nyx.Desktop.Update;
@@ -16,6 +18,7 @@ public sealed record UpdateLayout(
     public string StagingRoot => Path.Combine(InstallRoot, "staging");
     public string RollbackRoot => Path.Combine(InstallRoot, "rollback");
     public string PendingPath => Path.Combine(MetadataRoot, "pending-update.json");
+    public string PendingManifestPath => Path.Combine(MetadataRoot, "pending-release.json");
     public string TransactionPath => Path.Combine(MetadataRoot, "update-transaction.json");
     public string ActivePath => Path.Combine(MetadataRoot, "active-release.json");
     public string LockPath => Path.Combine(InstallRoot, ".update.lock");
@@ -43,7 +46,9 @@ public sealed record PendingUpdate(
     int SchemaVersion,
     string TargetVersion,
     string? PreviousVersion,
-    string? BackupDirectoryName);
+    string? BackupDirectoryName,
+    string? ManifestSha256 = null,
+    bool ConfirmationExpired = false);
 
 public sealed record ActiveRelease(int SchemaVersion, string Version, string Channel);
 
@@ -70,6 +75,13 @@ internal enum UpdateTransactionCheckpoint
     AbandonJournalCleared,
 }
 
+internal enum ConfirmationExpirationResult
+{
+    Expired,
+    Confirmed,
+    Busy,
+}
+
 internal sealed record UpdateJournal(
     int SchemaVersion,
     string Operation,
@@ -78,7 +90,8 @@ internal sealed record UpdateJournal(
     string? PreviousVersion,
     string? BackupDirectoryName,
     string? StagedDirectoryName,
-    string? DisplacedDirectoryName);
+    string? DisplacedDirectoryName,
+    string? ManifestSha256 = null);
 
 public static class UpdateTransaction
 {
@@ -109,19 +122,52 @@ public static class UpdateTransaction
     }
 
     public static void Apply(UpdateLayout layout, UpdateReleaseManifest manifest, string stagedRoot) =>
-        ApplyCore(layout, manifest, stagedRoot, checkpoint: null);
+        ApplyCore(layout, manifest, stagedRoot, stable: null, checkpoint: null);
+
+    public static void ApplyStable(
+        UpdateLayout layout,
+        UpdateReleaseManifest manifest,
+        string stagedRoot,
+        byte[] manifestBytes,
+        string parentVersion) =>
+        ApplyCore(
+            layout,
+            manifest,
+            stagedRoot,
+            new StableApply(manifestBytes, parentVersion),
+            checkpoint: null);
 
     internal static void ApplyWithFaultInjection(
         UpdateLayout layout,
         UpdateReleaseManifest manifest,
         string stagedRoot,
         Action<UpdateTransactionCheckpoint> checkpoint) =>
-        ApplyCore(layout, manifest, stagedRoot, checkpoint ?? throw new ArgumentNullException(nameof(checkpoint)));
+        ApplyCore(
+            layout,
+            manifest,
+            stagedRoot,
+            stable: null,
+            checkpoint ?? throw new ArgumentNullException(nameof(checkpoint)));
+
+    internal static void ApplyStableWithFaultInjection(
+        UpdateLayout layout,
+        UpdateReleaseManifest manifest,
+        string stagedRoot,
+        byte[] manifestBytes,
+        string parentVersion,
+        Action<UpdateTransactionCheckpoint> checkpoint) =>
+        ApplyCore(
+            layout,
+            manifest,
+            stagedRoot,
+            new StableApply(manifestBytes, parentVersion),
+            checkpoint ?? throw new ArgumentNullException(nameof(checkpoint)));
 
     private static void ApplyCore(
         UpdateLayout layout,
         UpdateReleaseManifest manifest,
         string stagedRoot,
+        StableApply? stable,
         Action<UpdateTransactionCheckpoint>? checkpoint)
     {
         ValidateLayout(layout);
@@ -149,6 +195,25 @@ public static class UpdateTransaction
 
         UpdatePackageStager.VerifyTree(manifest, safeStage);
         var active = ReadActive(layout.ActivePath);
+        string? manifestSha256 = null;
+        if (stable is not null)
+        {
+            var boundManifest = UpdateManifestReader.Parse(stable.ManifestBytes);
+            if (!ManifestMatches(boundManifest, manifest)
+                || !string.Equals(manifest.Channel, "stable", StringComparison.Ordinal)
+                || active is null
+                || !string.Equals(active.Channel, "stable", StringComparison.Ordinal)
+                || !string.Equals(active.Version, stable.ParentVersion, StringComparison.Ordinal)
+                || !StableUpdatePolicy.IsStrictUpgrade(active.Version, manifest.Version)
+                || !Directory.Exists(layout.AppRoot))
+            {
+                throw new UpdateContractException("StableUpgradeRejected");
+            }
+
+            manifestSha256 = Convert.ToHexStringLower(SHA256.HashData(stable.ManifestBytes));
+            AtomicFile.Write(layout.PendingManifestPath, stable.ManifestBytes);
+        }
+
         if (File.Exists(layout.AppRoot))
         {
             throw new UpdateContractException("UnsafePath");
@@ -170,7 +235,8 @@ public static class UpdateTransaction
             active?.Version,
             backupName,
             stagedName,
-            null);
+            null,
+            manifestSha256);
         AtomicJson.Write(layout.TransactionPath, journal);
         checkpoint?.Invoke(UpdateTransactionCheckpoint.ApplyJournalPrepared);
         _ = ReconcileLocked(layout, checkpoint);
@@ -187,9 +253,83 @@ public static class UpdateTransaction
             throw new UpdateContractException("PendingUpdateMismatch");
         }
 
+        if (pending.ManifestSha256 is not null)
+        {
+            throw new UpdateContractException("PendingManifestRequired");
+        }
+
+        RequireConfirmationOpen(pending);
         UpdatePackageStager.VerifyTree(manifest, layout.AppRoot);
         AtomicJson.Write(layout.ActivePath, new ActiveRelease(1, manifest.Version, manifest.Channel));
         File.Delete(layout.PendingPath);
+    }
+
+    public static bool ConfirmCurrent(
+        UpdateLayout layout,
+        string callerVersion,
+        Action requireCallerRunning)
+    {
+        ValidateLayout(layout);
+        if (!UpdateManifestReader.TryParseVersion(callerVersion))
+            throw new UpdateContractException("CallerProcessInvalid");
+        ArgumentNullException.ThrowIfNull(requireCallerRunning);
+        using var updateLock = AcquireLock(layout);
+        var pending = ReadPending(layout.PendingPath);
+        if (pending is not null)
+        {
+            _ = RequireBoundManifest(layout, pending.ManifestSha256, pending.TargetVersion);
+        }
+
+        if (pending is null || File.Exists(layout.TransactionPath))
+        {
+            _ = ReconcileLocked(layout, checkpoint: null);
+            pending = ReadPending(layout.PendingPath);
+        }
+
+        if (pending is null) return false;
+        if (!string.Equals(pending.TargetVersion, callerVersion, StringComparison.Ordinal))
+            throw new UpdateContractException("CallerProcessInvalid");
+
+        var manifest = RequireBoundManifest(layout, pending.ManifestSha256, pending.TargetVersion);
+        UpdatePackageStager.VerifyTree(manifest, layout.AppRoot);
+        RequireConfirmationOpen(pending);
+        requireCallerRunning();
+        AtomicJson.Write(layout.ActivePath, new ActiveRelease(1, manifest.Version, manifest.Channel));
+        File.Delete(layout.PendingPath);
+        File.Delete(layout.PendingManifestPath);
+        return true;
+    }
+
+    internal static ConfirmationExpirationResult TryExpireConfirmation(
+        UpdateLayout layout,
+        TimeSpan lockWait)
+    {
+        ValidateLayout(layout);
+        if (lockWait <= TimeSpan.Zero || lockWait.TotalMilliseconds > int.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(lockWait));
+
+        var timer = Stopwatch.StartNew();
+        while (true)
+        {
+            try
+            {
+                using var updateLock = AcquireLock(layout);
+                var pending = ReadPending(layout.PendingPath);
+                if (pending is null) return ConfirmationExpirationResult.Confirmed;
+                if (!pending.ConfirmationExpired)
+                {
+                    AtomicJson.Write(layout.PendingPath, pending with { ConfirmationExpired = true });
+                }
+
+                return ConfirmationExpirationResult.Expired;
+            }
+            catch (UpdateContractException exception) when (exception.Code == "UpdateBusy")
+            {
+                var remaining = lockWait - timer.Elapsed;
+                if (remaining <= TimeSpan.Zero) return ConfirmationExpirationResult.Busy;
+                Thread.Sleep((int)Math.Clamp(Math.Ceiling(remaining.TotalMilliseconds), 1, 25));
+            }
+        }
     }
 
     public static bool Rollback(UpdateLayout layout) => RollbackCore(layout, checkpoint: null);
@@ -203,37 +343,17 @@ public static class UpdateTransaction
     {
         ValidateLayout(layout);
         using var updateLock = AcquireLock(layout);
-        var reconciled = ReconcileLocked(layout, checkpoint: null);
+        var reconciled = ReconcileLocked(
+            layout,
+            checkpoint: null,
+            recoverPendingManifestMismatch: false);
         var pending = ReadPending(layout.PendingPath);
         if (pending is null)
         {
             return reconciled is ReconcileResult.RollbackCompleted;
         }
 
-        if (pending.BackupDirectoryName is null)
-        {
-            throw new UpdateContractException("RollbackUnavailable");
-        }
-
-        var backup = BackupPath(layout, pending.BackupDirectoryName);
-        if (!Directory.Exists(backup))
-        {
-            throw new UpdateContractException("RollbackUnavailable");
-        }
-
-        SafePaths.RequireExistingDirectory(backup);
-        var journal = new UpdateJournal(
-            1,
-            RollbackOperation,
-            PreparedPhase,
-            pending.TargetVersion,
-            pending.PreviousVersion,
-            pending.BackupDirectoryName,
-            null,
-            $"failed-{Guid.NewGuid():N}");
-        AtomicJson.Write(layout.TransactionPath, journal);
-        checkpoint?.Invoke(UpdateTransactionCheckpoint.RollbackJournalPrepared);
-        _ = ReconcileLocked(layout, checkpoint);
+        _ = BeginRollbackLocked(layout, pending, checkpoint);
         return true;
     }
 
@@ -269,7 +389,8 @@ public static class UpdateTransaction
             pending.PreviousVersion,
             null,
             null,
-            $"abandoned-{Guid.NewGuid():N}");
+            $"abandoned-{Guid.NewGuid():N}",
+            pending.ManifestSha256);
         AtomicJson.Write(layout.TransactionPath, journal);
         checkpoint?.Invoke(UpdateTransactionCheckpoint.AbandonJournalPrepared);
         _ = ReconcileLocked(layout, checkpoint);
@@ -287,7 +408,8 @@ public static class UpdateTransaction
         if (pending.SchemaVersion != 1
             || !UpdateManifestReader.TryParseVersion(pending.TargetVersion)
             || (pending.PreviousVersion is not null && !UpdateManifestReader.TryParseVersion(pending.PreviousVersion))
-            || (pending.BackupDirectoryName is not null && !IsGeneratedDirectoryName(pending.BackupDirectoryName, "previous-")))
+            || (pending.BackupDirectoryName is not null && !IsGeneratedDirectoryName(pending.BackupDirectoryName, "previous-"))
+            || (pending.ManifestSha256 is not null && !UpdateManifestReader.IsSha256(pending.ManifestSha256)))
         {
             throw new UpdateContractException("PendingMetadataInvalid");
         }
@@ -312,30 +434,121 @@ public static class UpdateTransaction
         return active;
     }
 
+    internal static void CleanupDeadStableArtifacts(
+        UpdateLayout layout,
+        Func<int, long, bool> ownerIsLive)
+    {
+        ArgumentNullException.ThrowIfNull(ownerIsLive);
+        ValidateLayout(layout);
+        if (!Directory.Exists(layout.StagingRoot)) return;
+
+        SafePaths.RequireNoReparseComponents(layout.InstallRoot);
+        using var updateLock = AcquireLock(layout);
+        var staging = SafePaths.RequireExistingDirectory(layout.StagingRoot);
+        var referencedStage = ReadJournal(layout.TransactionPath)?.StagedDirectoryName;
+        foreach (var ownerPath in Directory.EnumerateFiles(
+                     staging,
+                     "handoff-*.owner.json",
+                     SearchOption.TopDirectoryOnly))
+        {
+            var ownerName = Path.GetFileName(ownerPath);
+            if (!StableUpdateArtifactContract.TryGetIdFromOwnerFileName(ownerName, out var id))
+                continue;
+
+            StableUpdateArtifactOwner owner;
+            StableUpdateArtifactNames names;
+            try
+            {
+                var safeOwner = SafePaths.RequireExistingFile(ownerPath);
+                var length = new FileInfo(safeOwner).Length;
+                if (length is <= 0 or > StableUpdateArtifactContract.MaximumOwnerBytes) continue;
+                owner = StableUpdateArtifactContract.ParseOwner(File.ReadAllBytes(safeOwner));
+                names = StableUpdateArtifactContract.CreateNames(id, owner.TargetVersion);
+            }
+            catch (Exception exception) when (exception is
+                UpdateContractException or JsonException or IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+
+            if (string.Equals(names.ReadyDirectoryName, referencedStage, StringComparison.OrdinalIgnoreCase)
+                || ownerIsLive(owner.OwnerProcessId, owner.OwnerProcessStartedAtFileTime))
+            {
+                continue;
+            }
+
+            try
+            {
+                DeleteOwnedDirectory(SafePaths.CombineUnder(staging, names.IncomingDirectoryName));
+                DeleteOwnedDirectory(SafePaths.CombineUnder(staging, names.ReadyDirectoryName));
+                DeleteOwnedFile(SafePaths.CombineUnder(staging, names.PackageFileName));
+                DeleteOwnedFile(SafePaths.CombineUnder(staging, names.ManifestFileName));
+                DeleteOwnedFile(ownerPath);
+            }
+            catch (Exception exception) when (exception is
+                UpdateContractException or IOException or UnauthorizedAccessException)
+            {
+                // Keep the owner marker so a later launch can safely resume exact cleanup.
+            }
+        }
+    }
+
     private static ReconcileResult ReconcileLocked(
         UpdateLayout layout,
-        Action<UpdateTransactionCheckpoint>? checkpoint)
+        Action<UpdateTransactionCheckpoint>? checkpoint,
+        bool recoverPendingManifestMismatch = true)
     {
         var journal = ReadJournal(layout.TransactionPath);
         if (journal is null)
         {
+            var pending = ReadPending(layout.PendingPath);
+            if (recoverPendingManifestMismatch
+                && pending?.ManifestSha256 is not null
+                && !BoundManifestMatches(layout, pending.ManifestSha256, pending.TargetVersion))
+            {
+                return BeginRollbackLocked(layout, pending, checkpoint);
+            }
+
             return ReconcileResult.None;
         }
 
         return journal.Operation switch
         {
-            ApplyOperation => ReconcileApply(layout, journal, checkpoint),
+            ApplyOperation => ReconcileApplyOrRollback(layout, journal, checkpoint),
             RollbackOperation => ReconcileRollback(layout, journal, checkpoint),
             AbandonOperation => ReconcileAbandon(layout, journal, checkpoint),
             _ => throw new UpdateContractException("TransactionMetadataInvalid"),
         };
     }
 
-    private static ReconcileResult ReconcileApply(
+    private static ReconcileResult ReconcileApplyOrRollback(
         UpdateLayout layout,
         UpdateJournal journal,
         Action<UpdateTransactionCheckpoint>? checkpoint)
     {
+        if (journal.ManifestSha256 is null
+            || BoundManifestMatches(layout, journal.ManifestSha256, journal.TargetVersion))
+        {
+            return ReconcileApply(layout, journal, checkpoint);
+        }
+
+        _ = ReconcileApply(layout, journal, checkpoint, requireBoundManifest: false);
+        var pending = ReadPending(layout.PendingPath)
+            ?? throw new UpdateContractException("TransactionStateInvalid");
+        return BeginRollbackLocked(layout, pending, checkpoint);
+    }
+
+    private static ReconcileResult ReconcileApply(
+        UpdateLayout layout,
+        UpdateJournal journal,
+        Action<UpdateTransactionCheckpoint>? checkpoint,
+        bool requireBoundManifest = true)
+    {
+        if (requireBoundManifest && journal.ManifestSha256 is not null)
+        {
+            _ = RequireBoundManifest(layout, journal.ManifestSha256, journal.TargetVersion);
+        }
+
         var stage = StagedPath(layout, journal);
         var backup = journal.BackupDirectoryName is null ? null : BackupPath(layout, journal.BackupDirectoryName);
         var pending = ReadPending(layout.PendingPath);
@@ -428,11 +641,48 @@ public static class UpdateTransaction
 
         AtomicJson.Write(
             layout.PendingPath,
-            new PendingUpdate(1, journal.TargetVersion, journal.PreviousVersion, journal.BackupDirectoryName));
+            new PendingUpdate(
+                1,
+                journal.TargetVersion,
+                journal.PreviousVersion,
+                journal.BackupDirectoryName,
+                journal.ManifestSha256));
         checkpoint?.Invoke(UpdateTransactionCheckpoint.ApplyPendingPublished);
         File.Delete(layout.TransactionPath);
         checkpoint?.Invoke(UpdateTransactionCheckpoint.ApplyJournalCleared);
         return ReconcileResult.ApplyCompleted;
+    }
+
+    private static ReconcileResult BeginRollbackLocked(
+        UpdateLayout layout,
+        PendingUpdate pending,
+        Action<UpdateTransactionCheckpoint>? checkpoint)
+    {
+        if (pending.BackupDirectoryName is null)
+        {
+            throw new UpdateContractException("RollbackUnavailable");
+        }
+
+        var backup = BackupPath(layout, pending.BackupDirectoryName);
+        if (!Directory.Exists(backup))
+        {
+            throw new UpdateContractException("RollbackUnavailable");
+        }
+
+        SafePaths.RequireExistingDirectory(backup);
+        var journal = new UpdateJournal(
+            1,
+            RollbackOperation,
+            PreparedPhase,
+            pending.TargetVersion,
+            pending.PreviousVersion,
+            pending.BackupDirectoryName,
+            null,
+            $"failed-{Guid.NewGuid():N}",
+            pending.ManifestSha256);
+        AtomicJson.Write(layout.TransactionPath, journal);
+        checkpoint?.Invoke(UpdateTransactionCheckpoint.RollbackJournalPrepared);
+        return ReconcileRollback(layout, journal, checkpoint);
     }
 
     private static ReconcileResult ReconcileRollback(
@@ -497,6 +747,14 @@ public static class UpdateTransaction
         if (pending is not null)
         {
             File.Delete(layout.PendingPath);
+            if (journal.ManifestSha256 is not null)
+            {
+                File.Delete(layout.PendingManifestPath);
+            }
+        }
+        else if (journal.ManifestSha256 is not null && File.Exists(layout.PendingManifestPath))
+        {
+            File.Delete(layout.PendingManifestPath);
         }
 
         checkpoint?.Invoke(UpdateTransactionCheckpoint.RollbackPendingDeleted);
@@ -581,7 +839,9 @@ public static class UpdateTransaction
         };
         if (journal.SchemaVersion != 1 || !validOperation || !validPhase || !validBackup || !validStage
             || !validDisplaced || !validShape || !UpdateManifestReader.TryParseVersion(journal.TargetVersion)
-            || (journal.PreviousVersion is not null && !UpdateManifestReader.TryParseVersion(journal.PreviousVersion)))
+            || (journal.PreviousVersion is not null && !UpdateManifestReader.TryParseVersion(journal.PreviousVersion))
+            || (journal.ManifestSha256 is not null && !UpdateManifestReader.IsSha256(journal.ManifestSha256))
+            || (journal.Operation == AbandonOperation && journal.ManifestSha256 is not null))
         {
             throw new UpdateContractException("TransactionMetadataInvalid");
         }
@@ -657,11 +917,30 @@ public static class UpdateTransaction
         Directory.Move(source, destination);
     }
 
+    private static void RequireConfirmationOpen(PendingUpdate pending)
+    {
+        if (pending.ConfirmationExpired)
+            throw new UpdateContractException("ConfirmationExpired");
+    }
+
+    private static void DeleteOwnedDirectory(string path)
+    {
+        if (File.Exists(path)) throw new UpdateContractException("UnsafePath");
+        if (Directory.Exists(path)) SafePaths.DeleteTreeWithoutFollowingLinks(path);
+    }
+
+    private static void DeleteOwnedFile(string path)
+    {
+        if (Directory.Exists(path)) throw new UpdateContractException("UnsafePath");
+        if (File.Exists(path)) File.Delete(SafePaths.RequireExistingFile(path));
+    }
+
     private static void RequireMatchingPending(PendingUpdate pending, UpdateJournal journal)
     {
         if (!string.Equals(pending.TargetVersion, journal.TargetVersion, StringComparison.Ordinal)
             || !string.Equals(pending.PreviousVersion, journal.PreviousVersion, StringComparison.Ordinal)
-            || !string.Equals(pending.BackupDirectoryName, journal.BackupDirectoryName, StringComparison.Ordinal))
+            || !string.Equals(pending.BackupDirectoryName, journal.BackupDirectoryName, StringComparison.Ordinal)
+            || !string.Equals(pending.ManifestSha256, journal.ManifestSha256, StringComparison.Ordinal))
         {
             throw new UpdateContractException("TransactionStateInvalid");
         }
@@ -678,6 +957,72 @@ public static class UpdateTransaction
             return false;
         }
     }
+
+    private static UpdateReleaseManifest RequireBoundManifest(
+        UpdateLayout layout,
+        string? expectedSha256,
+        string targetVersion)
+    {
+        if (!UpdateManifestReader.IsSha256(expectedSha256)
+            || !File.Exists(layout.PendingManifestPath))
+        {
+            throw new UpdateContractException("PendingManifestMismatch");
+        }
+
+        var safePath = SafePaths.RequireExistingFile(layout.PendingManifestPath);
+        if (new FileInfo(safePath).Length is <= 0 or > UpdateManifestReader.MaximumManifestBytes)
+        {
+            throw new UpdateContractException("PendingManifestMismatch");
+        }
+
+        var bytes = File.ReadAllBytes(safePath);
+        if (!string.Equals(
+                Convert.ToHexStringLower(SHA256.HashData(bytes)),
+                expectedSha256,
+                StringComparison.Ordinal))
+        {
+            throw new UpdateContractException("PendingManifestMismatch");
+        }
+
+        var manifest = UpdateManifestReader.Parse(bytes);
+        if (!string.Equals(manifest.Channel, "stable", StringComparison.Ordinal)
+            || !string.Equals(manifest.Version, targetVersion, StringComparison.Ordinal))
+        {
+            throw new UpdateContractException("PendingManifestMismatch");
+        }
+
+        return manifest;
+    }
+
+    private static bool BoundManifestMatches(
+        UpdateLayout layout,
+        string expectedSha256,
+        string targetVersion)
+    {
+        try
+        {
+            _ = RequireBoundManifest(layout, expectedSha256, targetVersion);
+            return true;
+        }
+        catch (Exception exception) when (exception is
+            UpdateContractException or JsonException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static bool ManifestMatches(UpdateReleaseManifest left, UpdateReleaseManifest right) =>
+        left.SchemaVersion == right.SchemaVersion
+        && string.Equals(left.Product, right.Product, StringComparison.Ordinal)
+        && string.Equals(left.Channel, right.Channel, StringComparison.Ordinal)
+        && string.Equals(left.Version, right.Version, StringComparison.Ordinal)
+        && string.Equals(left.Architecture, right.Architecture, StringComparison.Ordinal)
+        && string.Equals(left.PackageFile, right.PackageFile, StringComparison.Ordinal)
+        && left.PackageSize == right.PackageSize
+        && string.Equals(left.PackageSha256, right.PackageSha256, StringComparison.Ordinal)
+        && string.Equals(left.EntryPoint, right.EntryPoint, StringComparison.Ordinal)
+        && string.Equals(left.PackageUrl, right.PackageUrl, StringComparison.Ordinal)
+        && left.Files.SequenceEqual(right.Files);
 
     private static bool IsGeneratedDirectoryName(string name, string prefix) =>
         name.Length == prefix.Length + 32
@@ -738,6 +1083,8 @@ public static class UpdateTransaction
         RollbackCompleted,
         AbandonCompleted,
     }
+
+    private sealed record StableApply(byte[] ManifestBytes, string ParentVersion);
 }
 
 public static class AtomicJson
@@ -771,6 +1118,36 @@ public static class AtomicJson
             {
                 File.Delete(temporary);
             }
+        }
+    }
+}
+
+internal static class AtomicFile
+{
+    public static void Write(string path, ReadOnlySpan<byte> bytes)
+    {
+        var directory = Path.GetDirectoryName(path) ?? throw new UpdateContractException("MetadataInvalid");
+        SafePaths.CreateDirectoryTree(directory);
+        var temporary = Path.Combine(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            using (var stream = new FileStream(
+                temporary,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 16 * 1024,
+                FileOptions.WriteThrough))
+            {
+                stream.Write(bytes);
+                stream.Flush(flushToDisk: true);
+            }
+
+            File.Move(temporary, path, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporary)) File.Delete(temporary);
         }
     }
 }

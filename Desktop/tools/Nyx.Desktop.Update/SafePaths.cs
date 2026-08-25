@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
+using Nyx.Desktop.Core.Updating;
 
 namespace Nyx.Desktop.Update;
 
@@ -91,34 +92,7 @@ public static class SafePaths
     }
 
     public static string RequireRelativeFile(string relativePath)
-    {
-        if (string.IsNullOrWhiteSpace(relativePath) || relativePath.Length > 512
-            || relativePath.Contains('\\', StringComparison.Ordinal)
-            || relativePath.StartsWith("/", StringComparison.Ordinal)
-            || relativePath.EndsWith("/", StringComparison.Ordinal))
-        {
-            throw new UpdateContractException("UnsafeRelativePath");
-        }
-
-        var segments = relativePath.Split('/');
-        if (segments.Length is <= 0 or > 32)
-        {
-            throw new UpdateContractException("UnsafeRelativePath");
-        }
-
-        foreach (var segment in segments)
-        {
-            if (segment.Length is <= 0 or > 128 || segment is "." or ".."
-                || segment.EndsWith(' ') || segment.EndsWith('.')
-                || segment.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
-                || IsReservedWindowsName(segment))
-            {
-                throw new UpdateContractException("UnsafeRelativePath");
-            }
-        }
-
-        return string.Join('/', segments);
-    }
+        => UpdateManifestReader.RequireRelativeFile(relativePath);
 
     public static string CombineUnder(string trustedRoot, string relativePath)
     {
@@ -227,19 +201,6 @@ public static class SafePaths
         }
 
         return root;
-    }
-
-    private static bool IsReservedWindowsName(string segment)
-    {
-        var stem = segment.Split('.')[0];
-        return stem.Equals("CON", StringComparison.OrdinalIgnoreCase)
-            || stem.Equals("PRN", StringComparison.OrdinalIgnoreCase)
-            || stem.Equals("AUX", StringComparison.OrdinalIgnoreCase)
-            || stem.Equals("NUL", StringComparison.OrdinalIgnoreCase)
-            || (stem.Length == 4
-                && (stem.StartsWith("COM", StringComparison.OrdinalIgnoreCase)
-                    || stem.StartsWith("LPT", StringComparison.OrdinalIgnoreCase))
-                && stem[3] is >= '1' and <= '9');
     }
 
     private static BoundDirectoryChain OpenBoundDirectoryChain(string fullPath)

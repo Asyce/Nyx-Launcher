@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Dispatching;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.UI;
 using Windows.UI.Text;
@@ -30,6 +31,7 @@ using Nyx.Desktop.Core.PublisherGames;
 using Nyx.Desktop.Core.Recovery;
 using Nyx.Desktop.Core.Sessions;
 using Nyx.Desktop.Core.State;
+using Nyx.Desktop.Core.Updating;
 using Nyx.Desktop.Infrastructure.Genshin;
 using Nyx.Desktop.Infrastructure.Games;
 using Nyx.Desktop.Infrastructure.Content;
@@ -39,6 +41,7 @@ using Nyx.Desktop.Infrastructure.Launching;
 using Nyx.Desktop.Infrastructure.PublisherMaintenance;
 using Nyx.Desktop.Infrastructure.PublisherGames;
 using Nyx.Desktop.Infrastructure.Sessions;
+using Nyx.Desktop.Infrastructure.Updating;
 using Nyx_Desktop_App.ViewModels;
 using Windows.Networking.Connectivity;
 
@@ -211,6 +214,8 @@ public sealed partial class MainPage : Page
     private bool reactivationSubscribed;
     private bool networkStatusSubscribed;
     private bool endfieldRootDiscoverySubscribed;
+    private bool stableUpdateScheduled;
+    private bool stableUpdateFramePending;
     private int networkAvailability = -1;
     private int networkContentRefreshInFlight;
     private int networkRefreshGeneration;
@@ -649,6 +654,7 @@ public sealed partial class MainPage : Page
         }
 
         RenderSelection();
+        ScheduleStableUpdateAfterFirstFrame();
         StartLauncherVisualPreload(lease);
         _ = RefreshPublisherResourcesOnStartupAsync(lease);
         var hoyoCheck = updaterScanFinished
@@ -669,6 +675,12 @@ public sealed partial class MainPage : Page
 
     private void MainPage_Unloaded(object sender, RoutedEventArgs e)
     {
+        if (stableUpdateFramePending)
+        {
+            CompositionTarget.Rendering -= StableUpdate_FirstFrameRendering;
+            stableUpdateFramePending = false;
+        }
+
         launcherVisualGeneration++;
         launcherBackgroundCrossfade?.Stop();
         launcherBackgroundCrossfade = null;
@@ -5328,6 +5340,83 @@ public sealed partial class MainPage : Page
                 ? Visibility.Visible
                 : Visibility.Collapsed;
         LaunchResourceRefreshButton.IsEnabled = !publisherAccountActionInFlight;
+    }
+
+    private void ScheduleStableUpdateAfterFirstFrame()
+    {
+        if (stableUpdateScheduled) return;
+        stableUpdateScheduled = true;
+        stableUpdateFramePending = true;
+        CompositionTarget.Rendering += StableUpdate_FirstFrameRendering;
+    }
+
+    private void StableUpdate_FirstFrameRendering(object? sender, object e)
+    {
+        CompositionTarget.Rendering -= StableUpdate_FirstFrameRendering;
+        stableUpdateFramePending = false;
+        _ = DispatcherQueue.TryEnqueue(
+            DispatcherQueuePriority.Low,
+            () => app.StartStableUpdate(RunStableUpdateAsync));
+    }
+
+    private async Task RunStableUpdateAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var installation = StableUpdatePolicy.FindInstalled(
+                AppContext.BaseDirectory,
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                StableUpdateBuildIdentity.Channel,
+                StableUpdateBuildIdentity.Version);
+            if (installation is null) return;
+
+            if (!await StableUpdateHandoffClient.ConfirmCurrentAsync(
+                installation.ControlUpdaterPath,
+                Environment.ProcessId,
+                cancellationToken)) return;
+            using var transport = new StableUpdateTransport();
+            var update = await transport.CheckAsync(
+                installation.CurrentVersion,
+                cancellationToken);
+            if (update is null) return;
+
+            var download = await transport.DownloadIfAcceptedAsync(
+                update,
+                installation.StagingRoot,
+                () => ConfirmStableUpdateAsync(update.Manifest, cancellationToken),
+                cancellationToken);
+            if (download is null) return;
+
+            _ = await StableUpdateHandoffClient.HandoffAsync(
+                installation.ControlUpdaterPath,
+                download,
+                Environment.ProcessId,
+                app.BeginStableUpdateShutdown,
+                cancellationToken);
+        }
+        catch (Exception)
+        {
+            // Installed update checks are optional and intentionally silent.
+        }
+    }
+
+    private async Task<bool> ConfirmStableUpdateAsync(
+        UpdateReleaseManifest manifest,
+        CancellationToken cancellationToken)
+    {
+        var mebibytes = manifest.PackageSize / (1024d * 1024d);
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "Nyx update available",
+            Content = $"Version {manifest.Version} is ready ({mebibytes:0.#} MB). Download and install it now?",
+            PrimaryButtonText = "Update now",
+            CloseButtonText = "Not now",
+            DefaultButton = ContentDialogButton.Primary,
+            PrimaryButtonStyle = (Style)Application.Current.Resources["NyxDialogPrimaryStyle"],
+            CloseButtonStyle = (Style)Application.Current.Resources["NyxDialogQuietStyle"],
+        };
+        return await dialog.ShowAsync().AsTask(cancellationToken) is ContentDialogResult.Primary;
     }
 
     private void RenderPreInstallNotice(GameLauncherItem selected)

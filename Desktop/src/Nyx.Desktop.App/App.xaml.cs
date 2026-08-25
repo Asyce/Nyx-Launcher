@@ -47,6 +47,10 @@ public partial class App : Application
     private PublisherAccountService? _publisherAccounts;
     private Hsr120FpsSetting? _hsr120FpsSetting;
     private GameScreenshotFolderResolver? _screenshotFolders;
+    private readonly CancellationTokenSource _stableUpdateCancellation = new();
+    private Task _stableUpdateTask = Task.CompletedTask;
+    private int _stableUpdateStarted;
+    private bool _stableUpdateHandoffCommitted;
     private bool _accountShutdownStarted;
     private bool _accountShutdownComplete;
     private CancellationTokenSource? _endfieldDiscoveryCancellation;
@@ -742,6 +746,7 @@ public partial class App : Application
         args.Cancel = true;
         if (_accountShutdownStarted) return;
         _accountShutdownStarted = true;
+        if (!_stableUpdateHandoffCommitted) _stableUpdateCancellation.Cancel();
         sender.Hide();
         SessionUiLifetime.Terminate();
         Interlocked.Exchange(ref _endfieldDiscoveryCancellation, null)?.Cancel();
@@ -764,7 +769,7 @@ public partial class App : Application
         var achievementHandoffShutdown = _achievementExportHandoffs is null
             ? Task.CompletedTask
             : _achievementExportHandoffs.WaitForActiveAsync();
-        await Task.WhenAll(wuwaAccountShutdown, publisherAccountShutdown);
+        await Task.WhenAll(wuwaAccountShutdown, publisherAccountShutdown, _stableUpdateTask);
         await exportShutdown;
         await achievementHandoffShutdown;
         _exports = null;
@@ -779,6 +784,19 @@ public partial class App : Application
         {
             // Explicit unregistration is best effort; shutdown must still close the window.
         }
+        _window?.Close();
+    }
+
+    internal void StartStableUpdate(Func<CancellationToken, Task> runUpdate)
+    {
+        ArgumentNullException.ThrowIfNull(runUpdate);
+        if (_accountShutdownStarted || Interlocked.Exchange(ref _stableUpdateStarted, 1) != 0) return;
+        _stableUpdateTask = runUpdate(_stableUpdateCancellation.Token);
+    }
+
+    internal void BeginStableUpdateShutdown()
+    {
+        _stableUpdateHandoffCommitted = true;
         _window?.Close();
     }
 

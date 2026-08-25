@@ -305,6 +305,57 @@ public sealed class PackagingScriptTests
     }
 
     [Fact]
+    public void Stable_update_is_first_frame_prompted_and_shortcut_routes_through_control()
+    {
+        var install = File.ReadAllText(Path.Combine(PackagingRoot, "scripts", "Install-Nyx.ps1"));
+        var build = File.ReadAllText(Path.Combine(PackagingRoot, "build-development-package.ps1"));
+        var appProject = File.ReadAllText(Path.Combine(
+            DesktopRoot,
+            "src",
+            "Nyx.Desktop.App",
+            "Nyx.Desktop.App.csproj"));
+        var mainPage = File.ReadAllText(Path.Combine(
+            DesktopRoot,
+            "src",
+            "Nyx.Desktop.App",
+            "MainPage.xaml.cs"));
+        var app = File.ReadAllText(Path.Combine(
+            DesktopRoot,
+            "src",
+            "Nyx.Desktop.App",
+            "App.xaml.cs"));
+        var handoff = File.ReadAllText(Path.Combine(
+            DesktopRoot,
+            "src",
+            "Nyx.Desktop.Infrastructure",
+            "Updating",
+            "StableUpdateHandoffClient.cs"));
+
+        Assert.Contains("$shortcut.TargetPath = $controlUpdater", install, StringComparison.Ordinal);
+        Assert.Contains("$shortcut.Arguments = 'launch'", install, StringComparison.Ordinal);
+        Assert.Contains("$shortcut.WorkingDirectory = Split-Path -Parent $controlUpdater", install, StringComparison.Ordinal);
+        Assert.Contains("-p:NyxReleaseChannel=$Channel", build, StringComparison.Ordinal);
+        Assert.Contains("PengoReleaseChannel", appProject, StringComparison.Ordinal);
+        Assert.Contains("CompositionTarget.Rendering += StableUpdate_FirstFrameRendering", mainPage, StringComparison.Ordinal);
+        Assert.Contains("DispatcherQueuePriority.Low", mainPage, StringComparison.Ordinal);
+        Assert.Contains("app.StartStableUpdate(RunStableUpdateAsync)", mainPage, StringComparison.Ordinal);
+        Assert.Contains("DownloadIfAcceptedAsync", mainPage, StringComparison.Ordinal);
+        Assert.True(
+            mainPage.IndexOf("ConfirmStableUpdateAsync", StringComparison.Ordinal)
+            < mainPage.IndexOf("StableUpdateHandoffClient.HandoffAsync", StringComparison.Ordinal));
+        Assert.True(
+            handoff.IndexOf("beginShutdown();", StringComparison.Ordinal)
+            < handoff.IndexOf("WriteLineAsync(\"APPLY\")", StringComparison.Ordinal));
+        Assert.Contains("private readonly CancellationTokenSource _stableUpdateCancellation", app, StringComparison.Ordinal);
+        Assert.Contains("private Task _stableUpdateTask = Task.CompletedTask", app, StringComparison.Ordinal);
+        Assert.Contains("if (!_stableUpdateHandoffCommitted) _stableUpdateCancellation.Cancel();", app, StringComparison.Ordinal);
+        Assert.Contains("publisherAccountShutdown, _stableUpdateTask", app, StringComparison.Ordinal);
+        Assert.True(
+            app.IndexOf("_stableUpdateHandoffCommitted = true;", StringComparison.Ordinal)
+            < app.IndexOf("_window?.Close();", app.IndexOf("internal void BeginStableUpdateShutdown", StringComparison.Ordinal), StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Stable_package_seals_the_tag_derived_version_channel_url_and_binary_versions()
     {
         var build = File.ReadAllText(Path.Combine(PackagingRoot, "build-development-package.ps1"));

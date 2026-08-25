@@ -124,7 +124,7 @@ public sealed class WuWaAccountStatusUiTests
 
         Assert.Contains("args.Cancel = true", close, StringComparison.Ordinal);
         Assert.Contains("DisposeWuWaAccountStatusAsync(_wuwaAccountStatus)", close, StringComparison.Ordinal);
-        Assert.Contains("await Task.WhenAll(wuwaAccountShutdown, publisherAccountShutdown)", close, StringComparison.Ordinal);
+        Assert.Contains("await Task.WhenAll(wuwaAccountShutdown, publisherAccountShutdown, _stableUpdateTask)", close, StringComparison.Ordinal);
         Assert.Contains("_accountShutdownComplete = true", close, StringComparison.Ordinal);
         Assert.Contains("await accountStatus.DisposeAsync()", dispose, StringComparison.Ordinal);
         Assert.DoesNotContain("GetAwaiter().GetResult()", dispose, StringComparison.Ordinal);

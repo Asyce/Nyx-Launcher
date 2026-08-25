@@ -19,11 +19,13 @@
     <Nullable>enable</Nullable>
     <AchievementHelperSha256 Condition="'$(AchievementHelperSha256)' == ''">0000000000000000000000000000000000000000000000000000000000000000</AchievementHelperSha256>
     <Genshin120HelperSha256 Condition="'$(Genshin120HelperSha256)' == ''">0000000000000000000000000000000000000000000000000000000000000000</Genshin120HelperSha256>
+    <NyxReleaseChannel Condition="'$(NyxReleaseChannel)' == ''">development</NyxReleaseChannel>
   </PropertyGroup>
 
   <ItemGroup>
     <AssemblyMetadata Include="PengoAchievementHelperSha256" Value="$(AchievementHelperSha256)" />
     <AssemblyMetadata Include="PengoGenshin120HelperSha256" Value="$(Genshin120HelperSha256)" />
+    <AssemblyMetadata Include="PengoReleaseChannel" Value="$(NyxReleaseChannel)" />
     <Using Include="Nyx.Desktop.Infrastructure.Exports" />
   </ItemGroup>
 
