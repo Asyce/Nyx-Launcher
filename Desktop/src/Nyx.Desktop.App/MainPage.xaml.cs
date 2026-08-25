@@ -672,6 +672,9 @@ public sealed partial class MainPage : Page
 
     private void MainPage_Unloaded(object sender, RoutedEventArgs e)
     {
+        launcherVisualGeneration++;
+        launcherBackgroundCrossfade?.Stop();
+        launcherBackgroundCrossfade = null;
         StopAmbientAnimations();
         launcherGalleryTimer.Stop();
         LauncherMotionBackground.MediaPlayer?.Pause();
@@ -5696,10 +5699,13 @@ public sealed partial class MainPage : Page
                 ? launcherMotionPrimaryGeneration
                 : launcherMotionSecondaryGeneration;
             if (generation != launcherVisualGeneration
-                || activeLauncherVisual is not { Kind: "video", Files.Count: > 1 } selection) return;
+                || activeLauncherVisual is not { Kind: "video" } selection) return;
             HideLauncherMotionBackgrounds();
-            SetBackgroundSource(selection.Files[1]);
-            BackgroundArtwork.Opacity = 1;
+            if (selection.Files.Count > 1)
+                PrepareLauncherImageBackground(
+                    selection.Files[1],
+                    generation,
+                    TimeSpan.FromMilliseconds(380));
         });
     }
 

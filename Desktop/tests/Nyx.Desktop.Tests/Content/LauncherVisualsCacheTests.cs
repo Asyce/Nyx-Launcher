@@ -11,19 +11,23 @@ public sealed class LauncherVisualsCacheTests
     private const string HoyoEndpoint = "https://sg-hyp-api.hoyoverse.com/hyp/hyp-connect/api/getAllGameBasicInfo?launcher_id=VYTpXlbWo8&language=en-us";
     private const string HoyoGenshinVideo = "https://launcher-webstatic.hoyoverse.com/launcher-public/2026/08/11/8e1c78aaa6e33ed60b88e12a461f8ee5_960034339638640640.webm";
     private const string HoyoGenshinImage = "https://launcher-webstatic.hoyoverse.com/launcher-public/2026/08/11/7add3d312f1a796796e6b7b939a1f3a4_3849034172684705523.webp";
-    private const string HoyoHsrVideo = "https://fastcdn.hoyoverse.com/static-resource-v2/2026/07/09/afba5bfdb3678ac02b6cd2705e44e8db_635706159057290737.webm";
-    private const string HoyoZzzVideo = "https://fastcdn.hoyoverse.com/static-resource-v2/2026/07/27/ac4360ca5c3247dd5630ecb5a261d9ca_2272221460347633592.webm";
+    private const string HoyoHsrVideo = "https://fastcdn.hoyoverse.com/static-resource-v2/2026/08/21/e03cdbee1cd9f23890a912539cdbd24b_6037866158777122843.webm";
+    private const string HoyoHsrImage = "https://fastcdn.hoyoverse.com/static-resource-v2/2026/08/21/0ad3be08f9842b2acd4713c08346aa0d_7479681194112238612.webp";
+    private const string HoyoZzzVideo = "https://fastcdn.hoyoverse.com/static-resource-v2/2026/08/17/f1ca2e4158a18b4a770bb956a07f8ea8_823680119809509683.webm";
+    private const string HoyoZzzImage = "https://fastcdn.hoyoverse.com/static-resource-v2/2026/08/17/467d79a09078b7e5a96a46c092f3d972_6212424333152206963.webp";
     private const string WuwaIndexEndpoint = "https://prod-alicdn-gamestarter.kurogame.com/launcher/launcher/50004_obOHXFrFanqsaIEOmuKroCcbZkQRBC7c/G153/index.json";
     private const string WuwaBackgroundId = "nmJutnA7saYMz2eJ46CL8mB3VUEZvyCs";
     private const string WuwaBackgroundEndpoint = "https://prod-alicdn-gamestarter.kurogame.com/launcher/50004_obOHXFrFanqsaIEOmuKroCcbZkQRBC7c/G153/background/nmJutnA7saYMz2eJ46CL8mB3VUEZvyCs/en.json";
     private const string WuwaVideo = "https://hw-pcdownload-qcloud.aki-game.net/launcher/clientUpload/0nr2n8wkbta7l7flfl.mp4";
+    private const string WuwaImage = "https://hw-pcdownload-qcloud.aki-game.net/launcher/clientUpload/kp82e0hn4uq2qqwz80.webp";
     private const string OfficialEndpoint = "https://launcher.gryphline.com/api/proxy/web/batch_proxy";
     private const string OfficialVideo = "https://gl-utils-public.hg-cdn.com/hg-utils/prod/eppcsuwqpaueijqk/YDUTE5gscDZ229CW/background/main.mp4";
+    private const string OfficialImage = "https://gl-utils-public.hg-cdn.com/hg-utils/prod/eppcsuwqpaueijqk/YDUTE5gscDZ229CW/background/main.png";
     private const string OfficialRequest = "{\"proxy_reqs\":[{\"kind\":\"get_main_bg_image\",\"get_main_bg_image_req\":{\"appcode\":\"YDUTE5gscDZ229CW\",\"language\":\"en-us\",\"channel\":\"6\",\"sub_channel\":\"6\",\"platform\":\"Windows\",\"source\":\"launcher\"}}]}";
 
     [Theory]
-    [InlineData("hsr", HoyoHsrVideo, null)]
-    [InlineData("zzz", HoyoZzzVideo, null)]
+    [InlineData("hsr", HoyoHsrVideo, HoyoHsrImage)]
+    [InlineData("zzz", HoyoZzzVideo, HoyoZzzImage)]
     public async Task Hoyo_refresh_uses_the_current_official_launcher_video_before_Pengo_fallback(
         string gameId,
         string officialVideo,
@@ -62,6 +66,77 @@ public sealed class LauncherVisualsCacheTests
                     new LauncherVisualsCache(root, http).TryLoadLastGood(gameId)).Files.Count);
             }
             Assert.DoesNotContain(handler.Requests, static request => request.Uri == LauncherVisualsCache.DefaultManifestUri.AbsoluteUri);
+        });
+    }
+
+    [Theory]
+    [InlineData("gi", HoyoGenshinImage)]
+    [InlineData("hsr", HoyoHsrImage)]
+    [InlineData("zzz", HoyoZzzImage)]
+    public async Task Hoyo_refresh_accepts_image_only_backgrounds(string gameId, string officialImage)
+    {
+        await WithRoot(async root =>
+        {
+            var image = Media("image/webp", "official static background");
+            var handler = new RecordingHandler((request, _) => Task.FromResult(request.RequestUri!.AbsoluteUri switch
+            {
+                HoyoEndpoint => JsonResponse(HoyoPayload(
+                    genshinVideo: null,
+                    hsrVideo: null,
+                    zzzVideo: null)),
+                var url when url == officialImage => MediaResponse(image, "image/webp"),
+                _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable),
+            }));
+            using var http = new HttpClient(handler);
+
+            var selection = await new LauncherVisualsCache(root, http).RefreshAsync(gameId);
+
+            Assert.NotNull(selection);
+            Assert.Equal("image", selection.Kind);
+            Assert.EndsWith(".webp", Assert.Single(selection.Files), StringComparison.Ordinal);
+            Assert.Contains(handler.Requests, request => request.Uri == officialImage);
+        });
+    }
+
+    [Theory]
+    [InlineData(true, false, "video")]
+    [InlineData(false, true, "image")]
+    [InlineData(false, false, null)]
+    public async Task Hoyo_combined_backgrounds_degrade_each_asset_independently(
+        bool videoSucceeds,
+        bool imageSucceeds,
+        string? expectedKind)
+    {
+        await WithRoot(async root =>
+        {
+            var video = Media("video/webm", "official combined animation");
+            var image = Media("image/webp", "official combined fallback");
+            var handler = new RecordingHandler((request, _) => Task.FromResult(request.RequestUri!.AbsoluteUri switch
+            {
+                HoyoEndpoint => JsonResponse(HoyoPayload()),
+                HoyoHsrVideo when videoSucceeds => MediaResponse(video, "video/webm"),
+                HoyoHsrImage when imageSucceeds => MediaResponse(image, "image/webp"),
+                _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable),
+            }));
+            using var http = new HttpClient(handler);
+
+            var selection = await new LauncherVisualsCache(root, http).RefreshAsync("hsr");
+
+            if (expectedKind is null)
+            {
+                Assert.Null(selection);
+                Assert.Contains(handler.Requests, request => request.Uri == LauncherVisualsCache.DefaultManifestUri.AbsoluteUri);
+            }
+            else
+            {
+                Assert.NotNull(selection);
+                Assert.Equal(expectedKind, selection.Kind);
+                Assert.Single(selection.Files);
+            }
+            Assert.DoesNotContain(Directory.Exists(CacheRoot(root, "hsr"))
+                    ? Directory.EnumerateFiles(CacheRoot(root, "hsr"))
+                    : [],
+                path => Path.GetFileName(path).Contains(".tmp-", StringComparison.Ordinal));
         });
     }
 
@@ -130,24 +205,13 @@ public sealed class LauncherVisualsCacheTests
         await WithRoot(async root =>
         {
             var video = Media("video/mp4", "official WuWa background");
+            var image = Media("image/webp", "official WuWa first frame");
             var handler = new RecordingHandler((request, _) => Task.FromResult(request.RequestUri!.AbsoluteUri switch
             {
-                WuwaIndexEndpoint => JsonResponse(JsonSerializer.Serialize(new
-                {
-                    @default = new { resource = new { version = "2.6.5.0" } },
-                    functionCode = new { background = WuwaBackgroundId },
-                    experiment = new { updater = new { enableCDNSelect = false } },
-                    crashInitSwitch = 1,
-                })),
-                WuwaBackgroundEndpoint => JsonResponse(JsonSerializer.Serialize(new
-                {
-                    functionSwitch = 1,
-                    backgroundFile = WuwaVideo,
-                    backgroundFileType = 2,
-                    firstFrameImage = "https://hw-pcdownload-qcloud.aki-game.net/launcher/clientUpload/kp82e0hn4uq2qqwz80.webp",
-                    slogan = "https://hw-pcdownload-qcloud.aki-game.net/launcher/clientUpload/gsamyapds9ruiv7erm.png",
-                })),
+                WuwaIndexEndpoint => JsonResponse(WuwaIndexPayload()),
+                WuwaBackgroundEndpoint => JsonResponse(WuwaPayload(WuwaVideo, WuwaImage)),
                 WuwaVideo => MediaResponse(video, "video/mp4"),
+                WuwaImage => MediaResponse(image, "image/webp"),
                 _ => new HttpResponseMessage(HttpStatusCode.NotFound),
             }));
             using var http = new HttpClient(handler);
@@ -155,9 +219,63 @@ public sealed class LauncherVisualsCacheTests
             var selection = await new LauncherVisualsCache(root, http).RefreshAsync("wuwa");
 
             Assert.NotNull(selection);
-            Assert.Equal([WuwaIndexEndpoint, WuwaBackgroundEndpoint, WuwaVideo], handler.Requests.Select(static request => request.Uri));
-            Assert.EndsWith(".mp4", Assert.Single(selection.Files), StringComparison.Ordinal);
+            Assert.Equal([WuwaIndexEndpoint, WuwaBackgroundEndpoint, WuwaVideo, WuwaImage], handler.Requests.Select(static request => request.Uri));
+            Assert.Equal(2, selection.Files.Count);
+            Assert.EndsWith(".mp4", selection.Files[0], StringComparison.Ordinal);
+            Assert.EndsWith(".webp", selection.Files[1], StringComparison.Ordinal);
             Assert.DoesNotContain(handler.Requests, static request => request.Uri == LauncherVisualsCache.DefaultManifestUri.AbsoluteUri);
+        });
+    }
+
+    [Theory]
+    [InlineData(true, false, "video")]
+    [InlineData(false, true, "image")]
+    public async Task Wuwa_accepts_video_only_or_first_frame_only(
+        bool includeVideo,
+        bool includeImage,
+        string expectedKind)
+    {
+        await WithRoot(async root =>
+        {
+            var video = Media("video/mp4", "official WuWa animation");
+            var image = Media("image/webp", "official WuWa static art");
+            var handler = new RecordingHandler((request, _) => Task.FromResult(request.RequestUri!.AbsoluteUri switch
+            {
+                WuwaIndexEndpoint => JsonResponse(WuwaIndexPayload()),
+                WuwaBackgroundEndpoint => JsonResponse(WuwaPayload(
+                    includeVideo ? WuwaVideo : null,
+                    includeImage ? WuwaImage : null)),
+                WuwaVideo => MediaResponse(video, "video/mp4"),
+                WuwaImage => MediaResponse(image, "image/webp"),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+            }));
+            using var http = new HttpClient(handler);
+
+            var selection = await new LauncherVisualsCache(root, http).RefreshAsync("wuwa");
+
+            Assert.NotNull(selection);
+            Assert.Equal(expectedKind, selection.Kind);
+            Assert.Single(selection.Files);
+        });
+    }
+
+    [Fact]
+    public async Task Wuwa_rejects_a_first_frame_outside_the_existing_asset_contract()
+    {
+        await WithRoot(async root =>
+        {
+            var handler = new RecordingHandler((request, _) => Task.FromResult(request.RequestUri!.AbsoluteUri switch
+            {
+                WuwaIndexEndpoint => JsonResponse(WuwaIndexPayload()),
+                WuwaBackgroundEndpoint => JsonResponse(WuwaPayload(null, "https://example.com/launcher/clientUpload/static.webp")),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+            }));
+            using var http = new HttpClient(handler);
+
+            Assert.Null(await new LauncherVisualsCache(root, http).RefreshAsync("wuwa"));
+            Assert.Equal(
+                [WuwaIndexEndpoint, WuwaBackgroundEndpoint, LauncherVisualsCache.DefaultManifestUri.AbsoluteUri],
+                handler.Requests.Select(static request => request.Uri));
         });
     }
 
@@ -627,6 +745,41 @@ public sealed class LauncherVisualsCacheTests
     }
 
     [Theory]
+    [InlineData(true, true, "video", 2)]
+    [InlineData(true, false, "video", 1)]
+    [InlineData(false, true, "image", 1)]
+    public async Task Endfield_accepts_combined_video_only_or_image_only_backgrounds(
+        bool includeVideo,
+        bool includeImage,
+        string expectedKind,
+        int expectedFiles)
+    {
+        await WithRoot(async root =>
+        {
+            var video = Media("video/mp4", "official Endfield animation");
+            var image = Media("image/png", "official Endfield static art");
+            var handler = new RecordingHandler((request, _) => Task.FromResult(request.RequestUri!.AbsoluteUri switch
+            {
+                OfficialEndpoint => JsonResponse(OfficialPayload(
+                    includeVideo ? OfficialVideo : null,
+                    includeImage ? OfficialImage : "unused")),
+                OfficialVideo => MediaResponse(video, "video/mp4"),
+                OfficialImage => MediaResponse(image, "image/png"),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+            }));
+            using var http = new HttpClient(handler);
+
+            var cache = new LauncherVisualsCache(root, http);
+            var selection = await cache.RefreshAsync("ae");
+
+            Assert.True(selection is not null, cache.LastFailure);
+            Assert.Equal(expectedKind, selection.Kind);
+            Assert.Equal(expectedFiles, selection.Files.Count);
+            Assert.Equal(includeVideo ? ".mp4" : ".png", Path.GetExtension(selection.Files[0]));
+        });
+    }
+
+    [Theory]
     [MemberData(nameof(InvalidOfficialResponses))]
     public async Task Endfield_rejects_malformed_or_ambiguous_official_responses(string payload)
     {
@@ -669,6 +822,25 @@ public sealed class LauncherVisualsCacheTests
         await WithRoot(async root =>
         {
             var handler = new RecordingHandler((_, _) => Task.FromResult(JsonResponse(OfficialPayload(videoUrl))));
+            using var http = new HttpClient(handler);
+
+            Assert.Null(await new LauncherVisualsCache(root, http).RefreshAsync("ae"));
+            Assert.Equal(
+                [OfficialEndpoint, LauncherVisualsCache.DefaultManifestUri.AbsoluteUri],
+                handler.Requests.Select(static request => request.Uri));
+        });
+    }
+
+    [Theory]
+    [InlineData("http://gl-utils-public.hg-cdn.com/hg-utils/prod/eppcsuwqpaueijqk/YDUTE5gscDZ229CW/a.png")]
+    [InlineData("https://example.com/hg-utils/prod/eppcsuwqpaueijqk/YDUTE5gscDZ229CW/a.png")]
+    [InlineData("https://gl-utils-public.hg-cdn.com/not-the-contract/a.png")]
+    [InlineData("https://gl-utils-public.hg-cdn.com/hg-utils/prod/eppcsuwqpaueijqk/YDUTE5gscDZ229CW/a.jpg")]
+    public async Task Endfield_rejects_static_URLs_outside_the_fixed_CDN_contract(string imageUrl)
+    {
+        await WithRoot(async root =>
+        {
+            var handler = new RecordingHandler((_, _) => Task.FromResult(JsonResponse(OfficialPayload(null, imageUrl))));
             using var http = new HttpClient(handler);
 
             Assert.Null(await new LauncherVisualsCache(root, http).RefreshAsync("ae"));
@@ -805,6 +977,40 @@ public sealed class LauncherVisualsCacheTests
             Assert.DoesNotContain(Directory.Exists(CacheRoot(root, "ae"))
                     ? Directory.EnumerateFiles(CacheRoot(root, "ae"))
                     : [],
+                path => Path.GetFileName(path).Contains(".tmp-", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public async Task Endfield_cancellation_during_static_fallback_keeps_the_previous_last_good()
+    {
+        await WithRoot(async root =>
+        {
+            var previous = await DownloadOfficialAsync(root, Media("video/mp4", "previous working background"));
+            var nextVideo = Media("video/mp4", "new animation awaiting its fallback");
+            var imageStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var canceled = new CancellationTokenSource();
+            using var http = new HttpClient(new RecordingHandler(async (request, cancellationToken) =>
+            {
+                if (request.RequestUri!.AbsoluteUri == OfficialEndpoint)
+                    return JsonResponse(OfficialPayload(OfficialVideo, OfficialImage));
+                if (request.RequestUri.AbsoluteUri == OfficialVideo)
+                    return MediaResponse(nextVideo, "video/mp4");
+                imageStarted.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                throw new InvalidOperationException("Unreachable.");
+            }));
+            var refresh = new LauncherVisualsCache(root, http).RefreshAsync("ae", canceled.Token);
+
+            await imageStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+            canceled.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresh);
+            var retained = new LauncherVisualsCache(root).TryLoadLastGood("ae");
+            Assert.NotNull(retained);
+            Assert.Equal(previous.Revision, retained.Revision);
+            Assert.Equal(previous.Files, retained.Files);
+            Assert.DoesNotContain(Directory.EnumerateFiles(CacheRoot(root, "ae")),
                 path => Path.GetFileName(path).Contains(".tmp-", StringComparison.Ordinal));
         });
     }
@@ -1307,7 +1513,7 @@ public sealed class LauncherVisualsCacheTests
         }
     }
 
-    private static string OfficialPayload(string videoUrl) => JsonSerializer.Serialize(new
+    private static string OfficialPayload(string? videoUrl, string imageUrl = "unused") => JsonSerializer.Serialize(new
     {
         proxy_rsps = new[]
         {
@@ -1317,7 +1523,7 @@ public sealed class LauncherVisualsCacheTests
                 get_main_bg_image_rsp = new
                 {
                     data_version = "1",
-                    main_bg_image = new { url = "unused", md5 = "unused", video_url = videoUrl },
+                    main_bg_image = new { url = imageUrl, md5 = "unused", video_url = videoUrl },
                 },
             },
         },
@@ -1467,18 +1673,63 @@ public sealed class LauncherVisualsCacheTests
     private static string CacheRoot(string root, string gameId) =>
         Path.Combine(root, "ContentCache", "LauncherVisuals", gameId);
 
-    private static string HoyoPayload() => JsonSerializer.Serialize(new
+    private static string WuwaIndexPayload() => JsonSerializer.Serialize(new
     {
-        data = new
-        {
-            game_info_list = new object[]
-            {
-                new { game = new { id = "gopR6Cufr3" }, backgrounds = new[] { new { background = new { url = HoyoGenshinImage }, video = new { url = HoyoGenshinVideo } } } },
-                new { game = new { id = "4ziysqXOQ8" }, backgrounds = new[] { new { video = new { url = HoyoHsrVideo } } } },
-                new { game = new { id = "U5hbdsT9W7" }, backgrounds = new[] { new { video = new { url = HoyoZzzVideo } } } },
-            },
-        },
+        @default = new { resource = new { version = "2.6.5.0" } },
+        functionCode = new { background = WuwaBackgroundId },
+        experiment = new { updater = new { enableCDNSelect = false } },
+        crashInitSwitch = 1,
     });
+
+    private static string WuwaPayload(string? videoUrl, string? imageUrl) => JsonSerializer.Serialize(new
+    {
+        functionSwitch = 1,
+        backgroundFile = videoUrl,
+        backgroundFileType = 2,
+        firstFrameImage = imageUrl,
+        slogan = "https://hw-pcdownload-qcloud.aki-game.net/launcher/clientUpload/gsamyapds9ruiv7erm.png",
+    });
+
+    private static string HoyoPayload(
+        string? genshinVideo = HoyoGenshinVideo,
+        string? genshinImage = HoyoGenshinImage,
+        string? hsrVideo = HoyoHsrVideo,
+        string? hsrImage = HoyoHsrImage,
+        string? zzzVideo = HoyoZzzVideo,
+        string? zzzImage = HoyoZzzImage) =>
+        JsonSerializer.Serialize(new
+        {
+            data = new
+            {
+                game_info_list = new[]
+                {
+                    new
+                    {
+                        game = new { id = "gopR6Cufr3" },
+                        backgrounds = new[]
+                        {
+                            new { background = new { url = genshinImage }, video = new { url = genshinVideo } },
+                        },
+                    },
+                    new
+                    {
+                        game = new { id = "4ziysqXOQ8" },
+                        backgrounds = new[]
+                        {
+                            new { background = new { url = hsrImage }, video = new { url = hsrVideo } },
+                        },
+                    },
+                    new
+                    {
+                        game = new { id = "U5hbdsT9W7" },
+                        backgrounds = new[]
+                        {
+                            new { background = new { url = zzzImage }, video = new { url = zzzVideo } },
+                        },
+                    },
+                },
+            },
+        });
 
     private static HttpResponseMessage JsonResponse(string body) => JsonResponse(Encoding.UTF8.GetBytes(body));
 

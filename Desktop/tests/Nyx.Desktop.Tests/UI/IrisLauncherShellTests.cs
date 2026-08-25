@@ -316,6 +316,7 @@ public sealed class IrisLauncherShellTests
         var end = code.IndexOf("private void StartLauncherVisualPreload", start, StringComparison.Ordinal);
         var selectionHandler = code[start..end];
         var imageLoader = Slice(code, "private void PrepareLauncherImageBackground", "private void BeginLauncherBackgroundCrossfade");
+        var mediaFailure = Slice(code, "private void LauncherMotionPlayer_MediaFailed", "private void HideLauncherMotionBackgrounds");
 
         Assert.Contains("RefreshAllAsync", code, StringComparison.Ordinal);
         Assert.Contains("\"wuwa\"", selectionHandler, StringComparison.Ordinal);
@@ -330,7 +331,8 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("TimeSpan.FromMilliseconds(700)", code, StringComparison.Ordinal);
         Assert.Contains("BeginLauncherBackgroundCrossfade", code, StringComparison.Ordinal);
         Assert.Contains("selection.Files.Count > 1", code, StringComparison.Ordinal);
-        Assert.Contains("SetBackgroundSource(selection.Files[1])", code, StringComparison.Ordinal);
+        Assert.Contains("PrepareLauncherImageBackground(", mediaFailure, StringComparison.Ordinal);
+        Assert.DoesNotContain("SetBackgroundSource(selection.Files[1])", mediaFailure, StringComparison.Ordinal);
         Assert.Contains("MediaFailed += LauncherMotionPlayer_MediaFailed", code, StringComparison.Ordinal);
         Assert.Equal(2, Regex.Matches(imageLoader, @"requestToken != launcherImageRequestToken \|\| generation != launcherVisualGeneration").Count);
         Assert.Matches(@"bitmap\.ImageFailed[\s\S]*?requestToken != launcherImageRequestToken \|\| generation != launcherVisualGeneration\) return;\s*incoming\.Source = null;", imageLoader);
@@ -362,6 +364,7 @@ public sealed class IrisLauncherShellTests
     {
         var code = ReadAppFile("MainPage.xaml.cs");
         var preload = Slice(code, "private void StartLauncherVisualPreload", "private void ApplyLauncherVisual");
+        var unload = Slice(code, "private void MainPage_Unloaded", "private HoyoMaintenanceUiSnapshot");
 
         Assert.Contains("StartLauncherVisualPreload(SessionUiLease lease)", preload, StringComparison.Ordinal);
         Assert.Contains("lease.CancellationToken", preload, StringComparison.Ordinal);
@@ -370,6 +373,8 @@ public sealed class IrisLauncherShellTests
             preload.IndexOf("sessionUiLifetime.TryRun(lease", StringComparison.Ordinal)
             < preload.IndexOf("preloadedLauncherVisuals[selection.GameId] = selection", StringComparison.Ordinal));
         Assert.DoesNotContain("StartLauncherVisualPreload(lease.CancellationToken)", code, StringComparison.Ordinal);
+        Assert.Contains("launcherVisualGeneration++;", unload, StringComparison.Ordinal);
+        Assert.Contains("launcherBackgroundCrossfade?.Stop();", unload, StringComparison.Ordinal);
     }
 
     [Fact]
