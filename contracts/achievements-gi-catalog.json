@@ -1,21 +1,21 @@
 {
   "schemaVersion": 1,
   "game": "gi",
-  "catalogVersion": "6.7",
-  "releasedVersion": "6.7",
-  "generatedAt": "2026-07-14T17:11:12.229Z",
-  "dataTimestamp": "2026-07-01T07:39:21.000Z",
+  "catalogVersion": "7.0",
+  "releasedVersion": "7.0",
+  "generatedAt": "2026-08-26T22:41:42.395Z",
+  "dataTimestamp": "2026-08-12T03:34:09.000Z",
   "source": {
     "name": "Paimon.moe achievement data",
     "repository": "https://github.com/MadeBaruna/paimon-moe",
-    "dataUrl": "https://raw.githubusercontent.com/MadeBaruna/paimon-moe/8719a58b04ae5c8dfca6484d2b6c66db3f06549c/src/data/achievement/en.json",
+    "dataUrl": "https://raw.githubusercontent.com/MadeBaruna/paimon-moe/4a4a87452b8ea929553e4a72532cbc838a741e0c/src/data/achievement/en.json",
     "license": "MIT",
     "licenseUrl": "https://github.com/MadeBaruna/paimon-moe/blob/main/LICENSE",
-    "commit": "8719a58b04ae5c8dfca6484d2b6c66db3f06549c"
+    "commit": "4a4a87452b8ea929553e4a72532cbc838a741e0c"
   },
-  "categoryCount": 69,
-  "achievementCount": 1759,
-  "count": 1759,
+  "categoryCount": 73,
+  "achievementCount": 1844,
+  "count": 1844,
   "categories": [
     {
       "id": "gi-0",
@@ -138,10 +138,25 @@
       }
     },
     {
+      "id": "gi-71",
+      "sourceId": "71",
+      "name": "Mortal Travails: Series VII",
+      "sortOrder": 9,
+      "symbol": {
+        "kind": "monogram",
+        "value": "MT"
+      },
+      "icon": {
+        "kind": "image",
+        "path": "/assets/achievements/gi/categories/7a86e4f6914f8832238a9ab5cb70dc7b02657c62bb9f133f21acee917c1d4d3d.webp",
+        "sourceKey": "UI_AchievementIcon_A001_Part7"
+      }
+    },
+    {
       "id": "gi-2",
       "sourceId": "2",
       "name": "The Art of Adventure",
-      "sortOrder": 9,
+      "sortOrder": 10,
       "symbol": {
         "kind": "monogram",
         "value": "AA"
@@ -156,7 +171,7 @@
       "id": "gi-3",
       "sourceId": "3",
       "name": "The Hero's Journey",
-      "sortOrder": 10,
+      "sortOrder": 11,
       "symbol": {
         "kind": "monogram",
         "value": "HS"
@@ -171,7 +186,7 @@
       "id": "gi-4",
       "sourceId": "4",
       "name": "Mondstadt: The City of Wind and Song",
-      "sortOrder": 11,
+      "sortOrder": 12,
       "symbol": {
         "kind": "monogram",
         "value": "MC"
@@ -186,7 +201,7 @@
       "id": "gi-5",
       "sourceId": "5",
       "name": "Liyue: The Harbor of Stone and Contracts",
-      "sortOrder": 12,
+      "sortOrder": 13,
       "symbol": {
         "kind": "monogram",
         "value": "LH"
@@ -201,7 +216,7 @@
       "id": "gi-6",
       "sourceId": "6",
       "name": "Elemental Specialist: Series I",
-      "sortOrder": 13,
+      "sortOrder": 14,
       "symbol": {
         "kind": "monogram",
         "value": "ES"
@@ -216,7 +231,7 @@
       "id": "gi-36",
       "sourceId": "36",
       "name": "Elemental Specialist: Series II",
-      "sortOrder": 14,
+      "sortOrder": 15,
       "symbol": {
         "kind": "monogram",
         "value": "ES"
@@ -231,7 +246,7 @@
       "id": "gi-7",
       "sourceId": "7",
       "name": "Marksmanship",
-      "sortOrder": 15,
+      "sortOrder": 16,
       "symbol": {
         "kind": "monogram",
         "value": "M"
@@ -246,7 +261,7 @@
       "id": "gi-8",
       "sourceId": "8",
       "name": "Challenger: Series I",
-      "sortOrder": 16,
+      "sortOrder": 17,
       "symbol": {
         "kind": "monogram",
         "value": "CS"
@@ -261,7 +276,7 @@
       "id": "gi-14",
       "sourceId": "14",
       "name": "Challenger: Series II",
-      "sortOrder": 17,
+      "sortOrder": 18,
       "symbol": {
         "kind": "monogram",
         "value": "CS"
@@ -276,7 +291,7 @@
       "id": "gi-15",
       "sourceId": "15",
       "name": "Challenger: Series III",
-      "sortOrder": 18,
+      "sortOrder": 19,
       "symbol": {
         "kind": "monogram",
         "value": "CS"
@@ -291,7 +306,7 @@
       "id": "gi-20",
       "sourceId": "20",
       "name": "Challenger: Series IV",
-      "sortOrder": 19,
+      "sortOrder": 20,
       "symbol": {
         "kind": "monogram",
         "value": "CS"
@@ -306,7 +321,7 @@
       "id": "gi-29",
       "sourceId": "29",
       "name": "Challenger: Series V",
-      "sortOrder": 20,
+      "sortOrder": 21,
       "symbol": {
         "kind": "monogram",
         "value": "CS"
@@ -321,7 +336,7 @@
       "id": "gi-34",
       "sourceId": "34",
       "name": "Challenger: Series VI",
-      "sortOrder": 21,
+      "sortOrder": 22,
       "symbol": {
         "kind": "monogram",
         "value": "CS"
@@ -336,7 +351,7 @@
       "id": "gi-39",
       "sourceId": "39",
       "name": "Challenger: Series VII",
-      "sortOrder": 22,
+      "sortOrder": 23,
       "symbol": {
         "kind": "monogram",
         "value": "CS"
@@ -351,7 +366,7 @@
       "id": "gi-40",
       "sourceId": "40",
       "name": "Challenger: Series VIII",
-      "sortOrder": 23,
+      "sortOrder": 24,
       "symbol": {
         "kind": "monogram",
         "value": "CS"
@@ -366,7 +381,7 @@
       "id": "gi-49",
       "sourceId": "49",
       "name": "Challenger: Series IX",
-      "sortOrder": 24,
+      "sortOrder": 25,
       "symbol": {
         "kind": "monogram",
         "value": "CS"
@@ -381,7 +396,7 @@
       "id": "gi-59",
       "sourceId": "59",
       "name": "Challenger: Series X",
-      "sortOrder": 25,
+      "sortOrder": 26,
       "symbol": {
         "kind": "monogram",
         "value": "CS"
@@ -396,7 +411,7 @@
       "id": "gi-9",
       "sourceId": "9",
       "name": "Domains and Spiral Abyss: Series I",
-      "sortOrder": 26,
+      "sortOrder": 27,
       "symbol": {
         "kind": "monogram",
         "value": "DS"
@@ -411,7 +426,7 @@
       "id": "gi-10",
       "sourceId": "10",
       "name": "Olah!: Series I",
-      "sortOrder": 27,
+      "sortOrder": 28,
       "symbol": {
         "kind": "monogram",
         "value": "OS"
@@ -426,7 +441,7 @@
       "id": "gi-11",
       "sourceId": "11",
       "name": "Snezhnaya Does Not Believe in Tears: Series I",
-      "sortOrder": 28,
+      "sortOrder": 29,
       "symbol": {
         "kind": "monogram",
         "value": "SD"
@@ -441,7 +456,7 @@
       "id": "gi-12",
       "sourceId": "12",
       "name": "Stone Harbor's Nostalgia: Series I",
-      "sortOrder": 29,
+      "sortOrder": 30,
       "symbol": {
         "kind": "monogram",
         "value": "SH"
@@ -456,7 +471,7 @@
       "id": "gi-13",
       "sourceId": "13",
       "name": "Meetings in Outrealm: Series I",
-      "sortOrder": 30,
+      "sortOrder": 31,
       "symbol": {
         "kind": "monogram",
         "value": "MO"
@@ -471,7 +486,7 @@
       "id": "gi-21",
       "sourceId": "21",
       "name": "Meetings in Outrealm: Series II",
-      "sortOrder": 31,
+      "sortOrder": 32,
       "symbol": {
         "kind": "monogram",
         "value": "MO"
@@ -486,7 +501,7 @@
       "id": "gi-33",
       "sourceId": "33",
       "name": "Meetings in Outrealm: Series III",
-      "sortOrder": 32,
+      "sortOrder": 33,
       "symbol": {
         "kind": "monogram",
         "value": "MO"
@@ -501,7 +516,7 @@
       "id": "gi-44",
       "sourceId": "44",
       "name": "Meetings in Outrealm: Series IV",
-      "sortOrder": 33,
+      "sortOrder": 34,
       "symbol": {
         "kind": "monogram",
         "value": "MO"
@@ -516,7 +531,7 @@
       "id": "gi-53",
       "sourceId": "53",
       "name": "Meetings in Outrealm: Series V",
-      "sortOrder": 34,
+      "sortOrder": 35,
       "symbol": {
         "kind": "monogram",
         "value": "MO"
@@ -531,7 +546,7 @@
       "id": "gi-64",
       "sourceId": "64",
       "name": "Meetings in Outrealm: Series VI",
-      "sortOrder": 35,
+      "sortOrder": 36,
       "symbol": {
         "kind": "monogram",
         "value": "MO"
@@ -543,10 +558,25 @@
       }
     },
     {
+      "id": "gi-72",
+      "sourceId": "72",
+      "name": "Meetings in Outrealm: Series VII",
+      "sortOrder": 37,
+      "symbol": {
+        "kind": "monogram",
+        "value": "MO"
+      },
+      "icon": {
+        "kind": "image",
+        "path": "/assets/achievements/gi/categories/9d92058e22fa80dd25107f05e6f12918ba5a466697a738076a4b330ccdf6dc7a.webp",
+        "sourceKey": "UI_AchievementIcon_D001_Part7"
+      }
+    },
+    {
       "id": "gi-16",
       "sourceId": "16",
       "name": "Visitors on the Icy Mountain",
-      "sortOrder": 36,
+      "sortOrder": 38,
       "symbol": {
         "kind": "monogram",
         "value": "VO"
@@ -561,7 +591,7 @@
       "id": "gi-18",
       "sourceId": "18",
       "name": "A Realm Beyond: Series I",
-      "sortOrder": 37,
+      "sortOrder": 39,
       "symbol": {
         "kind": "monogram",
         "value": "RB"
@@ -576,7 +606,7 @@
       "id": "gi-19",
       "sourceId": "19",
       "name": "A Realm Beyond: Series II",
-      "sortOrder": 38,
+      "sortOrder": 40,
       "symbol": {
         "kind": "monogram",
         "value": "RB"
@@ -591,7 +621,7 @@
       "id": "gi-23",
       "sourceId": "23",
       "name": "A Realm Beyond: Series III",
-      "sortOrder": 39,
+      "sortOrder": 41,
       "symbol": {
         "kind": "monogram",
         "value": "RB"
@@ -606,7 +636,7 @@
       "id": "gi-24",
       "sourceId": "24",
       "name": "Inazuma: The Islands of Thunder and Eternity - Series I",
-      "sortOrder": 40,
+      "sortOrder": 42,
       "symbol": {
         "kind": "monogram",
         "value": "II"
@@ -621,7 +651,7 @@
       "id": "gi-26",
       "sourceId": "26",
       "name": "Inazuma: The Islands of Thunder and Eternity - Series II",
-      "sortOrder": 41,
+      "sortOrder": 43,
       "symbol": {
         "kind": "monogram",
         "value": "II"
@@ -636,7 +666,7 @@
       "id": "gi-27",
       "sourceId": "27",
       "name": "The Chronicles of the Sea of Fog",
-      "sortOrder": 42,
+      "sortOrder": 44,
       "symbol": {
         "kind": "monogram",
         "value": "CS"
@@ -651,7 +681,7 @@
       "id": "gi-25",
       "sourceId": "25",
       "name": "Teyvat Fishing Guide: Series I",
-      "sortOrder": 43,
+      "sortOrder": 45,
       "symbol": {
         "kind": "monogram",
         "value": "TF"
@@ -666,7 +696,7 @@
       "id": "gi-28",
       "sourceId": "28",
       "name": "The Light of Day",
-      "sortOrder": 44,
+      "sortOrder": 46,
       "symbol": {
         "kind": "monogram",
         "value": "LD"
@@ -681,7 +711,7 @@
       "id": "gi-30",
       "sourceId": "30",
       "name": "Chasmlighter",
-      "sortOrder": 45,
+      "sortOrder": 47,
       "symbol": {
         "kind": "monogram",
         "value": "C"
@@ -696,7 +726,7 @@
       "id": "gi-31",
       "sourceId": "31",
       "name": "Sumeru: The Rainforest of Lore",
-      "sortOrder": 46,
+      "sortOrder": 48,
       "symbol": {
         "kind": "monogram",
         "value": "SR"
@@ -711,7 +741,7 @@
       "id": "gi-35",
       "sourceId": "35",
       "name": "Sumeru: The Gilded Desert - Series I",
-      "sortOrder": 47,
+      "sortOrder": 49,
       "symbol": {
         "kind": "monogram",
         "value": "SG"
@@ -726,7 +756,7 @@
       "id": "gi-38",
       "sourceId": "38",
       "name": "Sumeru: The Gilded Desert - Series II",
-      "sortOrder": 48,
+      "sortOrder": 50,
       "symbol": {
         "kind": "monogram",
         "value": "SG"
@@ -741,7 +771,7 @@
       "id": "gi-37",
       "sourceId": "37",
       "name": "Genius Invokation TCG",
-      "sortOrder": 49,
+      "sortOrder": 51,
       "symbol": {
         "kind": "monogram",
         "value": "GI"
@@ -756,7 +786,7 @@
       "id": "gi-41",
       "sourceId": "41",
       "name": "Blessed Hamada",
-      "sortOrder": 50,
+      "sortOrder": 52,
       "symbol": {
         "kind": "monogram",
         "value": "BH"
@@ -771,7 +801,7 @@
       "id": "gi-42",
       "sourceId": "42",
       "name": "Fontaine: Dance of the Dew-White Springs (I)",
-      "sortOrder": 51,
+      "sortOrder": 53,
       "symbol": {
         "kind": "monogram",
         "value": "FD"
@@ -786,7 +816,7 @@
       "id": "gi-45",
       "sourceId": "45",
       "name": "Fontaine: Dance of the Dew-White Springs (II)",
-      "sortOrder": 52,
+      "sortOrder": 54,
       "symbol": {
         "kind": "monogram",
         "value": "FD"
@@ -801,7 +831,7 @@
       "id": "gi-46",
       "sourceId": "46",
       "name": "Fontaine: Dance of the Dew-White Springs (III)",
-      "sortOrder": 53,
+      "sortOrder": 55,
       "symbol": {
         "kind": "monogram",
         "value": "FD"
@@ -816,7 +846,7 @@
       "id": "gi-47",
       "sourceId": "47",
       "name": "Chenyu's Splendor",
-      "sortOrder": 54,
+      "sortOrder": 56,
       "symbol": {
         "kind": "monogram",
         "value": "CS"
@@ -831,7 +861,7 @@
       "id": "gi-48",
       "sourceId": "48",
       "name": "Rhapsodia in the Ancient Sea",
-      "sortOrder": 55,
+      "sortOrder": 57,
       "symbol": {
         "kind": "monogram",
         "value": "RA"
@@ -846,7 +876,7 @@
       "id": "gi-50",
       "sourceId": "50",
       "name": "Imaginarium Theater: The First Folio",
-      "sortOrder": 56,
+      "sortOrder": 58,
       "symbol": {
         "kind": "monogram",
         "value": "IT"
@@ -861,7 +891,7 @@
       "id": "gi-52",
       "sourceId": "52",
       "name": "Imaginarium Theater: The Second Folio",
-      "sortOrder": 57,
+      "sortOrder": 59,
       "symbol": {
         "kind": "monogram",
         "value": "IT"
@@ -876,7 +906,7 @@
       "id": "gi-51",
       "sourceId": "51",
       "name": "Natlan: The Land of Fire and Competition (I)",
-      "sortOrder": 58,
+      "sortOrder": 60,
       "symbol": {
         "kind": "monogram",
         "value": "NL"
@@ -891,7 +921,7 @@
       "id": "gi-55",
       "sourceId": "55",
       "name": "Natlan: The Land of Fire and Competition (II)",
-      "sortOrder": 59,
+      "sortOrder": 61,
       "symbol": {
         "kind": "monogram",
         "value": "NL"
@@ -906,7 +936,7 @@
       "id": "gi-54",
       "sourceId": "54",
       "name": "Duelist: Series I",
-      "sortOrder": 60,
+      "sortOrder": 62,
       "symbol": {
         "kind": "monogram",
         "value": "DS"
@@ -921,7 +951,7 @@
       "id": "gi-56",
       "sourceId": "56",
       "name": "Duelist: Series II",
-      "sortOrder": 61,
+      "sortOrder": 63,
       "symbol": {
         "kind": "monogram",
         "value": "DS"
@@ -936,7 +966,7 @@
       "id": "gi-61",
       "sourceId": "61",
       "name": "Duelist: Series III",
-      "sortOrder": 62,
+      "sortOrder": 64,
       "symbol": {
         "kind": "monogram",
         "value": "DS"
@@ -951,7 +981,7 @@
       "id": "gi-58",
       "sourceId": "58",
       "name": "Repertoire of Myriad Melodies",
-      "sortOrder": 63,
+      "sortOrder": 65,
       "symbol": {
         "kind": "monogram",
         "value": "RM"
@@ -966,7 +996,7 @@
       "id": "gi-60",
       "sourceId": "60",
       "name": "Sacred Mountain's Fading Glow",
-      "sortOrder": 64,
+      "sortOrder": 66,
       "symbol": {
         "kind": "monogram",
         "value": "SM"
@@ -981,7 +1011,7 @@
       "id": "gi-62",
       "sourceId": "62",
       "name": "A Summer of Ash and Prickly Pears",
-      "sortOrder": 65,
+      "sortOrder": 67,
       "symbol": {
         "kind": "monogram",
         "value": "SA"
@@ -996,7 +1026,7 @@
       "id": "gi-63",
       "sourceId": "63",
       "name": "Nod-Krai: An Elysium of Moonlight and Wanderings (I)",
-      "sortOrder": 66,
+      "sortOrder": 68,
       "symbol": {
         "kind": "monogram",
         "value": "NK"
@@ -1011,7 +1041,7 @@
       "id": "gi-66",
       "sourceId": "66",
       "name": "Nod-Krai: An Elysium of Moonlight and Wanderings (II)",
-      "sortOrder": 67,
+      "sortOrder": 69,
       "symbol": {
         "kind": "monogram",
         "value": "NK"
@@ -1026,7 +1056,7 @@
       "id": "gi-67",
       "sourceId": "67",
       "name": "Demon Mountain's Breath",
-      "sortOrder": 68,
+      "sortOrder": 70,
       "symbol": {
         "kind": "monogram",
         "value": "DM"
@@ -1041,7 +1071,7 @@
       "id": "gi-68",
       "sourceId": "68",
       "name": "Unfettered Crescent",
-      "sortOrder": 69,
+      "sortOrder": 71,
       "symbol": {
         "kind": "monogram",
         "value": "UC"
@@ -1050,6 +1080,36 @@
         "kind": "image",
         "path": "/assets/achievements/gi/categories/68a1e92ce25c66fb68ca09d1a0484c431cd6c2e80b297581df3bf5903500bdfa.webp",
         "sourceKey": "UI_AchievementIcon_A025"
+      }
+    },
+    {
+      "id": "gi-69",
+      "sourceId": "69",
+      "name": "Snezhnaya: Sacred city of ice and pale star (I)",
+      "sortOrder": 72,
+      "symbol": {
+        "kind": "monogram",
+        "value": "SS"
+      },
+      "icon": {
+        "kind": "image",
+        "path": "/assets/achievements/gi/categories/9e1b3d9ec63b477bc21503fbbbfdac7443146322eb59db296bb8239d0ffc1311.webp",
+        "sourceKey": "UI_AchievementIcon_A026"
+      }
+    },
+    {
+      "id": "gi-70",
+      "sourceId": "70",
+      "name": "Land of Surging Shadows",
+      "sortOrder": 73,
+      "symbol": {
+        "kind": "monogram",
+        "value": "LS"
+      },
+      "icon": {
+        "kind": "image",
+        "path": "/assets/achievements/gi/categories/33b37898d6f5531d2bcf124368e132a1ea695ddc2650be77e35bcc6a31763cda.webp",
+        "sourceKey": "UI_AchievementIcon_A027"
       }
     }
   ],
@@ -1420,8 +1480,8 @@
     {
       "id": "81032",
       "categoryId": "gi-0",
-      "name": "QUEST FAILED",
-      "description": "Lost track of a Bounty target.",
+      "name": "QUEST FAILED OR ...",
+      "description": "Lost track of the target during a Bounty, or no longer need to pursue Bounties at all...",
       "reward": 5,
       "version": "1.0",
       "stage": 1,
@@ -7413,6 +7473,292 @@
       "sortOrder": 565
     },
     {
+      "id": "81700",
+      "categoryId": "gi-0",
+      "name": "Stay a While, You Are So Beautiful",
+      "description": "Pause for a moment to take in the beauty of the white birches and the Snow-Buried Palace.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 566
+    },
+    {
+      "id": "81701",
+      "categoryId": "gi-0",
+      "name": "Transcender of the Land of Tomorrow",
+      "description": "Collect all relics left behind by someone in the Pale Crown Palace.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 567
+    },
+    {
+      "id": "81702",
+      "categoryId": "gi-0",
+      "name": "Compound Effect",
+      "description": "Roll the biggest snowball.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 568
+    },
+    {
+      "id": "81703",
+      "categoryId": "gi-0",
+      "name": "Wedding Bell",
+      "description": "Ring the bell that no longer loops.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 569
+    },
+    {
+      "id": "81704",
+      "categoryId": "gi-0",
+      "name": "For Whom It Tolls",
+      "description": "Let the unbound bell ring out once more.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 570
+    },
+    {
+      "id": "81705",
+      "categoryId": "gi-0",
+      "name": "Visions in the Match",
+      "description": "Bring comfort at last to the troubled one.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 571
+    },
+    {
+      "id": "81706",
+      "categoryId": "gi-0",
+      "name": "Limits & Demonstrations",
+      "description": "Perhaps a work is given a name only so that it may forge another type of bond.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 572
+    },
+    {
+      "id": "81707",
+      "categoryId": "gi-0",
+      "name": "They Live",
+      "description": "Put on the \"Eye of Graeae\" for the first time.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 573
+    },
+    {
+      "id": "81708",
+      "categoryId": "gi-0",
+      "name": "Snow, Kristall, and Speed",
+      "description": "Give your old train a new lease on life.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 574
+    },
+    {
+      "id": "81709",
+      "categoryId": "gi-0",
+      "name": "Through the Hall of False Splendor",
+      "description": "Collect all paintings in the House of Hesperides and open the hidden treasure beyond.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 575
+    },
+    {
+      "id": "81710",
+      "categoryId": "gi-0",
+      "name": "For Every Future You",
+      "description": "Even if that version of you has yet to arrive.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 576
+    },
+    {
+      "id": "81711",
+      "categoryId": "gi-0",
+      "name": "Because the Palace Is There",
+      "description": "Reach the highest point of the Zapolyarny Palace.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 577
+    },
+    {
+      "id": "81712",
+      "categoryId": "gi-0",
+      "name": "The Last Rose of Winter",
+      "description": "...Perishing like a moth to the flame.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 578
+    },
+    {
+      "id": "81714",
+      "categoryId": "gi-0",
+      "name": "Colder Than a Snowman",
+      "description": "Win a \"cold endurance contest\" against a Natlan competitor.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 579
+    },
+    {
+      "id": "81715",
+      "categoryId": "gi-0",
+      "name": "Ya-ho!",
+      "description": "Help the Jack Frost \"Village Chief\" fend off the Volkodlak invasion.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 580
+    },
+    {
+      "id": "81716",
+      "categoryId": "gi-0",
+      "name": "Above the High Table",
+      "description": "But who still remembers that the \"High Table\" was built by the Domovoy...?",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 581
+    },
+    {
+      "id": "81717",
+      "categoryId": "gi-0",
+      "name": "The Iceberg Sinks, Never to Rise Again",
+      "description": "Witness the end of the colossal Snegovik.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 582
+    },
+    {
+      "id": "81718",
+      "categoryId": "gi-0",
+      "name": "\"The Cherry Orchard Has Been Sold\"",
+      "description": "Witness the cabin on the ice turn upside down, fall still, and finally sink.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 583
+    },
+    {
+      "id": "81720",
+      "categoryId": "gi-0",
+      "name": "Route Successfully Planned",
+      "description": "Use a Link Mechanism to travel 30 meters horizontally in a single ride.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 584
+    },
+    {
+      "id": "81721",
+      "categoryId": "gi-0",
+      "name": "Just Like Inspiration",
+      "description": "Launch a snowball that begins to fade before it lands.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 585
+    },
+    {
+      "id": "81722",
+      "categoryId": "gi-0",
+      "name": "You Shall Not Pass",
+      "description": "Successfully stop a rolling snowball.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 586
+    },
+    {
+      "id": "81724",
+      "categoryId": "gi-0",
+      "name": "Sturdy Knees",
+      "description": "Remain sliding for 20 seconds.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 587
+    },
+    {
+      "id": "81728",
+      "categoryId": "gi-0",
+      "name": "A Promise of Old",
+      "description": "Back then, the Zolnyy had no king, and everyone did as they saw fit...",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 588
+    },
+    {
+      "id": "81729",
+      "categoryId": "gi-0",
+      "name": "Koski, Options.",
+      "description": "Help the Natlan woman calm down her Flowfire Bird companion.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 589
+    },
+    {
+      "id": "81730",
+      "categoryId": "gi-0",
+      "name": "As My Vision Freezes into Form",
+      "description": "Atop the lighthouse, approach the girl's phantom manifested as a statue.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 590
+    },
+    {
+      "id": "81731",
+      "categoryId": "gi-0",
+      "name": "Drunk as Charged",
+      "description": "You can always wake someone who's truly drunk.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 591
+    },
+    {
       "id": "82008",
       "categoryId": "gi-0",
       "name": "Juggernaut",
@@ -7421,7 +7767,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 566
+      "sortOrder": 592
     },
     {
       "id": "82009",
@@ -7432,7 +7778,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 567
+      "sortOrder": 593
     },
     {
       "id": "82010",
@@ -7443,7 +7789,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 568
+      "sortOrder": 594
     },
     {
       "id": "82012",
@@ -7454,7 +7800,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 569
+      "sortOrder": 595
     },
     {
       "id": "82013",
@@ -7465,7 +7811,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 570
+      "sortOrder": 596
     },
     {
       "id": "82014",
@@ -7476,7 +7822,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 571
+      "sortOrder": 597
     },
     {
       "id": "82015",
@@ -7487,7 +7833,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 572
+      "sortOrder": 598
     },
     {
       "id": "82017",
@@ -7498,7 +7844,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 573
+      "sortOrder": 599
     },
     {
       "id": "82040",
@@ -7509,7 +7855,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 574
+      "sortOrder": 600
     },
     {
       "id": "82041",
@@ -7520,7 +7866,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 3,
-      "sortOrder": 575
+      "sortOrder": 601
     },
     {
       "id": "82042",
@@ -7531,7 +7877,7 @@
       "version": "1.0",
       "stage": 2,
       "stageCount": 3,
-      "sortOrder": 575
+      "sortOrder": 601
     },
     {
       "id": "82043",
@@ -7542,7 +7888,7 @@
       "version": "1.0",
       "stage": 3,
       "stageCount": 3,
-      "sortOrder": 575
+      "sortOrder": 601
     },
     {
       "id": "82052",
@@ -7553,7 +7899,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 576
+      "sortOrder": 602
     },
     {
       "id": "82063",
@@ -7564,7 +7910,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 577
+      "sortOrder": 603
     },
     {
       "id": "82064",
@@ -7575,7 +7921,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 578
+      "sortOrder": 604
     },
     {
       "id": "82065",
@@ -7586,7 +7932,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 579
+      "sortOrder": 605
     },
     {
       "id": "82074",
@@ -7597,7 +7943,7 @@
       "version": "1.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 580
+      "sortOrder": 606
     },
     {
       "id": "82075",
@@ -7608,7 +7954,7 @@
       "version": "1.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 581
+      "sortOrder": 607
     },
     {
       "id": "82076",
@@ -7619,7 +7965,7 @@
       "version": "1.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 582
+      "sortOrder": 608
     },
     {
       "id": "82077",
@@ -7630,7 +7976,7 @@
       "version": "1.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 583
+      "sortOrder": 609
     },
     {
       "id": "82078",
@@ -7641,7 +7987,7 @@
       "version": "1.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 584
+      "sortOrder": 610
     },
     {
       "id": "82079",
@@ -7652,7 +7998,7 @@
       "version": "1.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 585
+      "sortOrder": 611
     },
     {
       "id": "82080",
@@ -7663,7 +8009,7 @@
       "version": "1.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 586
+      "sortOrder": 612
     },
     {
       "id": "82081",
@@ -7674,7 +8020,7 @@
       "version": "1.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 587
+      "sortOrder": 613
     },
     {
       "id": "82082",
@@ -7685,7 +8031,7 @@
       "version": "1.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 588
+      "sortOrder": 614
     },
     {
       "id": "82083",
@@ -7696,7 +8042,7 @@
       "version": "1.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 589
+      "sortOrder": 615
     },
     {
       "id": "82084",
@@ -7707,7 +8053,7 @@
       "version": "1.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 590
+      "sortOrder": 616
     },
     {
       "id": "82085",
@@ -7718,7 +8064,7 @@
       "version": "1.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 591
+      "sortOrder": 617
     },
     {
       "id": "82086",
@@ -7729,7 +8075,7 @@
       "version": "1.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 592
+      "sortOrder": 618
     },
     {
       "id": "82087",
@@ -7740,7 +8086,7 @@
       "version": "1.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 593
+      "sortOrder": 619
     },
     {
       "id": "82088",
@@ -7751,7 +8097,7 @@
       "version": "1.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 594
+      "sortOrder": 620
     },
     {
       "id": "82089",
@@ -7762,7 +8108,7 @@
       "version": "1.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 595
+      "sortOrder": 621
     },
     {
       "id": "82090",
@@ -7773,7 +8119,7 @@
       "version": "1.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 596
+      "sortOrder": 622
     },
     {
       "id": "82099",
@@ -7784,7 +8130,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 597
+      "sortOrder": 623
     },
     {
       "id": "82100",
@@ -7795,7 +8141,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 598
+      "sortOrder": 624
     },
     {
       "id": "82101",
@@ -7806,7 +8152,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 599
+      "sortOrder": 625
     },
     {
       "id": "82102",
@@ -7817,7 +8163,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 600
+      "sortOrder": 626
     },
     {
       "id": "82103",
@@ -7828,7 +8174,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 601
+      "sortOrder": 627
     },
     {
       "id": "82104",
@@ -7839,7 +8185,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 602
+      "sortOrder": 628
     },
     {
       "id": "82105",
@@ -7850,7 +8196,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 603
+      "sortOrder": 629
     },
     {
       "id": "82106",
@@ -7861,7 +8207,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 604
+      "sortOrder": 630
     },
     {
       "id": "82107",
@@ -7872,7 +8218,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 605
+      "sortOrder": 631
     },
     {
       "id": "82108",
@@ -7883,7 +8229,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 606
+      "sortOrder": 632
     },
     {
       "id": "82110",
@@ -7894,7 +8240,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 607
+      "sortOrder": 633
     },
     {
       "id": "82111",
@@ -7905,7 +8251,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 608
+      "sortOrder": 634
     },
     {
       "id": "82112",
@@ -7916,7 +8262,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 609
+      "sortOrder": 635
     },
     {
       "id": "82113",
@@ -7927,7 +8273,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 610
+      "sortOrder": 636
     },
     {
       "id": "82114",
@@ -7938,7 +8284,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 611
+      "sortOrder": 637
     },
     {
       "id": "82121",
@@ -7949,7 +8295,7 @@
       "version": "2.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 612
+      "sortOrder": 638
     },
     {
       "id": "82122",
@@ -7960,7 +8306,7 @@
       "version": "2.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 613
+      "sortOrder": 639
     },
     {
       "id": "82123",
@@ -7971,7 +8317,7 @@
       "version": "2.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 614
+      "sortOrder": 640
     },
     {
       "id": "82124",
@@ -7982,7 +8328,7 @@
       "version": "2.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 615
+      "sortOrder": 641
     },
     {
       "id": "82125",
@@ -7993,7 +8339,7 @@
       "version": "2.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 616
+      "sortOrder": 642
     },
     {
       "id": "82127",
@@ -8004,7 +8350,7 @@
       "version": "2.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 617
+      "sortOrder": 643
     },
     {
       "id": "82129",
@@ -8015,7 +8361,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 618
+      "sortOrder": 644
     },
     {
       "id": "82130",
@@ -8026,7 +8372,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 619
+      "sortOrder": 645
     },
     {
       "id": "82131",
@@ -8037,7 +8383,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 620
+      "sortOrder": 646
     },
     {
       "id": "82132",
@@ -8048,7 +8394,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 621
+      "sortOrder": 647
     },
     {
       "id": "82133",
@@ -8059,7 +8405,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 622
+      "sortOrder": 648
     },
     {
       "id": "82142",
@@ -8070,7 +8416,7 @@
       "version": "3.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 623
+      "sortOrder": 649
     },
     {
       "id": "82143",
@@ -8081,7 +8427,7 @@
       "version": "3.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 624
+      "sortOrder": 650
     },
     {
       "id": "82144",
@@ -8092,7 +8438,7 @@
       "version": "3.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 625
+      "sortOrder": 651
     },
     {
       "id": "82145",
@@ -8103,7 +8449,7 @@
       "version": "3.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 626
+      "sortOrder": 652
     },
     {
       "id": "82155",
@@ -8114,7 +8460,7 @@
       "version": "3.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 627
+      "sortOrder": 653
     },
     {
       "id": "82156",
@@ -8125,7 +8471,7 @@
       "version": "3.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 628
+      "sortOrder": 654
     },
     {
       "id": "82157",
@@ -8136,7 +8482,7 @@
       "version": "3.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 629
+      "sortOrder": 655
     },
     {
       "id": "82158",
@@ -8147,7 +8493,7 @@
       "version": "3.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 630
+      "sortOrder": 656
     },
     {
       "id": "82160",
@@ -8158,7 +8504,7 @@
       "version": "3.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 631
+      "sortOrder": 657
     },
     {
       "id": "82168",
@@ -8169,7 +8515,7 @@
       "version": "3.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 632
+      "sortOrder": 658
     },
     {
       "id": "82175",
@@ -8180,7 +8526,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 633
+      "sortOrder": 659
     },
     {
       "id": "82176",
@@ -8191,7 +8537,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 634
+      "sortOrder": 660
     },
     {
       "id": "82177",
@@ -8202,7 +8548,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 635
+      "sortOrder": 661
     },
     {
       "id": "82178",
@@ -8213,7 +8559,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 636
+      "sortOrder": 662
     },
     {
       "id": "82180",
@@ -8224,7 +8570,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 637
+      "sortOrder": 663
     },
     {
       "id": "82179",
@@ -8235,7 +8581,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 638
+      "sortOrder": 664
     },
     {
       "id": "82187",
@@ -8246,7 +8592,7 @@
       "version": "4.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 639
+      "sortOrder": 665
     },
     {
       "id": "82188",
@@ -8257,7 +8603,7 @@
       "version": "4.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 640
+      "sortOrder": 666
     },
     {
       "id": "82189",
@@ -8268,7 +8614,7 @@
       "version": "4.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 641
+      "sortOrder": 667
     },
     {
       "id": "82190",
@@ -8279,7 +8625,7 @@
       "version": "4.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 642
+      "sortOrder": 668
     },
     {
       "id": "82191",
@@ -8290,7 +8636,7 @@
       "version": "4.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 643
+      "sortOrder": 669
     },
     {
       "id": "82192",
@@ -8301,7 +8647,7 @@
       "version": "4.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 644
+      "sortOrder": 670
     },
     {
       "id": "82250",
@@ -8312,7 +8658,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 645
+      "sortOrder": 671
     },
     {
       "id": "82251",
@@ -8323,7 +8669,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 646
+      "sortOrder": 672
     },
     {
       "id": "82252",
@@ -8334,7 +8680,7 @@
       "version": "5.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 647
+      "sortOrder": 673
     },
     {
       "id": "82253",
@@ -8345,7 +8691,7 @@
       "version": "5.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 648
+      "sortOrder": 674
     },
     {
       "id": "82294",
@@ -8356,7 +8702,7 @@
       "version": "5.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 649
+      "sortOrder": 675
     },
     {
       "id": "82295",
@@ -8367,7 +8713,7 @@
       "version": "5.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 650
+      "sortOrder": 676
     },
     {
       "id": "82296",
@@ -8378,7 +8724,7 @@
       "version": "5.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 651
+      "sortOrder": 677
     },
     {
       "id": "82297",
@@ -8389,7 +8735,7 @@
       "version": "5.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 652
+      "sortOrder": 678
     },
     {
       "id": "82298",
@@ -8400,7 +8746,7 @@
       "version": "6.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 653
+      "sortOrder": 679
     },
     {
       "id": "82299",
@@ -8411,7 +8757,7 @@
       "version": "6.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 654
+      "sortOrder": 680
     },
     {
       "id": "82300",
@@ -8422,7 +8768,7 @@
       "version": "6.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 655
+      "sortOrder": 681
     },
     {
       "id": "82301",
@@ -8433,7 +8779,7 @@
       "version": "6.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 656
+      "sortOrder": 682
     },
     {
       "id": "82302",
@@ -8444,7 +8790,7 @@
       "version": "6.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 657
+      "sortOrder": 683
     },
     {
       "id": "82303",
@@ -8455,7 +8801,7 @@
       "version": "6.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 658
+      "sortOrder": 684
     },
     {
       "id": "82304",
@@ -8466,7 +8812,7 @@
       "version": "6.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 659
+      "sortOrder": 685
     },
     {
       "id": "82305",
@@ -8477,7 +8823,7 @@
       "version": "6.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 660
+      "sortOrder": 686
     },
     {
       "id": "82306",
@@ -8488,7 +8834,7 @@
       "version": "6.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 661
+      "sortOrder": 687
     },
     {
       "id": "82307",
@@ -8499,7 +8845,7 @@
       "version": "6.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 662
+      "sortOrder": 688
     },
     {
       "id": "82308",
@@ -8510,7 +8856,7 @@
       "version": "6.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 663
+      "sortOrder": 689
     },
     {
       "id": "82309",
@@ -8521,7 +8867,29 @@
       "version": "6.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 664
+      "sortOrder": 690
+    },
+    {
+      "id": "82310",
+      "categoryId": "gi-0",
+      "name": "Hold... Hold... Now!",
+      "description": "Interrupt an Immortal Construct's attack by breaking its HP Shield while it's in the Lifeflare state.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 691
+    },
+    {
+      "id": "82311",
+      "categoryId": "gi-0",
+      "name": "Winged Lion Down",
+      "description": "Knock the Chimeric Winged Lion out of the sky by destroying all Anemo Orbs while it is in the Galeforce state.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 692
     },
     {
       "id": "84000",
@@ -8532,7 +8900,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 665
+      "sortOrder": 693
     },
     {
       "id": "84001",
@@ -8543,7 +8911,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 666
+      "sortOrder": 694
     },
     {
       "id": "84002",
@@ -8554,7 +8922,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 667
+      "sortOrder": 695
     },
     {
       "id": "84003",
@@ -8565,7 +8933,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 668
+      "sortOrder": 696
     },
     {
       "id": "84004",
@@ -8576,7 +8944,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 669
+      "sortOrder": 697
     },
     {
       "id": "84005",
@@ -8587,7 +8955,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 670
+      "sortOrder": 698
     },
     {
       "id": "84006",
@@ -8598,7 +8966,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 671
+      "sortOrder": 699
     },
     {
       "id": "84007",
@@ -8609,7 +8977,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 672
+      "sortOrder": 700
     },
     {
       "id": "84008",
@@ -8620,7 +8988,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 673
+      "sortOrder": 701
     },
     {
       "id": "84009",
@@ -8631,7 +8999,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 674
+      "sortOrder": 702
     },
     {
       "id": "84010",
@@ -8642,7 +9010,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 675
+      "sortOrder": 703
     },
     {
       "id": "84011",
@@ -8653,7 +9021,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 676
+      "sortOrder": 704
     },
     {
       "id": "84012",
@@ -8664,7 +9032,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 677
+      "sortOrder": 705
     },
     {
       "id": "84013",
@@ -8675,7 +9043,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 678
+      "sortOrder": 706
     },
     {
       "id": "84014",
@@ -8686,7 +9054,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 679
+      "sortOrder": 707
     },
     {
       "id": "84015",
@@ -8697,7 +9065,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 680
+      "sortOrder": 708
     },
     {
       "id": "84016",
@@ -8708,7 +9076,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 681
+      "sortOrder": 709
     },
     {
       "id": "84017",
@@ -8719,7 +9087,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 682
+      "sortOrder": 710
     },
     {
       "id": "84018",
@@ -8730,7 +9098,7 @@
       "version": "1.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 683
+      "sortOrder": 711
     },
     {
       "id": "84019",
@@ -8741,7 +9109,7 @@
       "version": "1.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 684
+      "sortOrder": 712
     },
     {
       "id": "84020",
@@ -8752,7 +9120,7 @@
       "version": "1.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 685
+      "sortOrder": 713
     },
     {
       "id": "84021",
@@ -8763,7 +9131,7 @@
       "version": "1.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 686
+      "sortOrder": 714
     },
     {
       "id": "84022",
@@ -8774,7 +9142,7 @@
       "version": "1.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 687
+      "sortOrder": 715
     },
     {
       "id": "84023",
@@ -8785,7 +9153,7 @@
       "version": "1.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 688
+      "sortOrder": 716
     },
     {
       "id": "84024",
@@ -8796,7 +9164,7 @@
       "version": "1.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 689
+      "sortOrder": 717
     },
     {
       "id": "84508",
@@ -8807,7 +9175,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 690
+      "sortOrder": 718
     },
     {
       "id": "84509",
@@ -8818,7 +9186,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 691
+      "sortOrder": 719
     },
     {
       "id": "84510",
@@ -8829,7 +9197,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 692
+      "sortOrder": 720
     },
     {
       "id": "84512",
@@ -8840,7 +9208,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 693
+      "sortOrder": 721
     },
     {
       "id": "84513",
@@ -8851,7 +9219,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 694
+      "sortOrder": 722
     },
     {
       "id": "84514",
@@ -8862,7 +9230,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 695
+      "sortOrder": 723
     },
     {
       "id": "84515",
@@ -8873,7 +9241,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 696
+      "sortOrder": 724
     },
     {
       "id": "84516",
@@ -8884,7 +9252,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 697
+      "sortOrder": 725
     },
     {
       "id": "84518",
@@ -8895,7 +9263,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 698
+      "sortOrder": 726
     },
     {
       "id": "84519",
@@ -8906,7 +9274,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 699
+      "sortOrder": 727
     },
     {
       "id": "84520",
@@ -8917,7 +9285,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 700
+      "sortOrder": 728
     },
     {
       "id": "84522",
@@ -8928,7 +9296,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 701
+      "sortOrder": 729
     },
     {
       "id": "84523",
@@ -8939,7 +9307,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 702
+      "sortOrder": 730
     },
     {
       "id": "84524",
@@ -8950,7 +9318,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 703
+      "sortOrder": 731
     },
     {
       "id": "84525",
@@ -8961,7 +9329,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 704
+      "sortOrder": 732
     },
     {
       "id": "84526",
@@ -8972,7 +9340,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 705
+      "sortOrder": 733
     },
     {
       "id": "84527",
@@ -8983,7 +9351,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 706
+      "sortOrder": 734
     },
     {
       "id": "84528",
@@ -8994,7 +9362,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 707
+      "sortOrder": 735
     },
     {
       "id": "84529",
@@ -9005,7 +9373,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 708
+      "sortOrder": 736
     },
     {
       "id": "84530",
@@ -9016,7 +9384,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 709
+      "sortOrder": 737
     },
     {
       "id": "84531",
@@ -9027,7 +9395,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 710
+      "sortOrder": 738
     },
     {
       "id": "84532",
@@ -9038,7 +9406,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 711
+      "sortOrder": 739
     },
     {
       "id": "84533",
@@ -9049,7 +9417,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 712
+      "sortOrder": 740
     },
     {
       "id": "84534",
@@ -9060,7 +9428,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 713
+      "sortOrder": 741
     },
     {
       "id": "84535",
@@ -9071,7 +9439,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 714
+      "sortOrder": 742
     },
     {
       "id": "84536",
@@ -9082,7 +9450,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 715
+      "sortOrder": 743
     },
     {
       "id": "84537",
@@ -9093,7 +9461,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 716
+      "sortOrder": 744
     },
     {
       "id": "84538",
@@ -9104,7 +9472,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 717
+      "sortOrder": 745
     },
     {
       "id": "84539",
@@ -9115,7 +9483,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 718
+      "sortOrder": 746
     },
     {
       "id": "84540",
@@ -9126,7 +9494,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 719
+      "sortOrder": 747
     },
     {
       "id": "84541",
@@ -9137,7 +9505,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 720
+      "sortOrder": 748
     },
     {
       "id": "84542",
@@ -9148,7 +9516,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 721
+      "sortOrder": 749
     },
     {
       "id": "84543",
@@ -9159,7 +9527,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 722
+      "sortOrder": 750
     },
     {
       "id": "84544",
@@ -9170,7 +9538,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 723
+      "sortOrder": 751
     },
     {
       "id": "84545",
@@ -9181,7 +9549,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 724
+      "sortOrder": 752
     },
     {
       "id": "84546",
@@ -9192,7 +9560,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 725
+      "sortOrder": 753
     },
     {
       "id": "84547",
@@ -9203,7 +9571,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 726
+      "sortOrder": 754
     },
     {
       "id": "84548",
@@ -9214,7 +9582,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 727
+      "sortOrder": 755
     },
     {
       "id": "84549",
@@ -9225,7 +9593,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 728
+      "sortOrder": 756
     },
     {
       "id": "84550",
@@ -9236,7 +9604,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 729
+      "sortOrder": 757
     },
     {
       "id": "84551",
@@ -9247,7 +9615,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 730
+      "sortOrder": 758
     },
     {
       "id": "84552",
@@ -9258,7 +9626,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 731
+      "sortOrder": 759
     },
     {
       "id": "84553",
@@ -9269,7 +9637,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 732
+      "sortOrder": 760
     },
     {
       "id": "84554",
@@ -9280,7 +9648,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 733
+      "sortOrder": 761
     },
     {
       "id": "84555",
@@ -9291,7 +9659,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 734
+      "sortOrder": 762
     },
     {
       "id": "84556",
@@ -9302,7 +9670,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 735
+      "sortOrder": 763
     },
     {
       "id": "84557",
@@ -9313,7 +9681,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 736
+      "sortOrder": 764
     },
     {
       "id": "84558",
@@ -9324,7 +9692,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 737
+      "sortOrder": 765
     },
     {
       "id": "84559",
@@ -9335,7 +9703,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 738
+      "sortOrder": 766
     },
     {
       "id": "84560",
@@ -9346,7 +9714,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 739
+      "sortOrder": 767
     },
     {
       "id": "84561",
@@ -9357,7 +9725,7 @@
       "version": "3.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 740
+      "sortOrder": 768
     },
     {
       "id": "84562",
@@ -9368,7 +9736,7 @@
       "version": "3.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 741
+      "sortOrder": 769
     },
     {
       "id": "84563",
@@ -9379,7 +9747,7 @@
       "version": "3.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 742
+      "sortOrder": 770
     },
     {
       "id": "84564",
@@ -9390,7 +9758,7 @@
       "version": "3.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 743
+      "sortOrder": 771
     },
     {
       "id": "84565",
@@ -9401,7 +9769,7 @@
       "version": "3.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 744
+      "sortOrder": 772
     },
     {
       "id": "84566",
@@ -9412,7 +9780,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 745
+      "sortOrder": 773
     },
     {
       "id": "84567",
@@ -9423,7 +9791,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 746
+      "sortOrder": 774
     },
     {
       "id": "84568",
@@ -9434,7 +9802,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 747
+      "sortOrder": 775
     },
     {
       "id": "84569",
@@ -9445,7 +9813,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 748
+      "sortOrder": 776
     },
     {
       "id": "84570",
@@ -9456,7 +9824,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 749
+      "sortOrder": 777
     },
     {
       "id": "84571",
@@ -9467,7 +9835,7 @@
       "version": "4.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 750
+      "sortOrder": 778
     },
     {
       "id": "84572",
@@ -9478,7 +9846,7 @@
       "version": "4.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 751
+      "sortOrder": 779
     },
     {
       "id": "84573",
@@ -9489,7 +9857,7 @@
       "version": "4.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 752
+      "sortOrder": 780
     },
     {
       "id": "84574",
@@ -9500,7 +9868,7 @@
       "version": "4.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 753
+      "sortOrder": 781
     },
     {
       "id": "84575",
@@ -9511,7 +9879,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 754
+      "sortOrder": 782
     },
     {
       "id": "84576",
@@ -9522,7 +9890,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 755
+      "sortOrder": 783
     },
     {
       "id": "84578",
@@ -9533,7 +9901,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 756
+      "sortOrder": 784
     },
     {
       "id": "84579",
@@ -9544,7 +9912,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 757
+      "sortOrder": 785
     },
     {
       "id": "84580",
@@ -9555,7 +9923,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 758
+      "sortOrder": 786
     },
     {
       "id": "84581",
@@ -9566,7 +9934,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 759
+      "sortOrder": 787
     },
     {
       "id": "84582",
@@ -9577,7 +9945,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 760
+      "sortOrder": 788
     },
     {
       "id": "84583",
@@ -9588,7 +9956,18 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 761
+      "sortOrder": 789
+    },
+    {
+      "id": "84584",
+      "categoryId": "gi-0",
+      "name": "The soaring black snow swan",
+      "description": "Reaching heights no snow swan has ever reached and daring to dream what no snow swan has ever dreamed.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 790
     },
     {
       "id": "85000",
@@ -9599,7 +9978,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 762
+      "sortOrder": 791
     },
     {
       "id": "85001",
@@ -9610,7 +9989,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 763
+      "sortOrder": 792
     },
     {
       "id": "85002",
@@ -9621,7 +10000,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 764
+      "sortOrder": 793
     },
     {
       "id": "85003",
@@ -9632,7 +10011,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 765
+      "sortOrder": 794
     },
     {
       "id": "85004",
@@ -9643,7 +10022,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 766
+      "sortOrder": 795
     },
     {
       "id": "85005",
@@ -9654,7 +10033,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 767
+      "sortOrder": 796
     },
     {
       "id": "85006",
@@ -9665,7 +10044,7 @@
       "version": "1.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 768
+      "sortOrder": 797
     },
     {
       "id": "84025",
@@ -9676,7 +10055,7 @@
       "version": "1.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 769
+      "sortOrder": 798
     },
     {
       "id": "84029",
@@ -9687,7 +10066,7 @@
       "version": "1.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 770
+      "sortOrder": 799
     },
     {
       "id": "84030",
@@ -9698,7 +10077,7 @@
       "version": "1.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 771
+      "sortOrder": 800
     },
     {
       "id": "84031",
@@ -9709,7 +10088,7 @@
       "version": "1.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 772
+      "sortOrder": 801
     },
     {
       "id": "84032",
@@ -9720,7 +10099,7 @@
       "version": "1.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 773
+      "sortOrder": 802
     },
     {
       "id": "84033",
@@ -9731,7 +10110,7 @@
       "version": "1.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 774
+      "sortOrder": 803
     },
     {
       "id": "84034",
@@ -9742,7 +10121,7 @@
       "version": "1.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 775
+      "sortOrder": 804
     },
     {
       "id": "84035",
@@ -9753,7 +10132,7 @@
       "version": "1.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 776
+      "sortOrder": 805
     },
     {
       "id": "84036",
@@ -9764,7 +10143,7 @@
       "version": "1.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 777
+      "sortOrder": 806
     },
     {
       "id": "84037",
@@ -9775,7 +10154,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 778
+      "sortOrder": 807
     },
     {
       "id": "84038",
@@ -9786,7 +10165,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 779
+      "sortOrder": 808
     },
     {
       "id": "84039",
@@ -9797,7 +10176,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 780
+      "sortOrder": 809
     },
     {
       "id": "84040",
@@ -9808,7 +10187,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 781
+      "sortOrder": 810
     },
     {
       "id": "84041",
@@ -9819,7 +10198,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 782
+      "sortOrder": 811
     },
     {
       "id": "84042",
@@ -9830,7 +10209,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 783
+      "sortOrder": 812
     },
     {
       "id": "84043",
@@ -9841,7 +10220,7 @@
       "version": "2.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 784
+      "sortOrder": 813
     },
     {
       "id": "84044",
@@ -9852,7 +10231,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 785
+      "sortOrder": 814
     },
     {
       "id": "84045",
@@ -9863,7 +10242,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 786
+      "sortOrder": 815
     },
     {
       "id": "84046",
@@ -9874,7 +10253,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 787
+      "sortOrder": 816
     },
     {
       "id": "84047",
@@ -9885,7 +10264,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 788
+      "sortOrder": 817
     },
     {
       "id": "84048",
@@ -9896,7 +10275,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 789
+      "sortOrder": 818
     },
     {
       "id": "84049",
@@ -9907,7 +10286,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 790
+      "sortOrder": 819
     },
     {
       "id": "84050",
@@ -9918,7 +10297,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 791
+      "sortOrder": 820
     },
     {
       "id": "84051",
@@ -9929,7 +10308,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 792
+      "sortOrder": 821
     },
     {
       "id": "84052",
@@ -9940,7 +10319,7 @@
       "version": "2.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 793
+      "sortOrder": 822
     },
     {
       "id": "84053",
@@ -9951,7 +10330,7 @@
       "version": "2.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 794
+      "sortOrder": 823
     },
     {
       "id": "84054",
@@ -9962,7 +10341,7 @@
       "version": "2.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 795
+      "sortOrder": 824
     },
     {
       "id": "84055",
@@ -9973,7 +10352,7 @@
       "version": "2.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 796
+      "sortOrder": 825
     },
     {
       "id": "84056",
@@ -9984,7 +10363,7 @@
       "version": "2.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 797
+      "sortOrder": 826
     },
     {
       "id": "84057",
@@ -9995,7 +10374,7 @@
       "version": "2.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 798
+      "sortOrder": 827
     },
     {
       "id": "84058",
@@ -10006,7 +10385,7 @@
       "version": "2.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 799
+      "sortOrder": 828
     },
     {
       "id": "84059",
@@ -10017,7 +10396,7 @@
       "version": "2.4",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 800
+      "sortOrder": 829
     },
     {
       "id": "84060",
@@ -10028,7 +10407,7 @@
       "version": "2.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 801
+      "sortOrder": 830
     },
     {
       "id": "84061",
@@ -10039,7 +10418,7 @@
       "version": "2.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 802
+      "sortOrder": 831
     },
     {
       "id": "84062",
@@ -10050,7 +10429,7 @@
       "version": "2.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 803
+      "sortOrder": 832
     },
     {
       "id": "84063",
@@ -10061,7 +10440,7 @@
       "version": "2.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 804
+      "sortOrder": 833
     },
     {
       "id": "84064",
@@ -10072,7 +10451,7 @@
       "version": "2.7",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 805
+      "sortOrder": 834
     },
     {
       "id": "84065",
@@ -10083,7 +10462,7 @@
       "version": "2.7",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 806
+      "sortOrder": 835
     },
     {
       "id": "84066",
@@ -10094,7 +10473,7 @@
       "version": "2.7",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 807
+      "sortOrder": 836
     },
     {
       "id": "84067",
@@ -10105,7 +10484,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 808
+      "sortOrder": 837
     },
     {
       "id": "84068",
@@ -10116,7 +10495,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 809
+      "sortOrder": 838
     },
     {
       "id": "84069",
@@ -10127,7 +10506,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 810
+      "sortOrder": 839
     },
     {
       "id": "84070",
@@ -10138,7 +10517,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 811
+      "sortOrder": 840
     },
     {
       "id": "84071",
@@ -10149,7 +10528,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 812
+      "sortOrder": 841
     },
     {
       "id": "84072",
@@ -10160,7 +10539,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 813
+      "sortOrder": 842
     },
     {
       "id": "84073",
@@ -10171,7 +10550,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 814
+      "sortOrder": 843
     },
     {
       "id": "84074",
@@ -10182,7 +10561,7 @@
       "version": "3.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 815
+      "sortOrder": 844
     },
     {
       "id": "84075",
@@ -10193,7 +10572,7 @@
       "version": "3.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 816
+      "sortOrder": 845
     },
     {
       "id": "84076",
@@ -10204,7 +10583,7 @@
       "version": "3.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 817
+      "sortOrder": 846
     },
     {
       "id": "84077",
@@ -10215,7 +10594,7 @@
       "version": "3.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 818
+      "sortOrder": 847
     },
     {
       "id": "84078",
@@ -10226,7 +10605,7 @@
       "version": "3.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 819
+      "sortOrder": 848
     },
     {
       "id": "84079",
@@ -10237,7 +10616,7 @@
       "version": "3.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 820
+      "sortOrder": 849
     },
     {
       "id": "84080",
@@ -10248,7 +10627,7 @@
       "version": "3.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 821
+      "sortOrder": 850
     },
     {
       "id": "84081",
@@ -10259,7 +10638,7 @@
       "version": "3.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 822
+      "sortOrder": 851
     },
     {
       "id": "84082",
@@ -10270,7 +10649,7 @@
       "version": "3.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 823
+      "sortOrder": 852
     },
     {
       "id": "84083",
@@ -10281,7 +10660,7 @@
       "version": "3.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 824
+      "sortOrder": 853
     },
     {
       "id": "84084",
@@ -10292,7 +10671,7 @@
       "version": "3.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 825
+      "sortOrder": 854
     },
     {
       "id": "84085",
@@ -10303,7 +10682,7 @@
       "version": "3.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 826
+      "sortOrder": 855
     },
     {
       "id": "84086",
@@ -10314,7 +10693,7 @@
       "version": "3.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 827
+      "sortOrder": 856
     },
     {
       "id": "84087",
@@ -10325,7 +10704,7 @@
       "version": "3.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 828
+      "sortOrder": 857
     },
     {
       "id": "84088",
@@ -10336,7 +10715,7 @@
       "version": "3.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 829
+      "sortOrder": 858
     },
     {
       "id": "84089",
@@ -10347,7 +10726,7 @@
       "version": "3.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 830
+      "sortOrder": 859
     },
     {
       "id": "84090",
@@ -10358,7 +10737,7 @@
       "version": "3.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 831
+      "sortOrder": 860
     },
     {
       "id": "84091",
@@ -10369,7 +10748,7 @@
       "version": "3.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 832
+      "sortOrder": 861
     },
     {
       "id": "84092",
@@ -10380,7 +10759,7 @@
       "version": "3.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 833
+      "sortOrder": 862
     },
     {
       "id": "84093",
@@ -10391,7 +10770,7 @@
       "version": "3.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 834
+      "sortOrder": 863
     },
     {
       "id": "84094",
@@ -10402,7 +10781,7 @@
       "version": "3.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 835
+      "sortOrder": 864
     },
     {
       "id": "84095",
@@ -10413,7 +10792,7 @@
       "version": "3.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 836
+      "sortOrder": 865
     },
     {
       "id": "84096",
@@ -10424,7 +10803,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 837
+      "sortOrder": 866
     },
     {
       "id": "84097",
@@ -10435,7 +10814,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 838
+      "sortOrder": 867
     },
     {
       "id": "84098",
@@ -10446,7 +10825,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 839
+      "sortOrder": 868
     },
     {
       "id": "84099",
@@ -10457,7 +10836,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 840
+      "sortOrder": 869
     },
     {
       "id": "84300",
@@ -10468,7 +10847,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 841
+      "sortOrder": 870
     },
     {
       "id": "84301",
@@ -10479,7 +10858,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 842
+      "sortOrder": 871
     },
     {
       "id": "84302",
@@ -10490,7 +10869,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 843
+      "sortOrder": 872
     },
     {
       "id": "84303",
@@ -10501,7 +10880,7 @@
       "version": "4.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 844
+      "sortOrder": 873
     },
     {
       "id": "84304",
@@ -10512,7 +10891,7 @@
       "version": "4.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 845
+      "sortOrder": 874
     },
     {
       "id": "84305",
@@ -10523,7 +10902,7 @@
       "version": "4.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 846
+      "sortOrder": 875
     },
     {
       "id": "84306",
@@ -10534,7 +10913,7 @@
       "version": "4.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 847
+      "sortOrder": 876
     },
     {
       "id": "84307",
@@ -10545,7 +10924,7 @@
       "version": "4.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 848
+      "sortOrder": 877
     },
     {
       "id": "84308",
@@ -10556,7 +10935,7 @@
       "version": "4.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 849
+      "sortOrder": 878
     },
     {
       "id": "84309",
@@ -10567,7 +10946,7 @@
       "version": "4.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 850
+      "sortOrder": 879
     },
     {
       "id": "84310",
@@ -10578,7 +10957,7 @@
       "version": "4.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 851
+      "sortOrder": 880
     },
     {
       "id": "84311",
@@ -10589,7 +10968,7 @@
       "version": "4.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 852
+      "sortOrder": 881
     },
     {
       "id": "84312",
@@ -10600,7 +10979,7 @@
       "version": "4.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 853
+      "sortOrder": 882
     },
     {
       "id": "84313",
@@ -10611,7 +10990,7 @@
       "version": "4.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 854
+      "sortOrder": 883
     },
     {
       "id": "84314",
@@ -10622,7 +11001,7 @@
       "version": "4.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 855
+      "sortOrder": 884
     },
     {
       "id": "84315",
@@ -10633,7 +11012,7 @@
       "version": "4.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 856
+      "sortOrder": 885
     },
     {
       "id": "84316",
@@ -10644,7 +11023,7 @@
       "version": "4.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 857
+      "sortOrder": 886
     },
     {
       "id": "84317",
@@ -10655,7 +11034,7 @@
       "version": "4.7",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 858
+      "sortOrder": 887
     },
     {
       "id": "84318",
@@ -10666,7 +11045,7 @@
       "version": "4.7",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 859
+      "sortOrder": 888
     },
     {
       "id": "84319",
@@ -10677,7 +11056,7 @@
       "version": "4.7",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 860
+      "sortOrder": 889
     },
     {
       "id": "84320",
@@ -10688,7 +11067,7 @@
       "version": "4.7",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 861
+      "sortOrder": 890
     },
     {
       "id": "84321",
@@ -10699,7 +11078,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 862
+      "sortOrder": 891
     },
     {
       "id": "84322",
@@ -10710,7 +11089,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 863
+      "sortOrder": 892
     },
     {
       "id": "84323",
@@ -10721,7 +11100,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 864
+      "sortOrder": 893
     },
     {
       "id": "84325",
@@ -10732,7 +11111,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 865
+      "sortOrder": 894
     },
     {
       "id": "84324",
@@ -10743,7 +11122,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 866
+      "sortOrder": 895
     },
     {
       "id": "84326",
@@ -10754,7 +11133,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 867
+      "sortOrder": 896
     },
     {
       "id": "84327",
@@ -10765,7 +11144,7 @@
       "version": "5.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 868
+      "sortOrder": 897
     },
     {
       "id": "84328",
@@ -10776,7 +11155,7 @@
       "version": "5.5",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 869
+      "sortOrder": 898
     },
     {
       "id": "84329",
@@ -10787,7 +11166,7 @@
       "version": "5.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 870
+      "sortOrder": 899
     },
     {
       "id": "84330",
@@ -10798,7 +11177,7 @@
       "version": "5.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 871
+      "sortOrder": 900
     },
     {
       "id": "84331",
@@ -10809,7 +11188,7 @@
       "version": "5.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 872
+      "sortOrder": 901
     },
     {
       "id": "84332",
@@ -10820,7 +11199,7 @@
       "version": "5.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 873
+      "sortOrder": 902
     },
     {
       "id": "84333",
@@ -10831,7 +11210,7 @@
       "version": "5.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 874
+      "sortOrder": 903
     },
     {
       "id": "84334",
@@ -10842,7 +11221,7 @@
       "version": "5.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 875
+      "sortOrder": 904
     },
     {
       "id": "84335",
@@ -10853,7 +11232,7 @@
       "version": "5.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 876
+      "sortOrder": 905
     },
     {
       "id": "84336",
@@ -10864,7 +11243,7 @@
       "version": "5.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 877
+      "sortOrder": 906
     },
     {
       "id": "84337",
@@ -10875,7 +11254,7 @@
       "version": "5.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 878
+      "sortOrder": 907
     },
     {
       "id": "84338",
@@ -10886,7 +11265,7 @@
       "version": "5.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 879
+      "sortOrder": 908
     },
     {
       "id": "84339",
@@ -10897,7 +11276,7 @@
       "version": "5.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 880
+      "sortOrder": 909
     },
     {
       "id": "84340",
@@ -10908,7 +11287,7 @@
       "version": "5.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 881
+      "sortOrder": 910
     },
     {
       "id": "84341",
@@ -10919,7 +11298,7 @@
       "version": "5.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 882
+      "sortOrder": 911
     },
     {
       "id": "84342",
@@ -10930,7 +11309,7 @@
       "version": "5.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 883
+      "sortOrder": 912
     },
     {
       "id": "84343",
@@ -10941,7 +11320,7 @@
       "version": "5.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 884
+      "sortOrder": 913
     },
     {
       "id": "84344",
@@ -10952,7 +11331,7 @@
       "version": "5.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 885
+      "sortOrder": 914
     },
     {
       "id": "84345",
@@ -10963,7 +11342,7 @@
       "version": "5.7",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 886
+      "sortOrder": 915
     },
     {
       "id": "84346",
@@ -10974,7 +11353,7 @@
       "version": "5.7",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 887
+      "sortOrder": 916
     },
     {
       "id": "84347",
@@ -10985,7 +11364,7 @@
       "version": "5.7",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 888
+      "sortOrder": 917
     },
     {
       "id": "84348",
@@ -10996,7 +11375,7 @@
       "version": "5.8",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 889
+      "sortOrder": 918
     },
     {
       "id": "84349",
@@ -11007,7 +11386,7 @@
       "version": "5.8",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 890
+      "sortOrder": 919
     },
     {
       "id": "84350",
@@ -11018,7 +11397,7 @@
       "version": "5.8",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 891
+      "sortOrder": 920
     },
     {
       "id": "84351",
@@ -11029,7 +11408,7 @@
       "version": "6.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 892
+      "sortOrder": 921
     },
     {
       "id": "84352",
@@ -11040,7 +11419,7 @@
       "version": "6.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 893
+      "sortOrder": 922
     },
     {
       "id": "84353",
@@ -11051,7 +11430,7 @@
       "version": "6.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 894
+      "sortOrder": 923
     },
     {
       "id": "84354",
@@ -11062,7 +11441,7 @@
       "version": "6.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 895
+      "sortOrder": 924
     },
     {
       "id": "84355",
@@ -11073,7 +11452,7 @@
       "version": "6.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 896
+      "sortOrder": 925
     },
     {
       "id": "84356",
@@ -11084,7 +11463,7 @@
       "version": "6.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 897
+      "sortOrder": 926
     },
     {
       "id": "84357",
@@ -11095,7 +11474,7 @@
       "version": "6.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 898
+      "sortOrder": 927
     },
     {
       "id": "84358",
@@ -11106,7 +11485,7 @@
       "version": "6.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 899
+      "sortOrder": 928
     },
     {
       "id": "84359",
@@ -11117,7 +11496,7 @@
       "version": "6.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 900
+      "sortOrder": 929
     },
     {
       "id": "84360",
@@ -11128,7 +11507,7 @@
       "version": "6.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 901
+      "sortOrder": 930
     },
     {
       "id": "84361",
@@ -11139,7 +11518,7 @@
       "version": "6.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 902
+      "sortOrder": 931
     },
     {
       "id": "84362",
@@ -11150,7 +11529,7 @@
       "version": "6.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 903
+      "sortOrder": 932
     },
     {
       "id": "84363",
@@ -11161,7 +11540,7 @@
       "version": "6.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 904
+      "sortOrder": 933
     },
     {
       "id": "84364",
@@ -11172,7 +11551,7 @@
       "version": "6.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 905
+      "sortOrder": 934
     },
     {
       "id": "84365",
@@ -11183,7 +11562,7 @@
       "version": "6.1",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 906
+      "sortOrder": 935
     },
     {
       "id": "84370",
@@ -11194,7 +11573,7 @@
       "version": "6.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 907
+      "sortOrder": 936
     },
     {
       "id": "84371",
@@ -11205,7 +11584,7 @@
       "version": "6.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 908
+      "sortOrder": 937
     },
     {
       "id": "84372",
@@ -11216,7 +11595,7 @@
       "version": "6.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 909
+      "sortOrder": 938
     },
     {
       "id": "84373",
@@ -11227,7 +11606,7 @@
       "version": "6.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 910
+      "sortOrder": 939
     },
     {
       "id": "84366",
@@ -11238,7 +11617,7 @@
       "version": "6.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 911
+      "sortOrder": 940
     },
     {
       "id": "84374",
@@ -11249,7 +11628,7 @@
       "version": "6.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 912
+      "sortOrder": 941
     },
     {
       "id": "84367",
@@ -11260,7 +11639,7 @@
       "version": "6.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 913
+      "sortOrder": 942
     },
     {
       "id": "84375",
@@ -11271,7 +11650,7 @@
       "version": "6.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 914
+      "sortOrder": 943
     },
     {
       "id": "84368",
@@ -11282,7 +11661,7 @@
       "version": "6.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 915
+      "sortOrder": 944
     },
     {
       "id": "84376",
@@ -11293,7 +11672,7 @@
       "version": "6.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 916
+      "sortOrder": 945
     },
     {
       "id": "84369",
@@ -11304,7 +11683,7 @@
       "version": "6.2",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 917
+      "sortOrder": 946
     },
     {
       "id": "84377",
@@ -11315,7 +11694,7 @@
       "version": "6.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 918
+      "sortOrder": 947
     },
     {
       "id": "84378",
@@ -11326,7 +11705,7 @@
       "version": "6.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 919
+      "sortOrder": 948
     },
     {
       "id": "84379",
@@ -11337,7 +11716,7 @@
       "version": "6.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 920
+      "sortOrder": 949
     },
     {
       "id": "84380",
@@ -11348,7 +11727,7 @@
       "version": "6.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 921
+      "sortOrder": 950
     },
     {
       "id": "84381",
@@ -11359,7 +11738,7 @@
       "version": "6.3",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 922
+      "sortOrder": 951
     },
     {
       "id": "84382",
@@ -11370,7 +11749,7 @@
       "version": "6.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 923
+      "sortOrder": 952
     },
     {
       "id": "84383",
@@ -11381,7 +11760,7 @@
       "version": "6.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 924
+      "sortOrder": 953
     },
     {
       "id": "84384",
@@ -11392,7 +11771,7 @@
       "version": "6.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 925
+      "sortOrder": 954
     },
     {
       "id": "84385",
@@ -11403,7 +11782,7 @@
       "version": "6.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 926
+      "sortOrder": 955
     },
     {
       "id": "84386",
@@ -11414,7 +11793,7 @@
       "version": "6.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 927
+      "sortOrder": 956
     },
     {
       "id": "84387",
@@ -11425,7 +11804,7 @@
       "version": "6.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 928
+      "sortOrder": 957
     },
     {
       "id": "84388",
@@ -11436,7 +11815,7 @@
       "version": "6.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 929
+      "sortOrder": 958
     },
     {
       "id": "84389",
@@ -11447,7 +11826,7 @@
       "version": "6.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 930
+      "sortOrder": 959
     },
     {
       "id": "84390",
@@ -11458,7 +11837,95 @@
       "version": "6.6",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 931
+      "sortOrder": 960
+    },
+    {
+      "id": "84391",
+      "categoryId": "gi-0",
+      "name": "Blizzard-Roaring Overture",
+      "description": "Drive the train through the wind and snow in Snezhnaya.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 961
+    },
+    {
+      "id": "84392",
+      "categoryId": "gi-0",
+      "name": "Mystery Play of the Pale Star",
+      "description": "Retrieve the \"Exaiphanes Blade\" from the ice cave.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 962
+    },
+    {
+      "id": "84393",
+      "categoryId": "gi-0",
+      "name": "The Howling Gale",
+      "description": "Accept your companion's invitation to join The Rokot.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 963
+    },
+    {
+      "id": "84394",
+      "categoryId": "gi-0",
+      "name": "Everwinter Without Mercy",
+      "description": "Complete \"Everwinter Without Mercy.\"",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 964
+    },
+    {
+      "id": "84395",
+      "categoryId": "gi-0",
+      "name": "Waltz of Love or Regret",
+      "description": "Watch the trial performance of Spirit Seeker.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 965
+    },
+    {
+      "id": "84396",
+      "categoryId": "gi-0",
+      "name": "Beyond the Loop",
+      "description": "Witness Mitya step into the snowstorm.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 966
+    },
+    {
+      "id": "84397",
+      "categoryId": "gi-0",
+      "name": "The Three Deaths of Fate",
+      "description": "Survive the afterlife.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 967
+    },
+    {
+      "id": "84398",
+      "categoryId": "gi-0",
+      "name": "Wraith's Nocturne",
+      "description": "Complete \"Wraith's Nocturne.\"",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 968
     },
     {
       "id": "84155",
@@ -11469,7 +11936,7 @@
       "version": "6.0",
       "stage": 1,
       "stageCount": 1,
-      "sortOrder": 932
+      "sortOrder": 969
     },
     {
       "id": "84026",
@@ -12449,6 +12916,39 @@
       "stage": 1,
       "stageCount": 1,
       "sortOrder": 5
+    },
+    {
+      "id": "80525",
+      "categoryId": "gi-71",
+      "name": "Requiem of the Icewind",
+      "description": "Obtain the power of Cryo.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 0
+    },
+    {
+      "id": "80526",
+      "categoryId": "gi-71",
+      "name": "When Song Tears the Night",
+      "description": "Collect the entire \"Polestar Ballet Anthology\" series.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 1
+    },
+    {
+      "id": "80528",
+      "categoryId": "gi-71",
+      "name": "Tales of the Departed",
+      "description": "Collect the entire \"General History of Snezhnaya\" series.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 2
     },
     {
       "id": "80007",
@@ -14910,6 +15410,105 @@
       "description": "Defeat a Radiant Moonfly in Co-Op Mode.",
       "reward": 10,
       "version": "6.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 8
+    },
+    {
+      "id": "86079",
+      "categoryId": "gi-72",
+      "name": "The Fall of Being",
+      "description": "Defeat a Frostnight Herra in Co-Op Mode.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 0
+    },
+    {
+      "id": "86080",
+      "categoryId": "gi-72",
+      "name": "Twenty-Six. Penetration!",
+      "description": "Defeat a Super-Heavy Landrover: Mechanized Fortress in Co-Op Mode.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 1
+    },
+    {
+      "id": "86081",
+      "categoryId": "gi-72",
+      "name": "Then Don't Say It!",
+      "description": "Defeat a Lord of the Hidden Depths: Whisperer of Nightmares in Co-Op Mode.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 2
+    },
+    {
+      "id": "86082",
+      "categoryId": "gi-72",
+      "name": "Refuse Falsehood, Reveal the Truth",
+      "description": "Defeat The Doctor in Co-Op Mode.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 3
+    },
+    {
+      "id": "86083",
+      "categoryId": "gi-72",
+      "name": "What Did You Even Protect?",
+      "description": "Defeat a Radiant Moongecko in Co-Op Mode.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 4
+    },
+    {
+      "id": "86084",
+      "categoryId": "gi-72",
+      "name": "\"If I Whet My Glittering sword...\"",
+      "description": "Defeat the Watcher: Fallen Vigil in Co-Op Mode.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 5
+    },
+    {
+      "id": "86085",
+      "categoryId": "gi-72",
+      "name": "Independent Ignorance",
+      "description": "Defeat Il Dottore in Co-Op Mode.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 6
+    },
+    {
+      "id": "86086",
+      "categoryId": "gi-72",
+      "name": "Immortality Severed",
+      "description": "Defeat an Immortal Construct in Co-Op Mode.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 7
+    },
+    {
+      "id": "86087",
+      "categoryId": "gi-72",
+      "name": "Endless Vitality",
+      "description": "Defeat a Chimeric Winged Lion in Co-Op Mode.",
+      "reward": 10,
+      "version": "7.0",
       "stage": 1,
       "stageCount": 1,
       "sortOrder": 8
@@ -20402,6 +21001,402 @@
       "stage": 1,
       "stageCount": 1,
       "sortOrder": 10
+    },
+    {
+      "id": "80504",
+      "categoryId": "gi-69",
+      "name": "Continental Explorer: Snow Blanketed Nation (I)",
+      "description": "Light up the maps of Everfrozen Earth, Volkodlak Tundra, Flamefeather Valley, White Birch Snowgrave, and Fellfrost Peak in the Snezhnaya region.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 0
+    },
+    {
+      "id": "80505",
+      "categoryId": "gi-69",
+      "name": "Across the Icebound Snowscape (I)",
+      "description": "Unlock all Teleport Waypoints in Everfrozen Earth, Volkodlak Tundra, Flamefeather Valley, White Birch Snowgrave, and Fellfrost Peak in the Snezhnaya region.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 1
+    },
+    {
+      "id": "80506",
+      "categoryId": "gi-69",
+      "name": "Sanctuary Pilgrim: Snow Blanketed Nation (I)",
+      "description": "Unlock all Shrines of Depths in Everfrozen Earth, Volkodlak Tundra, Flamefeather Valley, White Birch Snowgrave, and Fellfrost Peak in the Snezhnaya region.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 2
+    },
+    {
+      "id": "80507",
+      "categoryId": "gi-69",
+      "name": "Pale and Lucent as Ice",
+      "description": "Upgrade the Statues of The Seven in Snezhnaya to their maximum level.",
+      "reward": 20,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 3
+    },
+    {
+      "id": "80508",
+      "categoryId": "gi-69",
+      "name": "Bounty of the Shadow Realm: Snow Blanketed Nation (I)",
+      "description": "Unlock all Shadow Realm treasure vaults in Everfrozen Earth, Volkodlak Tundra, Flamefeather Valley, White Birch Snowgrave, and Fellfrost Peak in the Snezhnaya region.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 4
+    },
+    {
+      "id": "80509",
+      "categoryId": "gi-69",
+      "name": "The Tundra Will Guide You Home (I)",
+      "description": "Follow 3 Seelies in Everfrozen Earth, Volkodlak Tundra, Flamefeather Valley, White Birch Snowgrave, and Fellfrost Peak to their Seelie Courts.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 3,
+      "sortOrder": 5
+    },
+    {
+      "id": "80510",
+      "categoryId": "gi-69",
+      "name": "The Tundra Will Guide You Home (I)",
+      "description": "Follow 5 Seelies in Everfrozen Earth, Volkodlak Tundra, Flamefeather Valley, White Birch Snowgrave, and Fellfrost Peak to their Seelie Courts.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 2,
+      "stageCount": 3,
+      "sortOrder": 5
+    },
+    {
+      "id": "80511",
+      "categoryId": "gi-69",
+      "name": "The Tundra Will Guide You Home (I)",
+      "description": "Follow 10 Seelies in Everfrozen Earth, Volkodlak Tundra, Flamefeather Valley, White Birch Snowgrave, and Fellfrost Peak to their Seelie Courts.",
+      "reward": 20,
+      "version": "7.0",
+      "stage": 3,
+      "stageCount": 3,
+      "sortOrder": 5
+    },
+    {
+      "id": "80512",
+      "categoryId": "gi-69",
+      "name": "Glacial Treasure Hunter (I)",
+      "description": "Open 65 chests in Everfrozen Earth, Volkodlak Tundra, Flamefeather Valley, White Birch Snowgrave, and Fellfrost Peak.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 3,
+      "sortOrder": 6
+    },
+    {
+      "id": "80513",
+      "categoryId": "gi-69",
+      "name": "Glacial Treasure Hunter (I)",
+      "description": "Open 130 chests in Everfrozen Earth, Volkodlak Tundra, Flamefeather Valley, White Birch Snowgrave, and Fellfrost Peak.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 2,
+      "stageCount": 3,
+      "sortOrder": 6
+    },
+    {
+      "id": "80514",
+      "categoryId": "gi-69",
+      "name": "Glacial Treasure Hunter (I)",
+      "description": "Open 260 chests in Everfrozen Earth, Volkodlak Tundra, Flamefeather Valley, White Birch Snowgrave, and Fellfrost Peak.",
+      "reward": 20,
+      "version": "7.0",
+      "stage": 3,
+      "stageCount": 3,
+      "sortOrder": 6
+    },
+    {
+      "id": "80515",
+      "categoryId": "gi-69",
+      "name": "Chillwinter Adventurer (I)",
+      "description": "Complete 6 Open World Time Trial Challenges in Everfrozen Earth, Volkodlak Tundra, Flamefeather Valley, White Birch Snowgrave, and Fellfrost Peak.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 3,
+      "sortOrder": 7
+    },
+    {
+      "id": "80516",
+      "categoryId": "gi-69",
+      "name": "Chillwinter Adventurer (I)",
+      "description": "Complete 12 Open World Time Trial Challenges in Everfrozen Earth, Volkodlak Tundra, Flamefeather Valley, White Birch Snowgrave, and Fellfrost Peak.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 2,
+      "stageCount": 3,
+      "sortOrder": 7
+    },
+    {
+      "id": "80517",
+      "categoryId": "gi-69",
+      "name": "Chillwinter Adventurer (I)",
+      "description": "Complete 24 Open World Time Trial Challenges in Everfrozen Earth, Volkodlak Tundra, Flamefeather Valley, White Birch Snowgrave, and Fellfrost Peak.",
+      "reward": 20,
+      "version": "7.0",
+      "stage": 3,
+      "stageCount": 3,
+      "sortOrder": 7
+    },
+    {
+      "id": "80518",
+      "categoryId": "gi-69",
+      "name": "Ladder of Love",
+      "description": "Complete \"Hesperides of Love and Hate.\"",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 8
+    },
+    {
+      "id": "80519",
+      "categoryId": "gi-69",
+      "name": "Gather for Everlasting Happiness",
+      "description": "Complete \"In the Dwelling of Life.\"",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 9
+    },
+    {
+      "id": "80520",
+      "categoryId": "gi-69",
+      "name": "A Thousand Affections Caught in a Sigh",
+      "description": "Stop the \"Primordial Human\" from turning the world into a courtyard untouched by love or sorrow.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 10
+    },
+    {
+      "id": "80521",
+      "categoryId": "gi-69",
+      "name": "Birth of the Singer in the Shell",
+      "description": "Reach maximum Construction Level at the \"Meeting Point: Tidesong Cavern.\"",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 11
+    },
+    {
+      "id": "80522",
+      "categoryId": "gi-69",
+      "name": "Hunt for Your Worth in the Waking World",
+      "description": "Reach maximum Construction Level at the \"Meeting Point: Huntsman's Cabin.\"",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 12
+    },
+    {
+      "id": "80523",
+      "categoryId": "gi-69",
+      "name": "Glorification of the Chosen One",
+      "description": "Reach maximum Construction Level at the \"Meeting Point: The Korolevskiy Theater.\"",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 13
+    },
+    {
+      "id": "80529",
+      "categoryId": "gi-69",
+      "name": "Open Your Eyelids Lulled by Night",
+      "description": "Complete the restoration of Rankova Zorya.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 14
+    },
+    {
+      "id": "86059",
+      "categoryId": "gi-70",
+      "name": "Tundra Restorer",
+      "description": "Clear a large Shadow Realm in Snezhnaya.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 0
+    },
+    {
+      "id": "86062",
+      "categoryId": "gi-70",
+      "name": "Then I'll See You in the Shadow Realm",
+      "description": "Complete an Edge of Survival challenge.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 1
+    },
+    {
+      "id": "86063",
+      "categoryId": "gi-70",
+      "name": "\"Veteran Shadowdiver\"",
+      "description": "Raise your Shadow Realm Analysis Level to maximum.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 2
+    },
+    {
+      "id": "86066",
+      "categoryId": "gi-70",
+      "name": "Ace of Survival",
+      "description": "Obtain 9 Edge of Survival Medal(s).",
+      "reward": 20,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 3
+    },
+    {
+      "id": "86067",
+      "categoryId": "gi-70",
+      "name": "Tundra Gunsmith (I)",
+      "description": "Install 1 accessory on 1 firearm.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 3,
+      "sortOrder": 4
+    },
+    {
+      "id": "86068",
+      "categoryId": "gi-70",
+      "name": "Tundra Gunsmith (II)",
+      "description": "Install 2 accessories on 1 firearm.",
+      "reward": 10,
+      "version": "7.0",
+      "stage": 2,
+      "stageCount": 3,
+      "sortOrder": 4
+    },
+    {
+      "id": "86069",
+      "categoryId": "gi-70",
+      "name": "Tundra Gunsmith (III)",
+      "description": "Install 4 accessories on 1 firearm.",
+      "reward": 20,
+      "version": "7.0",
+      "stage": 3,
+      "stageCount": 3,
+      "sortOrder": 4
+    },
+    {
+      "id": "86071",
+      "categoryId": "gi-70",
+      "name": "Tachanka",
+      "description": "Install 4 accessories each on \"Shatanaya's Frostsilver,\" \"Balsag's Sunwheel,\" and \"Ashamez's Thunder.\"",
+      "reward": 20,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 5
+    },
+    {
+      "id": "86072",
+      "categoryId": "gi-70",
+      "name": "It's High N—",
+      "description": "Hit enemy weak points 5 times in a row within 30 seconds.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 6
+    },
+    {
+      "id": "86073",
+      "categoryId": "gi-70",
+      "name": "Say Hello to My Little Friends!",
+      "description": "Trigger 5 elemental reactions with the Grenade Launcher within 30 seconds.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 7
+    },
+    {
+      "id": "86074",
+      "categoryId": "gi-70",
+      "name": "Aiming While Sliding is Pure Fantasy",
+      "description": "Defeat a total of 20 enemies while sliding.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 8
+    },
+    {
+      "id": "86075",
+      "categoryId": "gi-70",
+      "name": "For We Are Bound by the Sacred Light Spear",
+      "description": "Obtain the Assault Rifle \"Shatanaya's Frostsilver.\"",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 9
+    },
+    {
+      "id": "86076",
+      "categoryId": "gi-70",
+      "name": "The Martial Art of Grenade Launching!",
+      "description": "Obtain the Grenade Launcher \"Balsag's Sunwheel.\"",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 10
+    },
+    {
+      "id": "86077",
+      "categoryId": "gi-70",
+      "name": "Warning, Lightning Disaster Created...",
+      "description": "Obtain the Assault Rifle \"Ashamez's Thunder.\"",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 11
+    },
+    {
+      "id": "86078",
+      "categoryId": "gi-70",
+      "name": "500 Grams of Love",
+      "description": "Obtain a Frag Crystal.",
+      "reward": 5,
+      "version": "7.0",
+      "stage": 1,
+      "stageCount": 1,
+      "sortOrder": 12
     }
   ],
   "rewardCurrency": {

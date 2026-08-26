@@ -144,8 +144,8 @@ fn main() {
     let (gi_version, gi_ids) = catalog_data(
         &gi_path,
         "gi",
-        "5608dd41a26a06639c6455d65de7abdd2a7e5e997f55c6ed93dec6d08dc673b5",
-        1759,
+        "34b5f76579e435249e456ff4eba6a767f8562275f24270ee6111d0f46bfd268e",
+        1844,
     );
     let (hsr_version, hsr_ids) = catalog_data(
         &hsr_path,

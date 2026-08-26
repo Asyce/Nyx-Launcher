@@ -334,7 +334,7 @@ mod tests {
 
     #[test]
     fn embedded_catalog_counts_are_pinned() {
-        assert_eq!(GI_IDS.len(), 1759);
+        assert_eq!(GI_IDS.len(), 1844);
         assert_eq!(HSR_IDS.len(), 1869);
         assert!(GI_IDS.windows(2).all(|pair| pair[0] < pair[1]));
         assert!(HSR_IDS.windows(2).all(|pair| pair[0] < pair[1]));
@@ -354,7 +354,7 @@ mod tests {
             normalize(std::fs::read(contracts.join("achievements-hsr-catalog.json")).unwrap());
         assert_eq!(
             format!("{:x}", Sha256::digest(&gi)),
-            "5608dd41a26a06639c6455d65de7abdd2a7e5e997f55c6ed93dec6d08dc673b5"
+            "34b5f76579e435249e456ff4eba6a767f8562275f24270ee6111d0f46bfd268e"
         );
         assert_eq!(
             format!("{:x}", Sha256::digest(&hsr)),
@@ -369,6 +369,24 @@ mod tests {
         assert_eq!(
             format!("hsr-{}", hsr_value["catalogVersion"].as_str().unwrap()),
             Game::Hsr.catalog_version()
+        );
+    }
+
+    #[test]
+    fn gi_7_0_completed_id_is_accepted() {
+        assert!(GI_IDS.contains(&81700));
+        assert_eq!(
+            validate_complete_snapshot(
+                Game::Gi,
+                &[AchievementRecord {
+                    id: 81700,
+                    status: 2,
+                }],
+                GI_IDS,
+                HSR_IDS,
+            )
+            .unwrap(),
+            vec![81700]
         );
     }
 }

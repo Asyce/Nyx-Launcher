@@ -65,7 +65,7 @@ by tests:
 
 | Catalog | IDs | LF-normalized raw SHA-256 |
 | --- | ---: | --- |
-| GI | 1,759 | `5608dd41a26a06639c6455d65de7abdd2a7e5e997f55c6ed93dec6d08dc673b5` |
+| GI | 1,844 | `34b5f76579e435249e456ff4eba6a767f8562275f24270ee6111d0f46bfd268e` |
 | HSR | 1,869 | `1686a1deb2a03e758e1047684acc9e760d5c793b2e2717bb4d1bc9eeb7c60502` |
 
 The build accepts only the repository's exact reviewed JSON bytes after the
