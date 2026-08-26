@@ -103,7 +103,7 @@ public sealed class NativeSmokeScriptTests
             source);
         Assert.Contains("$settings = Wait-ExactElement -Root $window -Name 'Settings'", source, StringComparison.Ordinal);
         Assert.Contains("public static extern bool SetForegroundWindow(IntPtr window);", source, StringComparison.Ordinal);
-        Assert.Equal(4, Regex.Matches(source, @"\[NyxNativeSmokeCapture\]::SetForegroundWindow", RegexOptions.CultureInvariant).Count);
+        Assert.Equal(5, Regex.Matches(source, @"\[NyxNativeSmokeCapture\]::SetForegroundWindow", RegexOptions.CultureInvariant).Count);
         Assert.Contains("[NyxNativeSmokeCapture]::PrintWindow", source, StringComparison.Ordinal);
         Assert.Contains("$height = [Math]::Min([int] $rect.Height, 720)", source, StringComparison.Ordinal);
         Assert.Contains("$safeHeight = [Math]::Min($height, 120)", source, StringComparison.Ordinal);
@@ -243,6 +243,48 @@ public sealed class NativeSmokeScriptTests
         Assert.Matches(
             new Regex(@"\[NyxNativeSmokeCapture\]::SetForegroundWindow\([^\r\n]+\)\r?\n\s*\$cancel\.SetFocus\(\)\r?\n\s*Assert-FocusIs -Expected \$cancel\r?\n\s*Send-SafeKey -Key Escape", RegexOptions.CultureInvariant),
             source);
+    }
+
+    [Fact]
+    public void Native_smoke_screenshot_capture_retries_are_bounded_and_fresh()
+    {
+        var capture = ExtractPowerShellFunction(File.ReadAllText(Script), "Save-SanitizedScreenshot");
+        var handle = capture.IndexOf(
+            "$handle = [IntPtr] $Window.Current.NativeWindowHandle",
+            StringComparison.Ordinal);
+        var activation = capture.IndexOf(
+            "[void] [NyxNativeSmokeCapture]::SetForegroundWindow($handle)",
+            handle,
+            StringComparison.Ordinal);
+        var loop = capture.IndexOf(
+            "for ($attempt = 1; $attempt -le 3; $attempt++)",
+            StringComparison.Ordinal);
+        var deadline = capture.IndexOf("Assert-UiDeadline", loop, StringComparison.Ordinal);
+        var bitmap = capture.IndexOf(
+            "$bitmap = [Drawing.Bitmap]::new($width, $height, [Drawing.Imaging.PixelFormat]::Format24bppRgb)",
+            loop,
+            StringComparison.Ordinal);
+        var clear = capture.IndexOf("$graphics.Clear([Drawing.Color]::Black)", bitmap, StringComparison.Ordinal);
+        var printWindow = capture.IndexOf(
+            "[NyxNativeSmokeCapture]::PrintWindow",
+            clear,
+            StringComparison.Ordinal);
+
+        Assert.True(
+            handle >= 0 && activation > handle && loop > activation && deadline > loop &&
+            bitmap > loop && clear > bitmap && printWindow > clear);
+        Assert.Contains("if ($handle -ne [IntPtr]::Zero)", capture, StringComparison.Ordinal);
+        Assert.Single(
+            Regex.Matches(
+                    capture,
+                    @"\[NyxNativeSmokeCapture\]::PrintWindow",
+                    RegexOptions.CultureInvariant)
+                .Cast<Match>());
+        Assert.Contains("$graphics.Clear([Drawing.Color]::Black)", capture, StringComparison.Ordinal);
+        Assert.Contains("Start-Sleep -Milliseconds 250", capture, StringComparison.Ordinal);
+        Assert.Contains("if ($attempt -eq 3) { Throw-SmokeFailure $failureCode }", capture, StringComparison.Ordinal);
+        Assert.Contains("if ($mean -lt 8 -or $variance -lt 64)", capture, StringComparison.Ordinal);
+        Assert.Contains("captureAttempts = $attempt", capture, StringComparison.Ordinal);
     }
 
     [Theory]

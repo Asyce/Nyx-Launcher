@@ -734,54 +734,69 @@ function Save-SanitizedScreenshot {
     $width = [Math]::Min([int] $rect.Width, 1280)
     $height = [Math]::Min([int] $rect.Height, 720)
     if ($width -lt 320 -or $height -lt 120) { Throw-SmokeFailure 'SCREENSHOT_BOUNDS_INVALID' }
-    $bitmap = [Drawing.Bitmap]::new($width, $height, [Drawing.Imaging.PixelFormat]::Format24bppRgb)
-    try {
-        $graphics = [Drawing.Graphics]::FromImage($bitmap)
+    $failureCode = 'SCREENSHOT_CAPTURE_FAILED'
+    $handle = [IntPtr] $Window.Current.NativeWindowHandle
+    if ($handle -ne [IntPtr]::Zero) {
+        [void] [NyxNativeSmokeCapture]::SetForegroundWindow($handle)
+    }
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        Assert-UiDeadline
+        $bitmap = [Drawing.Bitmap]::new($width, $height, [Drawing.Imaging.PixelFormat]::Format24bppRgb)
         try {
-            $device = $graphics.GetHdc()
+            $graphics = [Drawing.Graphics]::FromImage($bitmap)
             try {
-                $handle = [IntPtr] $Window.Current.NativeWindowHandle
-                if ($handle -eq [IntPtr]::Zero -or
-                    -not [NyxNativeSmokeCapture]::PrintWindow($handle, $device, 2)) {
-                    Throw-SmokeFailure 'SCREENSHOT_CAPTURE_FAILED'
+                $graphics.Clear([Drawing.Color]::Black)
+                $device = $graphics.GetHdc()
+                try {
+                    $captured = $handle -ne [IntPtr]::Zero -and
+                        [NyxNativeSmokeCapture]::PrintWindow($handle, $device, 2)
+                }
+                finally { $graphics.ReleaseHdc($device) }
+            }
+            finally { $graphics.Dispose() }
+            if ($captured) {
+                [double] $sum = 0
+                [double] $sumSquares = 0
+                [int] $samples = 0
+                for ($y = 0; $y -lt $height; $y += 6) {
+                    for ($x = 0; $x -lt $width; $x += 6) {
+                        $pixel = $bitmap.GetPixel($x, $y)
+                        $brightness = (0.2126 * $pixel.R) + (0.7152 * $pixel.G) + (0.0722 * $pixel.B)
+                        $sum += $brightness
+                        $sumSquares += $brightness * $brightness
+                        $samples++
+                    }
+                }
+                $mean = $sum / $samples
+                $variance = ($sumSquares / $samples) - ($mean * $mean)
+                if ($mean -lt 8 -or $variance -lt 64) {
+                    $failureCode = 'SCREENSHOT_BLACK_OR_FLAT'
+                }
+                else {
+                    $path = Join-Path $EvidenceDirectory $FileName
+                    $safeHeight = [Math]::Min($height, 120)
+                    $safeBitmap = $bitmap.Clone(
+                        [Drawing.Rectangle]::new(0, 0, $width, $safeHeight),
+                        [Drawing.Imaging.PixelFormat]::Format24bppRgb)
+                    try { $safeBitmap.Save($path, [Drawing.Imaging.ImageFormat]::Png) }
+                    finally { $safeBitmap.Dispose() }
+                    return [ordered]@{
+                        file = $FileName
+                        surface = $Surface
+                        inspectedWidth = $width
+                        inspectedHeight = $height
+                        persistedHeight = $safeHeight
+                        meanBrightness = [Math]::Round($mean, 2)
+                        variance = [Math]::Round($variance, 2)
+                        captureAttempts = $attempt
+                    }
                 }
             }
-            finally { $graphics.ReleaseHdc($device) }
         }
-        finally { $graphics.Dispose() }
-        [double] $sum = 0
-        [double] $sumSquares = 0
-        [int] $samples = 0
-        for ($y = 0; $y -lt $height; $y += 6) {
-            for ($x = 0; $x -lt $width; $x += 6) {
-                $pixel = $bitmap.GetPixel($x, $y)
-                $brightness = (0.2126 * $pixel.R) + (0.7152 * $pixel.G) + (0.0722 * $pixel.B)
-                $sum += $brightness
-                $sumSquares += $brightness * $brightness
-                $samples++
-            }
-        }
-        $mean = $sum / $samples
-        $variance = ($sumSquares / $samples) - ($mean * $mean)
-        if ($mean -lt 8 -or $variance -lt 64) { Throw-SmokeFailure 'SCREENSHOT_BLACK_OR_FLAT' }
-        $path = Join-Path $EvidenceDirectory $FileName
-        $safeHeight = [Math]::Min($height, 120)
-        $safeBitmap = $bitmap.Clone(
-            [Drawing.Rectangle]::new(0, 0, $width, $safeHeight),
-            [Drawing.Imaging.PixelFormat]::Format24bppRgb)
-        try { $safeBitmap.Save($path, [Drawing.Imaging.ImageFormat]::Png) }
-        finally { $safeBitmap.Dispose() }
-        return [ordered]@{
-            file = $FileName
-            surface = $Surface
-            inspectedWidth = $width
-            inspectedHeight = $height
-            persistedHeight = $safeHeight
-            meanBrightness = [Math]::Round($mean, 2)
-            variance = [Math]::Round($variance, 2)
-        }
+        finally { $bitmap.Dispose() }
+        if ($attempt -eq 3) { Throw-SmokeFailure $failureCode }
+        Start-Sleep -Milliseconds 250
     }
-    finally { $bitmap.Dispose() }
 }
 
 function Test-NativeUi {
