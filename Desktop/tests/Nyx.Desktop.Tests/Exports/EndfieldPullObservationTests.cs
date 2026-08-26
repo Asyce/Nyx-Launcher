@@ -230,6 +230,27 @@ public sealed class EndfieldPullObservationTests
     }
 
     [Fact]
+    public void Identifier_errors_report_only_the_fixed_schema_field_and_failure_class()
+    {
+        using var wrongKind = JsonDocument.Parse("""{"charId":123}""");
+        Assert.Equal(
+            "phase7-identifier-invalid-charId-number",
+            Assert.Throws<InvalidDataException>(() => RequiredIdentifier(wrongKind.RootElement, "charId")).Message);
+
+        const string secret = "PRIVATE/IDENTIFIER";
+        using var wrongCharacters = JsonDocument.Parse($$"""{"weaponId":"{{secret}}"}""");
+        var error = Assert.Throws<InvalidDataException>(
+            () => RequiredIdentifier(wrongCharacters.RootElement, "weaponId"));
+        Assert.Equal("phase7-identifier-invalid-weaponId-character-set", error.Message);
+        Assert.DoesNotContain(secret, error.ToString(), StringComparison.Ordinal);
+
+        using var missing = JsonDocument.Parse($$"""{"characterId":"{{secret}}"}""");
+        error = Assert.Throws<InvalidDataException>(() => RequiredIdentifier(missing.RootElement, "charId"));
+        Assert.Equal("phase7-identifier-invalid-charId-missing", error.Message);
+        Assert.DoesNotContain(secret, error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Consent_gate_skips_before_any_private_path_or_http_work()
     {
         Assert.False(HasConsent("not-consent"));
@@ -250,12 +271,12 @@ public sealed class EndfieldPullObservationTests
             {
                 Assert.Equal(CharacterEndpoint.AbsolutePath, request.RequestUri!.AbsolutePath);
                 Assert.DoesNotContain("seq_id", request.RequestUri.Query, StringComparison.Ordinal);
-                return JsonResponse("""{"code":0,"msg":"ok","data":{"list":[{"charId":"1","charName":"A","gachaTs":"1760000000","isFree":false,"isNew":true,"poolId":"LIMIT_1","poolName":"Test","rarity":6,"seqId":"10"},{"charId":"2","charName":"B","gachaTs":"1759999999","isFree":true,"isNew":false,"poolId":"LIMIT_1","poolName":"Test","rarity":5,"seqId":"9"}],"hasMore":true}}""");
+                return JsonResponse("""{"code":0,"msg":"ok","data":{"list":[{"gachaTs":"1760000001000","kind":"gift_intel_book","nameText":"PRIVATE_INFORMATIONAL_NAME","poolId":"LIMIT_1","poolName":"Test","seqId":"11"},{"charId":"1","charName":"A","gachaTs":"1760000000000","isFree":false,"isNew":true,"kind":"draw","nameText":"A","poolId":"LIMIT_1","poolName":"Test","rarity":6,"seqId":"10"},{"charId":"2","charName":"B","gachaTs":"1759999999000","isFree":true,"isNew":false,"kind":"draw","nameText":"B","poolId":"LIMIT_1","poolName":"Test","rarity":5,"seqId":"9"}],"hasMore":true}}""");
             },
             request =>
             {
                 Assert.Contains("seq_id=9", request.RequestUri!.Query, StringComparison.Ordinal);
-                return JsonResponse("""{"code":0,"msg":"ok","data":{"list":[{"charId":"3","charName":"C","gachaTs":"1759999998","isFree":false,"isNew":false,"poolId":"LIMIT_1","poolName":"Test","rarity":4,"seqId":"8"}],"hasMore":false}}""");
+                return JsonResponse("""{"code":0,"msg":"ok","data":{"list":[{"charId":"3","charName":"C","gachaTs":"1759999998000","isFree":false,"isNew":false,"kind":"draw","nameText":"C","poolId":"LIMIT_1","poolName":"Test","rarity":4,"seqId":"8"}],"hasMore":false}}""");
             },
             request =>
             {
@@ -266,7 +287,7 @@ public sealed class EndfieldPullObservationTests
             {
                 Assert.Equal(WeaponEndpoint.AbsolutePath, request.RequestUri!.AbsolutePath);
                 Assert.Contains("pool_id=WEAPON_1", request.RequestUri.Query, StringComparison.Ordinal);
-                return JsonResponse("""{"code":0,"msg":"ok","data":{"list":[{"poolId":"WEAPON_1","poolName":"Issue","weaponId":"11","weaponName":"Weapon","weaponType":"Sword","rarity":6,"isNew":true,"gachaTs":"1760000000","seqId":"7"}],"hasMore":false}}""");
+                return JsonResponse("""{"code":0,"msg":"ok","data":{"list":[{"poolId":"WEAPON_1","poolName":"Issue","weaponId":"11","weaponName":"Weapon","weaponType":"Sword","rarity":6,"isNew":true,"kind":"draw","nameText":"Weapon","gachaTs":"1760000000000","seqId":"7"}],"hasMore":false}}""");
             });
         using var http = new HttpClient(handler);
         var pacer = new PullRequestPacer(static (_, _) => ValueTask.CompletedTask);
@@ -286,12 +307,39 @@ public sealed class EndfieldPullObservationTests
         Assert.Equal("20002", identity.RoleId);
         Assert.Equal(2, characters.Pages);
         Assert.Equal(3, characters.Records);
+        Assert.Equal(1, characters.InformationalRecords);
+        Assert.True(characters.TimestampsAreUnixMilliseconds);
+        Assert.DoesNotContain("PRIVATE_INFORMATIONAL_NAME", JsonSerializer.Serialize(characters), StringComparison.Ordinal);
         Assert.Equal(["LIMIT_1"], characters.PoolIds);
         Assert.Equal(["WEAPON_1"], pools.PoolIds);
         Assert.Single(weapons.PoolIds);
         Assert.Equal(5, counters.Pages);
-        Assert.Equal(4, counters.Records);
+        Assert.Equal(5, counters.Records);
         Assert.Equal(5, handler.Calls);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task History_rejects_unknown_record_kinds(bool isCharacterHistory)
+    {
+        var handler = new SequenceHandler(_ => JsonResponse(
+            """{"code":0,"msg":"ok","data":{"list":[{"gachaTs":"1760000000000","kind":"future_kind","nameText":"Test","poolId":"LIMIT_1","poolName":"Test","seqId":"10"}],"hasMore":false}}"""));
+        using var http = new HttpClient(handler);
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() => ReadHistoryAsync(
+            http,
+            new PullRequestPacer(static (_, _) => ValueTask.CompletedTask),
+            new ObservationCounters(),
+            isCharacterHistory ? CharacterEndpoint : WeaponEndpoint,
+            new EndfieldCredential("TEST_TOKEN", "2", "en-us"),
+            [new(isCharacterHistory ? "pool_type" : "pool_id", isCharacterHistory ? CharacterPoolTypes[2] : "LIMIT_1")],
+            isCharacterHistory ? "charId" : "weaponId",
+            isCharacterHistory ? "charName" : "weaponName",
+            isCharacterHistory,
+            expectedPoolId: isCharacterHistory ? null : "LIMIT_1",
+            default));
+
+        Assert.Equal(isCharacterHistory ? "phase7-character-kind-invalid" : "phase7-weapon-kind-invalid", error.Message);
     }
 
     [Fact]
@@ -423,7 +471,7 @@ public sealed class EndfieldPullObservationTests
                 [new("pool_type", poolType)],
                 "charId",
                 "charName",
-                requiresFreeFlag: true,
+                isCharacterHistory: true,
                 expectedPoolId: null,
                 cancellationToken));
         }
@@ -441,7 +489,7 @@ public sealed class EndfieldPullObservationTests
                 [new("pool_id", poolId)],
                 "weaponId",
                 "weaponName",
-                requiresFreeFlag: false,
+                isCharacterHistory: false,
                 expectedPoolId: poolId,
                 cancellationToken));
         }
@@ -569,7 +617,7 @@ public sealed class EndfieldPullObservationTests
         IReadOnlyList<KeyValuePair<string, string>> fixedQuery,
         string itemIdField,
         string itemNameField,
-        bool requiresFreeFlag,
+        bool isCharacterHistory,
         string? expectedPoolId,
         CancellationToken cancellationToken)
     {
@@ -582,6 +630,8 @@ public sealed class EndfieldPullObservationTests
         string? cursor = null;
         var pages = 0;
         var records = 0;
+        var informationalRecords = 0;
+        var timestampsAreUnixMilliseconds = true;
 
         while (true)
         {
@@ -610,6 +660,7 @@ public sealed class EndfieldPullObservationTests
                 foreach (var value in list.EnumerateArray())
                 {
                     var record = RequireObject(value);
+                    counters.AddRecords(1);
                     recordFields.UnionWith(FieldNames(record));
                     var seqId = RequiredIdentifier(record, "seqId");
                     if (!ulong.TryParse(seqId, out var sequence)
@@ -623,6 +674,7 @@ public sealed class EndfieldPullObservationTests
                         || !IsPlausibleTimestamp(timestamp)
                         || previousTimestamp is not null && timestamp > previousTimestamp)
                         throw new InvalidDataException("phase7-timestamp-invalid");
+                    timestampsAreUnixMilliseconds &= timestamp > 10_000_000_000;
                     previousTimestamp = timestamp;
 
                     var poolId = RequiredIdentifier(record, "poolId");
@@ -630,13 +682,27 @@ public sealed class EndfieldPullObservationTests
                         throw new InvalidDataException("phase7-weapon-group-invalid");
                     poolIds.Add(poolId);
                     _ = RequiredString(record, "poolName", 256);
+
+                    var kind = RequiredIdentifier(record, "kind");
+                    _ = RequiredString(record, "nameText", 256);
+                    if (!kind.Equals("draw", StringComparison.Ordinal))
+                    {
+                        if (isCharacterHistory && kind.Equals("gift_intel_book", StringComparison.Ordinal))
+                        {
+                            informationalRecords++;
+                            continue;
+                        }
+                        throw new InvalidDataException(isCharacterHistory
+                            ? "phase7-character-kind-invalid"
+                            : "phase7-weapon-kind-invalid");
+                    }
+
                     _ = RequiredIdentifier(record, itemIdField);
                     _ = RequiredString(record, itemNameField, 256);
                     RequireRarity(record);
                     RequireBoolean(record, "isNew");
-                    if (requiresFreeFlag) RequireBoolean(record, "isFree");
+                    if (isCharacterHistory) RequireBoolean(record, "isFree");
                     else _ = RequiredString(record, "weaponType", 128);
-                    counters.AddRecords(1);
                     records++;
                 }
                 if (!hasMore) break;
@@ -651,6 +717,8 @@ public sealed class EndfieldPullObservationTests
         return new(
             pages,
             records,
+            informationalRecords,
+            timestampsAreUnixMilliseconds,
             Sorted(poolIds),
             Sorted(rootFields),
             Sorted(dataFields),
@@ -664,6 +732,9 @@ public sealed class EndfieldPullObservationTests
             requestedPools.Count,
             parts.Sum(static part => part.Pages),
             parts.Sum(static part => part.Records),
+            parts.Sum(static part => part.InformationalRecords),
+            parts.Any(static part => part.Records + part.InformationalRecords > 0)
+                && parts.All(static part => part.TimestampsAreUnixMilliseconds),
             parts.Any(static part => part.Pages > 1),
             parts.Any(static part => part.Pages > 1),
             Sorted(parts.SelectMany(static part => part.PoolIds)).Length,
@@ -838,10 +909,21 @@ public sealed class EndfieldPullObservationTests
 
     private static string RequiredIdentifier(JsonElement value, string name)
     {
-        var text = RequiredString(value, name, 128);
+        if (!value.TryGetProperty(name, out var property))
+            throw new InvalidDataException($"phase7-identifier-invalid-{name}-missing");
+        if (property.ValueKind != JsonValueKind.String)
+            throw new InvalidDataException(
+                $"phase7-identifier-invalid-{name}-{property.ValueKind.ToString().ToLowerInvariant()}");
+        var text = property.GetString();
+        if (string.IsNullOrEmpty(text))
+            throw new InvalidDataException($"phase7-identifier-invalid-{name}-empty");
+        if (text.Length > 128)
+            throw new InvalidDataException($"phase7-identifier-invalid-{name}-length");
+        if (text.Any(static character => char.IsControl(character)))
+            throw new InvalidDataException($"phase7-identifier-invalid-{name}-control");
         if (text.Any(static character =>
                 !(char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.' or ':')))
-            throw new InvalidDataException("phase7-field-invalid");
+            throw new InvalidDataException($"phase7-identifier-invalid-{name}-character-set");
         return text;
     }
 
@@ -1163,7 +1245,7 @@ public sealed class EndfieldPullObservationTests
     private sealed record ContractObservation(string Uid, string RoleId, ContractSummary Summary);
     private sealed record ContractSummary(
         int RequestCount,
-        int RecordCount,
+        int RawHistoryRecordCount,
         IdentitySummary Identity,
         HistorySummary Characters,
         WeaponPoolSummary WeaponPools,
@@ -1185,6 +1267,8 @@ public sealed class EndfieldPullObservationTests
     private sealed record HistoryObservation(
         int Pages,
         int Records,
+        int InformationalRecords,
+        bool TimestampsAreUnixMilliseconds,
         IReadOnlyList<string> PoolIds,
         IReadOnlyList<string> RootFields,
         IReadOnlyList<string> DataFields,
@@ -1192,7 +1276,9 @@ public sealed class EndfieldPullObservationTests
     private sealed record HistorySummary(
         int RequestedPoolCount,
         int PageCount,
-        int RecordCount,
+        int PullRecordCount,
+        int InformationalRecordCount,
+        bool TimestampsAreUnixMilliseconds,
         bool MultiplePagesObserved,
         bool CursorProgressed,
         int DistinctPoolCount,
