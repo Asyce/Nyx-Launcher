@@ -169,10 +169,10 @@ Run:
 cargo install cargo-audit --version 0.22.1 --locked
 cargo audit --file Cargo.lock --ignore RUSTSEC-2023-0071
 cargo fmt --all -- --check
-cargo check --all-targets --locked
-cargo clippy --all-targets --locked -- -D warnings
-cargo test --all-targets --locked
-cargo build --release --locked
+cargo check --workspace --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+cargo build --workspace --release --locked
 python -m pip install --require-hashes -r tools/requirements.txt
 python tools/verify_release.py target/release/pengo-achievements-launcher.exe
 ```

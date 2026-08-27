@@ -1,3 +1,9 @@
+[workspace]
+members = [".", "vendor/auto-artifactarium", "vendor/auto-reliquary"]
+default-members = [".", "vendor/auto-artifactarium", "vendor/auto-reliquary"]
+exclude = ["vendor/mhy-kcp", "vendor/pktmon-realtime"]
+resolver = "3"
+
 [package]
 name = "pengo-achievements-live"
 version = "0.1.0"
@@ -10,7 +16,7 @@ auto-artifactarium = { path = "vendor/auto-artifactarium" }
 auto-reliquary = { path = "vendor/auto-reliquary" }
 base64 = "=0.22.1"
 ctrlc = "=3.4.7"
-pengo-pktmon-realtime = { path = "vendor/pktmon-realtime" }
+pengo-pktmon-realtime = "=0.6.2-pengo.1"
 serde_json = "=1.0.149"
 sha2 = "=0.10.9"
 tempfile = "=3.20.0"
@@ -43,3 +49,6 @@ strip = "symbols"
 
 [patch."https://github.com/hashblen/mhy-kcp"]
 kcp = { path = "vendor/mhy-kcp" }
+
+[patch.crates-io]
+pengo-pktmon-realtime = { path = "vendor/pktmon-realtime" }

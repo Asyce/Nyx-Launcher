@@ -25,7 +25,7 @@ pub fn matches_get_player_token_rsp(
         .map_or(data.len(), |pos| pos + 2);
     let data = &data[..end];
 
-    let d_msg = Unk::parse_from_bytes(&data);
+    let d_msg = Unk::parse_from_bytes(data);
     match d_msg {
         Ok(d_msg) => {
             let mut to_ret: Vec<u64> = vec![];
@@ -33,11 +33,7 @@ pub fn matches_get_player_token_rsp(
             for (_field_number, field_data) in unknown_fields.iter() {
                 let possible_encrypted = match field_data {
                     LengthDelimited(encrypted_bytes) => {
-                        let encrypted = BASE64_STANDARD.decode(encrypted_bytes);
-                        match encrypted {
-                            Ok(encrypted) => Some(encrypted),
-                            _ => None,
-                        }
+                        BASE64_STANDARD.decode(encrypted_bytes).ok()
                     }
                     _ => None,
                 };
@@ -54,7 +50,7 @@ pub fn matches_get_player_token_rsp(
                 };
                 to_ret.extend(possible_seeds)
             }
-            if to_ret.len() != 0 {
+            if !to_ret.is_empty() {
                 Some(to_ret)
             } else {
                 None
@@ -81,12 +77,10 @@ pub fn matches_achievement_all_data_notify(data: Vec<u8>) -> Option<Vec<Achievem
 fn decode_achievement_rows(data: &[u8]) -> Option<Vec<Achievement>> {
     let message = Unk::parse_from_bytes(data).ok()?;
     let mut groups = BTreeMap::<u32, Vec<(bool, Option<BTreeMap<u32, u64>>)>>::new();
-    let mut observed_rows = 0;
-    for (field_number, field_data) in message.unknown_fields().iter() {
+    for (observed_rows, (field_number, field_data)) in message.unknown_fields().iter().enumerate() {
         if observed_rows >= MAX_ACHIEVEMENT_ROWS {
             return None;
         }
-        observed_rows += 1;
         let LengthDelimited(bytes) = field_data else {
             groups.entry(field_number).or_default().push((false, None));
             continue;

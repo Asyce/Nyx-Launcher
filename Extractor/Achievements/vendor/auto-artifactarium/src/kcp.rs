@@ -11,13 +11,20 @@ pub(crate) struct KcpSniffer {
     time_start: SystemTime,
 }
 
+pub(crate) struct ValidatedKcpSegment {
+    pub(crate) conv_id: u32,
+    bytes: Vec<u8>,
+}
+
 impl KcpSniffer {
     #[instrument(skip(segment))]
-    pub fn try_new(segment: &[u8]) -> Option<Self> {
-        validate_kcp_segment(segment).map(Self::new).or_else(|| {
+    pub fn try_new(segment: &ValidatedKcpSegment) -> Option<(Self, Vec<Vec<u8>>)> {
+        let mut sniffer = Self::new(segment.conv_id);
+        let received = sniffer.receive_segments(segment).or_else(|| {
             error!("could not create new kcp instance");
             None
-        })
+        })?;
+        Some((sniffer, received))
     }
 
     #[instrument]
@@ -31,27 +38,22 @@ impl KcpSniffer {
         }
     }
 
-    #[instrument(skip_all, fields(conv_id = self.conv_id, len = segments.len()))]
-    pub fn receive_segments(&mut self, segments: &[u8]) -> Vec<Vec<u8>> {
-        let Some(conv_id) = validate_kcp_segment(segments) else {
-            return Vec::new();
-        };
-
-        if conv_id != self.conv_id {
+    #[instrument(skip_all, fields(conv_id = self.conv_id, len = segment.bytes.len()))]
+    pub fn receive_segments(&mut self, segment: &ValidatedKcpSegment) -> Option<Vec<Vec<u8>>> {
+        if segment.conv_id != self.conv_id {
             warn!(
                 expected = self.conv_id,
                 "packet did not belong to conversation"
             );
-            return Vec::new();
+            return None;
         }
 
-        // game uses special format which adds 4 bytes at index 4,
-        // reprocess to discard bytes 4..8 of every segment
-        let segments = reformat_kcp_segments(segments);
-
-        match self.kcp.input(&segments) {
+        match self.kcp.input(&segment.bytes) {
             Ok(size) => trace!(size, "input successful"),
-            Err(e) => warn!("could not input to kcp: {e}"),
+            Err(e) => {
+                warn!("could not input to kcp: {e}");
+                return None;
+            }
         }
 
         let mut recv = Vec::new();
@@ -75,7 +77,7 @@ impl KcpSniffer {
             warn!(%e, "could not update kcp state");
         }
 
-        recv
+        Some(recv)
     }
 
     #[inline]
@@ -94,16 +96,19 @@ fn new_kcp(conv_id: u32) -> Kcp<Vec<u8>> {
     kcp
 }
 
-fn validate_kcp_segment(payload: &[u8]) -> Option<u32> {
+pub(crate) fn validate_kcp_segment(payload: &[u8]) -> Option<ValidatedKcpSegment> {
     if payload.len() < GAME_KCP_HEADER_LEN {
         warn!(len = payload.len(), "kcp header was too short");
         return None;
     }
-    Some(get_conv(payload))
+    let conv_id = get_conv(payload);
+    let bytes = reformat_kcp_segments(payload)?;
+    new_kcp(conv_id).input(&bytes).ok()?;
+    Some(ValidatedKcpSegment { conv_id, bytes })
 }
 
 // reformat to skip bytes 4..8
-fn reformat_kcp_segments(data: &[u8]) -> Vec<u8> {
+fn reformat_kcp_segments(data: &[u8]) -> Option<Vec<u8>> {
     let span = span!(Level::TRACE, "split");
     let _enter = span.enter();
 
@@ -111,21 +116,13 @@ fn reformat_kcp_segments(data: &[u8]) -> Vec<u8> {
 
     let mut i = 0;
     while i < data.len() {
-        let Some(header_end) = i.checked_add(GAME_KCP_HEADER_LEN) else {
-            return Vec::new();
-        };
-        let Some(header) = data.get(i..header_end) else {
-            return Vec::new();
-        };
+        let header_end = i.checked_add(GAME_KCP_HEADER_LEN)?;
+        let header = data.get(i..header_end)?;
         let conv_id = &header[..4];
         let remaining_header = &header[8..28];
         let content_len = u32::from_le_bytes(header[24..28].try_into().unwrap()) as usize;
-        let Some(segment_end) = header_end.checked_add(content_len) else {
-            return Vec::new();
-        };
-        let Some(content) = data.get(header_end..segment_end) else {
-            return Vec::new();
-        };
+        let segment_end = header_end.checked_add(content_len)?;
+        let content = data.get(header_end..segment_end)?;
 
         for b in conv_id.iter().chain(remaining_header).chain(content) {
             reformatted_bytes.push(*b);
@@ -134,7 +131,7 @@ fn reformat_kcp_segments(data: &[u8]) -> Vec<u8> {
         i = segment_end;
     }
 
-    reformatted_bytes
+    Some(reformatted_bytes)
 }
 
 #[cfg(test)]
@@ -145,15 +142,23 @@ mod tests {
     fn rejects_truncated_and_other_conversation() {
         let mut conversation_a = vec![0; GAME_KCP_HEADER_LEN];
         conversation_a[..4].copy_from_slice(&1_u32.to_le_bytes());
-        let mut sniffer = KcpSniffer::try_new(&conversation_a)
-            .expect("minimum game KCP header should be accepted");
+        conversation_a[8] = 82;
+        let validated_a =
+            validate_kcp_segment(&conversation_a).expect("minimum game KCP ACK should be accepted");
+        let (mut sniffer, _) = KcpSniffer::try_new(&validated_a).unwrap();
 
         let mut conversation_b = vec![0; GAME_KCP_HEADER_LEN];
         conversation_b[..4].copy_from_slice(&2_u32.to_le_bytes());
-        assert!(sniffer.receive_segments(&conversation_b).is_empty());
+        conversation_b[8] = 82;
+        let validated_b = validate_kcp_segment(&conversation_b).unwrap();
+        assert!(sniffer.receive_segments(&validated_b).is_none());
+
+        let mut invalid = conversation_a;
+        invalid[8] = 0;
+        assert!(validate_kcp_segment(&invalid).is_none());
 
         for len in 0..GAME_KCP_HEADER_LEN {
-            assert!(KcpSniffer::try_new(&vec![0; len]).is_none());
+            assert!(validate_kcp_segment(&vec![0; len]).is_none());
         }
     }
 }
