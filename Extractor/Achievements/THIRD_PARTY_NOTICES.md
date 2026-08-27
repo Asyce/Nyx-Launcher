@@ -31,7 +31,7 @@ was copied or embedded.
 ## Locked Rust dependency inventory
 
 This table covers every non-root package entry in LF-normalized `Cargo.lock`
-SHA-256 `51104d5e84d6f99cecfa2bcb45886a433124d0945288ae17857c92a10c63ccf8`.
+SHA-256 `fb1ee0c281a7061936cfeb49cdb564caa87d9a31c19566b77dd969008b093aa1`.
 For multi-license packages, Nyx selects the
 listed permissive option. The source column names the exact license file or
 pinned upstream source whose complete text appears below.

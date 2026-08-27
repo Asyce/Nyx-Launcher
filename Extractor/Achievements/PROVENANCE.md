@@ -86,7 +86,7 @@ consumers. No optimizer code was copied or adapted.
 | Consumer | Reviewed commit | Test-only contract fixture | Fixture SHA-256 |
 | --- | --- | --- | --- |
 | HSR Optimizer / Fribbels | `99790f5514159655eb9865de612c7cdec01ae097` | `contracts/gear-export-hsr-fribbels-v4.fixture.json` | `8b22587549c236134d6f3acba9b96b11ca000ad7273bdc1053cc903ec96ad9dc` |
-| Genshin Optimizer | `984d82cda1e37a3a634ab14d2059b6ad91b90a4a` | `contracts/gear-export-genshin-good-v3.fixture.json` | `6b14c58f5d752f754cbc356dd4ba8335a698bb5e2ccbe64ca4b8b71f8ee0e8d5` |
+| Genshin Optimizer | `984d82cda1e37a3a634ab14d2059b6ad91b90a4a` | `contracts/gear-export-genshin-good-v3.fixture.json` | `3f91ecb188798db18de8e782ce88360a4f37864d37c55285957a91af8f8d1f64` |
 
 Both fixtures are synthetic, identity-free, and used only for contract tests.
 Local pinned-consumer acceptance passed at the exact commits above:
@@ -96,6 +96,10 @@ Local pinned-consumer acceptance passed at the exact commits above:
   passed.
 - Genshin: a one-test Vitest wrapper called `parseGOODImport` with
   `ArtCharDatabase` and `SandboxStorage` over the exact fixture: 1/1 passed.
+
+At exact pin `984d82c`, the parser accepts missing optional `initialValue` and
+preserves it absent. This is a fixture/parser observation, not a
+packet-semantics claim.
 
 These checks do not claim that the launcher implements gear export or that a
 gear-export feature has been released.

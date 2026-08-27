@@ -1,6 +1,8 @@
 pub mod capture;
 pub mod cli;
 pub mod decoder;
+#[cfg(test)]
+mod gear_observer;
 pub mod launcher;
 pub mod launcher_app;
 pub mod npcap;

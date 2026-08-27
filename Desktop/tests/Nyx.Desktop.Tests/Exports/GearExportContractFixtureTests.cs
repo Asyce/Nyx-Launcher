@@ -8,7 +8,7 @@ public sealed class GearExportContractFixtureTests
     private const string HsrFixtureSha256 =
         "8b22587549c236134d6f3acba9b96b11ca000ad7273bdc1053cc903ec96ad9dc";
     private const string GenshinFixtureSha256 =
-        "6b14c58f5d752f754cbc356dd4ba8335a698bb5e2ccbe64ca4b8b71f8ee0e8d5";
+        "3f91ecb188798db18de8e782ce88360a4f37864d37c55285957a91af8f8d1f64";
 
     private static string ContractsRoot => Path.Combine(AppContext.BaseDirectory, "Contracts");
 
@@ -58,7 +58,7 @@ public sealed class GearExportContractFixtureTests
         Assert.Equal("EmblemOfSeveredFate", artifact.GetProperty("setKey").GetString());
         Assert.Equal("flower", artifact.GetProperty("slotKey").GetString());
         Assert.Equal(5, artifact.GetProperty("rarity").GetInt32());
-        Assert.Equal(20, artifact.GetProperty("level").GetInt32());
+        Assert.Equal(0, artifact.GetProperty("level").GetInt32());
         Assert.Equal("hp", artifact.GetProperty("mainStatKey").GetString());
         Assert.False(artifact.GetProperty("lock").GetBoolean());
         Assert.NotEmpty(artifact.GetProperty("substats").EnumerateArray());
@@ -66,9 +66,9 @@ public sealed class GearExportContractFixtureTests
         {
             Assert.False(string.IsNullOrWhiteSpace(substat.GetProperty("key").GetString()));
             Assert.True(substat.GetProperty("value").GetDouble() >= 0);
-            Assert.True(substat.GetProperty("initialValue").GetDouble() >= 0);
+            Assert.False(substat.TryGetProperty("initialValue", out _));
         }
-        Assert.InRange(artifact.GetProperty("totalRolls").GetInt32(), 0, 9);
+        Assert.Equal(4, artifact.GetProperty("totalRolls").GetInt32());
         Assert.False(artifact.GetProperty("astralMark").GetBoolean());
         Assert.False(artifact.GetProperty("elixirCrafted").GetBoolean());
         Assert.Empty(artifact.GetProperty("unactivatedSubstats").EnumerateArray());
