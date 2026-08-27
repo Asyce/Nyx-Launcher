@@ -65,11 +65,11 @@ pub struct Achievement {
     pub finish_timestamp: Option<u32>,
 }
 
-pub fn matches_achievement_all_data_notify(data: Vec<u8>) -> Option<Vec<Achievement>> {
+pub fn matches_achievement_all_data_notify(data: &[u8]) -> Option<Vec<Achievement>> {
     if data.len() < MIN_ACHIEVEMENT_PACKET_BYTES {
         return None;
     }
-    decode_achievement_rows(&data)
+    decode_achievement_rows(data)
 }
 
 fn decode_achievement_rows(data: &[u8]) -> Option<Vec<Achievement>> {
@@ -252,12 +252,12 @@ mod tests {
             ]
         );
 
-        assert!(matches_achievement_all_data_notify(normal.clone()).is_none());
+        assert!(matches_achievement_all_data_notify(&normal).is_none());
         let mut padded = normal;
         while padded.len() < MIN_ACHIEVEMENT_PACKET_BYTES {
             push_varint_field(&mut padded, 100, 1);
         }
-        assert!(matches_achievement_all_data_notify(padded).is_some());
+        assert!(matches_achievement_all_data_notify(&padded).is_some());
     }
 
     #[test]

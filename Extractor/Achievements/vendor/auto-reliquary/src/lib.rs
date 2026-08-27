@@ -112,8 +112,8 @@ pub struct GameCommand {
     #[allow(unused)]
     pub data_len: u32,
     #[allow(unused)]
-    pub proto_header: Vec<u8>,
-    pub proto_data: Vec<u8>,
+    pub proto_header: Zeroizing<Vec<u8>>,
+    pub proto_data: Zeroizing<Vec<u8>>,
 }
 
 impl GameCommand {
@@ -122,6 +122,7 @@ impl GameCommand {
 
     #[instrument(skip(bytes), fields(len = bytes.len()))]
     pub fn try_new(bytes: Vec<u8>) -> Option<Self> {
+        let bytes = Zeroizing::new(bytes);
         let header_overhead = Self::HEADER_LEN + Self::TAIL_LEN;
         if bytes.len() < header_overhead {
             warn!(len = bytes.len(), "game command header incomplete");
@@ -141,8 +142,8 @@ impl GameCommand {
             return None;
         }
 
-        let proto_header = bytes[12..data_start].to_vec();
-        let proto_data = bytes[data_start..data_end].to_vec();
+        let proto_header = Zeroizing::new(bytes[12..data_start].to_vec());
+        let proto_data = Zeroizing::new(bytes[data_start..data_end].to_vec());
         Some(GameCommand {
             command_id,
             header_len,
@@ -185,6 +186,16 @@ mod tests {
         let mut trailing = valid;
         trailing.push(0);
         assert!(GameCommand::try_new(trailing).is_none());
+    }
+
+    #[test]
+    fn game_command_buffers_are_zeroizing() {
+        fn assert_zeroizing(_: &zeroize::Zeroizing<Vec<u8>>) {}
+
+        let command =
+            GameCommand::try_new(vec![0; GameCommand::HEADER_LEN + GameCommand::TAIL_LEN]).unwrap();
+        assert_zeroizing(&command.proto_header);
+        assert_zeroizing(&command.proto_data);
     }
 
     fn ipv4_packet(

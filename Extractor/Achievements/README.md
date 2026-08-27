@@ -155,11 +155,12 @@ the official HoYoLAB route instead when it is available.
 
 ## Important release block
 
-Npcap capture runs without elevation, but decrypted parser buffers are not yet
-wiped. Before public release, buffer wiping, independent native-binary review,
-code signing, Npcap licensing/distribution review, broader Windows coverage,
-and supported real-account tests must be independently cleared. Do not publish
-this executable yet.
+Npcap capture runs without elevation. Parser keys, seeds, generator state, and
+decrypted command buffers now wipe on replacement, reset, or drop as applicable.
+Before public release, independent native-binary review, code signing, Npcap
+licensing/distribution review, broader Windows coverage, and supported
+real-account tests must be independently cleared. Do not publish this executable
+yet.
 
 ## Developer checks
 

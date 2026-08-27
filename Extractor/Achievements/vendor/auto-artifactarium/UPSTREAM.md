@@ -9,3 +9,7 @@ seed tracing. Release logging is compile-time disabled. `mhy-kcp` is pinned to
 
 Pengo also rejects short or malformed packet, KCP, key, and protobuf buffers
 instead of indexing or unwrapping attacker-controlled lengths.
+
+Pengo binds one network flow and KCP conversation at a time, and wipes retained
+key, seed, generator, and decrypted command state on replacement, reset, or drop
+as applicable.

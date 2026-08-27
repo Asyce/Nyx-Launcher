@@ -10,6 +10,10 @@ logging is compile-time disabled. `mhy-kcp` is pinned to
 Pengo also rejects short or malformed packet, KCP, and key buffers instead of
 indexing, panicking, or unwrapping attacker-controlled lengths.
 
+Pengo binds one network flow and KCP conversation at a time, and wipes retained
+key, seed, generator, and decrypted command state on replacement, reset, or drop
+as applicable.
+
 Pengo keeps Stardb's current quest-list signature, including its reviewed
 `4040201` achievement sentinel, because live comparison showed that this is the
 working HSR packet shape. Pengo adds fixed packet, row, and row-field limits;
