@@ -191,3 +191,30 @@ hand-copied hash in this document.
 No live game capture is performed by the automated tests.
 Tests compile both real fixed BPF expressions against Npcap's offline filter and
 exercise synthetic Ethernet IPv4/IPv6 frames only. They never open an adapter.
+
+## Offline Genshin artifact map
+
+The checked-in `contracts/genshin-artifact-map-7.0-v1.json` is generated from
+the approved public Genshin 7.0 data snapshot and the pinned Genshin Optimizer
+mapping sources. It includes the exact 625-ID low-rarity allowlist needed to
+count unsupported one- and two-star artifacts without accepting an unknown
+item. The generator uses only Python's standard library, never fetches data,
+and requires both source roots when generating:
+
+```powershell
+python Extractor\Achievements\tools\generate_genshin_artifact_map.py `
+  --raw-root C:\Pengo\_nyx_gi_mapping_audit_20260827\raw `
+  --optimizer-root C:\Pengo\_nyx_gi_mapping_audit_20260827\go
+```
+
+To check the checked-in map, run this offline command. It reads only the
+contract and checks its canonical bytes, pins, counts, ordering, depot
+coverage, exclusions, and synthetic lookups:
+
+```powershell
+python Extractor\Achievements\tools\generate_genshin_artifact_map.py --check
+```
+
+The source approvals, commits, hashes, and coverage are recorded in
+`PROVENANCE.md`. No account export, game file, capture, or credential is an
+input to this map.

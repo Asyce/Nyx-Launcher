@@ -120,3 +120,59 @@ bind the accepted files to that review. No Npcap source or binary is copied into
 this repository. The game enum selects one of two compiled filters only:
 `udp and (port 22101 or port 22102)` for GI and
 `udp and (port 23301 or port 23302)` for HSR.
+
+## Genshin 7.0 offline artifact map
+
+At the audited pin, Dimbreath/animegamedata2 has no repository license. On
+2026-08-27 the user confirmed the necessary rightsholder approval for this
+exact HoYo data use. That approval is limited to generating this
+Pengo-generated offline mapping; it is not a public code license. The
+generator copies no upstream code, uses only Python's standard library,
+requires explicit local source roots, and never fetches at build time or
+runtime.
+
+The approved raw source is
+[`Dimbreath/animegamedata2`](https://gitlab.com/Dimbreath/animegamedata2/-/tree/26df1dfbdf05a82bbb1d97506859f3e1c40718d8)
+at commit `26df1dfbdf05a82bbb1d97506859f3e1c40718d8`:
+
+| Source path | Rows | SHA-256 |
+| --- | ---: | --- |
+| `ExcelBinOutput/ReliquaryExcelConfigData.json` | 4,352 | `1b0ea4e5642f183d579e1f2701359a5e5afebfc886f7379d0f6ddf3dc7d9b4e5` |
+| `ExcelBinOutput/ReliquaryMainPropExcelConfigData.json` | 66 | `c7c9ea5520fd090a090c0c7a12e750ac85fd80985a687194a30b9aa254d5c60b` |
+| `ExcelBinOutput/ReliquaryAffixExcelConfigData.json` | 350 | `0e1f1461d86597b3126b4f9ed61ee8975a7839e47111060458e51ae1b756bc39` |
+
+The validation source is
+[`frzyc/genshin-optimizer`](https://github.com/frzyc/genshin-optimizer/tree/984d82cda1e37a3a634ab14d2059b6ad91b90a4a)
+at commit `984d82cda1e37a3a634ab14d2059b6ad91b90a4a`:
+
+| Source path | SHA-256 |
+| --- | --- |
+| `libs/gi/dm/src/mapping/artifact.ts` | `0619c7e58d77d04c5f3da37649f4bb860dbe6d9d2c18aeec016ee6ca16facda3` |
+| `libs/gi/consts/src/artifact.ts` | `704ea84c1555e999ad6057e822e29922c58cfbc0cd7d8c52a616af9d5fc35781` |
+| `libs/gi/dm/src/dm/character/AvatarExcelConfigData_idmap_gen.json` | `1c8f30d9aa78c0ad8afcd3f27bb3c0cecb6e26409174c6238a476d15a7b3c12e` |
+| `libs/gi/consts/src/character.ts` | `1594571fb4a96c184f99e0f424313ff2c1ea8c749abd50a1b38f1dfde2962fdc` |
+
+Hashes are over UTF-8 bytes after one Windows-safe CRLF-to-LF conversion.
+Bare carriage returns are rejected. The generated map contains 3,520 item
+rows, a 625-ID low-rarity allowlist, 56 main-property rows, 198
+active/unactivated affix rows, and 124 character IDs covering 119 character
+keys. All 29 referenced main-property depots and all 12 referenced
+append-property depots are covered.
+
+The 4,352 raw item rows have exactly these exclusions: 625 one- and two-star
+rows, 175 rows from unsupported sets `15000`, `15004`, and `15012`, 32 rows
+with no set ID, and zero unexplained rows. Percent properties are converted to
+the GOOD percentage scale. Affix rows carry only their mapped `key` and
+`value`; no `initialValue` is invented for unactivated or active rows.
+
+The canonical contract is 613,555 UTF-8 bytes with SHA-256
+`377e333336e6a94d01785612533c4241a83e49e1d414efe283e1458fefe78b1b`. Its
+offline check covers canonical bytes, pins, counts, sorted IDs, depot
+coverage, exclusions, and synthetic lookups including item `31533`, main
+property `13007`, affixes `501022`, `501201`, `501241`, `501221`, character
+`10000061`, and rejection of affix `401021` when used with depot `501`.
+
+This mapping is checked-in static data only. It is not embedded in the helper
+or package and does not enable gear export. It contains no user export,
+account or game file, capture, packet, log, token, key, or network behavior.
+Any later public packaging requires a separate permission and notice review.

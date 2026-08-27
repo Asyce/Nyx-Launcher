@@ -19,6 +19,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Check offline Genshin artifact map
+        shell: pwsh
+        run: python Extractor\Achievements\tools\generate_genshin_artifact_map.py --check
+
       - name: Set up .NET
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
