@@ -202,7 +202,7 @@ public static class LauncherStateMigrations
             {
                 IsArmed = dto.Export?.IsArmed ?? false,
                 Games = new ReadOnlyDictionary<string, ExportGameArming>(gameArming),
-                // Export destinations are fixed under the Windows Downloads known
+                // Export destinations are fixed under the Windows Documents known
                 // folder. Older custom paths are intentionally not trusted.
                 OutputDirectory = null,
                 OutputPaths = new ReadOnlyDictionary<string, string>(

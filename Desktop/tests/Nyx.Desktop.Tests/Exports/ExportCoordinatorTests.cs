@@ -644,7 +644,12 @@ public sealed class ExportCoordinatorTests
             Assert.Contains("--launcher", runner.Invocation.Arguments);
             Assert.Contains("--parent-watch", runner.Invocation.Arguments);
             Assert.Contains("named-mutex", runner.Invocation.Arguments);
-            Assert.Contains("downloads", runner.Invocation.Arguments);
+            Assert.Equal(
+                Path.Combine(WindowsDocumentsDirectory.Get(), "Pengo Exports"),
+                runner.Invocation.OutputRoot);
+            Assert.Contains("--fixed-root", runner.Invocation.Arguments);
+            Assert.Contains(runner.Invocation.OutputRoot, runner.Invocation.Arguments);
+            Assert.DoesNotContain("downloads", runner.Invocation.Arguments);
             Assert.Equal("achievements", artifact.Kind);
             Assert.Empty(NdjsonExportStatusParser.Parse(["{bad", "{\"gameId\":\"zzz\",\"kind\":\"achievements\"}"]));
         }
