@@ -516,6 +516,7 @@ try {
     $entryPoint = Join-Path $publishRoot 'Nyx.Desktop.App.exe'
     $appAssembly = Join-Path $publishRoot 'Nyx.Desktop.App.dll'
     $achievementHelper = Join-Path $publishRoot 'Assets\Tools\pengo-achievements-launcher.exe'
+    $packagedAchievementNotice = Join-Path $publishRoot 'Assets\ThirdParty\pengo-achievements\THIRD_PARTY_NOTICES.md'
     $packagedGenshin120Helper = Join-Path $publishRoot 'Assets\Tools\Nyx.Genshin120.Helper.exe'
     $packagedGenshin120License = Join-Path $publishRoot 'Assets\ThirdParty\genshin-fps-unlock\LICENSE.txt'
     $packagedGenshin120Provenance = Join-Path $publishRoot 'Assets\ThirdParty\genshin-fps-unlock\PROVENANCE.md'
@@ -524,6 +525,7 @@ try {
         $entryPoint,
         $appAssembly,
         $achievementHelper,
+        $packagedAchievementNotice,
         $packagedGenshin120Helper,
         $packagedGenshin120License,
         $packagedGenshin120Provenance,

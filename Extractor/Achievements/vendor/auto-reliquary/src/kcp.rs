@@ -1,7 +1,9 @@
 use std::time::SystemTime;
 
-use kcp::{get_conv, Kcp, KCP_OVERHEAD};
+use kcp::{get_conv, Kcp};
 use tracing::{error, info, instrument, span, trace, warn, Level};
+
+const GAME_KCP_HEADER_LEN: usize = 28;
 
 pub(crate) struct KcpSniffer {
     conv_id: u32,
@@ -93,7 +95,7 @@ fn new_kcp(conv_id: u32) -> Kcp<Vec<u8>> {
 }
 
 fn validate_kcp_segment(payload: &[u8]) -> Option<u32> {
-    if payload.len() <= KCP_OVERHEAD {
+    if payload.len() < GAME_KCP_HEADER_LEN {
         warn!(len = payload.len(), "kcp header was too short");
         return None;
     }
@@ -109,7 +111,7 @@ fn reformat_kcp_segments(data: &[u8]) -> Vec<u8> {
 
     let mut i = 0;
     while i < data.len() {
-        let Some(header_end) = i.checked_add(28) else {
+        let Some(header_end) = i.checked_add(GAME_KCP_HEADER_LEN) else {
             return Vec::new();
         };
         let Some(header) = data.get(i..header_end) else {
@@ -133,4 +135,25 @@ fn reformat_kcp_segments(data: &[u8]) -> Vec<u8> {
     }
 
     reformatted_bytes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_truncated_and_other_conversation() {
+        let mut conversation_a = vec![0; GAME_KCP_HEADER_LEN];
+        conversation_a[..4].copy_from_slice(&1_u32.to_le_bytes());
+        let mut sniffer = KcpSniffer::try_new(&conversation_a)
+            .expect("minimum game KCP header should be accepted");
+
+        let mut conversation_b = vec![0; GAME_KCP_HEADER_LEN];
+        conversation_b[..4].copy_from_slice(&2_u32.to_le_bytes());
+        assert!(sniffer.receive_segments(&conversation_b).is_empty());
+
+        for len in 0..GAME_KCP_HEADER_LEN {
+            assert!(KcpSniffer::try_new(&vec![0; len]).is_none());
+        }
+    }
 }

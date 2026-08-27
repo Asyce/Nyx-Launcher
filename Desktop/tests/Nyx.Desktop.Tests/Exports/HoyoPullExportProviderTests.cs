@@ -161,6 +161,44 @@ public sealed class HoyoPullExportProviderTests
     }
 
     [Fact]
+    public async Task CredentialUrl_IsConfinedToOfficialInMemoryRequestState()
+    {
+        const string secret = "FULL_PRIVATE_AUTH_TOKEN";
+        var game = HoyoPullGameConfiguration.For("gi");
+        var candidate = Assert.Single(HoyoPullHistoryLinkReader.ExtractNewestWithOffsets(
+            Link(game, secret) + "&gacha_type=999&size=1&end_id=private&page=7&evil=DROP_ME",
+            game,
+            1,
+            16 * 1024));
+        var auth = candidate.Query;
+        var requests = new List<Uri>();
+        using var http = new HttpClient(new DelegateHandler(request =>
+        {
+            requests.Add(request.RequestUri!);
+            return JsonResponse(Page([]));
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
+
+        var archive = await new HoyoPullApiClient(
+            http,
+            new PullExportSafetyLimits(),
+            new NoWaitPullRequestPacer()).DownloadNewestValidAsync(game, [auth], default);
+
+        Assert.Contains(auth.Pairs, pair => pair.Key == "authkey" && pair.Value == secret);
+        Assert.Equal(nameof(HoyoAuthQuery), auth.ToString());
+        Assert.DoesNotContain(secret, candidate.ToString(), StringComparison.Ordinal);
+        Assert.NotEmpty(requests);
+        Assert.All(requests, request =>
+        {
+            Assert.True(HoyoPullApiClient.IsOfficialEndpoint(request, game.Endpoint));
+            Assert.Contains(secret, request.Query, StringComparison.Ordinal);
+            Assert.DoesNotContain("evil", request.Query, StringComparison.Ordinal);
+            Assert.DoesNotContain("private", request.Query, StringComparison.Ordinal);
+        });
+        Assert.DoesNotContain(secret, archive.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void LinkReader_RejectsOversizedCacheWithoutLeakingPath()
     {
         using var temp = new TemporaryDirectory();

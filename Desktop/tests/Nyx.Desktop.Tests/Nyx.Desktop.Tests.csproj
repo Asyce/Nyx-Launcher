@@ -47,6 +47,12 @@
     <None Include="..\..\..\contracts\pengo-achievements-v1.fixture.json"
           Link="Contracts\pengo-achievements-v1.fixture.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\contracts\gear-export-hsr-fribbels-v4.fixture.json"
+          Link="Contracts\gear-export-hsr-fribbels-v4.fixture.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\contracts\gear-export-genshin-good-v3.fixture.json"
+          Link="Contracts\gear-export-genshin-good-v3.fixture.json"
+          CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\..\contracts\achievements-hsr-catalog.json"
           Link="Catalog\hsr-catalog.json"
           CopyToOutputDirectory="PreserveNewest" />

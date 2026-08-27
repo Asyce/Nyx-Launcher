@@ -70,6 +70,10 @@
              CopyToOutputDirectory="PreserveNewest">
       <Link>Assets\Tools\pengo-achievements-launcher.exe</Link>
     </Content>
+    <Content Include="..\..\..\Extractor\Achievements\THIRD_PARTY_NOTICES.md"
+             CopyToOutputDirectory="PreserveNewest">
+      <Link>Assets\ThirdParty\pengo-achievements\THIRD_PARTY_NOTICES.md</Link>
+    </Content>
     <Content Include="$(Genshin120HelperSource)"
              Condition="'$(Genshin120HelperSource)' != '' AND Exists('$(Genshin120HelperSource)')"
              CopyToOutputDirectory="PreserveNewest">

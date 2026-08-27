@@ -1,0 +1,42 @@
+{
+  "format": "GOOD",
+  "source": "Nyx Launcher",
+  "version": 3,
+  "artifacts": [
+    {
+      "setKey": "EmblemOfSeveredFate",
+      "slotKey": "flower",
+      "level": 20,
+      "rarity": 5,
+      "mainStatKey": "hp",
+      "location": "",
+      "lock": false,
+      "substats": [
+        {
+          "key": "atk_",
+          "value": 5.8,
+          "initialValue": 4.1
+        },
+        {
+          "key": "critRate_",
+          "value": 3.1,
+          "initialValue": 3.1
+        },
+        {
+          "key": "def",
+          "value": 23,
+          "initialValue": 16
+        },
+        {
+          "key": "enerRech_",
+          "value": 5.2,
+          "initialValue": 5.2
+        }
+      ],
+      "totalRolls": 5,
+      "astralMark": false,
+      "elixirCrafted": false,
+      "unactivatedSubstats": []
+    }
+  ]
+}

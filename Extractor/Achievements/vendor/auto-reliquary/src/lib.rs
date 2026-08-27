@@ -120,11 +120,11 @@ impl GameCommand {
         let header_len = u16::from_be_bytes(bytes[6..8].try_into().unwrap());
         let data_len = u32::from_be_bytes(bytes[8..12].try_into().unwrap());
 
-        let data_start = 12 + header_len as usize;
-        let data_end = data_start + data_len as usize;
+        let data_start = Self::HEADER_LEN.checked_add(header_len as usize)?;
+        let data_end = data_start.checked_add(data_len as usize)?;
 
-        if data_end > bytes.len() {
-            warn!(len = bytes.len(), "game command buffer too short");
+        if data_end.checked_add(Self::TAIL_LEN) != Some(bytes.len()) {
+            warn!(len = bytes.len(), "game command frame length invalid");
             return None;
         }
 
@@ -141,6 +141,33 @@ impl GameCommand {
 
     pub fn parse_proto<T: protobuf::Message>(&self) -> protobuf::Result<T> {
         T::parse_from_bytes(&self.proto_data)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GameCommand;
+
+    #[test]
+    fn game_command_frame_boundaries() {
+        let valid = vec![0; GameCommand::HEADER_LEN + GameCommand::TAIL_LEN];
+
+        assert!(GameCommand::try_new(valid.clone()).is_some());
+        for end in 0..valid.len() {
+            assert!(GameCommand::try_new(valid[..end].to_vec()).is_none());
+        }
+
+        let mut oversized_header = valid.clone();
+        oversized_header[6..8].copy_from_slice(&u16::MAX.to_be_bytes());
+        assert!(GameCommand::try_new(oversized_header).is_none());
+
+        let mut oversized_data = valid.clone();
+        oversized_data[8..12].copy_from_slice(&u32::MAX.to_be_bytes());
+        assert!(GameCommand::try_new(oversized_data).is_none());
+
+        let mut trailing = valid;
+        trailing.push(0);
+        assert!(GameCommand::try_new(trailing).is_none());
     }
 }
 

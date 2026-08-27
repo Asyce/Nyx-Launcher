@@ -21,6 +21,29 @@ public sealed class DesktopStartReadinessTests
     }
 
     [Fact]
+    public void Development_package_keeps_achievement_notice_linked_and_required()
+    {
+        var project = File.ReadAllText(Path.Combine(
+            DesktopRoot, "src", "Nyx.Desktop.App", "Nyx.Desktop.App.csproj"));
+        var packageScript = File.ReadAllText(Path.Combine(
+            DesktopRoot, "packaging", "build-development-package.ps1"));
+
+        Assert.Contains(
+            "<Content Include=\"..\\..\\..\\Extractor\\Achievements\\THIRD_PARTY_NOTICES.md\"",
+            project,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "<Link>Assets\\ThirdParty\\pengo-achievements\\THIRD_PARTY_NOTICES.md</Link>",
+            project,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "$packagedAchievementNotice = Join-Path $publishRoot 'Assets\\ThirdParty\\pengo-achievements\\THIRD_PARTY_NOTICES.md'",
+            packageScript,
+            StringComparison.Ordinal);
+        Assert.Contains("$packagedAchievementNotice,", packageScript, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Start_script_has_fail_closed_normal_user_and_unpackaged_boundaries()
     {
         var script = File.ReadAllText(StartScript);
