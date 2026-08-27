@@ -11,8 +11,12 @@ base64 = "0.22.1"
 etherparse = "0.16.0"
 kcp = { git = "https://github.com/hashblen/mhy-kcp", rev = "1acf4ba5938ff91f7f2d2a31e16bf1f8d2db9c8f" }
 protobuf = "3.7.1"
-rand_mt = "4.2.2"
+rand_mt = "=4.2.2"
 tracing = { version = "0.1.40", features = ["release_max_level_off"] }
+zeroize = "=1.9.0"
 
 [build-dependencies]
 protobuf-codegen = "3.7.1"
+
+[dev-dependencies]
+sha2 = "=0.10.9"

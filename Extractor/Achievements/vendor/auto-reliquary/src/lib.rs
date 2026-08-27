@@ -46,6 +46,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use tracing::{info, info_span, instrument, warn};
+use zeroize::Zeroizing;
 
 use crate::connection::parse_connection_packet;
 use crate::crypto::{decrypt_command, lookup_initial_key, new_key_from_seed};
@@ -279,7 +280,7 @@ mod tests {
             ))
         ));
         let bound = sniffer.flow;
-        sniffer.key = Some(Key::Dispatch(vec![1]));
+        sniffer.key = Some(Key::Dispatch(zeroize::Zeroizing::new(vec![1])));
         assert!(sniffer.receive_packet(flow_b.clone()).is_none());
         assert!(sniffer.flow == bound);
         assert!(sniffer.key.is_some());
@@ -355,8 +356,8 @@ impl FlowId {
 }
 
 pub enum Key {
-    Dispatch(Vec<u8>),
-    Session(Vec<u8>),
+    Dispatch(Zeroizing<Vec<u8>>),
+    Session(Zeroizing<Vec<u8>>),
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -374,7 +375,7 @@ pub struct GameSniffer {
     sent_kcp: Option<KcpSniffer>,
     recv_kcp: Option<KcpSniffer>,
     key: Option<Key>,
-    initial_keys: HashMap<u32, Vec<u8>>,
+    initial_keys: HashMap<u32, Zeroizing<Vec<u8>>>,
 }
 
 impl GameSniffer {
@@ -383,7 +384,10 @@ impl GameSniffer {
     }
 
     pub fn set_initial_keys(mut self, initial_keys: HashMap<u32, Vec<u8>>) -> Self {
-        self.initial_keys = initial_keys;
+        self.initial_keys = initial_keys
+            .into_iter()
+            .map(|(version, key)| (version, Zeroizing::new(key)))
+            .collect();
         self
     }
 
@@ -507,8 +511,8 @@ impl GameSniffer {
         // }
 
         if let Some(Key::Dispatch(_)) = self.key {
-            if let Some(seed) = matches_player_get_token_sc_rsp(command.proto_data.clone()) {
-                self.key = Some(Key::Session(new_key_from_seed(seed)));
+            if let Some(seed) = matches_player_get_token_sc_rsp(&command.proto_data) {
+                self.key = Some(Key::Session(new_key_from_seed(*seed)));
             }
         }
 

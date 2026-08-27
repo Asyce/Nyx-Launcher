@@ -25,15 +25,23 @@ fn dependency_commits_and_realtime_only_backend_are_pinned() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let manifest = read(root.join("Cargo.toml"));
     let capture = read(root.join("vendor/pktmon-realtime/src/lib.rs"));
+    let artifactarium_manifest = read(root.join("vendor/auto-artifactarium/Cargo.toml"));
+    let reliquary_manifest = read(root.join("vendor/auto-reliquary/Cargo.toml"));
     let artifactarium = read(root.join("vendor/auto-artifactarium/UPSTREAM.md"));
     let reliquary = read(root.join("vendor/auto-reliquary/UPSTREAM.md"));
     let kcp = read(root.join("vendor/mhy-kcp/UPSTREAM.md"));
+    let rand_mt = read(root.join("vendor/rand_mt/UPSTREAM.md"));
     assert!(manifest.contains("path = \"vendor/auto-artifactarium\""));
     assert!(manifest.contains("path = \"vendor/auto-reliquary\""));
     assert!(manifest.contains("[patch.\"https://github.com/hashblen/mhy-kcp\"]"));
+    assert!(manifest.contains("rand_mt = { path = \"vendor/rand_mt\" }"));
+    assert!(artifactarium_manifest.contains("rand_mt = \"=4.2.2\""));
+    assert!(reliquary_manifest.contains("rand_mt = \"=4.2.2\""));
     assert!(artifactarium.contains("04421c4f8a7ed7e7b65bb5e6e59231d4e98405cf"));
     assert!(reliquary.contains("bc23b48cb3b1b994a5d4405cefea42eb0e1d3735"));
     assert!(kcp.contains("1acf4ba5938ff91f7f2d2a31e16bf1f8d2db9c8f"));
+    assert!(rand_mt.contains("49e018c6ded60e5252609887c12eb3ca2592e9248c5894a7db3975c8a7a1e2df"));
+    assert!(rand_mt.contains("8d9c44fa58903d8fd86295c50513ec520d6c7678"));
     assert_eq!(
         hash(root.join("vendor/mhy-kcp/src/error.rs")),
         "1adfe0acf36dec662342553bbad445cd7b73bd6ec2887c8df1bd62378c883882"

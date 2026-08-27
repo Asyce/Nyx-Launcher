@@ -13,6 +13,7 @@ and trailing whitespace are normalized; identical normalized texts share a block
 | auto-reliquary | `bc23b48cb3b1b994a5d4405cefea42eb0e1d3735` | Vendored HSR transport/achievement parser with Pengo hardening. | Listed in the locked dependency table. |
 | mhy-kcp | `1acf4ba5938ff91f7f2d2a31e16bf1f8d2db9c8f` | Vendored KCP implementation. | Listed as package `kcp` below. |
 | pktmon 0.6.2 | `33d1c0c421ed8610540bae3e34da3c1182cf28a2` | Vendored realtime-only Windows Packet Monitor subset. | Listed as `pengo-pktmon-realtime` below. |
+| rand_mt 4.2.2 | crates.io checksum `49e018c6ded60e5252609887c12eb3ca2592e9248c5894a7db3975c8a7a1e2df`, upstream commit `8d9c44fa58903d8fd86295c50513ec520d6c7678` | Vendored locked runtime source with Pengo state/index zeroization and the documented metadata-test omission. | Listed as `rand_mt` below. |
 
 The full retained pktmon source license also remains at
 `vendor/pktmon-realtime/LICENSE`.
@@ -30,7 +31,7 @@ was copied or embedded.
 ## Locked Rust dependency inventory
 
 This table covers every non-root package entry in LF-normalized `Cargo.lock`
-SHA-256 `29900dab171f24ad8450ee556507af946e6ebd3690f8821f5c4080260530a67c`.
+SHA-256 `51104d5e84d6f99cecfa2bcb45886a433124d0945288ae17857c92a10c63ccf8`.
 For multi-license packages, Nyx selects the
 listed permissive option. The source column names the exact license file or
 pinned upstream source whose complete text appears below.
@@ -99,7 +100,7 @@ pinned upstream source whose complete text appears below.
 | `rand` | `0.8.7` | MIT | LICENSE-MIT | `209fbbe0ad52d9235e37badf9cadfe4dbdc87203179c0899e738b39ade42177b` |
 | `rand_chacha` | `0.3.1` | MIT | LICENSE-MIT | `209fbbe0ad52d9235e37badf9cadfe4dbdc87203179c0899e738b39ade42177b` |
 | `rand_core` | `0.6.4` | MIT | LICENSE-MIT | `209fbbe0ad52d9235e37badf9cadfe4dbdc87203179c0899e738b39ade42177b` |
-| `rand_mt` | `4.2.2` | MIT | LICENSE-MIT | `2e679a5c6065dbd3652d06ec5c46ba83ef2450e7283c4e803ac2dae57027e279` |
+| `rand_mt` | `4.2.2` | MIT | vendor/rand_mt/LICENSE-MIT | `2e679a5c6065dbd3652d06ec5c46ba83ef2450e7283c4e803ac2dae57027e279` |
 | `regex` | `1.13.0` | MIT | LICENSE-MIT | `6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb` |
 | `regex-automata` | `0.4.15` | MIT | LICENSE-MIT | `6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb` |
 | `regex-syntax` | `0.8.11` | MIT | LICENSE-MIT | `6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb` |

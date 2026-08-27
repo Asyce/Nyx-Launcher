@@ -47,6 +47,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::net::{IpAddr, SocketAddr};
 use tracing::{error, info, info_span, instrument, warn};
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::connection::parse_connection_packet;
 use crate::crypto::{bruteforce, decrypt_command, lookup_initial_key};
@@ -297,14 +298,14 @@ mod tests {
             ))
         ));
         let bound = sniffer.flow;
-        sniffer.key = Some(Key::Dispatch(vec![1]));
+        sniffer.key = Some(Key::Dispatch(zeroize::Zeroizing::new(vec![1])));
         sniffer.sent_time = Some(2);
         sniffer.possible_seeds.push(3);
         assert!(sniffer.receive_packet(flow_b.clone()).is_none());
         assert!(sniffer.flow == bound);
         assert!(sniffer.key.is_some());
         assert!(sniffer.sent_time == Some(2));
-        assert!(sniffer.possible_seeds == [3]);
+        assert!(sniffer.possible_seeds.as_slice() == [3]);
 
         let observational = ipv4_packet(client, 40000, server, PORTS[0], &1u32.to_be_bytes());
         assert!(sniffer.receive_packet(observational).is_some());
@@ -379,8 +380,8 @@ impl FlowId {
 }
 
 pub enum Key {
-    Dispatch(Vec<u8>),
-    Session(Vec<u8>),
+    Dispatch(Zeroizing<Vec<u8>>),
+    Session(Zeroizing<Vec<u8>>),
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -398,10 +399,10 @@ pub struct GameSniffer {
     sent_kcp: Option<KcpSniffer>,
     recv_kcp: Option<KcpSniffer>,
     key: Option<Key>,
-    initial_keys: HashMap<u16, Vec<u8>>,
+    initial_keys: HashMap<u16, Zeroizing<Vec<u8>>>,
     rsa_keys: Vec<RsaPrivateKey>,
     sent_time: Option<u64>,
-    possible_seeds: Vec<u64>,
+    possible_seeds: Zeroizing<Vec<u64>>,
 }
 
 impl GameSniffer {
@@ -413,16 +414,16 @@ impl GameSniffer {
         let rsa_5 = RsaPrivateKey::from_pkcs1_pem(pem_data_5);
 
         GameSniffer {
-            rsa_keys: vec![rsa_4, rsa_5]
-                .iter()
-                .filter_map(|rsa_key| rsa_key.clone().ok())
-                .collect(),
+            rsa_keys: [rsa_4, rsa_5].into_iter().filter_map(Result::ok).collect(),
             ..Default::default()
         }
     }
 
     pub fn set_initial_keys(mut self, initial_keys: HashMap<u16, Vec<u8>>) -> Self {
-        self.initial_keys = initial_keys;
+        self.initial_keys = initial_keys
+            .into_iter()
+            .map(|(version, key)| (version, Zeroizing::new(key)))
+            .collect();
         self
     }
 
@@ -432,7 +433,7 @@ impl GameSniffer {
         self.key = None;
         self.kcp_conv = None;
         self.sent_time = None;
-        self.possible_seeds.clear();
+        self.possible_seeds.zeroize();
     }
 
     #[instrument(skip_all, fields(len = bytes.len()))]
@@ -546,16 +547,16 @@ impl GameSniffer {
                     self.key.as_ref().unwrap()
                 } else {
                     let sent_time = self.sent_time?;
-                    let mut discovered_key: Option<&Key> = None;
-                    for &seed in &self.possible_seeds {
-                        let key = bruteforce(sent_time, seed, data.clone());
-                        if let Some(key) = key {
-                            self.key = Some(Key::Session(key));
-                            discovered_key = self.key.as_ref()
-                        }
-                    }
+                    let discovered_key = self
+                        .possible_seeds
+                        .iter()
+                        .find_map(|&seed| bruteforce(sent_time, seed, &data));
                     match discovered_key {
-                        Some(key) => key,
+                        Some(key) => {
+                            self.possible_seeds.zeroize();
+                            self.key = Some(Key::Session(key));
+                            self.key.as_ref().unwrap()
+                        }
                         None => {
                             error!("Couldn't bruteforce from deduced keys");
                             return None;
@@ -601,7 +602,7 @@ impl GameSniffer {
 
         if let Some(Dispatch(_)) = self.key {
             if let Some(possible_seeds) =
-                matches_get_player_token_rsp(command.proto_data.clone(), self.rsa_keys.clone())
+                matches_get_player_token_rsp(&command.proto_data, &self.rsa_keys)
             {
                 self.possible_seeds = possible_seeds;
                 let header_command = command.parse_header::<PacketHead>().ok()?;

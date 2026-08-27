@@ -7,6 +7,7 @@ use protobuf::Message;
 use protobuf::UnknownValueRef::*;
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey};
 use tracing::info;
+use zeroize::Zeroizing;
 
 const MIN_ACHIEVEMENT_PACKET_BYTES: usize = 1000;
 const MAX_ACHIEVEMENT_ROWS: usize = 10_000;
@@ -15,9 +16,9 @@ const EARLIEST_FINISH_TIMESTAMP: u64 = 1_420_066_800;
 const GENSHIN_ACHIEVEMENT_SENTINEL: u64 = 80_014;
 
 pub fn matches_get_player_token_rsp(
-    data: Vec<u8>,
-    rsa_keys: Vec<RsaPrivateKey>,
-) -> Option<Vec<u64>> {
+    data: &[u8],
+    rsa_keys: &[RsaPrivateKey],
+) -> Option<Zeroizing<Vec<u64>>> {
     // Cut at last "==": token 256 bytes -> 1 modulo 3, so always == at end in base64.
     let end = data
         .windows(2)
@@ -28,8 +29,9 @@ pub fn matches_get_player_token_rsp(
     let d_msg = Unk::parse_from_bytes(data);
     match d_msg {
         Ok(d_msg) => {
-            let mut to_ret: Vec<u64> = vec![];
             let unknown_fields = d_msg.unknown_fields();
+            let capacity = unknown_fields.iter().count().checked_mul(rsa_keys.len())?;
+            let mut to_ret = Zeroizing::new(Vec::with_capacity(capacity));
             for (_field_number, field_data) in unknown_fields.iter() {
                 let possible_encrypted = match field_data {
                     LengthDelimited(encrypted_bytes) => {
@@ -37,18 +39,14 @@ pub fn matches_get_player_token_rsp(
                     }
                     _ => None,
                 };
-                let possible_seeds: Vec<u64> = match possible_encrypted {
-                    Some(possible_encrypted) => rsa_keys
-                        .iter()
-                        .filter_map(|key| key.decrypt(Pkcs1v15Encrypt, &possible_encrypted).ok())
-                        .collect::<Vec<Vec<u8>>>()
-                        .iter()
-                        .filter(|&seed| seed.len() == 8)
-                        .map(|seed| u64::from_be_bytes(seed.as_slice().try_into().unwrap()))
-                        .collect(),
-                    _ => vec![],
-                };
-                to_ret.extend(possible_seeds)
+                if let Some(possible_encrypted) = possible_encrypted {
+                    to_ret.extend(rsa_keys.iter().filter_map(|key| {
+                        let seed =
+                            Zeroizing::new(key.decrypt(Pkcs1v15Encrypt, &possible_encrypted).ok()?);
+                        (seed.len() == 8)
+                            .then(|| u64::from_be_bytes(seed.as_slice().try_into().unwrap()))
+                    }));
+                }
             }
             if !to_ret.is_empty() {
                 Some(to_ret)

@@ -1,7 +1,7 @@
 [workspace]
 members = [".", "vendor/auto-artifactarium", "vendor/auto-reliquary"]
 default-members = [".", "vendor/auto-artifactarium", "vendor/auto-reliquary"]
-exclude = ["vendor/mhy-kcp", "vendor/pktmon-realtime"]
+exclude = ["vendor/mhy-kcp", "vendor/pktmon-realtime", "vendor/rand_mt"]
 resolver = "3"
 
 [package]
@@ -52,3 +52,4 @@ kcp = { path = "vendor/mhy-kcp" }
 
 [patch.crates-io]
 pengo-pktmon-realtime = { path = "vendor/pktmon-realtime" }
+rand_mt = { path = "vendor/rand_mt" }
