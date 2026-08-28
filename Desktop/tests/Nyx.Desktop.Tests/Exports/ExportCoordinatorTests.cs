@@ -293,7 +293,7 @@ public sealed class ExportCoordinatorTests
         var achievements = new FakeAchievementProvider();
         await using var coordinator = new ExportCoordinator(pulls, achievements);
         var result = await coordinator.RunForLaunchAsync(
-            new ExportArmSnapshot("ae", true, true), _ => ValueTask.FromResult(true));
+            new ExportArmSnapshot("unknown", true, true), _ => ValueTask.FromResult(true));
 
         Assert.Equal(ExportJobState.Unsupported, result.Snapshot.State);
         Assert.Equal(ExportTaskState.Unsupported, result.Snapshot.Pulls.State);

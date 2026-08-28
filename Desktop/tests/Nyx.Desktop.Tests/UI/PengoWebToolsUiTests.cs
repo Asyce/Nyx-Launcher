@@ -151,6 +151,31 @@ public sealed class PengoWebToolsUiTests
     }
 
     [Fact]
+    public void Endfield_pull_export_uses_the_existing_status_cancel_and_one_use_preview_flow()
+    {
+        var code = ReadAppFile("MainPage.xaml.cs");
+        var app = ReadAppFile("App.xaml.cs");
+        var buildIdentity = ReadAppFile("StableUpdateBuildIdentity.cs");
+        var help = Slice(code, "private async void PullExportHelpButton_Click", "private async Task ShowExportHelpAsync");
+        var tracking = Slice(code, "private async Task TrackExportJobAsync", "private async Task ObserveNativeAchievementHandoffAsync");
+        var delivery = Slice(code, "private async Task DeliverExportAsync", "private void SetAchievementHandoffIfLatest");
+        var status = Slice(code, "private static string FormatExportStatus", "private static string FormatAchievementFailure");
+
+        Assert.Contains("Open the official Pull History screen once", help, StringComparison.Ordinal);
+        Assert.Contains("gameId == \"ae\"", tracking, StringComparison.Ordinal);
+        Assert.Contains("pulls: true", tracking, StringComparison.Ordinal);
+        Assert.Contains("StartEndfieldPullAsync", delivery, StringComparison.Ordinal);
+        Assert.Contains("LaunchUriAsync(bridge.BrowserUri)", delivery, StringComparison.Ordinal);
+        Assert.Contains("Path.GetFileName(path)", status, StringComparison.Ordinal);
+        Assert.Contains("pulls saved as", status, StringComparison.Ordinal);
+        Assert.DoesNotContain("u8_token", code, StringComparison.Ordinal);
+        Assert.Contains("StableUpdateBuildIdentity.PengoSiteOrigin", code, StringComparison.Ordinal);
+        Assert.Contains("StableUpdateBuildIdentity.PengoSiteOrigin", app, StringComparison.Ordinal);
+        Assert.Contains("Channel == \"development\"", buildIdentity, StringComparison.Ordinal);
+        Assert.Contains("http://127.0.0.1:5173", buildIdentity, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Startup_resource_refresh_prioritizes_the_selected_game_and_preloads_the_others()
     {
         var code = ReadAppFile("MainPage.xaml.cs");

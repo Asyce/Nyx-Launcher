@@ -384,7 +384,8 @@ public sealed class LauncherStateTests
         Assert.False(result.State.Export.Games["zzz"].AchievementsArmed);
         Assert.True(result.State.Export.Games["wuwa"].PullsArmed);
         Assert.False(result.State.Export.Games["wuwa"].AchievementsArmed);
-        Assert.DoesNotContain("ae", result.State.Export.Games.Keys);
+        Assert.True(result.State.Export.Games["ae"].PullsArmed);
+        Assert.False(result.State.Export.Games["ae"].AchievementsArmed);
     }
 
     [Fact]

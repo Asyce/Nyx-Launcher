@@ -15,7 +15,7 @@ public sealed class GameCatalogTests
     [InlineData("hsr", "HoYoPlay", "HoYoLAB", true, true, true, true, true, true, true)]
     [InlineData("zzz", "HoYoPlay", "HoYoLAB", true, true, false, true, false, true, true)]
     [InlineData("wuwa", "KURO GAMES", "KURO GAMES", false, true, false, true, false, true, true)]
-    [InlineData("ae", "GRYPHLINK", "SKPORT", true, false, false, false, false, true, true)]
+    [InlineData("ae", "GRYPHLINK", "SKPORT", true, false, false, true, false, true, true)]
     public void Catalog_contains_the_approved_capability_matrix(
         string gameId,
         string railProvider,

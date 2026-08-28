@@ -24,7 +24,7 @@ internal sealed class UigfPullExportWriter(
         var temporaryPath = string.Empty;
         try
         {
-            EnsureSafeDestination(directory);
+            EnsureSafeDestination(exportRootDirectory, directory);
             temporaryPath = Path.Combine(directory, "." + Path.GetFileName(basePath) + "." + Guid.NewGuid().ToString("N") + ".tmp");
             long bytes;
             await using (var file = new FileStream(
@@ -157,7 +157,7 @@ internal sealed class UigfPullExportWriter(
             $"{stamp}-{nonce}.uigf.json");
     }
 
-    private void EnsureSafeDestination(string directory)
+    internal static void EnsureSafeDestination(string exportRootDirectory, string directory)
     {
         try
         {

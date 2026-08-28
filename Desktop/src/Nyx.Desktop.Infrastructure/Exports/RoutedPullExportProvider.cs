@@ -10,9 +10,11 @@ namespace Nyx.Desktop.Infrastructure.Exports;
 public sealed class RoutedPullExportProvider : IPullExportProvider, IDisposable
 {
     private readonly IPullExportProvider hoyoProvider;
+    private readonly IPullExportProvider endfieldProvider;
     private readonly Func<string?> wuwaInstallRootResolver;
     private readonly Func<string, WuwaPullExportProvider> wuwaProviderFactory;
     private readonly bool ownsHoyoProvider;
+    private readonly bool ownsEndfieldProvider;
     private int disposed;
 
     /// <summary>
@@ -24,8 +26,10 @@ public sealed class RoutedPullExportProvider : IPullExportProvider, IDisposable
         this.wuwaInstallRootResolver = validatedWuwaRootResolver
             ?? throw new ArgumentNullException(nameof(validatedWuwaRootResolver));
         this.hoyoProvider = new HoyoPullExportProvider();
+        this.endfieldProvider = new EndfieldPullExportProvider();
         this.wuwaProviderFactory = static root => new WuwaPullExportProvider(root);
         ownsHoyoProvider = true;
+        ownsEndfieldProvider = true;
     }
 
     /// <summary>
@@ -36,7 +40,9 @@ public sealed class RoutedPullExportProvider : IPullExportProvider, IDisposable
         IPullExportProvider hoyoProvider,
         Func<string?> validatedWuwaRootResolver,
         Func<string, WuwaPullExportProvider>? wuwaProviderFactory = null,
-        bool ownsHoyo = false)
+        bool ownsHoyo = false,
+        IPullExportProvider? endfieldProvider = null,
+        bool ownsEndfield = false)
     {
         this.hoyoProvider = hoyoProvider ?? throw new ArgumentNullException(nameof(hoyoProvider));
         this.wuwaInstallRootResolver = validatedWuwaRootResolver
@@ -44,6 +50,8 @@ public sealed class RoutedPullExportProvider : IPullExportProvider, IDisposable
         this.wuwaProviderFactory = wuwaProviderFactory
             ?? (static root => new WuwaPullExportProvider(root));
         this.ownsHoyoProvider = ownsHoyo;
+        this.endfieldProvider = endfieldProvider ?? new UnsupportedPullExportProvider();
+        this.ownsEndfieldProvider = ownsEndfield;
     }
 
     public ValueTask<IPullExportSession> PrepareAsync(
@@ -57,6 +65,7 @@ public sealed class RoutedPullExportProvider : IPullExportProvider, IDisposable
         {
             "gi" or "hsr" or "zzz" => hoyoProvider.PrepareAsync(gameId, cancellationToken),
             "wuwa" => PrepareWuwaAsync(cancellationToken),
+            "ae" => endfieldProvider.PrepareAsync(gameId, cancellationToken),
             _ => ValueTask.FromException<IPullExportSession>(
                 new PullExportException(PullExportErrorCodes.UnsupportedGame)),
         };
@@ -67,6 +76,15 @@ public sealed class RoutedPullExportProvider : IPullExportProvider, IDisposable
         if (Interlocked.Exchange(ref disposed, 1) != 0) return;
         if (ownsHoyoProvider && hoyoProvider is IDisposable disposable)
             disposable.Dispose();
+        if (ownsEndfieldProvider && endfieldProvider is IDisposable endfieldDisposable)
+            endfieldDisposable.Dispose();
+    }
+
+    private sealed class UnsupportedPullExportProvider : IPullExportProvider
+    {
+        public ValueTask<IPullExportSession> PrepareAsync(string gameId, CancellationToken cancellationToken) =>
+            ValueTask.FromException<IPullExportSession>(
+                new PullExportException(PullExportErrorCodes.UnsupportedGame));
     }
 
     private async ValueTask<IPullExportSession> PrepareWuwaAsync(

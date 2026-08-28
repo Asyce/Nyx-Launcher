@@ -31,6 +31,28 @@ public sealed class RoutedPullExportProviderTests
     }
 
     [Fact]
+    public async Task Endfield_routes_to_the_injected_provider_without_resolving_wuwa()
+    {
+        var hoyo = new RecordingPullProvider();
+        var endfield = new RecordingPullProvider();
+        var resolverCalls = 0;
+        using var router = new RoutedPullExportProvider(
+            hoyo,
+            () =>
+            {
+                resolverCalls++;
+                return null;
+            },
+            endfieldProvider: endfield);
+
+        await using var session = await router.PrepareAsync("ae", CancellationToken.None);
+
+        Assert.Equal(["ae"], endfield.Games);
+        Assert.Empty(hoyo.Games);
+        Assert.Equal(0, resolverCalls);
+    }
+
+    [Fact]
     public async Task Wuwa_captures_one_resolved_root_for_the_preparation()
     {
         using var fixture = new WuwaFixture();
@@ -84,7 +106,6 @@ public sealed class RoutedPullExportProviderTests
     }
 
     [Theory]
-    [InlineData("ae")]
     [InlineData("unknown")]
     public async Task Unsupported_games_never_resolve_or_create_wuwa_provider(string gameId)
     {

@@ -10,7 +10,7 @@ public static class GameCatalog
         new("hsr", "Honkai: Star Rail", "HoYoPlay", "HoYoLAB", true, true, true, true, true, true, true),
         new("zzz", "Zenless Zone Zero", "HoYoPlay", "HoYoLAB", true, true, false, true, false, true, true),
         new("wuwa", "Wuthering Waves", "KURO GAMES", "KURO GAMES", false, true, false, true, false, true, true),
-        new("ae", "Arknights: Endfield", "GRYPHLINK", "SKPORT", true, false, false, false, false, true, true),
+        new("ae", "Arknights: Endfield", "GRYPHLINK", "SKPORT", true, false, false, true, false, true, true),
     ];
 
     private static readonly IReadOnlyDictionary<string, GameDefinition> ById =

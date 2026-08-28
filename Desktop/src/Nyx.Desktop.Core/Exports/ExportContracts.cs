@@ -47,7 +47,7 @@ public static class ExportProviderCatalog
             ["hsr"] = new("hsr", ExportKind.Pulls | ExportKind.Achievements),
             ["zzz"] = new("zzz", ExportKind.Pulls),
             ["wuwa"] = new("wuwa", ExportKind.Pulls),
-            ["ae"] = new("ae", ExportKind.None),
+            ["ae"] = new("ae", ExportKind.Pulls),
         });
 
     public static IReadOnlyList<ExportProviderCapability> All { get; } = Slots.Values.ToArray();

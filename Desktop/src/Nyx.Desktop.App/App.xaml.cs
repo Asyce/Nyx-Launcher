@@ -317,7 +317,9 @@ public partial class App : Application
             achievementPrepareTimeout: TimeSpan.FromSeconds(30));
         _achievementExportHandoffs = new BoundedAchievementExportHandoffOwner(
             _exports,
-            new AchievementImportBridge(),
+            new AchievementImportBridge(
+                StableUpdateBuildIdentity.PengoSiteOrigin,
+                releaseChannel: StableUpdateBuildIdentity.Channel),
             new WindowsAchievementExportHandoffLauncher());
         _hoyoPublisherStatus = new HoyoPublisherStatusSource(() => new HoyoLocalVersions(
             GenshinSession.Version,

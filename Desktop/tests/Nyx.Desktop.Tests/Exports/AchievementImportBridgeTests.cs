@@ -55,41 +55,113 @@ public sealed class AchievementImportBridgeTests
     }
 
     [Fact]
-    public async Task Wrong_origin_and_nonce_reveal_nothing_but_do_not_consume_capability()
+    public async Task Endfield_pull_bridge_serves_the_saved_bytes_once_with_v2_capability()
     {
         using var temp = new TemporaryDirectory();
-        await using var session = await new AchievementImportBridge().StartAsync(
-            "gi",
-            temp.Write("gi", rows: """{"id":1,"status":"complete"}"""));
-        var capability = ParseCapability(session.BrowserUri);
+        var bytes = EndfieldPullContract.Serialize(
+            new(
+                new("10001", "20002", "2", "Europe"),
+                [new(
+                    "character:BASIC:11",
+                    "character",
+                    "11",
+                    "BASIC",
+                    "Basic",
+                    EndfieldPullApiClient.BasicPool,
+                    "101",
+                    "Character",
+                    "character",
+                    6,
+                    DateTimeOffset.Parse("2026-08-27T01:00:00+00:00"),
+                    true,
+                    false)]),
+            DateTimeOffset.Parse("2026-08-28T12:00:00+00:00"));
+        var artifact = temp.WriteBytes(bytes);
+        await using var session = await new AchievementImportBridge(
+            endfieldPullLifetime: TimeSpan.FromSeconds(2)).StartEndfieldPullAsync(artifact);
+        var capability = ParseCapability(session.BrowserUri, "v2");
 
-        var wrongOrigin = await SendAsync(
+        Assert.Equal("/endfield", session.BrowserUri.AbsolutePath);
+        Assert.Empty(session.BrowserUri.Query);
+        Assert.Contains("type=pulls", session.BrowserUri.Fragment, StringComparison.Ordinal);
+        var preflight = await SendAsync(
             capability.Port,
             $"""
-            GET /v1/achievement-import/{capability.Nonce} HTTP/1.1
+            OPTIONS /v2/pull-import/{capability.Nonce} HTTP/1.1
             Host: 127.0.0.1:{capability.Port}
-            Origin: https://evil.example
+            Origin: https://pengo.gg
+            Access-Control-Request-Method: GET
+            Access-Control-Request-Private-Network: true
 
 
             """);
-        Assert.StartsWith("HTTP/1.1 403 Forbidden", wrongOrigin, StringComparison.Ordinal);
-        Assert.DoesNotContain("pengo-achievements", wrongOrigin, StringComparison.Ordinal);
-        var wrongNonce = await SendAsync(
+        Assert.StartsWith("HTTP/1.1 204 No Content", preflight, StringComparison.Ordinal);
+
+        var response = await SendBytesAsync(
             capability.Port,
             $"""
-            GET /v1/achievement-import/not-the-code HTTP/1.1
+            GET /v2/pull-import/{capability.Nonce} HTTP/1.1
             Host: 127.0.0.1:{capability.Port}
             Origin: https://pengo.gg
 
 
             """);
-        Assert.StartsWith("HTTP/1.1 404 Not Found", wrongNonce, StringComparison.Ordinal);
-        Assert.DoesNotContain("pengo-achievements", wrongNonce, StringComparison.Ordinal);
+
+        var responseText = Encoding.ASCII.GetString(response);
+        Assert.Contains("Content-Type: application/json; charset=utf-8\r\n", responseText, StringComparison.Ordinal);
+        Assert.Contains("Cache-Control: no-store\r\n", responseText, StringComparison.Ordinal);
+        Assert.Equal(bytes, ResponseBody(response));
+        Assert.Equal(
+            AchievementImportDeliveryState.Delivered,
+            await session.Completion.WaitAsync(TimeSpan.FromSeconds(2)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Repeated_wrong_origin_and_nonce_reveal_nothing_but_do_not_consume_capability(
+        bool endfield)
+    {
+        using var temp = new TemporaryDirectory();
+        var bridge = new AchievementImportBridge(
+            lifetime: TimeSpan.FromSeconds(5),
+            endfieldPullLifetime: TimeSpan.FromSeconds(5));
+        var artifact = endfield
+            ? temp.WriteBytes(EndfieldPullContract.Serialize(
+                new(new("10001", "20002", "2", "Europe"), []),
+                DateTimeOffset.Parse("2026-08-28T12:00:00+00:00")))
+            : temp.Write("gi", rows: """{"id":1,"status":"complete"}""");
+        await using var session = endfield
+            ? await bridge.StartEndfieldPullAsync(artifact)
+            : await bridge.StartAsync("gi", artifact);
+        var capability = ParseCapability(session.BrowserUri, endfield ? "v2" : "v1");
+        var path = endfield ? "v2/pull-import" : "v1/achievement-import";
+
+        await ResetConnectionAsync(capability.Port);
+
+        for (var index = 0; index < 8; index++)
+        {
+            var wrongOrigin = index % 2 == 0;
+            var response = await SendAsync(
+                capability.Port,
+                $"""
+                GET /{path}/{(wrongOrigin ? capability.Nonce : "not-the-code")} HTTP/1.1
+                Host: 127.0.0.1:{capability.Port}
+                Origin: {(wrongOrigin ? "https://evil.example" : "https://pengo.gg")}
+
+
+                """);
+            Assert.StartsWith(
+                wrongOrigin ? "HTTP/1.1 403 Forbidden" : "HTTP/1.1 404 Not Found",
+                response,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(endfield ? "pengo-pulls" : "pengo-achievements", response, StringComparison.Ordinal);
+        }
 
         var valid = await SendAsync(
             capability.Port,
             $"""
-            GET /v1/achievement-import/{capability.Nonce} HTTP/1.1
+            GET /{path}/{capability.Nonce} HTTP/1.1
             Host: 127.0.0.1:{capability.Port}
             Origin: https://pengo.gg
 
@@ -99,6 +171,30 @@ public sealed class AchievementImportBridgeTests
         Assert.Equal(
             AchievementImportDeliveryState.Delivered,
             await session.Completion.WaitAsync(TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
+    public void Site_origin_allowlist_is_exact_and_only_the_development_channel_accepts_local_origin()
+    {
+        _ = new AchievementImportBridge(new Uri("https://pengo.gg"));
+        foreach (var origin in new[]
+        {
+            "http://pengo.gg",
+            "https://pengo.gg:444",
+            "https://pengo.gg/path",
+            "http://localhost:5173",
+        })
+            Assert.Throws<ArgumentException>(() => new AchievementImportBridge(new Uri(origin)));
+
+        Assert.Throws<ArgumentException>(() =>
+            new AchievementImportBridge(new Uri("http://127.0.0.1:5173")));
+        Assert.Throws<ArgumentException>(() =>
+            new AchievementImportBridge(
+                new Uri("http://127.0.0.1:5173"),
+                releaseChannel: "preview"));
+        _ = new AchievementImportBridge(
+            new Uri("http://127.0.0.1:5173"),
+            releaseChannel: "development");
     }
 
     [Fact]
@@ -148,7 +244,31 @@ public sealed class AchievementImportBridgeTests
         Assert.Equal("achievement-handoff-invalid", failure.Code);
     }
 
+    [Fact]
+    public async Task Invalid_or_expired_Endfield_pull_artifact_is_never_delivered()
+    {
+        using var temp = new TemporaryDirectory();
+        var invalid = temp.WriteBytes(
+            Encoding.UTF8.GetBytes("""{"kind":"pengo-pulls","version":1,"game":"ae","secret":"no"}"""));
+        var failure = await Assert.ThrowsAsync<ExportProviderException>(async () =>
+            await new AchievementImportBridge().StartEndfieldPullAsync(invalid));
+        Assert.Equal("pull-handoff-invalid", failure.Code);
+
+        var valid = EndfieldPullContract.Serialize(
+            new(new("10001", "20002", "2", "Europe"), []),
+            DateTimeOffset.Parse("2026-08-28T12:00:00+00:00"));
+        await using var expired = await new AchievementImportBridge(
+            endfieldPullLifetime: TimeSpan.FromMilliseconds(50)).StartEndfieldPullAsync(
+                temp.WriteBytes(valid));
+        Assert.Equal(
+            AchievementImportDeliveryState.Expired,
+            await expired.Completion.WaitAsync(TimeSpan.FromSeconds(2)));
+    }
+
     private static async Task<string> SendAsync(int port, string request)
+        => Encoding.UTF8.GetString(await SendBytesAsync(port, request));
+
+    private static async Task<byte[]> SendBytesAsync(int port, string request)
     {
         using var client = new TcpClient();
         await client.ConnectAsync("127.0.0.1", port);
@@ -158,21 +278,32 @@ public sealed class AchievementImportBridgeTests
             .Replace("\n", "\r\n", StringComparison.Ordinal);
         await stream.WriteAsync(Encoding.ASCII.GetBytes(normalized));
         await stream.FlushAsync();
-        using var reader = new StreamReader(
-            stream,
-            Encoding.UTF8,
-            detectEncodingFromByteOrderMarks: false,
-            leaveOpen: true);
-        return await reader.ReadToEndAsync().WaitAsync(TimeSpan.FromSeconds(2));
+        using var output = new MemoryStream();
+        await stream.CopyToAsync(output).WaitAsync(TimeSpan.FromSeconds(2));
+        return output.ToArray();
     }
 
-    private static (int Port, string Nonce) ParseCapability(Uri browserUri)
+    private static async Task ResetConnectionAsync(int port)
+    {
+        using var client = new TcpClient();
+        client.Client.LingerState = new(true, 0);
+        await client.ConnectAsync("127.0.0.1", port);
+    }
+
+    private static byte[] ResponseBody(byte[] response)
+    {
+        var separator = response.AsSpan().IndexOf("\r\n\r\n"u8);
+        Assert.True(separator >= 0);
+        return response[(separator + 4)..];
+    }
+
+    private static (int Port, string Nonce) ParseCapability(Uri browserUri, string version = "v1")
     {
         var values = browserUri.Fragment.TrimStart('#')
             .Split('&', StringSplitOptions.RemoveEmptyEntries)
             .Select(static part => part.Split('=', 2))
             .ToDictionary(static part => part[0], static part => part[1], StringComparer.Ordinal);
-        Assert.Equal("v1", values["nyx-import"]);
+        Assert.Equal(version, values["nyx-import"]);
         return (int.Parse(values["port"]), values["nonce"]);
     }
 
@@ -194,6 +325,13 @@ public sealed class AchievementImportBridgeTests
             File.WriteAllText(
                 path,
                 $$"""{"kind":"pengo-achievements","version":1,"game":"{{game}}","catalogVersion":"{{game}}-fixture","exportedAt":"2026-07-27T00:00:00Z","achievements":[{{rows}}]}""");
+            return path;
+        }
+
+        public string WriteBytes(byte[] bytes)
+        {
+            var path = System.IO.Path.Combine(Path, Guid.NewGuid().ToString("N") + ".json");
+            File.WriteAllBytes(path, bytes);
             return path;
         }
 

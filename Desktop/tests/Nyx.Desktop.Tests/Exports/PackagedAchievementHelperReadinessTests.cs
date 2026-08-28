@@ -94,7 +94,7 @@ public sealed class PackagedAchievementHelperReadinessTests
     }
 
     [Fact]
-    public void Unsupported_endfield_export_slot_remains_empty_even_when_feature_flags_are_on()
+    public void Endfield_exposes_only_its_disabled_by_default_pull_lane()
     {
         const string gameId = "ae";
         var slot = ExportProviderCatalog.Get(gameId);
@@ -108,9 +108,15 @@ public sealed class PackagedAchievementHelperReadinessTests
             EndfieldAchievements = true,
         };
 
-        Assert.Equal(ExportKind.None, slot.SupportedKinds);
+        Assert.Equal(ExportKind.Pulls, slot.SupportedKinds);
         Assert.Equal(
             ExportKind.None,
+            ExportProviderCatalog.GetEnabled(
+                gameId,
+                LauncherFeatureFlags.Defaults(),
+                AchievementExportSources.Game).SupportedKinds);
+        Assert.Equal(
+            ExportKind.Pulls,
             ExportProviderCatalog.GetEnabled(
                 gameId,
                 flags,

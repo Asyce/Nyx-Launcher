@@ -182,7 +182,9 @@ public sealed partial class MainPage : Page
     private readonly TaskCompletionSource shutdownCompletion =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int shutdownStarted;
-    private readonly AchievementImportBridge achievementImportBridge = new();
+    private readonly AchievementImportBridge achievementImportBridge = new(
+        StableUpdateBuildIdentity.PengoSiteOrigin,
+        releaseChannel: StableUpdateBuildIdentity.Channel);
     private string? displayedBackgroundSource;
     private bool updaterActionInFlight;
     private bool wuwaActionInFlight;
@@ -4377,7 +4379,7 @@ public sealed partial class MainPage : Page
     private async void PullExportHelpButton_Click(object sender, RoutedEventArgs e)
     {
         var instructions = GameSelector?.SelectedItem is GameLauncherItem { Id: "ae" }
-            ? "Pull history export is not supported for Arknights: Endfield. The old local-log method stopped in version 1.1, while newer token and cache methods are unstable and account-sensitive."
+            ? "1. Turn on Pull History.\n2. Launch Endfield through Nyx.\n3. Open the official Pull History screen once.\n4. Nyx saves the complete retained history in Pengo Exports and opens a one-time Pengo preview."
             : "1. Turn on Pull History.\n2. Launch the game through Nyx.\n3. Nyx reads the game-owned pull-history cache.\n4. The result is saved in Pengo Exports. HoYoLAB cannot provide this export.";
         await ShowExportHelpAsync("Pull history export", instructions);
     }
@@ -4716,7 +4718,13 @@ public sealed partial class MainPage : Page
             launcherState.DataDirectory,
             final);
         if (final.Pulls.State is ExportTaskState.Succeeded)
-            await TryOpenExportsFolderAsync();
+        {
+            if (gameId == "ae"
+                && final.Pulls.Artifact is { OutputPath: { Length: > 0 } pullOutputPath })
+                await DeliverExportAsync(gameId, jobId, pullOutputPath, pulls: true, lease);
+            else
+                await TryOpenExportsFolderAsync();
+        }
         if (nativeHandoff is not null
             && final.Achievements.State is ExportTaskState.Succeeded)
         {
@@ -4733,10 +4741,11 @@ public sealed partial class MainPage : Page
                 OutputPath: { Length: > 0 } outputPath,
             })
         {
-            await DeliverAchievementExportAsync(
+            await DeliverExportAsync(
                 gameId,
                 jobId,
                 outputPath,
+                pulls: false,
                 lease);
         }
     }
@@ -4773,10 +4782,11 @@ public sealed partial class MainPage : Page
                     : AchievementHandoffUiState.Fallback));
     }
 
-    private async Task DeliverAchievementExportAsync(
+    private async Task DeliverExportAsync(
         string gameId,
         Guid jobId,
         string outputPath,
+        bool pulls,
         SessionUiLease lease)
     {
         _ = sessionUiLifetime.TryRun(
@@ -4784,10 +4794,9 @@ public sealed partial class MainPage : Page
             () => SetAchievementHandoffIfLatest(gameId, jobId, AchievementHandoffUiState.Opening));
         try
         {
-            await using var bridge = await achievementImportBridge.StartAsync(
-                gameId,
-                outputPath,
-                lease.CancellationToken);
+            await using var bridge = pulls
+                ? await achievementImportBridge.StartEndfieldPullAsync(outputPath, lease.CancellationToken)
+                : await achievementImportBridge.StartAsync(gameId, outputPath, lease.CancellationToken);
             var opened = await Windows.System.Launcher.LaunchUriAsync(bridge.BrowserUri);
             if (!opened)
             {
@@ -6258,12 +6267,14 @@ public sealed partial class MainPage : Page
                     ? "HoYoLAB is preparing the achievement export. Star Rail can stay closed."
                     : "Achievements: preparing capture before launch...";
             if (job.Pulls.State is ExportTaskState.Preparing)
-                return "Pulls: safely checking the pre-launch cache...";
+                return "Pulls: safely checking the pre-launch history source...";
             if (job.Pulls.State is ExportTaskState.Running
                 && job.Achievements.State is ExportTaskState.Running)
                 return "Enter the world and open Wish or Warp History. Nyx continues automatically.";
             if (job.Pulls.State is ExportTaskState.Running)
-                return "Open Wish or Warp History. Nyx continues automatically.";
+                return job.GameId == "ae"
+                    ? "Open the official Pull History screen once. Nyx continues automatically."
+                    : "Open Wish or Warp History. Nyx continues automatically.";
             if (job.Achievements.State is ExportTaskState.Running)
                 return hoyoLabImmediate
                     ? "HoYoLAB is exporting achievements. Star Rail can stay closed."
@@ -6272,21 +6283,25 @@ public sealed partial class MainPage : Page
         }
         if (job.State == ExportJobState.Completed)
         {
+            var pullSummary = job.GameId == "ae"
+                && job.Pulls.Artifact is { ItemCount: var count, OutputPath: { Length: > 0 } path }
+                    ? $" {count} pulls saved as {Path.GetFileName(path)}."
+                    : string.Empty;
             return handoff switch
             {
-                AchievementHandoffUiState.Opening => "Export complete. Opening the Pengo preview...",
-                AchievementHandoffUiState.Waiting => "Export complete. Waiting for the Pengo preview...",
-                AchievementHandoffUiState.Delivered => "Export complete. Review it in the Pengo preview.",
+                AchievementHandoffUiState.Opening => $"Export complete.{pullSummary} Opening the Pengo preview...",
+                AchievementHandoffUiState.Waiting => $"Export complete.{pullSummary} Waiting for the Pengo preview...",
+                AchievementHandoffUiState.Delivered => $"Export complete.{pullSummary} Review it in the Pengo preview.",
                 AchievementHandoffUiState.Fallback =>
-                    "Export complete. The browser could not receive it automatically. Use Open Export Folder to view the file.",
-                _ => "Export complete. The files are in Pengo Exports.",
+                    $"Export complete.{pullSummary} The browser could not receive it automatically. Use Open Export Folder to view the file.",
+                _ => $"Export complete.{pullSummary} The files are in Pengo Exports.",
             };
         }
         if (job.State == ExportJobState.Canceled) return "Export canceled. No unfinished file was kept.";
         if (job.State == ExportJobState.Unsupported) return "This game’s export provider is coming later.";
         var failures = new List<string>(2);
         if (job.Pulls.State is ExportTaskState.Failed)
-            failures.Add(FormatPullFailure(job.Pulls.ErrorCode));
+            failures.Add(FormatPullFailure(job.GameId, job.Pulls.ErrorCode));
         if (job.Achievements.State is ExportTaskState.Failed)
             failures.Add(FormatAchievementFailure(job.Achievements.ErrorCode));
         return failures.Count switch
@@ -6297,10 +6312,12 @@ public sealed partial class MainPage : Page
         };
     }
 
-    private static string FormatPullFailure(string? code) => code switch
+    private static string FormatPullFailure(string gameId, string? code) => code switch
     {
         PullExportErrorCodes.HistoryNotUpdated or PullExportErrorCodes.HistoryNotFound =>
-            "Pulls: no fresh History update. Open Wish or Warp History, then try Export again.",
+            gameId == "ae"
+                ? "Pulls: no fresh history was found. Open Endfield's official Pull History screen once, then try Export again."
+                : "Pulls: no fresh History update. Open Wish or Warp History, then try Export again.",
         PullExportErrorCodes.OutputFailed => "Pulls: Nyx could not create the export file.",
         _ => "Pulls: export failed without blocking the game.",
     };
