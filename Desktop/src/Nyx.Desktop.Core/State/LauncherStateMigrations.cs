@@ -350,15 +350,20 @@ public static class LauncherStateMigrations
                 SkportAccountAccess = dto.SkportAccountAccess ?? false,
                 HoyoLabAccountCleanupPending = dto.HoyoLabAccountCleanupPending ?? false,
                 SkportAccountCleanupPending = dto.SkportAccountCleanupPending ?? false,
-                EndfieldPulls = dto.EndfieldPulls ?? false,
+                EndfieldPulls = dto.EndfieldPulls ?? true,
                 EndfieldAchievements = dto.EndfieldAchievements ?? false,
             };
 
         // Version 4 activates the two pull lanes only after their desktop
         // writers, Pengo round trips, and routing gates are proven. Version 4+
         // keeps any later explicit user choice unchanged.
-        return sourceVersion < 4
-            ? normalized with { ZzzPulls = true, WuWaPulls = true }
+        if (sourceVersion < 4)
+            normalized = normalized with { ZzzPulls = true, WuWaPulls = true };
+
+        // Version 5 activates Endfield pulls only after the receiver is live.
+        // Achievements remain unavailable; version 5+ preserves later choices.
+        return sourceVersion < 5
+            ? normalized with { EndfieldPulls = true, EndfieldAchievements = false }
             : normalized;
     }
 

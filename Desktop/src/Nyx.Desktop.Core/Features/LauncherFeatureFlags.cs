@@ -40,7 +40,7 @@ public sealed record LauncherFeatureFlags
     public bool SkportAccountAccess { get; init; }
     public bool HoyoLabAccountCleanupPending { get; init; }
     public bool SkportAccountCleanupPending { get; init; }
-    public bool EndfieldPulls { get; init; }
+    public bool EndfieldPulls { get; init; } = true;
     public bool EndfieldAchievements { get; init; }
 
     [JsonIgnore]

@@ -8,7 +8,7 @@ namespace Nyx.Desktop.Core.State;
 /// <summary>Versioned, user-owned launcher state. The record contains no process or UI state.</summary>
 public sealed record LauncherState
 {
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 5;
 
     public int Version { get; init; } = CurrentVersion;
     public string SelectedGameId { get; init; } = "gi";

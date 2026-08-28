@@ -13,7 +13,7 @@ public sealed class LauncherStateTests
     public void Official_launch_options_round_trip_only_known_valid_entries()
     {
         var result = LauncherStateMigrations.Read(
-            """{"version":4,"selectedGameId":"zzz","officialLaunchOptions":{"gi":{"rawArguments":"--name \"Traveler One\"","enabled":true},"hsr":{"rawArguments":"--saved while off","enabled":false},"zzz":{"rawArguments":"\"unterminated","enabled":true},"wuwa":7,"ae":{"rawArguments":"--future","enabled":true,"schemaVersion":2},"future":{"rawArguments":"--bad","enabled":true}}}""");
+            """{"version":5,"selectedGameId":"zzz","officialLaunchOptions":{"gi":{"rawArguments":"--name \"Traveler One\"","enabled":true},"hsr":{"rawArguments":"--saved while off","enabled":false},"zzz":{"rawArguments":"\"unterminated","enabled":true},"wuwa":7,"ae":{"rawArguments":"--future","enabled":true,"schemaVersion":2},"future":{"rawArguments":"--bad","enabled":true}}}""");
 
         Assert.Equal(LauncherStateReadStatus.Loaded, result.Status);
         Assert.Equal("zzz", result.State!.SelectedGameId);
@@ -34,9 +34,9 @@ public sealed class LauncherStateTests
     public void Malformed_or_ambiguous_official_launch_options_default_without_replacing_other_state()
     {
         var wrongShape = LauncherStateMigrations.Read(
-            """{"version":4,"selectedGameId":"hsr","officialLaunchOptions":[{"enabled":true}]}""");
+            """{"version":5,"selectedGameId":"hsr","officialLaunchOptions":[{"enabled":true}]}""");
         var duplicate = LauncherStateMigrations.Read(
-            """{"version":4,"selectedGameId":"ae","officialLaunchOptions":{"gi":{"rawArguments":"--one","enabled":true},"gi":{"rawArguments":"--two","enabled":true}}}""");
+            """{"version":5,"selectedGameId":"ae","officialLaunchOptions":{"gi":{"rawArguments":"--one","enabled":true},"gi":{"rawArguments":"--two","enabled":true}}}""");
 
         Assert.Equal("hsr", wrongShape.State!.SelectedGameId);
         Assert.All(wrongShape.State.OfficialLaunchOptions.Values, option => Assert.Equal(new OfficialGameLaunchOptions(), option));
@@ -91,7 +91,7 @@ public sealed class LauncherStateTests
     public void Per_game_panel_visibility_defaults_on_and_round_trips_only_official_games()
     {
         var result = LauncherStateMigrations.Read("""
-        {"version":4,"preferences":{"panelVisibility":{
+        {"version":5,"preferences":{"panelVisibility":{
           "gi":{"showBanners":false,"showRedemptionCodes":true,"showAccountAndExport":false},
           "future":{"showBanners":false}
         }}}
@@ -253,7 +253,7 @@ public sealed class LauncherStateTests
     public void Hsr_120_fps_preference_is_optional_in_v4_and_round_trips()
     {
         var oldV4 = LauncherStateMigrations.Read("""{"version":4,"selectedGameId":"hsr"}""");
-        Assert.Equal(LauncherStateReadStatus.Loaded, oldV4.Status);
+        Assert.Equal(LauncherStateReadStatus.Migrated, oldV4.Status);
         Assert.False(oldV4.State!.Preferences.Hsr120FpsOnLaunch);
         Assert.False(oldV4.State.Preferences.Genshin120FpsOnLaunch);
 
@@ -271,7 +271,7 @@ public sealed class LauncherStateTests
     public void Genshin_120_fps_preference_is_optional_in_v4_and_round_trips()
     {
         var oldV4 = LauncherStateMigrations.Read("""{"version":4,"selectedGameId":"gi"}""");
-        Assert.Equal(LauncherStateReadStatus.Loaded, oldV4.Status);
+        Assert.Equal(LauncherStateReadStatus.Migrated, oldV4.Status);
         Assert.False(oldV4.State!.Preferences.Genshin120FpsOnLaunch);
 
         var enabled = oldV4.State with
@@ -299,7 +299,7 @@ public sealed class LauncherStateTests
             + "}}";
         var result = LauncherStateMigrations.Read(json);
 
-        Assert.Equal(LauncherStateReadStatus.Loaded, result.Status);
+        Assert.Equal(LauncherStateReadStatus.Migrated, result.Status);
         Assert.Equal(LauncherState.CurrentVersion, result.State!.Version);
         Assert.True(result.State.Preferences.Hsr120FpsOnLaunch);
         Assert.False(result.State.Preferences.Genshin120FpsOnLaunch);
@@ -503,6 +503,32 @@ public sealed class LauncherStateTests
         Assert.Equal(LauncherStateReadStatus.Loaded, roundTrip.Status);
         Assert.False(roundTrip.State!.Preferences.FeatureFlags.ZzzPulls);
         Assert.False(roundTrip.State.Preferences.FeatureFlags.WuWaPulls);
+    }
+
+    [Fact]
+    public void Version_five_activates_Endfield_pulls_once_and_then_preserves_user_choices()
+    {
+        var migrated = LauncherStateMigrations.Read("""
+        {"version":4,"preferences":{"featureFlags":{"giPulls":false,"endfieldPulls":false,"endfieldAchievements":true}}}
+        """);
+
+        Assert.Equal(LauncherStateReadStatus.Migrated, migrated.Status);
+        Assert.False(migrated.State!.Preferences.FeatureFlags.GiPulls);
+        Assert.True(migrated.State.Preferences.FeatureFlags.EndfieldPulls);
+        Assert.False(migrated.State.Preferences.FeatureFlags.EndfieldAchievements);
+
+        var chosenOff = migrated.State with
+        {
+            Preferences = migrated.State.Preferences with
+            {
+                FeatureFlags = migrated.State.Preferences.FeatureFlags with { EndfieldPulls = false },
+            },
+        };
+        var roundTrip = LauncherStateMigrations.Read(LauncherStateMigrations.Write(chosenOff));
+
+        Assert.Equal(LauncherStateReadStatus.Loaded, roundTrip.Status);
+        Assert.False(roundTrip.State!.Preferences.FeatureFlags.EndfieldPulls);
+        Assert.False(roundTrip.State.Preferences.FeatureFlags.EndfieldAchievements);
     }
 
     [Fact]
