@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Nyx.Desktop.Core.AccountStatus;
+using Nyx.Desktop.Core.Exports;
 using Nyx.Desktop.Core.Games;
 using Nyx.Desktop.Core.State;
 using Nyx.Desktop.Core.Features;
@@ -235,6 +236,22 @@ public sealed class LauncherStateTests
         Assert.True(result.State.Export.IsArmed);
         Assert.Null(result.State.Export.OutputDirectory);
         Assert.Empty(result.State.Export.OutputPaths);
+    }
+
+    [Fact]
+    public void Version_five_does_not_arm_Endfield_from_the_v0_global_export_bit()
+    {
+        var migrated = LauncherStateMigrations.Read(
+            """{"version":0,"export":{"isArmed":true}}""");
+
+        Assert.Equal(LauncherStateReadStatus.Migrated, migrated.Status);
+        Assert.True(migrated.State!.Export.IsArmed);
+        Assert.Equal(
+            ExportKind.None,
+            ExportArmSnapshot.From(
+                migrated.State.Export,
+                "ae",
+                migrated.State.Preferences.FeatureFlags).RequestedKinds);
     }
 
     [Fact]

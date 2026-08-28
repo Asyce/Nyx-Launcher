@@ -115,7 +115,9 @@ public sealed record ExportArmSnapshot(
         ArgumentNullException.ThrowIfNull(featureFlags);
         var armed = state.Games.TryGetValue(gameId, out var game)
             ? game
-            : new ExportGameArming { PullsArmed = state.IsArmed, AchievementsArmed = state.IsArmed };
+            // State migration expands the legacy global bit. Missing per-game
+            // state must stay off so a newly enabled provider cannot inherit it.
+            : new ExportGameArming();
         var capability = ExportProviderCatalog.GetEnabled(
             gameId,
             featureFlags,
