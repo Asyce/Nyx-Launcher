@@ -113,7 +113,7 @@ jobs:
             throw "Expected exactly three release assets, found $($assets.Count)."
           }
           $assetPaths = @($assets | ForEach-Object { $_.FullName })
-          & gh release create $env:GITHUB_REF_NAME @assetPaths --verify-tag --generate-notes --latest
+          & gh release create $env:GITHUB_REF_NAME @assetPaths --repo $env:GITHUB_REPOSITORY --verify-tag --generate-notes --latest
           if ($LASTEXITCODE -ne 0) {
             throw 'GitHub release creation failed.'
           }

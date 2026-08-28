@@ -95,7 +95,7 @@ public sealed class PackagingScriptTests
     }
 
     [Fact]
-    public void Windows_workflow_uses_pinned_cargo_audit_and_only_the_reviewed_ignore()
+    public void Windows_workflow_pins_security_and_names_the_release_repository()
     {
         var repositoryRoot = Path.GetFullPath(Path.Combine(DesktopRoot, ".."));
         var workflow = File.ReadAllText(Path.Combine(
@@ -110,6 +110,7 @@ public sealed class PackagingScriptTests
         Assert.Contains(audit, workflow, StringComparison.Ordinal);
         Assert.Equal(1, workflow.Split("--ignore", StringSplitOptions.None).Length - 1);
         Assert.DoesNotContain("--deny warnings", workflow, StringComparison.Ordinal);
+        Assert.Contains("--repo $env:GITHUB_REPOSITORY", workflow, StringComparison.Ordinal);
         Assert.True(
             workflow.IndexOf(install, StringComparison.Ordinal) <
             workflow.IndexOf(audit, StringComparison.Ordinal));
