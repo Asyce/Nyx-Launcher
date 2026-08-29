@@ -33,6 +33,7 @@ public sealed record LauncherState
 /// <summary>Persisted Endfield playtime data contains only normalized intervals and live state.</summary>
 public sealed record EndfieldPlaytimeState
 {
+    public int IncompleteSessions { get; init; }
     public IReadOnlyList<EndfieldPlaytimeInterval> Intervals { get; init; } = Array.Empty<EndfieldPlaytimeInterval>();
     public EndfieldPlaytimePendingStart? PendingStart { get; init; }
 }

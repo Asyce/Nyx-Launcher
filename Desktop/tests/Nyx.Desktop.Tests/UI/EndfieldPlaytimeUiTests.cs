@@ -45,57 +45,61 @@ public sealed class EndfieldPlaytimeUiTests
         ContainsNormalized(render, "var showPlaytime = !selected.IsCustom && selected.Id == \"ae\";");
         ContainsNormalized(render, "StableExportHeading.Text = showPlaytime ? \"EXPORT & STATS\" : \"EXPORT\";");
         ContainsNormalized(render, "PlaytimeStatsButton.Visibility = showPlaytime ? Visibility.Visible : Visibility.Collapsed;");
-        ContainsNormalized(render, "PlaytimeStatsButton.IsEnabled = showPlaytime && !endfieldPlaytimeActionInFlight;");
+        ContainsNormalized(render, "PlaytimeStatsButton.IsEnabled = showPlaytime;");
 
-        var click = Slice(page, "private async void PlaytimeStatsButton_Click", "private async Task ScanEndfieldPlaytimeAsync");
+        var click = Slice(page, "private async void PlaytimeStatsButton_Click", "private ContentDialog CreateEndfieldPlaytimeDialog");
         ContainsNormalized(click, "GameSelector?.SelectedItem is not GameLauncherItem { Id: \"ae\", IsCustom: false }");
     }
 
     [Fact]
-    public void Playtime_scan_uses_native_picker_dialog_progress_and_explicit_status_priority()
+    public void Playtime_button_opens_a_close_only_dialog_from_the_current_snapshot()
     {
         var page = ReadAppFile("MainPage.xaml.cs");
-        var click = Slice(page, "private async void PlaytimeStatsButton_Click", "private async Task ScanEndfieldPlaytimeAsync");
-        ContainsNormalized(click, "if (endfieldPlaytime.Current.ScanStatus is EndfieldPlaytimeScanStatus.NotScanned)");
-        ContainsNormalized(click, "new FolderPicker");
-        ContainsNormalized(click, "WinRT.Interop.InitializeWithWindow.Initialize(picker, app.WindowHandle)");
-        ContainsNormalized(click, "picker.PickSingleFolderAsync()");
-
-        var scan = Slice(page, "private async Task ScanEndfieldPlaytimeAsync", "private ContentDialog CreateEndfieldPlaytimeDialog");
-        ContainsNormalized(scan, "new ProgressRing");
-        ContainsNormalized(scan, "IsActive = true");
-        ContainsNormalized(scan, "AutomationProperties.SetLiveSetting");
-        ContainsNormalized(scan, "AutomationLiveSetting.Polite");
-        ContainsNormalized(scan, "new ContentDialog");
-        ContainsNormalized(scan, "await endfieldPlaytime.ScanAsync(selectedRoot, cancellationToken)");
-
-        var status = Slice(page, "private static string EndfieldPlaytimeStatusText", "private static void AddPlaytimeHeading");
-        foreach (var state in new[] { "Normal", "Empty", "Capped", "Corrupt" })
-            ContainsNormalized(status, $"EndfieldPlaytimeScanStatus.{state}");
-        ContainsNormalized(status, "Choose Scan again to read local Endfield history.");
-        ContainsNormalized(status, "Endfield is running. The unfinished session is saved but excluded from every total below.");
-        ContainsNormalized(status, "Endfield is running. Nyx saw its verified start but could not save it yet, so this session is excluded from every total below.");
-        ContainsNormalized(status, "Endfield is running, but Nyx did not see a verified start. This session is excluded from every total below.");
-        ContainsNormalized(status, "A previous unfinished session is waiting for matching official history and remains excluded.");
-        ContainsNormalized(status, "Scanning local Endfield logs within Nyx's safety limits.");
-        Assert.True(
-            status.IndexOf("snapshot.IsRunning", StringComparison.Ordinal)
-            < status.IndexOf("snapshot.IsScanning", StringComparison.Ordinal));
-        Assert.True(
-            status.IndexOf("snapshot.IsScanning", StringComparison.Ordinal)
-            < status.IndexOf("snapshot.ScanStatus", StringComparison.Ordinal));
+        var click = Slice(page, "private async void PlaytimeStatsButton_Click", "private ContentDialog CreateEndfieldPlaytimeDialog");
+        ContainsNormalized(click, "GameSelector?.SelectedItem is not GameLauncherItem { Id: \"ae\", IsCustom: false }");
+        ContainsNormalized(click, "var dialog = CreateEndfieldPlaytimeDialog(endfieldPlaytime.Current);");
+        ContainsNormalized(click, "await dialog.ShowAsync().AsTask(lease.CancellationToken);");
+        Assert.DoesNotContain("ScanAsync", click, StringComparison.Ordinal);
+        Assert.DoesNotContain("FolderPicker", click, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProgressRing", click, StringComparison.Ordinal);
+        Assert.DoesNotContain("ContentDialogResult", click, StringComparison.Ordinal);
+        Assert.DoesNotContain("endfieldPlaytimeActionInFlight", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("ScanEndfieldPlaytimeAsync", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("EndfieldPlaytimeScanStatus", page, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Playtime_dialog_has_all_stats_and_never_renders_private_log_details()
+    public void Playtime_dialog_discloses_tracked_gameplay_and_never_renders_private_details()
     {
         var page = ReadAppFile("MainPage.xaml.cs");
-        var dialog = Slice(page, "private ContentDialog CreateEndfieldPlaytimeDialog", "private static string EndfieldPlaytimeStatusText");
+        var dialog = Slice(page, "private ContentDialog CreateEndfieldPlaytimeDialog", "private static void AddPlaytimeHeading");
+
+        ContainsNormalized(dialog, "LOCAL PLAYTIME TRACKED BY NYX");
+        ContainsNormalized(
+            dialog,
+            "Nyx counts only complete sessions whose exact Endfield process start and end it observed during the same Nyx run. Earlier playtime is unavailable; incomplete sessions are excluded.");
+        ContainsNormalized(dialog, "Tracked total");
+        ContainsNormalized(dialog, "AddPlaytimeStat(panel, \"Status\", FormatEndfieldPlaytimeStatus(snapshot));");
+        ContainsNormalized(dialog, "snapshot.SaveFailed");
+        ContainsNormalized(dialog, "snapshot.IsRunning");
+        ContainsNormalized(dialog, "snapshot.HasPendingSession");
+        ContainsNormalized(dialog, "Tracking this Endfield session now.");
+        ContainsNormalized(dialog, "Its start is saved.");
+        ContainsNormalized(
+            dialog,
+            "This running Endfield session is not being counted because Nyx did not observe its start after Endfield was confirmed closed.");
+        ContainsNormalized(
+            dialog,
+            "Nyx could not save the latest playtime update and will keep trying while it is open.");
+        ContainsNormalized(dialog, "snapshot.IncompleteSessions");
+        ContainsNormalized(dialog, "Incomplete tracked sessions");
+        ContainsNormalized(
+            dialog,
+            "No complete sessions have been tracked yet. Keep Nyx open before starting Endfield and until the game closes.");
+        ContainsNormalized(dialog, "if (gameplay.Sessions == 0)");
 
         foreach (var label in new[]
         {
-            "GAMEPLAY",
-            "Verified total",
             "Sessions",
             "Active days",
             "Average session",
@@ -107,36 +111,26 @@ public sealed class EndfieldPlaytimeUiTests
             "Launch hours",
             "Time by weekday",
             "Time by month",
-            "OFFICIAL LAUNCHER ACTIVITY",
-            "Open time",
-            "Visits",
-            "Visits that launched the game",
-            "Launcher-only visits",
-            "Skipped safely",
         })
             ContainsNormalized(dialog, label);
 
-        ContainsNormalized(dialog, "PrimaryButtonText = \"Scan again\"");
-        ContainsNormalized(dialog, "SecondaryButtonText = \"Choose folder\"");
         ContainsNormalized(dialog, "CloseButtonText = \"Close\"");
-        ContainsNormalized(dialog, "AutomationProperties.SetLiveSetting");
-        ContainsNormalized(dialog, "AutomationLiveSetting.Polite");
+        Assert.Contains("Application.Current.Resources", dialog, StringComparison.Ordinal);
+        Assert.DoesNotContain("(FontFamily)Resources[\"NyxBodyFont\"]", dialog, StringComparison.Ordinal);
+        Assert.DoesNotContain("(Brush)Resources[\"MistBrush\"]", dialog, StringComparison.Ordinal);
+        Assert.DoesNotContain("Scan", dialog, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Folder", dialog, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ProgressRing", dialog, StringComparison.Ordinal);
+        Assert.DoesNotContain("Warnings", dialog, StringComparison.Ordinal);
+        Assert.DoesNotContain("Launcher", dialog, StringComparison.Ordinal);
+        Assert.DoesNotContain("Open time", dialog, StringComparison.Ordinal);
+        Assert.DoesNotContain("snapshot.Statistics.Launcher", dialog, StringComparison.Ordinal);
+        Assert.DoesNotContain("PrimaryButtonText", dialog, StringComparison.Ordinal);
+        Assert.DoesNotContain("SecondaryButtonText", dialog, StringComparison.Ordinal);
 
-        var status = Slice(page, "private static string EndfieldPlaytimeStatusText", "private static void AddPlaytimeHeading");
-        foreach (var display in new[] { dialog, status })
-        {
-            Assert.DoesNotMatch(
-                new Regex(@"(?:FileName|Exception|Exception\.Message|selectedRoot|snapshot\.(?:Path|File|Log))", RegexOptions.CultureInvariant),
-                display);
-        }
-
-        var scan = Slice(page, "private async Task ScanEndfieldPlaytimeAsync", "private ContentDialog CreateEndfieldPlaytimeDialog");
-        foreach (var playtimeDialog in new[] { scan, dialog })
-        {
-            Assert.Contains("Application.Current.Resources", playtimeDialog, StringComparison.Ordinal);
-            Assert.DoesNotContain("(FontFamily)Resources[\"NyxBodyFont\"]", playtimeDialog, StringComparison.Ordinal);
-            Assert.DoesNotContain("(Brush)Resources[\"MistBrush\"]", playtimeDialog, StringComparison.Ordinal);
-        }
+        Assert.DoesNotMatch(
+            new Regex(@"(?:FileName|Exception|Exception\.Message|selectedRoot|snapshot\.(?:Path|File|Log))", RegexOptions.CultureInvariant),
+            dialog);
     }
 
     private static void ContainsNormalized(string source, string expected)

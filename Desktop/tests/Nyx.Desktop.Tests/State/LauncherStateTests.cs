@@ -5,7 +5,6 @@ using Nyx.Desktop.Core.Exports;
 using Nyx.Desktop.Core.Games;
 using Nyx.Desktop.Core.State;
 using Nyx.Desktop.Core.Features;
-using Nyx.Desktop.Core.Playtime;
 using Nyx.Desktop.Infrastructure.State;
 
 namespace Nyx.Desktop.Tests.State;
@@ -118,8 +117,8 @@ public sealed class LauncherStateTests
           "version":5,
           "preferences":{"featureFlags":{"endfieldPulls":true,"endfieldAchievements":false}},
           "endfieldPlaytime":{
-            "selectedLogRoot":"C:\\Nyx\\Endfield\\Logs",
-            "intervals":[{"kind":0,"startUtc":"2026-08-29T10:00:00+00:00","endUtc":"2026-08-29T11:00:00+00:00","timeZoneId":"UTC"}],
+            "incompleteSessions":4,
+            "intervals":[{"startUtc":"2026-08-29T10:00:00+00:00","endUtc":"2026-08-29T11:00:00+00:00","timeZoneId":"UTC"}],
             "pendingStart":{"startedAt":"2026-08-29T12:00:00+00:00","timeZoneId":"UTC"}
           }
         }
@@ -127,6 +126,7 @@ public sealed class LauncherStateTests
 
         Assert.Equal(LauncherStateReadStatus.Migrated, result.Status);
         var state = Assert.IsType<LauncherState>(result.State);
+        Assert.Equal(0, state.EndfieldPlaytime.IncompleteSessions);
         Assert.Empty(state.EndfieldPlaytime.Intervals);
         Assert.Null(state.EndfieldPlaytime.PendingStart);
         Assert.True(state.Preferences.FeatureFlags.EndfieldPulls);
@@ -141,9 +141,10 @@ public sealed class LauncherStateTests
           "version":6,
           "preferences":{"featureFlags":{"endfieldPulls":true,"endfieldAchievements":false}},
           "endfieldPlaytime":{
+            "incompleteSessions":7,
             "intervals":[
-              {"kind":1,"startUtc":"2026-08-29T11:00:00+00:00","endUtc":"2026-08-29T11:30:00+00:00","timeZoneId":"UTC"},
-              {"kind":0,"startUtc":"2026-08-29T10:00:00+00:00","endUtc":"2026-08-29T11:00:00+00:00","timeZoneId":"UTC"}
+              {"startUtc":"2026-08-29T11:00:00+00:00","endUtc":"2026-08-29T11:30:00+00:00","timeZoneId":"UTC"},
+              {"startUtc":"2026-08-29T10:00:00+00:00","endUtc":"2026-08-29T11:00:00+00:00","timeZoneId":"UTC"}
             ],
             "pendingStart":{"startedAt":"2026-08-29T12:00:00+00:00","timeZoneId":"UTC"}
           }
@@ -152,9 +153,8 @@ public sealed class LauncherStateTests
 
         Assert.Equal(LauncherStateReadStatus.Loaded, result.Status);
         var state = Assert.IsType<LauncherState>(result.State);
-        Assert.Equal(
-            [EndfieldPlaytimeIntervalKind.Gameplay, EndfieldPlaytimeIntervalKind.Launcher],
-            state.EndfieldPlaytime.Intervals.Select(static value => value.Kind));
+        Assert.Equal(7, state.EndfieldPlaytime.IncompleteSessions);
+        Assert.Equal(2, state.EndfieldPlaytime.Intervals.Count);
         Assert.Equal(
             DateTimeOffset.Parse("2026-08-29T10:00:00+00:00"),
             state.EndfieldPlaytime.Intervals[0].StartUtc);
@@ -167,8 +167,27 @@ public sealed class LauncherStateTests
         Assert.Equal(LauncherStateReadStatus.Loaded, roundTrip.Status);
         Assert.Equal(state.EndfieldPlaytime.Intervals, roundTrip.State!.EndfieldPlaytime.Intervals);
         Assert.Equal(state.EndfieldPlaytime.PendingStart, roundTrip.State.EndfieldPlaytime.PendingStart);
+        Assert.Equal(state.EndfieldPlaytime.IncompleteSessions, roundTrip.State.EndfieldPlaytime.IncompleteSessions);
         Assert.True(roundTrip.State.Preferences.FeatureFlags.EndfieldPulls);
         Assert.False(roundTrip.State.Preferences.FeatureFlags.EndfieldAchievements);
+    }
+
+    [Fact]
+    public void Endfield_v6_discards_intervals_from_the_rejected_log_based_candidate()
+    {
+        var result = LauncherStateMigrations.Read("""
+        {
+          "version":6,
+          "endfieldPlaytime":{
+            "intervals":[
+              {"kind":0,"startUtc":"2026-08-29T10:00:00+00:00","endUtc":"2026-08-29T11:00:00+00:00","timeZoneId":"UTC"},
+              {"kind":1,"startUtc":"2026-08-29T12:00:00+00:00","endUtc":"2026-08-29T13:00:00+00:00","timeZoneId":"UTC"}
+            ]
+          }
+        }
+        """);
+
+        Assert.Empty(result.State!.EndfieldPlaytime.Intervals);
     }
 
     [Fact]
@@ -178,30 +197,38 @@ public sealed class LauncherStateTests
         {
           "version":6,
           "endfieldPlaytime":{
+            "incompleteSessions":-3,
             "intervals":[
-              {"kind":1,"startUtc":"2026-01-01T00:00:00+00:00","endUtc":"2026-01-01T00:30:00+00:00","timeZoneId":"UTC"},
-              {"kind":0,"startUtc":"2026-01-01T04:00:00+00:00","endUtc":"2026-01-01T05:00:00+00:00","timeZoneId":"UTC"},
-              {"kind":0,"startUtc":"2026-01-01T02:00:00+00:00","endUtc":"2026-01-01T03:00:00+00:00","timeZoneId":"UTC"},
-              {"kind":0,"startUtc":"2026-01-01T02:00:00+00:00","endUtc":"2026-01-01T03:00:00+00:00","timeZoneId":"UTC"},
-              {"kind":0,"startUtc":"2026-01-01T02:30:00+00:00","endUtc":"2026-01-01T03:30:00+00:00","timeZoneId":"UTC"},
-              {"kind":0,"startUtc":"2026-01-01T06:00:00-05:00","endUtc":"2026-01-01T07:00:00-05:00","timeZoneId":"UTC"},
-              {"kind":0,"startUtc":"2026-01-01T06:00:00+00:00","endUtc":"2026-01-01T07:00:00+00:00","timeZoneId":"not-a-zone"},
-              {"kind":0,"startUtc":"2026-01-01T08:00:00+00:00","endUtc":"2026-01-01T08:00:00+00:00","timeZoneId":"UTC"},
-              {"kind":0,"startUtc":"2026-01-01T09:00:00+00:00","endUtc":"2026-01-09T09:00:00+00:00","timeZoneId":"UTC"},
-              {"kind":99,"startUtc":"2026-01-01T10:00:00+00:00","endUtc":"2026-01-01T11:00:00+00:00","timeZoneId":"UTC"}
+              {"startUtc":"2026-01-01T04:00:00+00:00","endUtc":"2026-01-01T05:00:00+00:00","timeZoneId":"UTC"},
+              {"startUtc":"2026-01-01T02:00:00+00:00","endUtc":"2026-01-01T03:00:00+00:00","timeZoneId":"UTC"},
+              {"startUtc":"2026-01-01T02:00:00+00:00","endUtc":"2026-01-01T03:00:00+00:00","timeZoneId":"UTC"},
+              {"startUtc":"2026-01-01T02:30:00+00:00","endUtc":"2026-01-01T03:30:00+00:00","timeZoneId":"UTC"},
+              {"startUtc":"2026-01-01T06:00:00-05:00","endUtc":"2026-01-01T07:00:00-05:00","timeZoneId":"UTC"},
+              {"startUtc":"2026-01-01T06:00:00+00:00","endUtc":"2026-01-01T07:00:00+00:00","timeZoneId":"not-a-zone"},
+              {"startUtc":"2026-01-01T08:00:00+00:00","endUtc":"2026-01-01T08:00:00+00:00","timeZoneId":"UTC"},
+              {"startUtc":"2026-01-01T09:00:00+00:00","endUtc":"2026-01-09T09:00:00+00:00","timeZoneId":"UTC"}
             ]
           }
         }
         """);
 
         var intervals = result.State!.EndfieldPlaytime.Intervals;
-        Assert.Equal(3, intervals.Count);
-        Assert.Equal(
-            [EndfieldPlaytimeIntervalKind.Gameplay, EndfieldPlaytimeIntervalKind.Gameplay, EndfieldPlaytimeIntervalKind.Launcher],
-            intervals.Select(static value => value.Kind));
+        Assert.Equal(2, intervals.Count);
+        Assert.Equal(0, result.State.EndfieldPlaytime.IncompleteSessions);
         Assert.Equal(DateTimeOffset.Parse("2026-01-01T02:00:00+00:00"), intervals[0].StartUtc);
         Assert.Equal(DateTimeOffset.Parse("2026-01-01T04:00:00+00:00"), intervals[1].StartUtc);
-        Assert.Equal(DateTimeOffset.Parse("2026-01-01T00:00:00+00:00"), intervals[2].StartUtc);
+    }
+
+    [Theory]
+    [InlineData(-1, 0)]
+    [InlineData(0, 0)]
+    [InlineData(int.MaxValue, int.MaxValue)]
+    public void Endfield_incomplete_session_counter_is_nonnegative_and_saturates(int input, int expected)
+    {
+        var result = LauncherStateMigrations.Read(
+            $"{{\"version\":6,\"endfieldPlaytime\":{{\"incompleteSessions\":{input}}}}}");
+
+        Assert.Equal(expected, result.State!.EndfieldPlaytime.IncompleteSessions);
     }
 
     [Theory]
@@ -222,9 +249,10 @@ public sealed class LauncherStateTests
         {
           "version":6,
           "endfieldPlaytime":{
-            "selectedLogRoot":"C:\\Nyx\\Endfield\\Logs",
-            "intervals":[{"kind":0,"startUtc":"2026-08-29T10:00:00+00:00","endUtc":"2026-08-29T11:00:00+00:00","timeZoneId":"UTC"}],
+            "incompleteSessions":5,
+            "intervals":[{"startUtc":"2026-08-29T10:00:00+00:00","endUtc":"2026-08-29T11:00:00+00:00","timeZoneId":"UTC"}],
             "pendingStart":{"startedAt":"2026-08-29T12:00:00+00:00","timeZoneId":"UTC"},
+            "selectedLogRoot":"discard",
             "raw":"discard",
             "line":"discard",
             "filename":"discard",
@@ -239,11 +267,11 @@ public sealed class LauncherStateTests
         using var document = JsonDocument.Parse(written);
         var playtime = document.RootElement.GetProperty("endfieldPlaytime");
         Assert.Equal(
-            ["intervals", "pendingStart"],
+            ["incompleteSessions", "intervals", "pendingStart"],
             playtime.EnumerateObject().Select(static property => property.Name).Order());
         var interval = Assert.Single(playtime.GetProperty("intervals").EnumerateArray());
         Assert.Equal(
-            ["endUtc", "kind", "startUtc", "timeZoneId"],
+            ["endUtc", "startUtc", "timeZoneId"],
             interval.EnumerateObject().Select(static property => property.Name).Order());
 
         var forbidden = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

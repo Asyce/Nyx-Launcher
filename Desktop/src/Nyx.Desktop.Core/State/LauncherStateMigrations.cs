@@ -75,9 +75,9 @@ public static class LauncherStateMigrations
         ArgumentNullException.ThrowIfNull(state);
         return NormalizeEndfieldPlaytime(new()
         {
+            IncompleteSessions = state.IncompleteSessions,
             Intervals = state.Intervals.Select(static value => new EndfieldPlaytimeIntervalDto
             {
-                Kind = (int)value.Kind,
                 StartUtc = value.StartUtc,
                 EndUtc = value.EndUtc,
                 TimeZoneId = value.TimeZoneId,
@@ -364,8 +364,7 @@ public static class LauncherStateMigrations
         foreach (var value in dto?.Intervals ?? [])
         {
             if (value is null
-                || value.Kind is null
-                || !Enum.IsDefined((EndfieldPlaytimeIntervalKind)value.Kind.Value)
+                || value.Kind is not null
                 || value.StartUtc is not { Offset: var startOffset } start
                 || startOffset != TimeSpan.Zero
                 || value.EndUtc is not { Offset: var endOffset } end
@@ -376,32 +375,16 @@ public static class LauncherStateMigrations
             }
 
             var interval = new EndfieldPlaytimeInterval(
-                (EndfieldPlaytimeIntervalKind)value.Kind.Value,
                 start,
                 end,
                 zoneId);
             if (interval.IsValid) intervals.Add(interval);
         }
 
-        var normalized = new List<EndfieldPlaytimeInterval>();
-        EndfieldPlaytimeInterval? previous = null;
-        foreach (var interval in intervals
-            .Distinct()
-            .OrderBy(static value => value.Kind)
-            .ThenBy(static value => value.StartUtc)
-            .ThenBy(static value => value.EndUtc)
-            .ThenBy(static value => value.TimeZoneId, StringComparer.Ordinal))
-        {
-            if (previous is not null
-                && previous.Kind == interval.Kind
-                && interval.StartUtc < previous.EndUtc) continue;
-            normalized.Add(interval);
-            previous = interval;
-        }
-
         EndfieldPlaytimePendingStart? pending = null;
         if (dto?.PendingStart is { StartedAt: { Offset: var pendingOffset } startedAt } candidate
             && pendingOffset == TimeSpan.Zero
+            && startedAt != default
             && NormalizeTimeZoneId(candidate.TimeZoneId) is { } pendingZone)
         {
             pending = new()
@@ -413,7 +396,8 @@ public static class LauncherStateMigrations
 
         return new()
         {
-            Intervals = EndfieldPlaytime.LimitForStorage(normalized),
+            IncompleteSessions = Math.Max(0, dto?.IncompleteSessions ?? 0),
+            Intervals = EndfieldPlaytime.LimitForStorage(intervals),
             PendingStart = pending,
         };
     }
@@ -423,9 +407,9 @@ public static class LauncherStateMigrations
         var normalized = Normalize(state ?? new());
         return new()
         {
+            IncompleteSessions = normalized.IncompleteSessions,
             Intervals = normalized.Intervals.Select(static value => new EndfieldPlaytimeIntervalDto
             {
-                Kind = (int)value.Kind,
                 StartUtc = value.StartUtc,
                 EndUtc = value.EndUtc,
                 TimeZoneId = value.TimeZoneId,
@@ -676,12 +660,14 @@ public static class LauncherStateMigrations
 
     private sealed class EndfieldPlaytimeDto
     {
+        public int? IncompleteSessions { get; set; }
         public EndfieldPlaytimeIntervalDto?[]? Intervals { get; set; }
         public EndfieldPlaytimePendingStartDto? PendingStart { get; set; }
     }
 
     private sealed class EndfieldPlaytimeIntervalDto
     {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? Kind { get; set; }
         public DateTimeOffset? StartUtc { get; set; }
         public DateTimeOffset? EndUtc { get; set; }
