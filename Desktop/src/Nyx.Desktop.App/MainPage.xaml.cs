@@ -2488,7 +2488,7 @@ public sealed partial class MainPage : Page
             Text = "Scanning local Endfield logs within Nyx's safety limits...",
             TextWrapping = TextWrapping.Wrap,
             HorizontalAlignment = HorizontalAlignment.Center,
-            FontFamily = (FontFamily)Resources["NyxBodyFont"],
+            FontFamily = (FontFamily)Application.Current.Resources["NyxBodyFont"],
         };
         AutomationProperties.SetLiveSetting(
             status,
@@ -2539,8 +2539,8 @@ public sealed partial class MainPage : Page
         {
             Text = EndfieldPlaytimeStatusText(snapshot),
             TextWrapping = TextWrapping.Wrap,
-            FontFamily = (FontFamily)Resources["NyxBodyFont"],
-            Foreground = (Brush)Resources["MistBrush"],
+            FontFamily = (FontFamily)Application.Current.Resources["NyxBodyFont"],
+            Foreground = (Brush)Application.Current.Resources["MistBrush"],
         };
         AutomationProperties.SetLiveSetting(
             status,

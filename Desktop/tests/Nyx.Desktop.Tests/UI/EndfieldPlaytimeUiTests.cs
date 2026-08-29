@@ -129,6 +129,14 @@ public sealed class EndfieldPlaytimeUiTests
                 new Regex(@"(?:FileName|Exception|Exception\.Message|selectedRoot|snapshot\.(?:Path|File|Log))", RegexOptions.CultureInvariant),
                 display);
         }
+
+        var scan = Slice(page, "private async Task ScanEndfieldPlaytimeAsync", "private ContentDialog CreateEndfieldPlaytimeDialog");
+        foreach (var playtimeDialog in new[] { scan, dialog })
+        {
+            Assert.Contains("Application.Current.Resources", playtimeDialog, StringComparison.Ordinal);
+            Assert.DoesNotContain("(FontFamily)Resources[\"NyxBodyFont\"]", playtimeDialog, StringComparison.Ordinal);
+            Assert.DoesNotContain("(Brush)Resources[\"MistBrush\"]", playtimeDialog, StringComparison.Ordinal);
+        }
     }
 
     private static void ContainsNormalized(string source, string expected)
