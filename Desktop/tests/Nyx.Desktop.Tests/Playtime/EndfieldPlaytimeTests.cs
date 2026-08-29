@@ -39,7 +39,7 @@ public sealed class EndfieldPlaytimeTests
         var wrongCase = Parse(
             Utc,
             UtcAt(2026, 8, 29, 12),
-            ("08-29 10:00:00.000", "Create game process endfield.exe"),
+            ("08-29 10:00:00.000", "create game process endfield.exe"),
             ("08-29 11:00:00.000", "Child process exits"));
 
         var caseInsensitiveMatch = Assert.Single(wrongCase.Intervals);

@@ -377,7 +377,7 @@ public static class EndfieldPlaytime
 
     private static MarkerKind? ClassifyMarker(string line)
     {
-        var gameplayStart = line.Contains("Create game process", StringComparison.Ordinal)
+        var gameplayStart = line.Contains("Create game process", StringComparison.OrdinalIgnoreCase)
             && ContainsExactFileName(line, "Endfield.exe");
         var gameplayEnd = line.Contains("Child process exits", StringComparison.Ordinal);
         var launcherStart = line.Contains("enter main", StringComparison.Ordinal);
