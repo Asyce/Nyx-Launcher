@@ -838,6 +838,15 @@ public static class NyxNativeSmokeCapture
                 [System.Windows.Automation.TreeScope]::Children,
                 $windowCondition)
             if ($null -eq $observerWindow) { throw 'OBSERVER_WINDOW_MISSING' }
+            $metric = $observerWindow.FindFirst(
+                [System.Windows.Automation.TreeScope]::Descendants,
+                [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
+                    'LaunchResourceMetricsPanel'))
+            if ($null -eq $metric) { throw 'OBSERVER_RESOURCE_PANEL_MISSING' }
+            if ([string] $metric.Current.Name -cne 'TRAILBLAZE POWER  211/300') {
+                throw 'OBSERVER_RESOURCE_PANEL_PRECONDITION_FAILED'
+            }
             [void] $readyEvent.Set()
             if (-not $startEvent.WaitOne(10000)) { throw 'OBSERVER_START_TIMEOUT' }
             $startedTimestamp = [long]::Parse(
@@ -847,28 +856,22 @@ public static class NyxNativeSmokeCapture
             do {
                 $lastState = 'missing'
                 try {
-                    $metric = $observerWindow.FindFirst(
-                        [System.Windows.Automation.TreeScope]::Descendants,
-                        [System.Windows.Automation.PropertyCondition]::new(
-                            [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
-                            'LaunchResourceMetricsPanel'))
-                    if ($null -ne $metric) {
-                        if ([string] $metric.Current.Name -ceq 'ORIGINAL RESIN  137/200') {
-                            $lastState = 'genshin'
-                            $elapsed = (([Diagnostics.Stopwatch]::GetTimestamp() - $startedTimestamp) *
-                                1000.0) / [Diagnostics.Stopwatch]::Frequency
-                            if ($elapsed -le 1000) {
-                                Write-Output ('NYX_CACHED_RESOURCE=passed|' +
-                                    $elapsed.ToString('F2', [Globalization.CultureInfo]::InvariantCulture) +
-                                    '|' + $lastState)
-                                return
-                            }
+                    $metricName = [string] $metric.Current.Name
+                    if ($metricName -ceq 'ORIGINAL RESIN  137/200') {
+                        $lastState = 'genshin'
+                        $elapsed = (([Diagnostics.Stopwatch]::GetTimestamp() - $startedTimestamp) *
+                            1000.0) / [Diagnostics.Stopwatch]::Frequency
+                        if ($elapsed -le 1000) {
+                            Write-Output ('NYX_CACHED_RESOURCE=passed|' +
+                                $elapsed.ToString('F2', [Globalization.CultureInfo]::InvariantCulture) +
+                                '|' + $lastState)
+                            return
                         }
-                        elseif ([string] $metric.Current.Name -ceq 'TRAILBLAZE POWER  211/300') {
-                            $lastState = 'star-rail'
-                        }
-                        else { $lastState = 'other' }
                     }
+                    elseif ($metricName -ceq 'TRAILBLAZE POWER  211/300') {
+                        $lastState = 'star-rail'
+                    }
+                    else { $lastState = 'other' }
                 }
                 catch { }
                 $elapsed = (([Diagnostics.Stopwatch]::GetTimestamp() - $startedTimestamp) *

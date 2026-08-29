@@ -43,6 +43,26 @@ public sealed class NativeSmokeScriptTests
         Assert.Contains("'LaunchResourceMetricsPanel'", metricObserver, StringComparison.Ordinal);
         Assert.Contains("'ORIGINAL RESIN  137/200'", metricObserver, StringComparison.Ordinal);
         Assert.Contains("'TRAILBLAZE POWER  211/300'", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("if ($null -eq $metric) { throw 'OBSERVER_RESOURCE_PANEL_MISSING' }", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("throw 'OBSERVER_RESOURCE_PANEL_PRECONDITION_FAILED'", metricObserver, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(metricObserver, @"\$observerWindow\.FindFirst\(", RegexOptions.CultureInvariant).Cast<Match>());
+        var metricLookup = metricObserver.IndexOf("$metric = $observerWindow.FindFirst(", StringComparison.Ordinal);
+        var metricPrecondition = metricObserver.IndexOf(
+            "TRAILBLAZE POWER  211/300",
+            metricLookup,
+            StringComparison.Ordinal);
+        var readySignal = metricObserver.IndexOf("[void] $readyEvent.Set()", StringComparison.Ordinal);
+        Assert.True(metricLookup >= 0 && metricPrecondition > metricLookup && readySignal > metricPrecondition);
+        var timedObserverStart = metricObserver.IndexOf("$lastState = 'missing'", readySignal, StringComparison.Ordinal);
+        var timedObserverEnd = metricObserver.IndexOf(
+            "Write-Output ('NYX_CACHED_RESOURCE=failed|'",
+            timedObserverStart,
+            StringComparison.Ordinal);
+        Assert.True(timedObserverStart > readySignal && timedObserverEnd > timedObserverStart);
+        var timedObserver = metricObserver[timedObserverStart..timedObserverEnd];
+        Assert.Contains("$metric.Current.Name", timedObserver, StringComparison.Ordinal);
+        Assert.DoesNotContain("FindFirst", timedObserver, StringComparison.Ordinal);
+        Assert.DoesNotContain("TreeScope]::Descendants", timedObserver, StringComparison.Ordinal);
         Assert.Contains("if ($elapsed -le 1000)", metricObserver, StringComparison.Ordinal);
         Assert.Contains("if ($elapsed -ge 1000)", metricObserver, StringComparison.Ordinal);
         Assert.Contains("$startEvent.WaitOne(10000)", metricObserver, StringComparison.Ordinal);

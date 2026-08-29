@@ -5086,10 +5086,14 @@ public sealed partial class MainPage : Page
             }
             else
             {
-                _ = RefreshPublisherResourceAutomaticallyAsync(
-                    selectedForResource.Id,
-                    lease,
-                    selected: true);
+                _ = DispatcherQueue.TryEnqueue(
+                    DispatcherQueuePriority.Low,
+                    () => sessionUiLifetime.TryRun(
+                        lease,
+                        () => _ = RefreshPublisherResourceAutomaticallyAsync(
+                            selectedForResource.Id,
+                            lease,
+                            selected: true)));
             }
         }
     }

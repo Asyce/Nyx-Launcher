@@ -224,6 +224,40 @@ public sealed class HoyoLiveSessionUiTests
     }
 
     [Fact]
+    public void Selection_defers_selected_publisher_refresh_until_a_low_priority_callback()
+    {
+        var page = ReadAppFile("MainPage.xaml.cs");
+        var selection = Slice(
+            page,
+            "private void GameSelector_SelectionChanged",
+            "private void GameSelector_DragItemsCompleted");
+
+        var renderIndex = selection.IndexOf("RenderSelection();", StringComparison.Ordinal);
+        var dispatcherIndex = selection.IndexOf(
+            "DispatcherQueue.TryEnqueue(\n                    DispatcherQueuePriority.Low",
+            StringComparison.Ordinal);
+        var lifetimeIndex = selection.IndexOf(
+            "sessionUiLifetime.TryRun(\n                        lease",
+            StringComparison.Ordinal);
+        var refreshIndex = selection.IndexOf(
+            "RefreshPublisherResourceAutomaticallyAsync(",
+            StringComparison.Ordinal);
+
+        Assert.True(renderIndex >= 0 && dispatcherIndex > renderIndex);
+        Assert.True(lifetimeIndex > dispatcherIndex && refreshIndex > lifetimeIndex);
+        Assert.Contains(
+            "() => sessionUiLifetime.TryRun(",
+            selection,
+            StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(selection, "RefreshPublisherResourceAutomaticallyAsync\\("));
+
+        var refresh = selection[refreshIndex..];
+        Assert.Contains("selectedForResource.Id", refresh, StringComparison.Ordinal);
+        Assert.Contains("lease", refresh, StringComparison.Ordinal);
+        Assert.Contains("selected: true", refresh, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Ordinary_window_activation_refresh_does_not_reset_close_confirmation()
     {
         var app = ReadAppFile("App.xaml.cs");
