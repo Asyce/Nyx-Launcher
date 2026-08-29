@@ -566,45 +566,6 @@ function Wait-Window {
     Throw-SmokeFailure 'WINDOW_NOT_FOUND'
 }
 
-function Wait-CachedResourceMetric {
-    param(
-        [Parameter(Mandatory)] [object] $Root,
-        [Parameter(Mandatory)] [Diagnostics.Stopwatch] $Stopwatch
-    )
-    do {
-        Assert-UiDeadline
-        $script:uiChecks.cachedResourceLastObservedState = 'missing'
-        try {
-            $metric = Find-AutomationIdElement `
-                -Root $Root `
-                -AutomationId 'LaunchResourceMetricsPanel'
-            if ($null -ne $metric) {
-                if ([string] $metric.Current.Name -ceq 'ORIGINAL RESIN  137/200') {
-                    $script:uiChecks.cachedResourceLastObservedState = 'genshin'
-                }
-                elseif ([string] $metric.Current.Name -ceq 'TRAILBLAZE POWER  211/300') {
-                    $script:uiChecks.cachedResourceLastObservedState = 'star-rail'
-                }
-                else {
-                    $script:uiChecks.cachedResourceLastObservedState = 'other'
-                }
-            }
-            if ($script:uiChecks.cachedResourceLastObservedState -ceq 'genshin') {
-                $elapsed = $Stopwatch.Elapsed.TotalMilliseconds
-                if ($elapsed -le 1000) {
-                    return [pscustomobject]@{
-                        ElapsedMilliseconds = $elapsed
-                    }
-                }
-            }
-        }
-        catch { }
-        if ($Stopwatch.Elapsed.TotalMilliseconds -ge 1000) { break }
-        Start-Sleep -Milliseconds 10
-    } while ($true)
-    Throw-SmokeFailure 'CACHED_RESOURCE_SWITCH_UI_TIMEOUT'
-}
-
 function Wait-GameItem {
     param(
         [Parameter(Mandatory)] [object] $Root,
@@ -852,17 +813,140 @@ public static class NyxNativeSmokeCapture
 
     $giGame = Wait-GameItem -Root $window -GameName 'Genshin Impact'
     if ($giGame.Pattern.Current.IsSelected) { Throw-SmokeFailure 'CACHED_RESOURCE_SWITCH_PRECONDITION_FAILED' }
-    $cachedResourceTimer = [Diagnostics.Stopwatch]::StartNew()
-    $giGame.Pattern.Select()
-    $script:uiChecks.cachedResourceSelectionMilliseconds = [Math]::Round(
-        $cachedResourceTimer.Elapsed.TotalMilliseconds,
-        2)
-    $cachedResource = Wait-CachedResourceMetric -Root $window -Stopwatch $cachedResourceTimer
-    $cachedResourceTimer.Stop()
-    $script:uiChecks.cachedResourceVisibleWithinOneSecondOfGameSwitch = $true
-    $script:uiChecks.cachedResourceGameSwitchMilliseconds = [Math]::Round(
-        $cachedResource.ElapsedMilliseconds,
-        2)
+    $observerScript = {
+        param(
+            [Parameter(Mandatory)] [int] $TargetProcessId,
+            [Parameter(Mandatory)] [string] $ReadyEventName,
+            [Parameter(Mandatory)] [string] $StartEventName,
+            [Parameter(Mandatory)] [string] $StartedTimestampPath
+        )
+        Set-StrictMode -Version Latest
+        $ErrorActionPreference = 'Stop'
+        Add-Type -AssemblyName UIAutomationClient
+        Add-Type -AssemblyName UIAutomationTypes
+        $readyEvent = [Threading.EventWaitHandle]::OpenExisting($ReadyEventName)
+        $startEvent = [Threading.EventWaitHandle]::OpenExisting($StartEventName)
+        try {
+            $windowCondition = [System.Windows.Automation.AndCondition]::new(
+                [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::ProcessIdProperty,
+                    $TargetProcessId),
+                [System.Windows.Automation.PropertyCondition]::new(
+                    [System.Windows.Automation.AutomationElement]::NameProperty,
+                    'Nyx - Pengo'))
+            $observerWindow = [System.Windows.Automation.AutomationElement]::RootElement.FindFirst(
+                [System.Windows.Automation.TreeScope]::Children,
+                $windowCondition)
+            if ($null -eq $observerWindow) { throw 'OBSERVER_WINDOW_MISSING' }
+            [void] $readyEvent.Set()
+            if (-not $startEvent.WaitOne(10000)) { throw 'OBSERVER_START_TIMEOUT' }
+            $startedTimestamp = [long]::Parse(
+                [IO.File]::ReadAllText($StartedTimestampPath),
+                [Globalization.CultureInfo]::InvariantCulture)
+            $lastState = 'not-observed'
+            do {
+                $lastState = 'missing'
+                try {
+                    $metric = $observerWindow.FindFirst(
+                        [System.Windows.Automation.TreeScope]::Descendants,
+                        [System.Windows.Automation.PropertyCondition]::new(
+                            [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
+                            'LaunchResourceMetricsPanel'))
+                    if ($null -ne $metric) {
+                        if ([string] $metric.Current.Name -ceq 'ORIGINAL RESIN  137/200') {
+                            $lastState = 'genshin'
+                            $elapsed = (([Diagnostics.Stopwatch]::GetTimestamp() - $startedTimestamp) *
+                                1000.0) / [Diagnostics.Stopwatch]::Frequency
+                            if ($elapsed -le 1000) {
+                                Write-Output ('NYX_CACHED_RESOURCE=passed|' +
+                                    $elapsed.ToString('F2', [Globalization.CultureInfo]::InvariantCulture) +
+                                    '|' + $lastState)
+                                return
+                            }
+                        }
+                        elseif ([string] $metric.Current.Name -ceq 'TRAILBLAZE POWER  211/300') {
+                            $lastState = 'star-rail'
+                        }
+                        else { $lastState = 'other' }
+                    }
+                }
+                catch { }
+                $elapsed = (([Diagnostics.Stopwatch]::GetTimestamp() - $startedTimestamp) *
+                    1000.0) / [Diagnostics.Stopwatch]::Frequency
+                if ($elapsed -ge 1000) { break }
+                Start-Sleep -Milliseconds 10
+            } while ($true)
+            Write-Output ('NYX_CACHED_RESOURCE=failed|' +
+                $elapsed.ToString('F2', [Globalization.CultureInfo]::InvariantCulture) +
+                '|' + $lastState)
+        }
+        finally {
+            $startEvent.Dispose()
+            $readyEvent.Dispose()
+        }
+    }
+    $cachedResourceTimer = [Diagnostics.Stopwatch]::new()
+    $readyEventName = 'Local\NyxNativeSmoke-' + $runId + '-ready'
+    $startEventName = 'Local\NyxNativeSmoke-' + $runId + '-start'
+    $readyEvent = [Threading.EventWaitHandle]::new(
+        $false, [Threading.EventResetMode]::ManualReset, $readyEventName)
+    $startEvent = [Threading.EventWaitHandle]::new(
+        $false, [Threading.EventResetMode]::ManualReset, $startEventName)
+    $startedTimestampPath = Join-Path $temporaryRoot 'cached-resource-started-timestamp.txt'
+    $observerJob = $null
+    try {
+        $observerJob = Start-Job `
+            -ScriptBlock $observerScript `
+            -ArgumentList $window.Current.ProcessId, $readyEventName, $startEventName, $startedTimestampPath
+        if (-not $readyEvent.WaitOne(10000)) {
+            Throw-SmokeFailure 'CACHED_RESOURCE_OBSERVER_FAILED'
+        }
+        $cachedResourceTimer.Start()
+        [IO.File]::WriteAllText(
+            $startedTimestampPath,
+            [Diagnostics.Stopwatch]::GetTimestamp().ToString(
+                [Globalization.CultureInfo]::InvariantCulture),
+            [Text.UTF8Encoding]::new($false))
+        [void] $startEvent.Set()
+        try { $giGame.Pattern.Select() }
+        catch { Throw-SmokeFailure 'CACHED_RESOURCE_SELECTION_FAILED' }
+        $script:uiChecks.cachedResourceSelectionMilliseconds = [Math]::Round(
+            $cachedResourceTimer.Elapsed.TotalMilliseconds,
+            2)
+        if ($null -eq (Wait-Job -Job $observerJob -Timeout 5)) {
+            Throw-SmokeFailure 'CACHED_RESOURCE_OBSERVER_TIMEOUT'
+        }
+        try { $observerOutput = @(Receive-Job -Job $observerJob -ErrorAction Stop) }
+        catch { Throw-SmokeFailure 'CACHED_RESOURCE_OBSERVER_FAILED' }
+        $observerLines = @(
+            $observerOutput |
+                ForEach-Object { [string] $_ } |
+                Where-Object { $_.StartsWith('NYX_CACHED_RESOURCE=', [StringComparison]::Ordinal) })
+        if ($observerLines.Count -ne 1) { Throw-SmokeFailure 'CACHED_RESOURCE_OBSERVER_FAILED' }
+        $observerMatch = [regex]::Match(
+            $observerLines[0],
+            '^NYX_CACHED_RESOURCE=(passed|failed)\|([0-9]+(?:\.[0-9]{2})?)\|(missing|genshin|star-rail|other)$')
+        if (-not $observerMatch.Success) { Throw-SmokeFailure 'CACHED_RESOURCE_OBSERVER_FAILED' }
+        $script:uiChecks.cachedResourceLastObservedState = $observerMatch.Groups[3].Value
+        if ($observerMatch.Groups[1].Value -cne 'passed') {
+            Throw-SmokeFailure 'CACHED_RESOURCE_SWITCH_UI_TIMEOUT'
+        }
+        $cachedResourceTimer.Stop()
+        $script:uiChecks.cachedResourceVisibleWithinOneSecondOfGameSwitch = $true
+        $script:uiChecks.cachedResourceGameSwitchMilliseconds = [Math]::Round(
+            [double]::Parse(
+                $observerMatch.Groups[2].Value,
+                [Globalization.CultureInfo]::InvariantCulture),
+            2)
+    }
+    finally {
+        if ($null -ne $observerJob) {
+            Stop-Job -Job $observerJob -ErrorAction SilentlyContinue
+            Remove-Job -Job $observerJob -Force -ErrorAction SilentlyContinue
+        }
+        $startEvent.Dispose()
+        $readyEvent.Dispose()
+    }
 
     Assert-UiDeadline
     $primaryWindowId = $window.GetRuntimeId() -join ','

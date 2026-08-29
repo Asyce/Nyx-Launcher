@@ -29,28 +29,56 @@ public sealed class NativeSmokeScriptTests
         Assert.Contains("ORIGINAL RESIN  137/200", source, StringComparison.Ordinal);
         Assert.Contains("TRAILBLAZE POWER  211/300", source, StringComparison.Ordinal);
         Assert.Contains("if ($hsrGame.Pattern.Current.IsSelected -and", source, StringComparison.Ordinal);
-        Assert.Contains("if ($elapsed -le 1000)", source, StringComparison.Ordinal);
-        Assert.Contains("if ($Stopwatch.Elapsed.TotalMilliseconds -ge 1000)", source, StringComparison.Ordinal);
         Assert.Contains("cachedResourceSelectionMilliseconds = $null", source, StringComparison.Ordinal);
         Assert.Contains("cachedResourceLastObservedState = 'not-observed'", source, StringComparison.Ordinal);
-        var cachedResourceMetric = ExtractPowerShellFunction(source, "Wait-CachedResourceMetric");
-        Assert.Matches(
-            new Regex(@"do \{\r?\n\s*Assert-UiDeadline\r?\n\s*\$script:uiChecks\.cachedResourceLastObservedState = 'missing'\r?\n\s*try \{", RegexOptions.CultureInvariant),
-            cachedResourceMetric);
-        Assert.Matches(
-            new Regex(@"if \(\[string\] \$metric\.Current\.Name -ceq 'ORIGINAL RESIN  137/200'\) \{\r?\n\s*\$script:uiChecks\.cachedResourceLastObservedState = 'genshin'\r?\n\s*\}\r?\n\s*elseif \(\[string\] \$metric\.Current\.Name -ceq 'TRAILBLAZE POWER  211/300'\) \{\r?\n\s*\$script:uiChecks\.cachedResourceLastObservedState = 'star-rail'\r?\n\s*\}\r?\n\s*else \{\r?\n\s*\$script:uiChecks\.cachedResourceLastObservedState = 'other'", RegexOptions.CultureInvariant),
-            cachedResourceMetric);
-        Assert.Equal(
-            new[] { "missing", "genshin", "star-rail", "other" },
-            Regex.Matches(
-                    cachedResourceMetric,
-                    @"\$script:uiChecks\.cachedResourceLastObservedState = '(?<state>[^']+)'",
-                    RegexOptions.CultureInvariant)
-                .Cast<Match>()
-                .Select(match => match.Groups["state"].Value));
-        Assert.Matches(
-            new Regex(@"\$cachedResourceTimer = \[Diagnostics\.Stopwatch\]::StartNew\(\)\r?\n\s*\$giGame\.Pattern\.Select\(\)\r?\n\s*\$script:uiChecks\.cachedResourceSelectionMilliseconds = \[Math\]::Round\(\r?\n\s*\$cachedResourceTimer\.Elapsed\.TotalMilliseconds,\r?\n\s*2\)\r?\n\s*\$cachedResource = Wait-CachedResourceMetric -Root \$window -Stopwatch \$cachedResourceTimer", RegexOptions.CultureInvariant),
-            source);
+        var metricObserver = Regex.Match(
+            source,
+            @"\$observerScript = \{[\s\S]*?^\s{4}\}\r?\n\s*\$cachedResourceTimer =",
+            RegexOptions.Multiline | RegexOptions.CultureInvariant).Value;
+        Assert.Contains("Add-Type -AssemblyName UIAutomationClient", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("AutomationElement]::ProcessIdProperty", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("AutomationElement]::NameProperty", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("'Nyx - Pengo'", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("AutomationElement]::AutomationIdProperty", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("'LaunchResourceMetricsPanel'", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("'ORIGINAL RESIN  137/200'", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("'TRAILBLAZE POWER  211/300'", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("if ($elapsed -le 1000)", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("if ($elapsed -ge 1000)", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("$startEvent.WaitOne(10000)", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("[IO.File]::ReadAllText($StartedTimestampPath)", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("[Diagnostics.Stopwatch]::GetTimestamp()", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("[Diagnostics.Stopwatch]::Frequency", metricObserver, StringComparison.Ordinal);
+        Assert.DoesNotContain("[DateTime]::UtcNow", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("NYX_CACHED_RESOURCE=passed|", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("NYX_CACHED_RESOURCE=failed|", metricObserver, StringComparison.Ordinal);
+        Assert.Contains("CACHED_RESOURCE_OBSERVER_TIMEOUT", source, StringComparison.Ordinal);
+        Assert.Contains("CACHED_RESOURCE_OBSERVER_FAILED", source, StringComparison.Ordinal);
+        Assert.Contains("CACHED_RESOURCE_SELECTION_FAILED", source, StringComparison.Ordinal);
+        var cachedResourceTimerStart = source.IndexOf(
+            "$cachedResourceTimer = [Diagnostics.Stopwatch]::new()",
+            StringComparison.Ordinal);
+        var observerStart = source.IndexOf("$observerJob = Start-Job `", StringComparison.Ordinal);
+        var observerReady = source.IndexOf(
+            "if (-not $readyEvent.WaitOne(10000))",
+            StringComparison.Ordinal);
+        var timerStart = source.IndexOf("$cachedResourceTimer.Start()", StringComparison.Ordinal);
+        var observerSignal = source.IndexOf("[void] $startEvent.Set()", StringComparison.Ordinal);
+        var selectionInvoke = source.IndexOf("try { $giGame.Pattern.Select() }", StringComparison.Ordinal);
+        var observerWait = source.IndexOf("Wait-Job -Job $observerJob -Timeout 5", StringComparison.Ordinal);
+        var observerRead = source.IndexOf("Receive-Job -Job $observerJob", StringComparison.Ordinal);
+        Assert.True(cachedResourceTimerStart >= 0
+            && observerStart > cachedResourceTimerStart
+            && observerReady > observerStart
+            && timerStart > observerReady
+            && observerSignal > timerStart
+            && selectionInvoke > observerSignal
+            && observerWait > selectionInvoke
+            && observerRead > observerWait);
+        Assert.Contains("Stop-Job -Job $observerJob", source, StringComparison.Ordinal);
+        Assert.Contains("Remove-Job -Job $observerJob -Force", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Wait-CachedResourceMetric", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("NyxNativeSmokeMetricObserver", source, StringComparison.Ordinal);
         Assert.Contains("$uiDeadlineSeconds = 180", source, StringComparison.Ordinal);
         Assert.Contains("$script:uiRuntime.Elapsed.TotalSeconds -ge $uiDeadlineSeconds", source, StringComparison.Ordinal);
         Assert.Contains("UI_DEADLINE_EXCEEDED", source, StringComparison.Ordinal);
@@ -135,7 +163,7 @@ public sealed class NativeSmokeScriptTests
             "Initialize-SyntheticCachedResourceFixture `",
             StringComparison.Ordinal);
         var timedStart = source.IndexOf(
-            "$cachedResourceTimer = [Diagnostics.Stopwatch]::StartNew()",
+            "$cachedResourceTimer = [Diagnostics.Stopwatch]::new()",
             StringComparison.Ordinal);
         var hsrSelected = source.IndexOf(
             "$hsrGame = Wait-GameItem -Root $window -GameName 'Honkai: Star Rail'",
