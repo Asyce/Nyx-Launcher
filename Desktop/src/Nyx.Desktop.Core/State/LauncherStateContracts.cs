@@ -2,13 +2,14 @@ using System.Collections.ObjectModel;
 using System.Text.Json.Serialization;
 using Nyx.Desktop.Core.Features;
 using Nyx.Desktop.Core.Games;
+using Nyx.Desktop.Core.Playtime;
 
 namespace Nyx.Desktop.Core.State;
 
 /// <summary>Versioned, user-owned launcher state. The record contains no process or UI state.</summary>
 public sealed record LauncherState
 {
-    public const int CurrentVersion = 5;
+    public const int CurrentVersion = 6;
 
     public int Version { get; init; } = CurrentVersion;
     public string SelectedGameId { get; init; } = "gi";
@@ -20,12 +21,26 @@ public sealed record LauncherState
         new ReadOnlyDictionary<string, GameAppearanceState>(new Dictionary<string, GameAppearanceState>(StringComparer.Ordinal));
     public ExportArmingState Export { get; init; } = new();
     public LauncherGlobalPreferences Preferences { get; init; } = new();
+    public EndfieldPlaytimeState EndfieldPlaytime { get; init; } = new();
 
     public static LauncherState Defaults() => new()
     {
         RailOrder = GameCatalog.All.Select(static game => game.Id).ToArray(),
         Preferences = LauncherGlobalPreferences.FreshDefaults(),
     };
+}
+
+/// <summary>Persisted Endfield playtime data contains only normalized intervals and live state.</summary>
+public sealed record EndfieldPlaytimeState
+{
+    public IReadOnlyList<EndfieldPlaytimeInterval> Intervals { get; init; } = Array.Empty<EndfieldPlaytimeInterval>();
+    public EndfieldPlaytimePendingStart? PendingStart { get; init; }
+}
+
+public sealed record EndfieldPlaytimePendingStart
+{
+    public DateTimeOffset StartedAt { get; init; }
+    public string TimeZoneId { get; init; } = string.Empty;
 }
 
 public sealed record OfficialGameLaunchOptions

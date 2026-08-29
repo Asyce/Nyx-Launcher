@@ -1438,6 +1438,22 @@
                                     FontSize="8"
                                     Tag="hoyolab" />
                             </Grid>
+                            <Button
+                                x:Name="PlaytimeStatsButton"
+                                Grid.Row="1"
+                                Grid.ColumnSpan="2"
+                                Height="28"
+                                MinHeight="28"
+                                Margin="8,0"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center"
+                                AutomationProperties.Name="Open Endfield playtime statistics"
+                                Click="PlaytimeStatsButton_Click"
+                                Content="Playtime Stats"
+                                FontFamily="{StaticResource NyxBodyFont}"
+                                FontSize="10"
+                                Style="{StaticResource NyxOfficialLauncherStyle}"
+                                Visibility="Collapsed" />
                         </Grid>
 
                         <TextBlock

@@ -18,6 +18,7 @@ using Nyx.Desktop.Infrastructure.Cache;
 using Nyx.Desktop.Infrastructure.Exports;
 using Nyx.Desktop.Infrastructure.Hoyo;
 using Nyx.Desktop.Infrastructure.Launching;
+using Nyx.Desktop.Infrastructure.Playtime;
 using Nyx.Desktop.Infrastructure.PublisherMaintenance;
 using Nyx.Desktop.Infrastructure.PublisherGames;
 using Nyx.Desktop.Infrastructure.Sessions;
@@ -36,6 +37,7 @@ public partial class App : Application
     private Window? _window;
     private GameSessionCoordinator? _sessions;
     private GameSessionRefreshPump? _sessionRefresh;
+    private EndfieldPlaytimeService? _endfieldPlaytime;
     private LauncherBannersContentService? _launcherBanners;
     private LauncherCacheService? _cache;
     private LauncherRecoveryService? _recovery;
@@ -256,6 +258,10 @@ public partial class App : Application
         var adapters = officialAdapters.Concat(customAdapters);
         _sessions = new GameSessionCoordinator(adapters);
         _sessionRefresh = new GameSessionRefreshPump(_sessions);
+        _endfieldPlaytime = new EndfieldPlaytimeService(
+            LauncherState.Snapshot.EndfieldPlaytime,
+            playtime => LauncherState.TryUpdate(state => state with { EndfieldPlaytime = playtime }),
+            _sessionRefresh);
         _launcherBanners = new LauncherBannersContentService(
             File.ReadAllBytes(Path.Combine(
                 AppContext.BaseDirectory,
@@ -481,6 +487,9 @@ public partial class App : Application
 
     internal GameSessionRefreshPump SessionRefresh =>
         _sessionRefresh ?? throw new InvalidOperationException("Session refresh is not initialized.");
+
+    internal EndfieldPlaytimeService EndfieldPlaytime =>
+        _endfieldPlaytime ?? throw new InvalidOperationException("Endfield playtime is not initialized.");
 
     internal SessionUiLifetime SessionUiLifetime { get; } = new();
 
@@ -790,6 +799,7 @@ public partial class App : Application
         sender.Hide();
         SessionUiLifetime.Terminate();
         CancelEndfieldSiblingDiscovery();
+        _endfieldPlaytime?.Dispose();
         _sessionRefresh?.Stop();
         _sessions?.Shutdown();
         _ = ShutDownAccountsAndCloseAsync();
@@ -817,12 +827,14 @@ public partial class App : Application
             : CloseExportsForLauncherAsync(_exports);
 
         await AwaitEndfieldSiblingDiscoveryAsync();
+        _endfieldPlaytime?.Dispose();
         if (_sessionRefresh is not null)
             await DisposeRefreshAsync(_sessionRefresh);
         if (_sessions is not null)
             await DisposeSessionsAsync(_sessions);
         _sessionRefresh = null;
         _sessions = null;
+        _endfieldPlaytime = null;
 
         await Task.WhenAll(
             bannerShutdown,
@@ -894,6 +906,7 @@ public partial class App : Application
             _window.AppWindow.Closing -= AppWindow_Closing;
         }
 
+        _endfieldPlaytime?.Dispose();
         _sessionRefresh?.Stop();
         _sessions?.Shutdown();
     }

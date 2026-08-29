@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using Nyx.Desktop.Core.Exports;
 using Nyx.Desktop.Core.Features;
 using Nyx.Desktop.Core.Games;
+using Nyx.Desktop.Core.Playtime;
 
 namespace Nyx.Desktop.Core.State;
 
@@ -67,6 +68,28 @@ public static class LauncherStateMigrations
         ArgumentNullException.ThrowIfNull(state);
         var dto = ToDto(state);
         return Normalize(dto);
+    }
+
+    internal static EndfieldPlaytimeState Normalize(EndfieldPlaytimeState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return NormalizeEndfieldPlaytime(new()
+        {
+            Intervals = state.Intervals.Select(static value => new EndfieldPlaytimeIntervalDto
+            {
+                Kind = (int)value.Kind,
+                StartUtc = value.StartUtc,
+                EndUtc = value.EndUtc,
+                TimeZoneId = value.TimeZoneId,
+            }).ToArray(),
+            PendingStart = state.PendingStart is null
+                ? null
+                : new EndfieldPlaytimePendingStartDto
+                {
+                    StartedAt = state.PendingStart.StartedAt,
+                    TimeZoneId = state.PendingStart.TimeZoneId,
+                },
+        });
     }
 
     private static LauncherState Normalize(StateDto dto)
@@ -228,6 +251,9 @@ public static class LauncherStateMigrations
                     dto.Preferences?.FeatureFlags,
                     dto.Version ?? 0),
             },
+            EndfieldPlaytime = (dto.Version ?? 0) >= 6
+                ? NormalizeEndfieldPlaytime(dto.EndfieldPlaytime)
+                : new(),
         };
     }
 
@@ -329,7 +355,96 @@ public static class LauncherStateMigrations
                     EndfieldAchievements = state.Preferences.FeatureFlags.EndfieldAchievements,
                 },
         },
+        EndfieldPlaytime = ToEndfieldPlaytimeDto(state.EndfieldPlaytime),
     };
+
+    private static EndfieldPlaytimeState NormalizeEndfieldPlaytime(EndfieldPlaytimeDto? dto)
+    {
+        var intervals = new List<EndfieldPlaytimeInterval>();
+        foreach (var value in dto?.Intervals ?? [])
+        {
+            if (value is null
+                || value.Kind is null
+                || !Enum.IsDefined((EndfieldPlaytimeIntervalKind)value.Kind.Value)
+                || value.StartUtc is not { Offset: var startOffset } start
+                || startOffset != TimeSpan.Zero
+                || value.EndUtc is not { Offset: var endOffset } end
+                || endOffset != TimeSpan.Zero
+                || NormalizeTimeZoneId(value.TimeZoneId) is not { } zoneId)
+            {
+                continue;
+            }
+
+            var interval = new EndfieldPlaytimeInterval(
+                (EndfieldPlaytimeIntervalKind)value.Kind.Value,
+                start,
+                end,
+                zoneId);
+            if (interval.IsValid) intervals.Add(interval);
+        }
+
+        var normalized = new List<EndfieldPlaytimeInterval>();
+        EndfieldPlaytimeInterval? previous = null;
+        foreach (var interval in intervals
+            .Distinct()
+            .OrderBy(static value => value.Kind)
+            .ThenBy(static value => value.StartUtc)
+            .ThenBy(static value => value.EndUtc)
+            .ThenBy(static value => value.TimeZoneId, StringComparer.Ordinal))
+        {
+            if (previous is not null
+                && previous.Kind == interval.Kind
+                && interval.StartUtc < previous.EndUtc) continue;
+            normalized.Add(interval);
+            previous = interval;
+        }
+
+        EndfieldPlaytimePendingStart? pending = null;
+        if (dto?.PendingStart is { StartedAt: { Offset: var pendingOffset } startedAt } candidate
+            && pendingOffset == TimeSpan.Zero
+            && NormalizeTimeZoneId(candidate.TimeZoneId) is { } pendingZone)
+        {
+            pending = new()
+            {
+                StartedAt = startedAt,
+                TimeZoneId = pendingZone,
+            };
+        }
+
+        return new()
+        {
+            Intervals = EndfieldPlaytime.LimitForStorage(normalized),
+            PendingStart = pending,
+        };
+    }
+
+    private static EndfieldPlaytimeDto ToEndfieldPlaytimeDto(EndfieldPlaytimeState? state)
+    {
+        var normalized = Normalize(state ?? new());
+        return new()
+        {
+            Intervals = normalized.Intervals.Select(static value => new EndfieldPlaytimeIntervalDto
+            {
+                Kind = (int)value.Kind,
+                StartUtc = value.StartUtc,
+                EndUtc = value.EndUtc,
+                TimeZoneId = value.TimeZoneId,
+            }).ToArray(),
+            PendingStart = normalized.PendingStart is null
+                ? null
+                : new EndfieldPlaytimePendingStartDto
+                {
+                    StartedAt = normalized.PendingStart.StartedAt,
+                    TimeZoneId = normalized.PendingStart.TimeZoneId,
+                },
+        };
+    }
+
+    private static string? NormalizeTimeZoneId(string? value)
+    {
+        if (!EndfieldPlaytime.IsKnownTimeZone(value)) return null;
+        return TimeZoneInfo.FindSystemTimeZoneById(value!).Id;
+    }
 
     private static LauncherFeatureFlags NormalizeFeatureFlags(FeatureFlagsDto? dto, int sourceVersion)
     {
@@ -556,6 +671,27 @@ public static class LauncherStateMigrations
         [JsonPropertyName("appearance")] public Dictionary<string, AppearanceDto?>? Appearance { get; set; }
         [JsonPropertyName("export")] public ExportDto? Export { get; set; }
         [JsonPropertyName("preferences")] public PreferencesDto? Preferences { get; set; }
+        [JsonPropertyName("endfieldPlaytime")] public EndfieldPlaytimeDto? EndfieldPlaytime { get; set; }
+    }
+
+    private sealed class EndfieldPlaytimeDto
+    {
+        public EndfieldPlaytimeIntervalDto?[]? Intervals { get; set; }
+        public EndfieldPlaytimePendingStartDto? PendingStart { get; set; }
+    }
+
+    private sealed class EndfieldPlaytimeIntervalDto
+    {
+        public int? Kind { get; set; }
+        public DateTimeOffset? StartUtc { get; set; }
+        public DateTimeOffset? EndUtc { get; set; }
+        public string? TimeZoneId { get; set; }
+    }
+
+    private sealed class EndfieldPlaytimePendingStartDto
+    {
+        public DateTimeOffset? StartedAt { get; set; }
+        public string? TimeZoneId { get; set; }
     }
 
     private sealed class CustomGameDto

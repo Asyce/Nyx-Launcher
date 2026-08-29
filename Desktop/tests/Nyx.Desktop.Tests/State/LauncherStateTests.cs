@@ -1,9 +1,11 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Nyx.Desktop.Core.AccountStatus;
 using Nyx.Desktop.Core.Exports;
 using Nyx.Desktop.Core.Games;
 using Nyx.Desktop.Core.State;
 using Nyx.Desktop.Core.Features;
+using Nyx.Desktop.Core.Playtime;
 using Nyx.Desktop.Infrastructure.State;
 
 namespace Nyx.Desktop.Tests.State;
@@ -14,7 +16,7 @@ public sealed class LauncherStateTests
     public void Official_launch_options_round_trip_only_known_valid_entries()
     {
         var result = LauncherStateMigrations.Read(
-            """{"version":5,"selectedGameId":"zzz","officialLaunchOptions":{"gi":{"rawArguments":"--name \"Traveler One\"","enabled":true},"hsr":{"rawArguments":"--saved while off","enabled":false},"zzz":{"rawArguments":"\"unterminated","enabled":true},"wuwa":7,"ae":{"rawArguments":"--future","enabled":true,"schemaVersion":2},"future":{"rawArguments":"--bad","enabled":true}}}""");
+            """{"version":6,"selectedGameId":"zzz","officialLaunchOptions":{"gi":{"rawArguments":"--name \"Traveler One\"","enabled":true},"hsr":{"rawArguments":"--saved while off","enabled":false},"zzz":{"rawArguments":"\"unterminated","enabled":true},"wuwa":7,"ae":{"rawArguments":"--future","enabled":true,"schemaVersion":2},"future":{"rawArguments":"--bad","enabled":true}}}""");
 
         Assert.Equal(LauncherStateReadStatus.Loaded, result.Status);
         Assert.Equal("zzz", result.State!.SelectedGameId);
@@ -35,9 +37,9 @@ public sealed class LauncherStateTests
     public void Malformed_or_ambiguous_official_launch_options_default_without_replacing_other_state()
     {
         var wrongShape = LauncherStateMigrations.Read(
-            """{"version":5,"selectedGameId":"hsr","officialLaunchOptions":[{"enabled":true}]}""");
+            """{"version":6,"selectedGameId":"hsr","officialLaunchOptions":[{"enabled":true}]}""");
         var duplicate = LauncherStateMigrations.Read(
-            """{"version":5,"selectedGameId":"ae","officialLaunchOptions":{"gi":{"rawArguments":"--one","enabled":true},"gi":{"rawArguments":"--two","enabled":true}}}""");
+            """{"version":6,"selectedGameId":"ae","officialLaunchOptions":{"gi":{"rawArguments":"--one","enabled":true},"gi":{"rawArguments":"--two","enabled":true}}}""");
 
         Assert.Equal("hsr", wrongShape.State!.SelectedGameId);
         Assert.All(wrongShape.State.OfficialLaunchOptions.Values, option => Assert.Equal(new OfficialGameLaunchOptions(), option));
@@ -92,7 +94,7 @@ public sealed class LauncherStateTests
     public void Per_game_panel_visibility_defaults_on_and_round_trips_only_official_games()
     {
         var result = LauncherStateMigrations.Read("""
-        {"version":5,"preferences":{"panelVisibility":{
+        {"version":6,"preferences":{"panelVisibility":{
           "gi":{"showBanners":false,"showRedemptionCodes":true,"showAccountAndExport":false},
           "future":{"showBanners":false}
         }}}
@@ -106,6 +108,149 @@ public sealed class LauncherStateTests
 
         var roundTrip = LauncherStateMigrations.Read(LauncherStateMigrations.Write(result.State));
         Assert.Equal(result.State.Preferences.PanelVisibility, roundTrip.State!.Preferences.PanelVisibility);
+    }
+
+    [Fact]
+    public void Version_five_migrates_to_empty_endfield_playtime_without_changing_flags()
+    {
+        var result = LauncherStateMigrations.Read("""
+        {
+          "version":5,
+          "preferences":{"featureFlags":{"endfieldPulls":true,"endfieldAchievements":false}},
+          "endfieldPlaytime":{
+            "selectedLogRoot":"C:\\Nyx\\Endfield\\Logs",
+            "intervals":[{"kind":0,"startUtc":"2026-08-29T10:00:00+00:00","endUtc":"2026-08-29T11:00:00+00:00","timeZoneId":"UTC"}],
+            "pendingStart":{"startedAt":"2026-08-29T12:00:00+00:00","timeZoneId":"UTC"}
+          }
+        }
+        """);
+
+        Assert.Equal(LauncherStateReadStatus.Migrated, result.Status);
+        var state = Assert.IsType<LauncherState>(result.State);
+        Assert.Empty(state.EndfieldPlaytime.Intervals);
+        Assert.Null(state.EndfieldPlaytime.PendingStart);
+        Assert.True(state.Preferences.FeatureFlags.EndfieldPulls);
+        Assert.False(state.Preferences.FeatureFlags.EndfieldAchievements);
+    }
+
+    [Fact]
+    public void Valid_v6_endfield_playtime_round_trips_intervals_pending_and_flags()
+    {
+        var result = LauncherStateMigrations.Read("""
+        {
+          "version":6,
+          "preferences":{"featureFlags":{"endfieldPulls":true,"endfieldAchievements":false}},
+          "endfieldPlaytime":{
+            "intervals":[
+              {"kind":1,"startUtc":"2026-08-29T11:00:00+00:00","endUtc":"2026-08-29T11:30:00+00:00","timeZoneId":"UTC"},
+              {"kind":0,"startUtc":"2026-08-29T10:00:00+00:00","endUtc":"2026-08-29T11:00:00+00:00","timeZoneId":"UTC"}
+            ],
+            "pendingStart":{"startedAt":"2026-08-29T12:00:00+00:00","timeZoneId":"UTC"}
+          }
+        }
+        """);
+
+        Assert.Equal(LauncherStateReadStatus.Loaded, result.Status);
+        var state = Assert.IsType<LauncherState>(result.State);
+        Assert.Equal(
+            [EndfieldPlaytimeIntervalKind.Gameplay, EndfieldPlaytimeIntervalKind.Launcher],
+            state.EndfieldPlaytime.Intervals.Select(static value => value.Kind));
+        Assert.Equal(
+            DateTimeOffset.Parse("2026-08-29T10:00:00+00:00"),
+            state.EndfieldPlaytime.Intervals[0].StartUtc);
+        Assert.Equal(DateTimeOffset.Parse("2026-08-29T12:00:00+00:00"), state.EndfieldPlaytime.PendingStart!.StartedAt);
+        Assert.Equal("UTC", state.EndfieldPlaytime.PendingStart.TimeZoneId);
+        Assert.True(state.Preferences.FeatureFlags.EndfieldPulls);
+        Assert.False(state.Preferences.FeatureFlags.EndfieldAchievements);
+
+        var roundTrip = LauncherStateMigrations.Read(LauncherStateMigrations.Write(state));
+        Assert.Equal(LauncherStateReadStatus.Loaded, roundTrip.Status);
+        Assert.Equal(state.EndfieldPlaytime.Intervals, roundTrip.State!.EndfieldPlaytime.Intervals);
+        Assert.Equal(state.EndfieldPlaytime.PendingStart, roundTrip.State.EndfieldPlaytime.PendingStart);
+        Assert.True(roundTrip.State.Preferences.FeatureFlags.EndfieldPulls);
+        Assert.False(roundTrip.State.Preferences.FeatureFlags.EndfieldAchievements);
+    }
+
+    [Fact]
+    public void Endfield_playtime_filters_invalid_values_deduplicates_overlaps_and_sorts_deterministically()
+    {
+        var result = LauncherStateMigrations.Read("""
+        {
+          "version":6,
+          "endfieldPlaytime":{
+            "intervals":[
+              {"kind":1,"startUtc":"2026-01-01T00:00:00+00:00","endUtc":"2026-01-01T00:30:00+00:00","timeZoneId":"UTC"},
+              {"kind":0,"startUtc":"2026-01-01T04:00:00+00:00","endUtc":"2026-01-01T05:00:00+00:00","timeZoneId":"UTC"},
+              {"kind":0,"startUtc":"2026-01-01T02:00:00+00:00","endUtc":"2026-01-01T03:00:00+00:00","timeZoneId":"UTC"},
+              {"kind":0,"startUtc":"2026-01-01T02:00:00+00:00","endUtc":"2026-01-01T03:00:00+00:00","timeZoneId":"UTC"},
+              {"kind":0,"startUtc":"2026-01-01T02:30:00+00:00","endUtc":"2026-01-01T03:30:00+00:00","timeZoneId":"UTC"},
+              {"kind":0,"startUtc":"2026-01-01T06:00:00-05:00","endUtc":"2026-01-01T07:00:00-05:00","timeZoneId":"UTC"},
+              {"kind":0,"startUtc":"2026-01-01T06:00:00+00:00","endUtc":"2026-01-01T07:00:00+00:00","timeZoneId":"not-a-zone"},
+              {"kind":0,"startUtc":"2026-01-01T08:00:00+00:00","endUtc":"2026-01-01T08:00:00+00:00","timeZoneId":"UTC"},
+              {"kind":0,"startUtc":"2026-01-01T09:00:00+00:00","endUtc":"2026-01-09T09:00:00+00:00","timeZoneId":"UTC"},
+              {"kind":99,"startUtc":"2026-01-01T10:00:00+00:00","endUtc":"2026-01-01T11:00:00+00:00","timeZoneId":"UTC"}
+            ]
+          }
+        }
+        """);
+
+        var intervals = result.State!.EndfieldPlaytime.Intervals;
+        Assert.Equal(3, intervals.Count);
+        Assert.Equal(
+            [EndfieldPlaytimeIntervalKind.Gameplay, EndfieldPlaytimeIntervalKind.Gameplay, EndfieldPlaytimeIntervalKind.Launcher],
+            intervals.Select(static value => value.Kind));
+        Assert.Equal(DateTimeOffset.Parse("2026-01-01T02:00:00+00:00"), intervals[0].StartUtc);
+        Assert.Equal(DateTimeOffset.Parse("2026-01-01T04:00:00+00:00"), intervals[1].StartUtc);
+        Assert.Equal(DateTimeOffset.Parse("2026-01-01T00:00:00+00:00"), intervals[2].StartUtc);
+    }
+
+    [Theory]
+    [InlineData("""{"version":6,"endfieldPlaytime":{"pendingStart":{"startedAt":"2026-08-29T12:00:00-05:00","timeZoneId":"UTC"}}}""")]
+    [InlineData("""{"version":6,"endfieldPlaytime":{"pendingStart":{"startedAt":"2026-08-29T12:00:00+00:00","timeZoneId":"not-a-zone"}}}""")]
+    [InlineData("""{"version":6,"endfieldPlaytime":{"pendingStart":{"timeZoneId":"UTC"}}}""")]
+    public void Endfield_pending_start_is_rejected_without_a_valid_utc_instant_and_zone(string json)
+    {
+        var result = LauncherStateMigrations.Read(json);
+
+        Assert.Null(result.State!.EndfieldPlaytime.PendingStart);
+    }
+
+    [Fact]
+    public void Endfield_playtime_serialization_contains_only_normalized_fields()
+    {
+        var result = LauncherStateMigrations.Read("""
+        {
+          "version":6,
+          "endfieldPlaytime":{
+            "selectedLogRoot":"C:\\Nyx\\Endfield\\Logs",
+            "intervals":[{"kind":0,"startUtc":"2026-08-29T10:00:00+00:00","endUtc":"2026-08-29T11:00:00+00:00","timeZoneId":"UTC"}],
+            "pendingStart":{"startedAt":"2026-08-29T12:00:00+00:00","timeZoneId":"UTC"},
+            "raw":"discard",
+            "line":"discard",
+            "filename":"discard",
+            "warning":"discard",
+            "url":"discard",
+            "token":"discard"
+          }
+        }
+        """);
+
+        var written = LauncherStateMigrations.Write(result.State!);
+        using var document = JsonDocument.Parse(written);
+        var playtime = document.RootElement.GetProperty("endfieldPlaytime");
+        Assert.Equal(
+            ["intervals", "pendingStart"],
+            playtime.EnumerateObject().Select(static property => property.Name).Order());
+        var interval = Assert.Single(playtime.GetProperty("intervals").EnumerateArray());
+        Assert.Equal(
+            ["endUtc", "kind", "startUtc", "timeZoneId"],
+            interval.EnumerateObject().Select(static property => property.Name).Order());
+
+        var forbidden = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "raw", "line", "filename", "selectedLogRoot", "warning", "url", "token",
+        };
+        Assert.All(PropertyNames(playtime), name => Assert.False(forbidden.Contains(name), name));
     }
 
     [Fact]
@@ -1606,6 +1751,27 @@ public sealed class LauncherStateTests
             IconPath = $@"C:\Games\{id}.png",
             CreationOrder = creationOrder,
         };
+
+    private static IEnumerable<string> PropertyNames(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in value.EnumerateObject())
+            {
+                yield return property.Name;
+                foreach (var name in PropertyNames(property.Value))
+                    yield return name;
+            }
+        }
+        else if (value.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var child in value.EnumerateArray())
+            {
+                foreach (var name in PropertyNames(child))
+                    yield return name;
+            }
+        }
+    }
 
     private static void AssertUniqueExecutableIdentities(IReadOnlyList<CustomGameDefinition> games)
     {

@@ -38,6 +38,7 @@ using Nyx.Desktop.Infrastructure.Content;
 using Nyx.Desktop.Infrastructure.AccountStatus;
 using Nyx.Desktop.Infrastructure.Hoyo;
 using Nyx.Desktop.Infrastructure.Launching;
+using Nyx.Desktop.Infrastructure.Playtime;
 using Nyx.Desktop.Infrastructure.PublisherMaintenance;
 using Nyx.Desktop.Infrastructure.PublisherGames;
 using Nyx.Desktop.Infrastructure.Sessions;
@@ -141,6 +142,7 @@ public sealed partial class MainPage : Page
 
     private readonly GameSessionCoordinator sessions;
     private readonly GameSessionRefreshPump sessionRefresh;
+    private readonly EndfieldPlaytimeService endfieldPlaytime;
     private readonly SessionUiLifetime sessionUiLifetime;
     private readonly LauncherBannersContentService launcherBanners;
     private readonly ExportCoordinator exports;
@@ -192,6 +194,7 @@ public sealed partial class MainPage : Page
     private bool screenshotFolderActionInFlight;
     private bool endfieldMaintenanceScanFinished;
     private bool endfieldMaintenanceActionInFlight;
+    private bool endfieldPlaytimeActionInFlight;
     private bool wuwaAccountStatusActionInFlight;
     private bool wuwaAccountInitialRefreshRequested;
     private bool wuwaAccountStatusSessionDisabled;
@@ -509,6 +512,7 @@ public sealed partial class MainPage : Page
         RebuildGameRail(launcherState.Snapshot);
         sessions = app.Sessions;
         sessionRefresh = app.SessionRefresh;
+        endfieldPlaytime = app.EndfieldPlaytime;
         sessionUiLifetime = app.SessionUiLifetime;
         launcherBanners = app.LauncherBanners;
         exports = app.Exports;
@@ -607,6 +611,7 @@ public sealed partial class MainPage : Page
         endfieldFolderActionInFlight = false;
         screenshotFolderActionInFlight = false;
         endfieldMaintenanceActionInFlight = false;
+        endfieldPlaytimeActionInFlight = false;
 
         if (!refreshSubscribed)
         {
@@ -2417,6 +2422,270 @@ public sealed partial class MainPage : Page
             is PublisherGameLaunchStatus.Ready or PublisherGameLaunchStatus.Running,
         _ => false,
     };
+
+    private async void PlaytimeStatsButton_Click(object sender, RoutedEventArgs e)
+    {
+        var lease = pageLease;
+        if (lease is null
+            || endfieldPlaytimeActionInFlight
+            || GameSelector?.SelectedItem is not GameLauncherItem { Id: "ae", IsCustom: false })
+            return;
+
+        endfieldPlaytimeActionInFlight = true;
+        RenderSelection();
+        try
+        {
+            if (endfieldPlaytime.Current.ScanStatus is EndfieldPlaytimeScanStatus.NotScanned)
+                await ScanEndfieldPlaytimeAsync(null, lease.CancellationToken);
+
+            while (!lease.CancellationToken.IsCancellationRequested)
+            {
+                var dialog = CreateEndfieldPlaytimeDialog(endfieldPlaytime.Current);
+                var result = await dialog.ShowAsync().AsTask(lease.CancellationToken);
+                if (result is ContentDialogResult.Primary)
+                {
+                    await ScanEndfieldPlaytimeAsync(null, lease.CancellationToken);
+                    continue;
+                }
+                if (result is not ContentDialogResult.Secondary) break;
+
+                var picker = new FolderPicker
+                {
+                    SuggestedStartLocation = PickerLocationId.ComputerFolder,
+                };
+                picker.FileTypeFilter.Add("*");
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, app.WindowHandle);
+                var folder = await picker.PickSingleFolderAsync();
+                if (folder is not null && !lease.CancellationToken.IsCancellationRequested)
+                    await ScanEndfieldPlaytimeAsync(folder.Path, lease.CancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (lease.CancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception)
+        {
+            if (!lease.CancellationToken.IsCancellationRequested)
+            {
+                HeroDescription.Text = "Nyx could not open Playtime Stats safely.";
+                SetLaunchDetail(HeroDescription.Text);
+            }
+        }
+        finally
+        {
+            _ = sessionUiLifetime.TryRun(lease, () =>
+            {
+                endfieldPlaytimeActionInFlight = false;
+                RenderSelection();
+            });
+        }
+    }
+
+    private async Task ScanEndfieldPlaytimeAsync(string? selectedRoot, CancellationToken cancellationToken)
+    {
+        var status = new TextBlock
+        {
+            Text = "Scanning local Endfield logs within Nyx's safety limits...",
+            TextWrapping = TextWrapping.Wrap,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            FontFamily = (FontFamily)Resources["NyxBodyFont"],
+        };
+        AutomationProperties.SetLiveSetting(
+            status,
+            Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
+        var progress = new ProgressRing
+        {
+            IsActive = true,
+            Width = 36,
+            Height = 36,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        AutomationProperties.SetName(progress, "Scanning Endfield playtime logs");
+        var content = new StackPanel
+        {
+            Spacing = 12,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Children =
+            {
+                progress,
+                status,
+            },
+        };
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "Endfield Playtime Stats",
+            Content = content,
+            DefaultButton = ContentDialogButton.None,
+        };
+        AutomationProperties.SetName(dialog, "Scanning Endfield playtime statistics");
+        var showing = dialog.ShowAsync();
+        try
+        {
+            await endfieldPlaytime.ScanAsync(selectedRoot, cancellationToken);
+        }
+        finally
+        {
+            dialog.Hide();
+            try { await showing.AsTask(); }
+            catch (Exception) { }
+        }
+    }
+
+    private ContentDialog CreateEndfieldPlaytimeDialog(EndfieldPlaytimeSnapshot snapshot)
+    {
+        var panel = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var status = new TextBlock
+        {
+            Text = EndfieldPlaytimeStatusText(snapshot),
+            TextWrapping = TextWrapping.Wrap,
+            FontFamily = (FontFamily)Resources["NyxBodyFont"],
+            Foreground = (Brush)Resources["MistBrush"],
+        };
+        AutomationProperties.SetLiveSetting(
+            status,
+            Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
+        panel.Children.Add(status);
+
+        var gameplay = snapshot.Statistics.Gameplay;
+        AddPlaytimeHeading(panel, "GAMEPLAY");
+        AddPlaytimeStat(panel, "Verified total", FormatPlaytimeDuration(gameplay.Total));
+        AddPlaytimeStat(panel, "Sessions", gameplay.Sessions.ToString(CultureInfo.InvariantCulture));
+        AddPlaytimeStat(panel, "Active days", gameplay.ActiveDays.ToString(CultureInfo.InvariantCulture));
+        AddPlaytimeStat(panel, "Average session", FormatPlaytimeDuration(gameplay.AverageSession));
+        AddPlaytimeStat(panel, "Average active day", FormatPlaytimeDuration(gameplay.AverageActiveDay));
+        AddPlaytimeStat(panel, "Shortest / longest", $"{FormatPlaytimeDuration(gameplay.Shortest)} / {FormatPlaytimeDuration(gameplay.Longest)}");
+        AddPlaytimeStat(panel, "Longest streak", $"{gameplay.LongestActiveDayStreak} day{(gameplay.LongestActiveDayStreak == 1 ? string.Empty : "s")}");
+        AddPlaytimeStat(
+            panel,
+            "Session lengths",
+            $"<30m {gameplay.DurationBuckets.UnderThirtyMinutes}  ·  30m–3h {gameplay.DurationBuckets.ThirtyMinutesThroughThreeHours}  ·  >3h {gameplay.DurationBuckets.OverThreeHours}");
+        AddPlaytimeStat(panel, "Night play (22:00–06:00)", FormatPlaytimeDuration(gameplay.NightTime));
+
+        var hourly = gameplay.LaunchesByLocalHour
+            .Select((count, hour) => (count, hour))
+            .Where(static value => value.count > 0)
+            .Select(static value => $"{value.hour:D2}:00 ×{value.count}");
+        AddPlaytimeStat(panel, "Launch hours", string.Join("  ·  ", hourly.DefaultIfEmpty("None yet")));
+        AddPlaytimeStat(
+            panel,
+            "Time by weekday",
+            string.Join("  ·  ", gameplay.TimeByLocalWeekday
+                .Where(static pair => pair.Value > TimeSpan.Zero)
+                .OrderBy(static pair => pair.Key)
+                .Select(pair => $"{pair.Key.ToString()[..3]} {FormatPlaytimeDuration(pair.Value)}")
+                .DefaultIfEmpty("None yet")));
+        AddPlaytimeStat(
+            panel,
+            "Time by month",
+            string.Join("  ·  ", gameplay.TimeByLocalMonth
+                .Select(pair => $"{pair.Key} {FormatPlaytimeDuration(pair.Value)}")
+                .DefaultIfEmpty("None yet")));
+
+        var launcher = snapshot.Statistics.Launcher;
+        AddPlaytimeHeading(panel, "OFFICIAL LAUNCHER ACTIVITY");
+        AddPlaytimeStat(panel, "Open time", FormatPlaytimeDuration(launcher.Total));
+        AddPlaytimeStat(panel, "Visits", launcher.Visits.ToString(CultureInfo.InvariantCulture));
+        AddPlaytimeStat(panel, "Visits that launched the game", launcher.GameLaunchVisits.ToString(CultureInfo.InvariantCulture));
+        AddPlaytimeStat(panel, "Launcher-only visits", launcher.LauncherOnlyVisits.ToString(CultureInfo.InvariantCulture));
+
+        if (snapshot.Warnings.Total > 0)
+        {
+            AddPlaytimeStat(
+                panel,
+                "Skipped safely",
+                $"{snapshot.Warnings.Total} unmatched, invalid, overlapping, or unreadable item{(snapshot.Warnings.Total == 1 ? string.Empty : "s")}");
+        }
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "Endfield Playtime Stats",
+            Content = new ScrollViewer
+            {
+                MaxHeight = 480,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = panel,
+            },
+            PrimaryButtonText = "Scan again",
+            SecondaryButtonText = "Choose folder",
+            CloseButtonText = "Close",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        dialog.Resources["ContentDialogMinWidth"] = 560d;
+        dialog.Resources["ContentDialogMaxWidth"] = 560d;
+        AutomationProperties.SetName(dialog, "Endfield playtime statistics");
+        return dialog;
+    }
+
+    private static string EndfieldPlaytimeStatusText(EndfieldPlaytimeSnapshot snapshot)
+    {
+        var text = snapshot.IsRunning
+            ? snapshot.HasPendingSession
+                ? "Endfield is running. The unfinished session is saved but excluded from every total below."
+                : snapshot.SaveFailed
+                    ? "Endfield is running. Nyx saw its verified start but could not save it yet, so this session is excluded from every total below."
+                    : "Endfield is running, but Nyx did not see a verified start. This session is excluded from every total below."
+            : snapshot.IsScanning
+                ? "Scanning local Endfield logs within Nyx's safety limits."
+                : snapshot.ScanStatus switch
+                {
+                    EndfieldPlaytimeScanStatus.Capped =>
+                        "A safety limit was reached. Fully read sessions were kept; these verified totals may be partial.",
+                    EndfieldPlaytimeScanStatus.Corrupt =>
+                        "Nyx could not safely read a usable log. Existing verified totals were kept unchanged.",
+                    EndfieldPlaytimeScanStatus.Empty =>
+                        "No completed Endfield sessions were found in the selected folder.",
+                    EndfieldPlaytimeScanStatus.Normal =>
+                        $"Scan complete: {snapshot.ScannedFiles} log file{(snapshot.ScannedFiles == 1 ? string.Empty : "s")} read safely.",
+                    _ => "Choose Scan again to read local Endfield history.",
+                };
+        if (!snapshot.IsRunning && snapshot.HasPendingSession)
+            text += " A previous unfinished session is waiting for matching official history and remains excluded.";
+        return snapshot.SaveFailed && !(snapshot.IsRunning && !snapshot.HasPendingSession)
+            ? $"{text} Nyx could not save the newest result, so the earlier totals remain."
+            : text;
+    }
+
+    private static void AddPlaytimeHeading(StackPanel panel, string text) => panel.Children.Add(new TextBlock
+    {
+        Text = text,
+        Margin = new Thickness(0, 6, 0, 0),
+        FontSize = 11,
+        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+        CharacterSpacing = 120,
+    });
+
+    private static void AddPlaytimeStat(StackPanel panel, string label, string value)
+    {
+        var row = new Grid { ColumnSpacing = 16 };
+        row.ColumnDefinitions.Add(new() { Width = new GridLength(190) });
+        row.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        var labelText = new TextBlock
+        {
+            Text = label,
+            Foreground = (Brush)Application.Current.Resources["MistBrush"],
+            TextWrapping = TextWrapping.Wrap,
+        };
+        var valueText = new TextBlock
+        {
+            Text = value,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        Grid.SetColumn(valueText, 1);
+        row.Children.Add(labelText);
+        row.Children.Add(valueText);
+        panel.Children.Add(row);
+    }
+
+    private static string FormatPlaytimeDuration(TimeSpan duration)
+    {
+        if (duration <= TimeSpan.Zero) return "0m";
+        var hours = (long)duration.TotalHours;
+        return hours > 0
+            ? $"{hours}h {duration.Minutes}m"
+            : $"{Math.Max(1, duration.Minutes)}m";
+    }
 
     private async void OpenScreenshotFolderButton_Click(object sender, RoutedEventArgs e)
     {
@@ -6090,6 +6359,10 @@ public sealed partial class MainPage : Page
         NyxToolsPanel.Visibility = Visibility.Collapsed;
         ApplySavedPanelVisibility(selected);
         RenderOfficialTools(selected);
+        var showPlaytime = !selected.IsCustom && selected.Id == "ae";
+        StableExportHeading.Text = showPlaytime ? "EXPORT & STATS" : "EXPORT";
+        PlaytimeStatsButton.Visibility = showPlaytime ? Visibility.Visible : Visibility.Collapsed;
+        PlaytimeStatsButton.IsEnabled = showPlaytime && !endfieldPlaytimeActionInFlight;
         if (selected.IsCustom) return;
         var definition = GameCatalog.GetRequired(selected.Id);
         var armed = launcherState.Snapshot.Export.Games.TryGetValue(selected.Id, out var saved)
