@@ -42,7 +42,9 @@ public sealed class EndfieldPlaytimeTests
             ("08-29 10:00:00.000", "Create game process endfield.exe"),
             ("08-29 11:00:00.000", "Child process exits"));
 
-        Assert.Empty(wrongCase.Intervals);
+        var caseInsensitiveMatch = Assert.Single(wrongCase.Intervals);
+        Assert.Equal(EndfieldPlaytimeIntervalKind.Gameplay, caseInsensitiveMatch.Kind);
+        Assert.Equal(TimeSpan.FromHours(1), caseInsensitiveMatch.Duration);
     }
 
     [Fact]

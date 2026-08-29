@@ -394,7 +394,7 @@ public static class EndfieldPlaytime
     private static bool ContainsExactFileName(string value, string fileName)
     {
         var start = 0;
-        while ((start = value.IndexOf(fileName, start, StringComparison.Ordinal)) >= 0)
+        while ((start = value.IndexOf(fileName, start, StringComparison.OrdinalIgnoreCase)) >= 0)
         {
             var before = start == 0 ? '\0' : value[start - 1];
             var afterIndex = start + fileName.Length;
