@@ -89,6 +89,56 @@ public sealed class HoyoLabGameBundleStore
         () => TryMigrateFromV1Core(role, resource, resourceBinding),
         false);
 
+    public bool TrySelectRole(PublisherRoleRecord role)
+    {
+        if (role is null
+            || !PublisherRoleRecordRules.IsValid(HoyoLabGameBundleRules.GameId, role))
+            return false;
+        return TryMutate(bundle => SelectRole(bundle, role));
+    }
+
+    public bool TrySetCapabilityConsent(string capability, bool enabled)
+    {
+        if (capability is not (HoyoLabGameBundleRules.Resources
+            or HoyoLabGameBundleRules.Achievements))
+            return false;
+        return TryMutate(bundle => SetCapabilityConsent(bundle, capability, enabled));
+    }
+
+    public bool TryRecordResource(
+        PublisherRoleBinding binding,
+        PublisherResourceSnapshot resource)
+    {
+        if (binding is null || resource is null || !IsExactUtcSecond(resource.ObservedAt))
+            return false;
+        return TryMutate(bundle => RecordResource(bundle, binding, resource));
+    }
+
+    public bool TryRecordCompletedAchievements(
+        PublisherRoleBinding binding,
+        IReadOnlyList<long> completedIds,
+        DateTimeOffset observedAt)
+    {
+        if (binding is null
+            || completedIds is null
+            || completedIds.Count > HoyoLabGameBundleRules.MaximumAchievementIds
+            || completedIds.Any(static id => id <= 0 || id > HoyoLabGameBundleRules.MaximumAchievementId)
+            || !IsExactUtcSecond(observedAt))
+            return false;
+        var normalizedIds = completedIds.Distinct().Order().ToArray();
+        return TryMutate(bundle => RecordAchievements(bundle, binding, normalizedIds, observedAt));
+    }
+
+    public bool TryDeleteRole(PublisherRoleBinding binding)
+    {
+        if (binding is null
+            || !PublisherAccountCatalog.IsValidRoleBinding(HoyoLabGameBundleRules.GameId, binding))
+            return false;
+        return TryMutate(bundle => DeleteRole(bundle, binding));
+    }
+
+    public bool TryDelete() => SerializeMutation(TryDeleteCore, false);
+
     private bool TryMigrateFromV1Core(
         PublisherRoleRecord role,
         PublisherResourceSnapshot? resource,
@@ -132,6 +182,414 @@ public sealed class HoyoLabGameBundleStore
             Array.Empty<HoyoLabCapabilityTombstone>(),
             Array.Empty<HoyoLabRoleTombstone>());
         return TryWrite(migrated, requireMissing: true);
+    }
+
+    private bool TryMutate(Func<HoyoLabGameBundle, HoyoLabGameBundle?> mutation) =>
+        SerializeMutation(
+            () =>
+            {
+                try
+                {
+                    var current = ReadBundle(path);
+                    if (current is null) return false;
+                    var updated = mutation(current);
+                    return updated is not null
+                        && (ReferenceEquals(updated, current)
+                            || TryWrite(updated, requireMissing: false));
+                }
+                catch (Exception exception) when (IsExpectedFailure(exception))
+                {
+                    return false;
+                }
+            },
+            false);
+
+    private HoyoLabGameBundle? SelectRole(
+        HoyoLabGameBundle bundle,
+        PublisherRoleRecord role)
+    {
+        var now = UtcNowSecond();
+        var roles = bundle.Roles.ToList();
+        var index = roles.FindIndex(item => item.Role.Binding == role.Binding);
+        if (index < 0)
+        {
+            if (roles.Count >= HoyoLabGameBundleRules.MaximumRoles) return null;
+            roles.Add(new(role, EmptyObservations(), null, null));
+        }
+        else
+        {
+            roles[index] = roles[index] with { Role = role };
+        }
+
+        var exactTombstone = bundle.RoleTombstones.FirstOrDefault(item => item.Binding == role.Binding);
+        if (exactTombstone is not null && exactTombstone.DeletedAt >= now) return null;
+        var tombstones = bundle.RoleTombstones
+            .Where(item => item.Binding != role.Binding)
+            .ToArray();
+        var capabilityTombstones = bundle.CapabilityTombstones.ToList();
+        var protectedCapabilities = new HashSet<(PublisherRoleBinding, string)>();
+        if (exactTombstone is not null)
+        {
+            foreach (var capability in new[]
+                     {
+                         HoyoLabGameBundleRules.Resources,
+                         HoyoLabGameBundleRules.Achievements,
+                     })
+            {
+                UpsertCapabilityTombstone(
+                    capabilityTombstones,
+                    role.Binding,
+                    capability,
+                    exactTombstone.DeletedAt);
+                protectedCapabilities.Add((role.Binding, capability));
+            }
+        }
+        if (index >= 0
+            && roles[index].Role == bundle.Roles[index].Role
+            && bundle.SelectedRole == role.Binding
+            && tombstones.Length == bundle.RoleTombstones.Count)
+            return bundle;
+        var active = roles.Select(item => item.Role.Binding).ToHashSet();
+        return bundle with
+        {
+            Roles = roles,
+            SelectedRole = role.Binding,
+            CapabilityTombstones = PruneCapabilityTombstones(
+                capabilityTombstones,
+                active,
+                tombstones.Select(item => item.Binding).ToHashSet(),
+                protectedCapabilities),
+            RoleTombstones = tombstones,
+        };
+    }
+
+    private HoyoLabGameBundle SetCapabilityConsent(
+        HoyoLabGameBundle bundle,
+        string capability,
+        bool enabled)
+    {
+        if (enabled)
+        {
+            if (bundle.Consents.IsEnabled(capability)) return bundle;
+            return bundle with
+            {
+                Consents = SetConsent(bundle.Consents, capability, true),
+            };
+        }
+
+        var now = UtcNowSecond();
+        var protectedIdentities = bundle.Roles
+            .Select(role => (role.Role.Binding, capability))
+            .ToHashSet();
+        var tombstones = bundle.CapabilityTombstones.ToList();
+        foreach (var role in bundle.Roles)
+            UpsertCapabilityTombstone(
+                tombstones,
+                role.Role.Binding,
+                capability,
+                Latest(now, ObservationFor(role, capability)));
+        return bundle with
+        {
+            Roles = bundle.Roles.Select(role => ClearCapability(role, capability)).ToArray(),
+            Consents = SetConsent(bundle.Consents, capability, false),
+            CapabilityTombstones = PruneCapabilityTombstones(
+                tombstones,
+                bundle.Roles.Select(role => role.Role.Binding).ToHashSet(),
+                bundle.RoleTombstones.Select(item => item.Binding).ToHashSet(),
+                protectedIdentities),
+        };
+    }
+
+    private static HoyoLabGameBundle? RecordResource(
+        HoyoLabGameBundle bundle,
+        PublisherRoleBinding binding,
+        PublisherResourceSnapshot resource)
+    {
+        if (!bundle.Consents.Resources) return null;
+        var index = FindRole(bundle, binding);
+        if (index < 0) return null;
+        var role = bundle.Roles[index];
+        var existingAt = role.Observations.Resources;
+        var normalized = resource with { IsStale = true };
+        if (existingAt > resource.ObservedAt) return null;
+        if (existingAt == resource.ObservedAt)
+            return role.Resource == normalized ? bundle : null;
+        if (!CanReplaceTombstone(
+                bundle.CapabilityTombstones,
+                binding,
+                HoyoLabGameBundleRules.Resources,
+                resource.ObservedAt))
+            return null;
+        var roles = bundle.Roles.ToArray();
+        roles[index] = role with
+        {
+            Observations = role.Observations with { Resources = resource.ObservedAt },
+            Resource = normalized,
+        };
+        return bundle with
+        {
+            Roles = roles,
+            CapabilityTombstones = RemoveOlderCapabilityTombstone(
+                bundle.CapabilityTombstones,
+                binding,
+                HoyoLabGameBundleRules.Resources,
+                resource.ObservedAt),
+        };
+    }
+
+    private static HoyoLabGameBundle? RecordAchievements(
+        HoyoLabGameBundle bundle,
+        PublisherRoleBinding binding,
+        IReadOnlyList<long> completedIds,
+        DateTimeOffset observedAt)
+    {
+        if (!bundle.Consents.Achievements) return null;
+        var index = FindRole(bundle, binding);
+        if (index < 0) return null;
+        var role = bundle.Roles[index];
+        var existingAt = role.Observations.Achievements;
+        if (existingAt > observedAt) return null;
+        if (existingAt == observedAt)
+            return role.CompletedHsrAchievementIds?.SequenceEqual(completedIds) == true
+                ? bundle
+                : null;
+        if (!CanReplaceTombstone(
+                bundle.CapabilityTombstones,
+                binding,
+                HoyoLabGameBundleRules.Achievements,
+                observedAt))
+            return null;
+        var roles = bundle.Roles.ToArray();
+        roles[index] = role with
+        {
+            Observations = role.Observations with { Achievements = observedAt },
+            CompletedHsrAchievementIds = completedIds.ToArray(),
+        };
+        return bundle with
+        {
+            Roles = roles,
+            CapabilityTombstones = RemoveOlderCapabilityTombstone(
+                bundle.CapabilityTombstones,
+                binding,
+                HoyoLabGameBundleRules.Achievements,
+                observedAt),
+        };
+    }
+
+    private HoyoLabGameBundle? DeleteRole(
+        HoyoLabGameBundle bundle,
+        PublisherRoleBinding binding)
+    {
+        if (!bundle.Roles.Any(role => role.Role.Binding == binding)) return null;
+        var now = UtcNowSecond();
+        var deletedRole = bundle.Roles.Single(role => role.Role.Binding == binding);
+        var roles = bundle.Roles.Where(role => role.Role.Binding != binding).ToArray();
+        var roleTombstones = bundle.RoleTombstones.ToList();
+        UpsertRoleTombstone(
+            roleTombstones,
+            binding,
+            Latest(
+                Latest(now, deletedRole.Observations.Resources),
+                deletedRole.Observations.Achievements));
+        var protectedRole = new HashSet<PublisherRoleBinding> { binding };
+        var prunedRoles = PruneRoleTombstones(roleTombstones, protectedRole);
+
+        var capabilityTombstones = bundle.CapabilityTombstones.ToList();
+        var protectedCapabilities = new HashSet<(PublisherRoleBinding, string)>();
+        foreach (var capability in new[]
+                 {
+                     HoyoLabGameBundleRules.Resources,
+                     HoyoLabGameBundleRules.Achievements,
+                 })
+        {
+            UpsertCapabilityTombstone(
+                capabilityTombstones,
+                binding,
+                capability,
+                Latest(now, ObservationFor(deletedRole, capability)));
+            protectedCapabilities.Add((binding, capability));
+        }
+        var active = roles.Select(role => role.Role.Binding).ToHashSet();
+        var deleted = prunedRoles.Select(item => item.Binding).ToHashSet();
+        var selected = bundle.SelectedRole != binding
+            ? bundle.SelectedRole
+            : roles
+                .OrderBy(role => role.Role.Binding.Server, StringComparer.Ordinal)
+                .ThenBy(role => role.Role.Binding.RoleId, StringComparer.Ordinal)
+                .Select(role => role.Role.Binding)
+                .FirstOrDefault();
+        return bundle with
+        {
+            Roles = roles,
+            SelectedRole = selected,
+            CapabilityTombstones = PruneCapabilityTombstones(
+                capabilityTombstones,
+                active,
+                deleted,
+                protectedCapabilities),
+            RoleTombstones = prunedRoles,
+        };
+    }
+
+    private bool TryDeleteCore()
+    {
+        try
+        {
+            if (!ValidateExistingComponents(protectedSlotRoot)
+                || !ValidateExistingComponents(root)
+                || !ValidateExistingComponents(path))
+                return false;
+            var entryExists = files.EntryExists(path);
+            var fileExists = files.Exists(path);
+            if (!entryExists && !fileExists) return true;
+            if (entryExists != fileExists
+                || (files.GetAttributes(path) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0)
+                return false;
+            files.Delete(path);
+            return !files.EntryExists(path);
+        }
+        catch (Exception exception) when (IsExpectedFailure(exception))
+        {
+            return false;
+        }
+    }
+
+    private DateTimeOffset UtcNowSecond()
+    {
+        var now = clock.GetUtcNow().ToUniversalTime();
+        return new DateTimeOffset(
+            now.Ticks - now.Ticks % TimeSpan.TicksPerSecond,
+            TimeSpan.Zero);
+    }
+
+    private static bool IsExactUtcSecond(DateTimeOffset value) =>
+        value.Offset == TimeSpan.Zero
+        && value.Ticks % TimeSpan.TicksPerSecond == 0;
+
+    private static HoyoLabCapabilityObservations EmptyObservations() => new(
+        null, null, null, null, null, null, null, null);
+
+    private static int FindRole(HoyoLabGameBundle bundle, PublisherRoleBinding binding) =>
+        bundle.Roles.ToList().FindIndex(role => role.Role.Binding == binding);
+
+    private static HoyoLabCapabilityConsentSet SetConsent(
+        HoyoLabCapabilityConsentSet consents,
+        string capability,
+        bool value) => capability == HoyoLabGameBundleRules.Resources
+        ? consents with { Resources = value }
+        : consents with { Achievements = value };
+
+    private static HoyoLabGameBundleRole ClearCapability(
+        HoyoLabGameBundleRole role,
+        string capability) => capability == HoyoLabGameBundleRules.Resources
+        ? role with
+        {
+            Observations = role.Observations with { Resources = null },
+            Resource = null,
+        }
+        : role with
+        {
+            Observations = role.Observations with { Achievements = null },
+            CompletedHsrAchievementIds = null,
+        };
+
+    private static DateTimeOffset? ObservationFor(
+        HoyoLabGameBundleRole role,
+        string capability) => capability == HoyoLabGameBundleRules.Resources
+        ? role.Observations.Resources
+        : role.Observations.Achievements;
+
+    private static DateTimeOffset Latest(DateTimeOffset first, DateTimeOffset? second) =>
+        second > first ? second.Value : first;
+
+    private static bool CanReplaceTombstone(
+        IReadOnlyList<HoyoLabCapabilityTombstone> tombstones,
+        PublisherRoleBinding binding,
+        string capability,
+        DateTimeOffset observedAt) => tombstones.All(item =>
+        item.Binding != binding
+        || item.Capability != capability
+        || item.DeletedAt < observedAt);
+
+    private static IReadOnlyList<HoyoLabCapabilityTombstone> RemoveOlderCapabilityTombstone(
+        IReadOnlyList<HoyoLabCapabilityTombstone> tombstones,
+        PublisherRoleBinding binding,
+        string capability,
+        DateTimeOffset observedAt) => tombstones
+        .Where(item => item.Binding != binding
+            || item.Capability != capability
+            || item.DeletedAt >= observedAt)
+        .ToArray();
+
+    private static void UpsertCapabilityTombstone(
+        List<HoyoLabCapabilityTombstone> tombstones,
+        PublisherRoleBinding binding,
+        string capability,
+        DateTimeOffset deletedAt)
+    {
+        var existing = tombstones.FindIndex(item =>
+            item.Binding == binding && item.Capability == capability);
+        if (existing >= 0)
+            deletedAt = tombstones[existing].DeletedAt > deletedAt
+                ? tombstones[existing].DeletedAt
+                : deletedAt;
+        tombstones.RemoveAll(item => item.Binding == binding && item.Capability == capability);
+        tombstones.Add(new(binding, capability, deletedAt));
+    }
+
+    private static void UpsertRoleTombstone(
+        List<HoyoLabRoleTombstone> tombstones,
+        PublisherRoleBinding binding,
+        DateTimeOffset deletedAt)
+    {
+        var existing = tombstones.FindIndex(item => item.Binding == binding);
+        if (existing >= 0)
+            deletedAt = tombstones[existing].DeletedAt > deletedAt
+                ? tombstones[existing].DeletedAt
+                : deletedAt;
+        tombstones.RemoveAll(item => item.Binding == binding);
+        tombstones.Add(new(binding, deletedAt));
+    }
+
+    private static IReadOnlyList<HoyoLabRoleTombstone> PruneRoleTombstones(
+        IEnumerable<HoyoLabRoleTombstone> tombstones,
+        IReadOnlySet<PublisherRoleBinding> protectedBindings)
+    {
+        var ordered = tombstones
+            .OrderBy(item => item.DeletedAt)
+            .ThenBy(item => item.Binding.Server, StringComparer.Ordinal)
+            .ThenBy(item => item.Binding.RoleId, StringComparer.Ordinal)
+            .ToList();
+        while (ordered.Count > HoyoLabGameBundleRules.MaximumRoleTombstones)
+        {
+            var index = ordered.FindIndex(item => !protectedBindings.Contains(item.Binding));
+            if (index < 0) break;
+            ordered.RemoveAt(index);
+        }
+        return ordered;
+    }
+
+    private static IReadOnlyList<HoyoLabCapabilityTombstone> PruneCapabilityTombstones(
+        IEnumerable<HoyoLabCapabilityTombstone> tombstones,
+        IReadOnlySet<PublisherRoleBinding> activeBindings,
+        IReadOnlySet<PublisherRoleBinding> deletedBindings,
+        IReadOnlySet<(PublisherRoleBinding, string)> protectedIdentities)
+    {
+        var ordered = tombstones
+            .Where(item => activeBindings.Contains(item.Binding) || deletedBindings.Contains(item.Binding))
+            .OrderBy(item => item.DeletedAt)
+            .ThenBy(item => item.Binding.Server, StringComparer.Ordinal)
+            .ThenBy(item => item.Binding.RoleId, StringComparer.Ordinal)
+            .ThenBy(item => item.Capability, StringComparer.Ordinal)
+            .ToList();
+        while (ordered.Count > HoyoLabGameBundleRules.MaximumCapabilityTombstones)
+        {
+            var index = ordered.FindIndex(item =>
+                !protectedIdentities.Contains((item.Binding, item.Capability)));
+            if (index < 0) break;
+            ordered.RemoveAt(index);
+        }
+        return ordered;
     }
 
     private bool TryWrite(HoyoLabGameBundle bundle, bool requireMissing)
