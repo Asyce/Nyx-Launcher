@@ -70,7 +70,7 @@
                 PointerExited="RailSurface_PointerExited">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition x:Name="RailBrandRow" Height="104" />
+                        <RowDefinition x:Name="RailBrandRow" Height="116" />
                         <RowDefinition x:Name="RailContentRow" Height="Auto" />
                         <RowDefinition x:Name="RailAddRow" Height="Auto" />
                         <RowDefinition x:Name="RailSpacerRow" Height="*" />
@@ -329,13 +329,13 @@
                                                         ItemsSource="{Binding}">
                                                         <ItemsControl.ItemsPanel>
                                                             <ItemsPanelTemplate>
-                                                                <StackPanel Orientation="Horizontal" Spacing="2" />
+                                                                <StackPanel Orientation="Horizontal" Spacing="12" />
                                                             </ItemsPanelTemplate>
                                                         </ItemsControl.ItemsPanel>
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate>
                                                                 <Grid
-                                                                    Width="160"
+                                                                    MaxWidth="400"
                                                                     MinHeight="38"
                                                                     Margin="0,0,0,2"
                                                                     HorizontalAlignment="Left"
@@ -367,21 +367,25 @@
                                                                             Source="{Binding PortraitSource}"
                                                                             Stretch="UniformToFill" />
                                                                     </Border>
-                                                                    <TextBlock
-                                                                        x:Name="CurrentBannerNameLabel"
+                                                                    <Viewbox
                                                                         Grid.Column="1"
+                                                                        MaxWidth="354"
                                                                         Margin="2,0"
+                                                                        HorizontalAlignment="Left"
                                                                         VerticalAlignment="Center"
-                                                                        FontFamily="{StaticResource NyxBodyFont}"
-                                                                        FontSize="15"
-                                                                        LineHeight="20"
-                                                                        LineStackingStrategy="BlockLineHeight"
-                                                                        Foreground="{ThemeResource MoonBrush}"
                                                                         IsHitTestVisible="False"
-                                                                        Text="{Binding Name}"
-                                                                        TextWrapping="Wrap"
-                                                                        ToolTipService.ToolTip="{Binding Name}"
-                                                                        Visibility="{Binding PrimaryVisibility}" />
+                                                                        Stretch="Uniform"
+                                                                        StretchDirection="DownOnly"
+                                                                        Visibility="{Binding PrimaryVisibility}">
+                                                                        <TextBlock
+                                                                            x:Name="CurrentBannerNameLabel"
+                                                                            FontFamily="{StaticResource NyxBodyFont}"
+                                                                            FontSize="15"
+                                                                            Foreground="{ThemeResource MoonBrush}"
+                                                                            Text="{Binding Name}"
+                                                                            TextWrapping="NoWrap"
+                                                                            ToolTipService.ToolTip="{Binding Name}" />
+                                                                    </Viewbox>
                                                                     <Button
                                                                         x:Name="CurrentBannerNameButton"
                                                                         Grid.Column="1"
@@ -484,13 +488,13 @@
                                                                     ItemsSource="{Binding}">
                                                                     <ItemsControl.ItemsPanel>
                                                                         <ItemsPanelTemplate>
-                                                                            <StackPanel Orientation="Horizontal" Spacing="2" />
+                                                                            <StackPanel Orientation="Horizontal" Spacing="12" />
                                                                         </ItemsPanelTemplate>
                                                                     </ItemsControl.ItemsPanel>
                                                                     <ItemsControl.ItemTemplate>
                                                                         <DataTemplate>
                                                                             <Grid
-                                                                                Width="160"
+                                                                                MaxWidth="400"
                                                                                 MinHeight="38"
                                                                                 Margin="0,0,0,2"
                                                                                 HorizontalAlignment="Left"
@@ -521,21 +525,25 @@
                                                                                         Source="{Binding PortraitSource}"
                                                                                         Stretch="UniformToFill" />
                                                                                 </Border>
-                                                                                <TextBlock
-                                                                                    x:Name="UpcomingBannerNameLabel"
+                                                                                <Viewbox
                                                                                     Grid.Column="1"
+                                                                                    MaxWidth="354"
                                                                                     Margin="2,0"
+                                                                                    HorizontalAlignment="Left"
                                                                                     VerticalAlignment="Center"
-                                                                                    FontFamily="{StaticResource NyxBodyFont}"
-                                                                                    FontSize="15"
-                                                                                    LineHeight="20"
-                                                                                    LineStackingStrategy="BlockLineHeight"
-                                                                                    Foreground="{ThemeResource MoonBrush}"
                                                                                     IsHitTestVisible="False"
-                                                                                    Text="{Binding Name}"
-                                                                                    TextWrapping="Wrap"
-                                                                                    ToolTipService.ToolTip="{Binding Name}"
-                                                                                    Visibility="{Binding PrimaryVisibility}" />
+                                                                                    Stretch="Uniform"
+                                                                                    StretchDirection="DownOnly"
+                                                                                    Visibility="{Binding PrimaryVisibility}">
+                                                                                    <TextBlock
+                                                                                        x:Name="UpcomingBannerNameLabel"
+                                                                                        FontFamily="{StaticResource NyxBodyFont}"
+                                                                                        FontSize="15"
+                                                                                        Foreground="{ThemeResource MoonBrush}"
+                                                                                        Text="{Binding Name}"
+                                                                                        TextWrapping="NoWrap"
+                                                                                        ToolTipService.ToolTip="{Binding Name}" />
+                                                                                </Viewbox>
                                                                                 <Button
                                                                                     x:Name="UpcomingBannerNameButton"
                                                                                     Grid.Column="1"
@@ -1234,7 +1242,6 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
                         <StackPanel x:Name="OnLaunchPanel" Grid.Row="0" Margin="12,0" Spacing="2">
@@ -1452,24 +1459,6 @@
                             Text=""
                             TextWrapping="Wrap"
                             Visibility="Collapsed" />
-                        <Button
-                            x:Name="OfficialToolsButton"
-                            Grid.Row="4"
-                            Height="28"
-                            MinHeight="28"
-                            Margin="12,0"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Center"
-                            AutomationProperties.Name="Official Tools for the selected game"
-                            Content="Official Tools"
-                            IsTabStop="True"
-                            Style="{StaticResource NyxOfficialLauncherStyle}"
-                            ToolTipService.ToolTip="Open an official tool for the selected game"
-                            Visibility="Collapsed">
-                            <Button.Flyout>
-                                <MenuFlyout x:Name="OfficialToolsMenuFlyout" />
-                            </Button.Flyout>
-                        </Button>
                         </Grid>
                     </Grid>
 
@@ -1481,6 +1470,7 @@
                         VerticalAlignment="Bottom"
                         RowSpacing="0">
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -1536,9 +1526,37 @@
                             IsTabStop="True"
                             Style="{StaticResource NyxQuietActionStyle}"
                             Visibility="Collapsed" />
+                        <Grid
+                            x:Name="LaunchPlayTimeDisplay"
+                            Grid.Row="2"
+                            Margin="12,2"
+                            HorizontalAlignment="Center">
+                            <TextBlock
+                                x:Name="LaunchPlayTimeOutlineText"
+                                AutomationProperties.AccessibilityView="Raw"
+                                FontFamily="{StaticResource NyxDataFont}"
+                                FontSize="11.5"
+                                Foreground="Black"
+                                HorizontalAlignment="Center"
+                                IsHitTestVisible="False"
+                                Text="Play Time: 0m"
+                                TextWrapping="NoWrap"
+                                VerticalAlignment="Center" />
+                            <TextBlock
+                                x:Name="LaunchPlayTimeText"
+                                AutomationProperties.Name="Play Time: 0m. Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded."
+                                FontFamily="{StaticResource NyxDataFont}"
+                                FontSize="10"
+                                Foreground="{ThemeResource MoonBrush}"
+                                HorizontalAlignment="Center"
+                                Text="Play Time: 0m"
+                                TextWrapping="NoWrap"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded." />
+                        </Grid>
                         <Border
                             x:Name="LaunchResourceMetricsPanel"
-                            Grid.Row="2"
+                            Grid.Row="3"
                             Padding="4,2"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
@@ -1663,7 +1681,7 @@
                         </Border>
                          <Button
                              x:Name="LaunchButton"
-                             Grid.Row="3"
+                             Grid.Row="4"
                              Width="381"
                              Margin="12,0,12,0"
                             HorizontalAlignment="Stretch"
@@ -1781,18 +1799,6 @@
                                  </Border>
                              </Grid>
                          </Button>
-                         <TextBlock
-                             x:Name="LaunchPlayTimeText"
-                             Grid.Row="4"
-                             Margin="12,2,12,2"
-                             HorizontalAlignment="Center"
-                             AutomationProperties.Name="Play Time: 0m. Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded."
-                             FontFamily="{StaticResource NyxDataFont}"
-                             FontSize="10"
-                             Foreground="{ThemeResource MistBrush}"
-                             Text="Play Time: 0m"
-                             TextWrapping="NoWrap"
-                             ToolTipService.ToolTip="Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded." />
                          <Grid
                              x:Name="LaunchUtilityButtons"
                              Grid.Row="5"
@@ -1826,6 +1832,24 @@
                                  IsEnabled="False"
                                  Style="{StaticResource NyxOfficialLauncherStyle}" />
                          </Grid>
+                         <Button
+                             x:Name="OfficialToolsButton"
+                             Grid.Row="6"
+                             Height="28"
+                             MinHeight="28"
+                             Margin="12,2,12,0"
+                             HorizontalAlignment="Stretch"
+                             HorizontalContentAlignment="Center"
+                             AutomationProperties.Name="Official Tools for the selected game"
+                             Content="Official Tools"
+                             IsTabStop="True"
+                             Style="{StaticResource NyxOfficialLauncherStyle}"
+                             ToolTipService.ToolTip="Open an official tool for the selected game"
+                             Visibility="Collapsed">
+                             <Button.Flyout>
+                                 <MenuFlyout x:Name="OfficialToolsMenuFlyout" />
+                             </Button.Flyout>
+                         </Button>
                     </Grid>
                 </Grid>
             </Border>

@@ -31,22 +31,32 @@ public sealed class EndfieldPlaytimeUiTests
     }
 
     [Fact]
-    public void Playtime_text_is_between_launch_and_utility_controls_for_every_game()
+    public void Playtime_text_is_outlined_above_account_resources_for_every_game()
     {
         var xaml = ReadLauncherFile("MainPage.xaml");
+        var display = xaml.IndexOf("x:Name=\"LaunchPlayTimeDisplay\"", StringComparison.Ordinal);
+        var resources = xaml.IndexOf("x:Name=\"LaunchResourceMetricsPanel\"", StringComparison.Ordinal);
         var launchButton = xaml.IndexOf("x:Name=\"LaunchButton\"", StringComparison.Ordinal);
-        var playtime = xaml.IndexOf("x:Name=\"LaunchPlayTimeText\"", StringComparison.Ordinal);
         var utilityButtons = xaml.IndexOf("x:Name=\"LaunchUtilityButtons\"", StringComparison.Ordinal);
 
-        Assert.True(launchButton >= 0 && launchButton < playtime);
-        Assert.True(playtime < utilityButtons);
+        Assert.True(display >= 0 && display < resources);
+        Assert.True(resources < launchButton && launchButton < utilityButtons);
 
+        var playtimeDisplay = Slice(xaml, "x:Name=\"LaunchPlayTimeDisplay\"", "x:Name=\"LaunchResourceMetricsPanel\"");
+        ContainsNormalized(playtimeDisplay, "Grid.Row=\"2\"");
+        var outline = Slice(playtimeDisplay, "x:Name=\"LaunchPlayTimeOutlineText\"", "/>");
         var text = Slice(xaml, "x:Name=\"LaunchPlayTimeText\"", "/>");
-        ContainsNormalized(text, "Grid.Row=\"4\"");
+        ContainsNormalized(outline, "AutomationProperties.AccessibilityView=\"Raw\"");
+        ContainsNormalized(outline, "Foreground=\"Black\"");
+        ContainsNormalized(outline, "Text=\"Play Time: 0m\"");
         ContainsNormalized(text, "Text=\"Play Time: 0m\"");
         Assert.DoesNotContain("Visibility=", text, StringComparison.Ordinal);
         ContainsNormalized(text, "AutomationProperties.Name=\"Play Time: 0m.");
         ContainsNormalized(text, "ToolTipService.ToolTip=\"Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded.\"");
+
+        var render = ReadLauncherFile("MainPage.xaml.cs");
+        ContainsNormalized(render, "LaunchPlayTimeOutlineText.Text = LaunchPlayTimeText.Text = unavailable;");
+        ContainsNormalized(render, "LaunchPlayTimeOutlineText.Text = LaunchPlayTimeText.Text = value;");
     }
 
     [Fact]

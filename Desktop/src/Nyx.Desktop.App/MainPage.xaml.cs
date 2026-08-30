@@ -5148,7 +5148,7 @@ public sealed partial class MainPage : Page
         RailSurface.VerticalAlignment = VerticalAlignment.Stretch;
         RailSurface.BorderThickness = new Thickness(0, 0, 1, 0);
 
-        RailBrandRow.Height = new GridLength(90);
+        RailBrandRow.Height = new GridLength(102);
         RailContentRow.Height = GridLength.Auto;
         RailAddRow.Height = GridLength.Auto;
         RailSpacerRow.Height = new GridLength(1, GridUnitType.Star);
@@ -5413,7 +5413,7 @@ public sealed partial class MainPage : Page
             const string unavailable = "Play Time: tracking unavailable";
             const string explanation =
                 "Windows sleep tracking could not start, so Nyx will not show or count play time this session.";
-            LaunchPlayTimeText.Text = unavailable;
+            LaunchPlayTimeOutlineText.Text = LaunchPlayTimeText.Text = unavailable;
             AutomationProperties.SetName(LaunchPlayTimeText, $"{unavailable}. {explanation}");
             ToolTipService.SetToolTip(LaunchPlayTimeText, explanation);
             return;
@@ -5427,7 +5427,7 @@ public sealed partial class MainPage : Page
 
         const string disclosure =
             "Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded.";
-        LaunchPlayTimeText.Text = value;
+        LaunchPlayTimeOutlineText.Text = LaunchPlayTimeText.Text = value;
         AutomationProperties.SetName(
             LaunchPlayTimeText,
             snapshot.SaveFailed ? $"{value}. {disclosure} Save pending." : $"{value}. {disclosure}");
@@ -6917,7 +6917,7 @@ public sealed partial class MainPage : Page
                 characters.Skip(namedCount).Select(CreateBannerPortrait).ToArray()));
         }
 
-        foreach (var row in rows.Chunk(5))
+        foreach (var row in rows.Chunk(2))
         {
             BannerCharacterRows.Add(row);
         }
@@ -7743,7 +7743,7 @@ public sealed class UpcomingBannerGroupItem : INotifyPropertyChanged
         StableKey = stableKey;
         Timing = timing;
         Characters = characters.ToArray();
-        CharacterRows = Characters.Chunk(5).ToArray();
+        CharacterRows = Characters.Chunk(2).ToArray();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

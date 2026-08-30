@@ -392,7 +392,7 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("x:Name=\"SettingsButton\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"MinimizeButton\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"CloseButton\"", xaml, StringComparison.Ordinal);
-        foreach (var buttonName in new[] { "SettingsButton", "MinimizeButton", "CloseButton" })
+        foreach (var buttonName in new[] { "AnimationButton", "SettingsButton", "MinimizeButton", "CloseButton" })
         {
             var button = SliceElement(xaml, $"x:Name=\"{buttonName}\"");
             Assert.Contains("Width=\"42\"", button, StringComparison.Ordinal);
@@ -403,12 +403,47 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("FontSize=\"22\"", SliceElement(xaml, "x:Name=\"SettingsIcon\""), StringComparison.Ordinal);
         Assert.Contains("FontSize=\"20\"", SliceElement(xaml, "x:Name=\"MinimizeIcon\""), StringComparison.Ordinal);
         Assert.Contains("FontSize=\"20\"", SliceElement(xaml, "x:Name=\"CloseIcon\""), StringComparison.Ordinal);
+        foreach (var iconName in new[]
+                 {
+                     "AnimationIconOutline",
+                     "SettingsIconOutline",
+                     "MinimizeIconOutline",
+                     "CloseIconOutline",
+                 })
+        {
+            var icon = SliceElement(xaml, $"x:Name=\"{iconName}\"");
+            Assert.Contains("Foreground=\"Black\"", icon, StringComparison.Ordinal);
+            Assert.Contains("AutomationProperties.AccessibilityView=\"Raw\"", icon, StringComparison.Ordinal);
+        }
+        foreach (var iconName in new[] { "AnimationIcon", "SettingsIcon", "MinimizeIcon", "CloseIcon" })
+        {
+            Assert.Contains("Foreground=\"White\"", SliceElement(xaml, $"x:Name=\"{iconName}\""), StringComparison.Ordinal);
+        }
         Assert.DoesNotContain("MaximizeButton", xaml, StringComparison.Ordinal);
         Assert.Contains("Foreground=\"White\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Color.FromArgb", code, StringComparison.Ordinal);
         Assert.DoesNotContain("ButtonForegroundColor", code, StringComparison.Ordinal);
         Assert.DoesNotContain("ButtonHoverBackgroundColor", code, StringComparison.Ordinal);
         Assert.DoesNotContain("ButtonPressedBackgroundColor", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Game_rail_starts_below_the_unchanged_nyx_brand_lockup()
+    {
+        var xaml = ReadAppFile("MainPage.xaml");
+        var code = ReadAppFile("MainPage.xaml.cs");
+        Assert.Contains("<RowDefinition x:Name=\"RailBrandRow\" Height=\"116\" />", xaml, StringComparison.Ordinal);
+
+        var brand = Slice(xaml, "x:Name=\"BrandLockup\"", "x:Name=\"GameSelector\"");
+        Assert.Contains("x:Name=\"BrandLogo\"", brand, StringComparison.Ordinal);
+        Assert.Contains("Height=\"96\"", brand, StringComparison.Ordinal);
+        Assert.Contains("Margin=\"0,3,0,0\"", brand, StringComparison.Ordinal);
+
+        var runtimeBrand = Slice(code, "RailBrandRow.Height", "AddGameButton.Visibility");
+        Assert.Contains("RailBrandRow.Height = new GridLength(102)", runtimeBrand, StringComparison.Ordinal);
+        Assert.Contains("BrandLockup.Height = 90", runtimeBrand, StringComparison.Ordinal);
+        Assert.Contains("BrandLogo.Height = 80", runtimeBrand, StringComparison.Ordinal);
+        Assert.Contains("BrandLogo.Margin = new Thickness(0, 7, 0, 0)", runtimeBrand, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -440,6 +475,7 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("Resume background animation", code, StringComparison.Ordinal);
         Assert.Contains("Pause background animation", code, StringComparison.Ordinal);
         Assert.Contains("AnimationIcon.Glyph = paused ? \"\\uE768\" : \"\\uE769\"", code, StringComparison.Ordinal);
+        Assert.Contains("AnimationIconOutline.Glyph = AnimationIcon.Glyph", code, StringComparison.Ordinal);
     }
 
     [Fact]

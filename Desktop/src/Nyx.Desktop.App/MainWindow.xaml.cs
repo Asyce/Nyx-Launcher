@@ -144,6 +144,7 @@ public sealed partial class MainWindow : Window
     {
         var text = paused ? ResumeAnimationText : PauseAnimationText;
         AnimationIcon.Glyph = paused ? "\uE768" : "\uE769";
+        AnimationIconOutline.Glyph = AnimationIcon.Glyph;
         AutomationProperties.SetName(AnimationIcon, $"{text} icon");
         AutomationProperties.SetName(AnimationButton, text);
         ToolTipService.SetToolTip(AnimationButton, new ToolTip { Content = text });

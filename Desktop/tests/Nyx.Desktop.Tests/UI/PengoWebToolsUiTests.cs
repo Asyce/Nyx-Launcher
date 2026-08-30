@@ -36,15 +36,18 @@ public sealed class PengoWebToolsUiTests
         var code = ReadAppFile("MainPage.xaml.cs");
         var app = ReadAppFile("App.xaml.cs");
         var parser = ReadInfrastructureFile("Content", "LauncherBannersParser.cs");
-        var account = Slice(xaml, "x:Name=\"AccountSectionContent\"", "x:Name=\"LaunchStack\"");
-        var button = Slice(account, "x:Name=\"OfficialToolsButton\"", "</Button>");
+        var launch = Slice(xaml, "x:Name=\"LaunchStack\"", "</Page>");
+        var button = Slice(launch, "x:Name=\"OfficialToolsButton\"", "</Button>");
         var render = Slice(code, "private void RenderOfficialTools", "private async void OfficialTool_Click");
         var handler = Slice(code, "private async void OfficialTool_Click", "private void RenderExportTools");
         var exportRender = Slice(code, "private void RenderExportTools", "private static string FormatExportStatus");
 
         Assert.Single(Regex.Matches(xaml, "x:Name=\"OfficialToolsButton\"").Cast<Match>());
         Assert.Single(Regex.Matches(xaml, "x:Name=\"OfficialToolsMenuFlyout\"").Cast<Match>());
-        Assert.Contains("Grid.Row=\"4\"", button, StringComparison.Ordinal);
+        Assert.Contains("Grid.Row=\"6\"", button, StringComparison.Ordinal);
+        Assert.True(
+            launch.IndexOf("x:Name=\"LaunchUtilityButtons\"", StringComparison.Ordinal)
+            < launch.IndexOf("x:Name=\"OfficialToolsButton\"", StringComparison.Ordinal));
         Assert.Contains("HorizontalAlignment=\"Stretch\"", button, StringComparison.Ordinal);
         Assert.Contains("Height=\"28\"", button, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name=\"Official Tools for the selected game\"", button, StringComparison.Ordinal);
