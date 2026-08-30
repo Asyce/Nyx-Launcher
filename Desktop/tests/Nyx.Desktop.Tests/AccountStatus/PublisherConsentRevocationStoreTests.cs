@@ -97,7 +97,8 @@ public sealed class PublisherConsentRevocationStoreTests
                     "HoYoLAB",
                     revocations,
                     bindings,
-                    snapshots));
+                    snapshots,
+                    deleteHoyoGameBundle: static () => true));
                 Assert.True(revocations.IsPending("HoYoLAB"));
                 Assert.Null(bindings.TryLoad("hsr"));
                 Assert.True(File.Exists(snapshotPath));
@@ -110,7 +111,8 @@ public sealed class PublisherConsentRevocationStoreTests
                 "HoYoLAB",
                 revocations,
                 bindings,
-                snapshots));
+                snapshots,
+                deleteHoyoGameBundle: static () => true));
             Assert.False(new PublisherConsentRevocationStore(root).IsPending("HoYoLAB"));
             Assert.False(File.Exists(snapshotPath));
         }
@@ -159,7 +161,8 @@ public sealed class PublisherConsentRevocationStoreTests
                     "HoYoLAB",
                     revocations,
                     bindings,
-                    snapshots));
+                    snapshots,
+                    deleteHoyoGameBundle: static () => true));
                 Assert.True(File.Exists(snapshotPath));
                 Assert.True(new PublisherConsentRevocationStore(root).IsPending("HoYoLAB"));
             }
@@ -170,7 +173,8 @@ public sealed class PublisherConsentRevocationStoreTests
                 "HoYoLAB",
                 revocations,
                 bindings,
-                snapshots));
+                snapshots,
+                deleteHoyoGameBundle: static () => true));
             Assert.False(new PublisherConsentRevocationStore(root).IsPending("HoYoLAB"));
             Assert.False(File.Exists(snapshotPath));
         }
@@ -233,7 +237,8 @@ public sealed class PublisherConsentRevocationStoreTests
                     revocations,
                     bindings,
                     snapshots,
-                    PersistPending));
+                    PersistPending,
+                    deleteHoyoGameBundle: static () => true));
                 Assert.True(revocations.IsPending("HoYoLAB"));
                 Assert.True(durablePending);
                 Assert.Equal([true], pendingWrites);
@@ -252,7 +257,8 @@ public sealed class PublisherConsentRevocationStoreTests
                 revocations,
                 bindings,
                 snapshots,
-                PersistPending));
+                PersistPending,
+                deleteHoyoGameBundle: static () => true));
             Assert.False(durablePending);
             Assert.Equal([true, true, false], pendingWrites);
             Assert.False(revocations.IsPending("HoYoLAB"));
@@ -299,7 +305,8 @@ public sealed class PublisherConsentRevocationStoreTests
                     Assert.Equal("HoYoLAB", provider);
                     callbackCalls.Add(pending);
                     return false;
-                }));
+                },
+                deleteHoyoGameBundle: static () => true));
             Assert.Equal([true], callbackCalls);
             Assert.True(revocations.IsPending("HoYoLAB"));
             Assert.Null(bindings.TryLoad("gi"));
@@ -314,8 +321,54 @@ public sealed class PublisherConsentRevocationStoreTests
                     Assert.Equal("HoYoLAB", provider);
                     callbackCalls.Add(pending);
                     return true;
-                }));
+                },
+                deleteHoyoGameBundle: static () => true));
             Assert.Equal([true, true, false], callbackCalls);
+            Assert.False(revocations.IsPending("HoYoLAB"));
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Failed_hoyo_bundle_delete_keeps_quarantine_pending_until_exact_retry_succeeds()
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "nyx-publisher-quarantine-bundle-failure-tests-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var protector = new CopyProtector();
+            var bindings = new PublisherRoleBindingStore(root, protector);
+            var snapshots = new PublisherResourceSnapshotStore(root, protector);
+            var revocations = new PublisherConsentRevocationStore(root);
+            var deleteCalls = 0;
+
+            Assert.False(PublisherQuarantineCleanupStore.TryClean(
+                "HoYoLAB",
+                revocations,
+                bindings,
+                snapshots,
+                deleteHoyoGameBundle: () =>
+                {
+                    deleteCalls++;
+                    return false;
+                }));
+            Assert.True(revocations.IsPending("HoYoLAB"));
+
+            Assert.True(PublisherQuarantineCleanupStore.TryClean(
+                "HoYoLAB",
+                revocations,
+                bindings,
+                snapshots,
+                deleteHoyoGameBundle: () =>
+                {
+                    deleteCalls++;
+                    return true;
+                }));
+            Assert.Equal(2, deleteCalls);
             Assert.False(revocations.IsPending("HoYoLAB"));
         }
         finally
@@ -372,7 +425,8 @@ public sealed class PublisherConsentRevocationStoreTests
                         Assert.Equal("HoYoLAB", provider);
                         callbackCalls.Add(pending);
                         return false;
-                    }));
+                    },
+                    deleteHoyoGameBundle: static () => true));
             }
 
             Assert.Equal([true], callbackCalls);

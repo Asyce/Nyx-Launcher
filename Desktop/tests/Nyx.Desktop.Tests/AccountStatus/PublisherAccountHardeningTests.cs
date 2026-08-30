@@ -5356,7 +5356,7 @@ public sealed class PublisherAccountHardeningTests
         var disconnect = Slice(
             service,
             "private async Task<PublisherConnectionState> DisconnectCoreAsync",
-            "private void CommitDeletedProfile");
+            "private PublisherConnectionState CommitDeletedProfile");
         Assert.Contains("roleBindings.DeleteProvider(entry.Provider)", disconnect, StringComparison.Ordinal);
         Assert.Contains("resourceSnapshots.DeleteProvider(entry.Provider)", disconnect, StringComparison.Ordinal);
         Assert.Contains("DeleteProfileDirectoryAsync(", disconnect, StringComparison.Ordinal);
@@ -5431,9 +5431,9 @@ public sealed class PublisherAccountHardeningTests
 
         var interrupted = Slice(
             service,
-            "private void CommitInterruptedProfileChange(",
+            "private PublisherConnectionState CommitInterruptedProfileChange(",
             "private Task DeleteProfileDirectoryAsync(");
-        Assert.Contains("if (!TryDeleteProtectedProviderState(provider)) return;", interrupted, StringComparison.Ordinal);
+        Assert.Contains("!TryDeleteProtectedProviderState(provider, operation)", interrupted, StringComparison.Ordinal);
 
         var helpers = Slice(
             service,

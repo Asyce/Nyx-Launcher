@@ -7,7 +7,8 @@ public static class PublisherQuarantineCleanupStore
         PublisherConsentRevocationStore revocations,
         PublisherRoleBindingStore roleBindings,
         PublisherResourceSnapshotStore resourceSnapshots,
-        Func<string, bool, bool>? persistCleanupPending = null)
+        Func<string, bool, bool>? persistCleanupPending = null,
+        Func<bool>? deleteHoyoGameBundle = null)
     {
         ArgumentNullException.ThrowIfNull(revocations);
         ArgumentNullException.ThrowIfNull(roleBindings);
@@ -23,10 +24,13 @@ public static class PublisherQuarantineCleanupStore
         var revocationRecorded = revocations.MarkPending(provider);
         var roleBindingsCleared = roleBindings.DeleteProvider(provider);
         var resourceSnapshotsCleared = resourceSnapshots.DeleteProvider(provider);
+        var gameBundleCleared = provider != "HoYoLAB"
+            || deleteHoyoGameBundle?.Invoke() == true;
         if (!pendingBitRecorded
             || !revocationRecorded
             || !roleBindingsCleared
-            || !resourceSnapshotsCleared)
+            || !resourceSnapshotsCleared
+            || !gameBundleCleared)
             return false;
 
         if (!revocations.ClearCleanupPending(provider))

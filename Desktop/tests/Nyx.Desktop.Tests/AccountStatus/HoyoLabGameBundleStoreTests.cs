@@ -424,6 +424,47 @@ public sealed class HoyoLabGameBundleStoreTests
     }
 
     [Fact]
+    public void Captured_old_slot_delete_never_touches_the_new_slot_root()
+    {
+        using var firstRoot = new TemporaryRoot();
+        using var secondRoot = new TemporaryRoot();
+        var first = Store(firstRoot.Path);
+        var second = Store(secondRoot.Path);
+        var firstRole = RoleRecord(RoleId(1));
+        var secondRole = RoleRecord(RoleId(2), "prod_official_usa");
+        var firstProtector = new TrackingProtector();
+        var secondProtector = new TrackingProtector();
+        var firstRoles = new PublisherRoleBindingStore(firstRoot.Path, firstProtector);
+        var firstResources = new PublisherResourceSnapshotStore(firstRoot.Path, firstProtector);
+        var secondRoles = new PublisherRoleBindingStore(secondRoot.Path, secondProtector);
+        var secondResources = new PublisherResourceSnapshotStore(secondRoot.Path, secondProtector);
+
+        Assert.True(first.TryMigrateFromV1(firstRole));
+        Assert.True(second.TryMigrateFromV1(secondRole));
+        Assert.True(firstRoles.SaveRecord(HoyoLabGameBundleRules.GameId, firstRole));
+        Assert.True(firstResources.Save(Resource(FirstObservation), firstRole.Binding));
+        Assert.True(secondRoles.SaveRecord(HoyoLabGameBundleRules.GameId, secondRole));
+        Assert.True(secondResources.Save(Resource(FirstObservation), secondRole.Binding));
+        Assert.True(first.TrySetCapabilityConsent(HoyoLabGameBundleRules.Resources, true));
+        Assert.True(first.TryRecordResource(firstRole.Binding, Resource(FirstObservation)));
+
+        Assert.Equal(firstRole.Binding, first.TryLoad()!.SelectedRole);
+        Assert.Equal(secondRole.Binding, second.TryLoad()!.SelectedRole);
+        Assert.Null(second.TryLoad()!.Roles.Single().Resource);
+
+        Assert.True(PublisherProtectedStateDeletionPolicy.TryDeleteProviderState(
+            () => firstResources.DeleteProvider("HoYoLAB"),
+            () => firstRoles.DeleteProvider("HoYoLAB")));
+        Assert.True(first.TryDelete());
+        Assert.Null(first.TryLoad());
+        Assert.Null(firstRoles.TryLoadRecord(HoyoLabGameBundleRules.GameId));
+        Assert.Null(firstResources.TryLoad(HoyoLabGameBundleRules.GameId, firstRole.Binding));
+        Assert.Equal(secondRole.Binding, second.TryLoad()!.SelectedRole);
+        Assert.Equal(secondRole, secondRoles.TryLoadRecord(HoyoLabGameBundleRules.GameId));
+        Assert.NotNull(secondResources.TryLoad(HoyoLabGameBundleRules.GameId, secondRole.Binding));
+    }
+
+    [Fact]
     public async Task Buffers_are_zeroed_and_concurrent_store_instances_serialize_writers()
     {
         using var zeroRoot = new TemporaryRoot();
@@ -470,6 +511,81 @@ public sealed class HoyoLabGameBundleStoreTests
             loaded.Roles.Select(role => role.Role.Binding.RoleId).Order().ToArray());
         Assert.False(Store(root.Path).TrySelectRole(RoleRecord(RoleId(9))));
         Assert.Equal(HoyoLabGameBundleRules.MaximumRoles, Store(root.Path).TryLoad()!.Roles.Count);
+    }
+
+    [Fact]
+    public async Task Cancellation_while_named_mutex_is_contended_never_reads_or_writes_canonical_state()
+    {
+        using var root = new TemporaryRoot();
+        var store = Store(root.Path);
+        var role = RoleData(1);
+        Assert.True(store.TrySave(Bundle([role], role.Role.Binding)));
+        var before = File.ReadAllBytes(BundlePath(root.Path));
+        using var release = new ManualResetEventSlim();
+        var held = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var holder = Task.Run(() =>
+        {
+            using var mutex = new Mutex(initiallyOwned: false, store.MutationMutexName);
+            mutex.WaitOne();
+            try
+            {
+                held.SetResult(true);
+                release.Wait();
+            }
+            finally
+            {
+                mutex.ReleaseMutex();
+            }
+        });
+        await held.Task;
+
+        using var cancellation = new CancellationTokenSource();
+        var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var mutation = Task.Run(() =>
+        {
+            started.SetResult(true);
+            return store.TrySetCapabilityConsent(
+                HoyoLabGameBundleRules.Resources,
+                true,
+                cancellation.Token);
+        });
+        try
+        {
+            await started.Task;
+            await Task.Delay(100);
+            Assert.False(mutation.IsCompleted);
+            cancellation.Cancel();
+            await Assert.ThrowsAsync<OperationCanceledException>(async () => await mutation);
+        }
+        finally
+        {
+            release.Set();
+            await holder;
+        }
+
+        Assert.Equal(before, File.ReadAllBytes(BundlePath(root.Path)));
+        Assert.Empty(TemporaryFiles(root.Path));
+    }
+
+    [Fact]
+    public void Cancellation_after_temporary_write_but_before_promotion_preserves_canonical_bytes()
+    {
+        using var root = new TemporaryRoot();
+        var boundary = new FaultBoundary();
+        var store = Store(root.Path, boundary: boundary);
+        var role = RoleData(1);
+        Assert.True(store.TrySave(Bundle([role], role.Role.Binding)));
+        var before = File.ReadAllBytes(BundlePath(root.Path));
+        using var cancellation = new CancellationTokenSource();
+        boundary.TemporaryReadObserved = cancellation.Cancel;
+
+        Assert.Throws<OperationCanceledException>(() => store.TrySetCapabilityConsent(
+            HoyoLabGameBundleRules.Resources,
+            true,
+            cancellation.Token));
+
+        Assert.Equal(before, File.ReadAllBytes(BundlePath(root.Path)));
+        Assert.Empty(TemporaryFiles(root.Path));
     }
 
     [Fact]
@@ -1006,6 +1122,7 @@ public sealed class HoyoLabGameBundleStoreTests
         public bool FailMoveNew { get; set; }
         public bool FailMoveOverwrite { get; set; }
         public bool FailDelete { get; set; }
+        public Action? TemporaryReadObserved { get; set; }
         public bool MoveNewObservedAfterTemporaryRead { get; private set; }
 
         public void CreateDirectory(string path) => inner.CreateDirectory(path);
@@ -1020,7 +1137,9 @@ public sealed class HoyoLabGameBundleStoreTests
         public FileStream OpenRead(string path)
         {
             if (++openReadCalls == FailOpenReadAt) throw new IOException("Injected read failure.");
-            return inner.OpenRead(path);
+            var stream = inner.OpenRead(path);
+            if (path.Contains(".tmp.", StringComparison.Ordinal)) TemporaryReadObserved?.Invoke();
+            return stream;
         }
         public FileStream CreateNewWriteThrough(string path)
         {
@@ -1051,6 +1170,7 @@ public sealed class HoyoLabGameBundleStoreTests
             FailMoveNew = false;
             FailMoveOverwrite = false;
             FailDelete = false;
+            TemporaryReadObserved = null;
             openReadCalls = 0;
         }
     }

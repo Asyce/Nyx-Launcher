@@ -14,6 +14,7 @@ public sealed class PublisherAccountService : IAsyncDisposable
     private readonly HoyoLabAccountSlotStore hoyoSlots;
     private PublisherRoleBindingStore roleBindings;
     private PublisherResourceSnapshotStore resourceSnapshots;
+    private HoyoLabGameBundleStore hoyoGameBundle;
     private readonly PublisherConsentRevocationStore revocations;
     private readonly Func<string, bool, bool?, bool>? persistCleanupPending;
     private readonly PengoAchievementCatalogReader achievementCatalog;
@@ -100,6 +101,7 @@ public sealed class PublisherAccountService : IAsyncDisposable
         var protectedStateRoot = ResolveCurrentHoyoProtectedStateRootOrLegacy();
         roleBindings = new(protectedStateRoot);
         resourceSnapshots = new(protectedStateRoot);
+        hoyoGameBundle = new(protectedStateRoot);
         revocations = new(this.root);
         achievementBindings = new(
             achievementBindingRoot ?? Path.Combine(this.root, ".achievement-account-binding"));
@@ -173,6 +175,72 @@ public sealed class PublisherAccountService : IAsyncDisposable
                     index?.ActiveSlotId,
                     index?.Slots.ToArray() ?? Array.Empty<HoyoLabAccountSlot>());
             }
+        }
+    }
+
+    public async Task<HoyoLabGameBundle?> GetHsrGameBundleSnapshotAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (!consent.IsEnabled("HoYoLAB")
+            || !HasUsableHoyoAccount()
+            || !OwnsProfile("HoYoLAB"))
+            return null;
+
+        ThrowIfDisposed();
+        using var operation = CreateOperation("HoYoLAB", cancellationToken);
+        var gate = GateFor("HoYoLAB");
+        await gate.WaitAsync(operation.Cancellation.Token);
+        try
+        {
+            if (!ProfileAccessAllowedAfterGate("HoYoLAB", consentRequired: true, operation))
+                return null;
+            _ = TryMigrateHsrBundleFromV1(operation);
+            if (!CanPublish("HoYoLAB", operation)) return null;
+            var snapshot = hoyoGameBundle.TryLoad();
+            return snapshot is not null && CanPublish("HoYoLAB", operation)
+                ? HoyoLabGameBundleRules.Normalize(snapshot)
+                : null;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    public async Task<bool> SetHsrCapabilityConsentAsync(
+        string capability,
+        bool enabled,
+        CancellationToken cancellationToken = default)
+    {
+        if (capability is not (HoyoLabGameBundleRules.Resources
+                or HoyoLabGameBundleRules.Achievements)
+            || !consent.IsEnabled("HoYoLAB")
+            || !HasUsableHoyoAccount()
+            || !OwnsProfile("HoYoLAB"))
+            return false;
+
+        ThrowIfDisposed();
+        using var operation = CreateOperation("HoYoLAB", cancellationToken);
+        var gate = GateFor("HoYoLAB");
+        await gate.WaitAsync(operation.Cancellation.Token);
+        try
+        {
+            if (!ProfileAccessAllowedAfterGate("HoYoLAB", consentRequired: true, operation))
+                return false;
+            _ = TryMigrateHsrBundleFromV1(operation);
+            lock (sync)
+            {
+                if (!CanPublish("HoYoLAB", operation)) return false;
+                var saved = hoyoGameBundle.TrySetCapabilityConsent(
+                    capability,
+                    enabled,
+                    operation.Cancellation.Token);
+                return saved && CanPublish("HoYoLAB", operation);
+            }
+        }
+        finally
+        {
+            gate.Release();
         }
     }
 
@@ -601,6 +669,7 @@ public sealed class PublisherAccountService : IAsyncDisposable
                     operation.HoyoContext,
                     operation.Cancellation.Token),
                 cancellationToken);
+            _ = TryMirrorHsrAchievements(result.Role, result.AchievementIds, operation);
             TrySetConnection(provider, PublisherConnectionState.Connected, operation);
             return artifact;
         }
@@ -991,6 +1060,8 @@ public sealed class PublisherAccountService : IAsyncDisposable
             var storedRecord = entry.Provider == "HoYoLAB"
                 ? TryLoadRoleRecord(entry.GameId, operation)
                 : null;
+            if (entry.GameId == HoyoLabGameBundleRules.GameId)
+                _ = TryMigrateHsrBundleFromV1(operation);
             var storedBinding = storedRecord?.Binding;
             var activeBinding = storedBinding;
             var resourceRead = await window.ReadResourceAsync(entry, storedBinding, cancellationToken);
@@ -1073,6 +1144,12 @@ public sealed class PublisherAccountService : IAsyncDisposable
                     resourceRead.Diagnostic);
             }
             if (entry.Provider == "HoYoLAB"
+                && activeBinding is null
+                && resourceRead.Candidates is { Count: 1 } selectedSingleRole)
+            {
+                activeBinding = selectedSingleRole[0].Binding;
+            }
+            if (entry.Provider == "HoYoLAB"
                 && activeBinding is not null
                 && resourceRead.Outcome == PublisherResourceReadOutcome.Valid
                 && resourceRead.Candidates is { Count: > 0 } officialCandidates
@@ -1099,12 +1176,6 @@ public sealed class PublisherAccountService : IAsyncDisposable
                 TrySetConnection(entry.Provider, PublisherConnectionState.NeedsReview, operation);
                 return null;
             }
-            if (entry.Provider == "HoYoLAB"
-                && activeBinding is null
-                && resourceRead.Candidates is { Count: 1 } selectedSingleRole)
-            {
-                activeBinding = selectedSingleRole[0].Binding;
-            }
             var nextState = PublisherAccountStatePolicy.ForAuthenticatedResourceRead(resourceRead);
             var snapshot = resourceRead.Snapshot;
             if (resourceRead.Outcome == PublisherResourceReadOutcome.Valid
@@ -1116,6 +1187,8 @@ public sealed class PublisherAccountService : IAsyncDisposable
                     if (!CanPublish(entry.Provider, operation)
                         || !resourceSnapshots.Save(snapshot with { IsStale = false }, activeBinding))
                         return null;
+                    if (entry.GameId == HoyoLabGameBundleRules.GameId)
+                        _ = TryMirrorHsrResource(activeBinding, snapshot, operation);
                 }
                 SetResourceStateIfCurrent(
                     entry.GameId,
@@ -2081,7 +2154,7 @@ public sealed class PublisherAccountService : IAsyncDisposable
             bool resourceSnapshotsCleared;
             if (entry.Provider == "HoYoLAB" && !consentRequired)
             {
-                roleBindingsCleared = TryDeleteAllHoyoState();
+                roleBindingsCleared = TryDeleteAllHoyoState(operation);
                 resourceSnapshotsCleared = roleBindingsCleared;
                 if (roleBindingsCleared)
                 {
@@ -2092,6 +2165,7 @@ public sealed class PublisherAccountService : IAsyncDisposable
                         activeHoyoSlot = null;
                         roleBindings = new(root);
                         resourceSnapshots = new(root);
+                        hoyoGameBundle = new(root);
                     }
                     ProfileMutationsFor(entry.Provider).MarkDeleted();
                 }
@@ -2107,10 +2181,10 @@ public sealed class PublisherAccountService : IAsyncDisposable
             }
             if (!roleBindingsCleared || !resourceSnapshotsCleared)
             {
-                CommitInterruptedProfileChange(
+                return CommitInterruptedProfileChange(
                     entry.Provider,
-                    PublisherConnectionState.NeedsReview);
-                return PublisherConnectionState.NeedsReview;
+                    PublisherConnectionState.NeedsReview,
+                    operation);
             }
             // Profile deletion is irreversible. Once the directory is known
             // absent, cancellation cannot preserve old Connected data.
@@ -2120,8 +2194,7 @@ public sealed class PublisherAccountService : IAsyncDisposable
                 SetConnection("HoYoLAB", PublisherConnectionState.NotConnected);
                 return PublisherConnectionState.NotConnected;
             }
-            CommitDeletedProfile(entry.Provider);
-            return PublisherConnectionState.NotConnected;
+            return CommitDeletedProfile(entry.Provider, operation);
         }
         catch (OperationCanceledException)
         {
@@ -2153,8 +2226,11 @@ public sealed class PublisherAccountService : IAsyncDisposable
                     out var terminalState))
             {
                 if (CanCommitInterruptedProfileChange(entry.Provider, operation, enteredGate))
-                    CommitInterruptedProfileChange(entry.Provider, terminalState);
-                return terminalState;
+                    return CommitInterruptedProfileChange(
+                        entry.Provider,
+                        terminalState,
+                        operation);
+                return PublisherConnectionState.NeedsReview;
             }
             TrySetConnection(entry.Provider, PublisherConnectionState.NeedsReview, operation);
             return PublisherConnectionState.NeedsReview;
@@ -2317,8 +2393,13 @@ public sealed class PublisherAccountService : IAsyncDisposable
         Updated?.Invoke(this, EventArgs.Empty);
     }
 
-    private void CommitDeletedProfile(string provider) =>
-        CommitInterruptedProfileChange(provider, PublisherConnectionState.NotConnected);
+    private PublisherConnectionState CommitDeletedProfile(
+        string provider,
+        PublisherOperation operation) =>
+        CommitInterruptedProfileChange(
+            provider,
+            PublisherConnectionState.NotConnected,
+            operation);
 
     private void CommitInterruptedDisconnectIfNeeded(
         string provider,
@@ -2332,7 +2413,7 @@ public sealed class PublisherAccountService : IAsyncDisposable
                 currentProfile,
                 out var terminalState)
             && CanCommitInterruptedProfileChange(provider, operation, enteredGate))
-            CommitInterruptedProfileChange(provider, terminalState);
+            CommitInterruptedProfileChange(provider, terminalState, operation);
     }
 
     private bool CanCommitInterruptedProfileChange(
@@ -2341,14 +2422,29 @@ public sealed class PublisherAccountService : IAsyncDisposable
         bool enteredGate) =>
         enteredGate || GenerationFor(provider).IsCurrent(operation.Generation);
 
-    private void CommitInterruptedProfileChange(
+    private PublisherConnectionState CommitInterruptedProfileChange(
         string provider,
-        PublisherConnectionState terminalState)
+        PublisherConnectionState terminalState,
+        PublisherOperation operation)
     {
         if (terminalState is not (PublisherConnectionState.NotConnected
                 or PublisherConnectionState.NeedsReview))
             throw new ArgumentOutOfRangeException(nameof(terminalState));
-        if (!TryDeleteProtectedProviderState(provider)) return;
+        // The gate still protects the old captured slot after irreversible
+        // profile deletion, even if a newer operation has advanced generation.
+        // Delete that exact old root, never the mutable active-slot store.
+        if (provider == "HoYoLAB" && !CanMutateHoyoProtectedState(operation))
+        {
+            if (!TryDeleteCapturedHoyoProtectedState(operation))
+            {
+                QuarantineProvider(provider);
+                return PublisherConnectionState.NeedsReview;
+            }
+        }
+        else if (!TryDeleteProtectedProviderState(provider, operation))
+        {
+            return PublisherConnectionState.NeedsReview;
+        }
         var ids = provider == "HoYoLAB" ? new[] { "gi", "hsr", "zzz" } : new[] { "ae" };
         lock (sync)
         {
@@ -2364,6 +2460,7 @@ public sealed class PublisherAccountService : IAsyncDisposable
             else throw new ArgumentOutOfRangeException(nameof(provider));
         }
         Updated?.Invoke(this, EventArgs.Empty);
+        return terminalState;
     }
 
     private Task DeleteProfileDirectoryAsync(
@@ -2562,7 +2659,11 @@ public sealed class PublisherAccountService : IAsyncDisposable
             revocations,
             roleBindings,
             resourceSnapshots,
-            cleanupPersistence);
+            cleanupPersistence,
+            provider == "HoYoLAB"
+                ? () => CanMutateHoyoProtectedState(operation)
+                    && hoyoGameBundle.TryDelete()
+                : null);
         SetCleanupPending(provider, !cleanupComplete);
         ClearProviderState(provider);
         SetConnection(provider, PublisherConnectionState.NeedsReview);
@@ -2584,11 +2685,36 @@ public sealed class PublisherAccountService : IAsyncDisposable
         string provider,
         PublisherOperation? operation = null)
     {
-        var deleted = PublisherProtectedStateDeletionPolicy.TryDeleteProviderState(
+        var legacyDeleted = PublisherProtectedStateDeletionPolicy.TryDeleteProviderState(
             () => resourceSnapshots.DeleteProvider(provider),
             () => roleBindings.DeleteProvider(provider));
+        var bundleDeleted = provider != "HoYoLAB"
+            || (CanMutateHoyoProtectedState(operation)
+                && hoyoGameBundle.TryDelete());
+        var deleted = legacyDeleted && bundleDeleted;
         if (!deleted) QuarantineProvider(provider, operation);
         return deleted;
+    }
+
+    private bool CanMutateHoyoProtectedState(PublisherOperation? operation) =>
+        operation is not null
+        && operation.HoyoContext is not null
+        && GenerationFor("HoYoLAB").IsCurrent(operation.Generation)
+        && IsCurrentHoyoContext(operation.HoyoContext);
+
+    private bool CanDeleteAllHoyoProtectedState(PublisherOperation operation) =>
+        GenerationFor("HoYoLAB").IsCurrent(operation.Generation);
+
+    private static bool TryDeleteCapturedHoyoProtectedState(PublisherOperation operation)
+    {
+        if (operation.HoyoContext is not { } context) return true;
+        var legacyDeleted = PublisherProtectedStateDeletionPolicy.TryDeleteProviderState(
+            () => new PublisherResourceSnapshotStore(context.ProtectedStateRoot)
+                .DeleteProvider("HoYoLAB"),
+            () => new PublisherRoleBindingStore(context.ProtectedStateRoot)
+                .DeleteProvider("HoYoLAB"));
+        var bundleDeleted = new HoyoLabGameBundleStore(context.ProtectedStateRoot).TryDelete();
+        return legacyDeleted && bundleDeleted;
     }
 
     private void SetQuarantinedResourceFailure(
@@ -2895,6 +3021,7 @@ public sealed class PublisherAccountService : IAsyncDisposable
             var protectedRoot = ResolveCurrentHoyoProtectedStateRootOrLegacy();
             roleBindings = new(protectedRoot);
             resourceSnapshots = new(protectedRoot);
+            hoyoGameBundle = new(protectedRoot);
         }
         Updated?.Invoke(this, EventArgs.Empty);
         return true;
@@ -2913,6 +3040,7 @@ public sealed class PublisherAccountService : IAsyncDisposable
             var protectedRoot = ResolveCurrentHoyoProtectedStateRootOrLegacy();
             roleBindings = new(protectedRoot);
             resourceSnapshots = new(protectedRoot);
+            hoyoGameBundle = new(protectedRoot);
         }
     }
 
@@ -2997,8 +3125,87 @@ public sealed class PublisherAccountService : IAsyncDisposable
     private bool SaveRoleBinding(
         string gameId,
         PublisherRoleBinding binding,
-        PublisherOperation operation) =>
-        CanPublish("HoYoLAB", operation) && roleBindings.Save(gameId, binding);
+        PublisherOperation operation)
+    {
+        if (!CanPublish("HoYoLAB", operation) || !roleBindings.Save(gameId, binding))
+            return false;
+        if (gameId == HoyoLabGameBundleRules.GameId)
+        {
+            var record = roleBindings.TryLoadRecord(gameId);
+            if (record is not null) _ = TryMirrorHsrRole(record, operation);
+        }
+        return true;
+    }
+
+    private bool TryMigrateHsrBundleFromV1(PublisherOperation operation)
+    {
+        if (!CanPublish("HoYoLAB", operation)) return false;
+        var role = roleBindings.TryLoadRecord(HoyoLabGameBundleRules.GameId);
+        if (role is null) return false;
+        var resource = resourceSnapshots.TryLoad(HoyoLabGameBundleRules.GameId, role.Binding);
+        lock (sync)
+        {
+            if (!CanPublish("HoYoLAB", operation)) return false;
+            var saved = hoyoGameBundle.TryMigrateFromV1(
+                role,
+                resource,
+                resource is null ? null : role.Binding,
+                operation.Cancellation.Token);
+            return saved && CanPublish("HoYoLAB", operation);
+        }
+    }
+
+    private bool TryMirrorHsrRole(
+        PublisherRoleRecord role,
+        PublisherOperation operation)
+    {
+        _ = TryMigrateHsrBundleFromV1(operation);
+        lock (sync)
+        {
+            if (!CanPublish("HoYoLAB", operation)) return false;
+            var saved = hoyoGameBundle.TrySelectRole(
+                role,
+                operation.Cancellation.Token);
+            return saved && CanPublish("HoYoLAB", operation);
+        }
+    }
+
+    private bool TryMirrorHsrResource(
+        PublisherRoleBinding binding,
+        PublisherResourceSnapshot resource,
+        PublisherOperation operation)
+    {
+        lock (sync)
+        {
+            if (!CanPublish("HoYoLAB", operation)) return false;
+            var saved = hoyoGameBundle.TryRecordResource(
+                binding,
+                resource with { IsStale = true },
+                operation.Cancellation.Token);
+            return saved && CanPublish("HoYoLAB", operation);
+        }
+    }
+
+    private bool TryMirrorHsrAchievements(
+        PublisherRoleBinding binding,
+        IReadOnlyList<long> completedIds,
+        PublisherOperation operation)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var observedAt = new DateTimeOffset(
+            now.Ticks - now.Ticks % TimeSpan.TicksPerSecond,
+            TimeSpan.Zero);
+        lock (sync)
+        {
+            if (!CanPublish("HoYoLAB", operation)) return false;
+            var saved = hoyoGameBundle.TryRecordCompletedAchievements(
+                binding,
+                completedIds,
+                observedAt,
+                operation.Cancellation.Token);
+            return saved && CanPublish("HoYoLAB", operation);
+        }
+    }
 
     private PublisherResourceSnapshot? TryLoadResourceSnapshot(
         string gameId,
@@ -3037,7 +3244,10 @@ public sealed class PublisherAccountService : IAsyncDisposable
             binding,
             nicknames.SingleOrDefault(),
             PublisherRoleRecordRules.CanonicalRegionLabel(binding.Server));
-        return roleBindings.SaveRecord(gameId, record);
+        if (!roleBindings.SaveRecord(gameId, record)) return false;
+        if (gameId == HoyoLabGameBundleRules.GameId)
+            _ = TryMirrorHsrRole(record, operation);
+        return true;
     }
 
     private static bool RoleRecordNeedsRefresh(
@@ -3159,16 +3369,20 @@ public sealed class PublisherAccountService : IAsyncDisposable
         return TryDeleteExactDirectory(fullPath);
     }
 
-    private bool TryDeleteAllHoyoState()
+    private bool TryDeleteAllHoyoState(PublisherOperation operation)
     {
         var accountsRoot = Path.GetFullPath(Path.Combine(root, "Accounts", "HoYoLAB"));
         var legacyProfile = Path.GetFullPath(Path.Combine(root, "HoYoLAB"));
         var legacyRoles = Path.GetFullPath(Path.Combine(root, ".protected-role-bindings"));
         var legacyResources = Path.GetFullPath(Path.Combine(root, ".protected-resource-snapshots"));
-        var cleaned = TryDeleteExactDirectory(accountsRoot)
+        var legacyBundles = Path.GetFullPath(Path.Combine(root, ".protected-hoyolab-game-bundles"));
+        var cleaned = CanDeleteAllHoyoProtectedState(operation)
+            && TryDeleteExactDirectory(accountsRoot)
             && TryDeleteExactDirectory(legacyProfile)
             && TryDeleteExactDirectory(legacyRoles)
-            && TryDeleteExactDirectory(legacyResources);
+            && TryDeleteExactDirectory(legacyResources)
+            && CanDeleteAllHoyoProtectedState(operation)
+            && TryDeleteExactDirectory(legacyBundles);
         return cleaned && hoyoSlots.TryDeleteIndex();
     }
 

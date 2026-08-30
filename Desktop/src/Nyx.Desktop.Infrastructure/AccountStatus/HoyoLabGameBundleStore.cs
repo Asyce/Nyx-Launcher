@@ -24,7 +24,6 @@ public sealed class HoyoLabGameBundleStore
     private readonly IPublisherRoleBindingProtector protector;
     private readonly IPublisherRoleBindingFileBoundary files;
     private readonly TimeProvider clock;
-    private readonly object mutationSync = new();
     private readonly string mutationMutexName;
 
     internal string MutationMutexName => mutationMutexName;
@@ -85,39 +84,50 @@ public sealed class HoyoLabGameBundleStore
     public bool TryMigrateFromV1(
         PublisherRoleRecord role,
         PublisherResourceSnapshot? resource = null,
-        PublisherRoleBinding? resourceBinding = null) => SerializeMutation(
-        () => TryMigrateFromV1Core(role, resource, resourceBinding),
-        false);
+        PublisherRoleBinding? resourceBinding = null,
+        CancellationToken cancellationToken = default) => SerializeMutation(
+        () => TryMigrateFromV1Core(role, resource, resourceBinding, cancellationToken),
+        false,
+        cancellationToken);
 
-    public bool TrySelectRole(PublisherRoleRecord role)
+    public bool TrySelectRole(
+        PublisherRoleRecord role,
+        CancellationToken cancellationToken = default)
     {
         if (role is null
             || !PublisherRoleRecordRules.IsValid(HoyoLabGameBundleRules.GameId, role))
             return false;
-        return TryMutate(bundle => SelectRole(bundle, role));
+        return TryMutate(bundle => SelectRole(bundle, role), cancellationToken);
     }
 
-    public bool TrySetCapabilityConsent(string capability, bool enabled)
+    public bool TrySetCapabilityConsent(
+        string capability,
+        bool enabled,
+        CancellationToken cancellationToken = default)
     {
         if (capability is not (HoyoLabGameBundleRules.Resources
             or HoyoLabGameBundleRules.Achievements))
             return false;
-        return TryMutate(bundle => SetCapabilityConsent(bundle, capability, enabled));
+        return TryMutate(
+            bundle => SetCapabilityConsent(bundle, capability, enabled),
+            cancellationToken);
     }
 
     public bool TryRecordResource(
         PublisherRoleBinding binding,
-        PublisherResourceSnapshot resource)
+        PublisherResourceSnapshot resource,
+        CancellationToken cancellationToken = default)
     {
         if (binding is null || resource is null || !IsExactUtcSecond(resource.ObservedAt))
             return false;
-        return TryMutate(bundle => RecordResource(bundle, binding, resource));
+        return TryMutate(bundle => RecordResource(bundle, binding, resource), cancellationToken);
     }
 
     public bool TryRecordCompletedAchievements(
         PublisherRoleBinding binding,
         IReadOnlyList<long> completedIds,
-        DateTimeOffset observedAt)
+        DateTimeOffset observedAt,
+        CancellationToken cancellationToken = default)
     {
         if (binding is null
             || completedIds is null
@@ -126,7 +136,9 @@ public sealed class HoyoLabGameBundleStore
             || !IsExactUtcSecond(observedAt))
             return false;
         var normalizedIds = completedIds.Distinct().Order().ToArray();
-        return TryMutate(bundle => RecordAchievements(bundle, binding, normalizedIds, observedAt));
+        return TryMutate(
+            bundle => RecordAchievements(bundle, binding, normalizedIds, observedAt),
+            cancellationToken);
     }
 
     public bool TryDeleteRole(PublisherRoleBinding binding)
@@ -142,7 +154,8 @@ public sealed class HoyoLabGameBundleStore
     private bool TryMigrateFromV1Core(
         PublisherRoleRecord role,
         PublisherResourceSnapshot? resource,
-        PublisherRoleBinding? resourceBinding)
+        PublisherRoleBinding? resourceBinding,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(role);
         if (!PublisherRoleRecordRules.IsValid(HoyoLabGameBundleRules.GameId, role)
@@ -181,10 +194,15 @@ public sealed class HoyoLabGameBundleStore
                 Currency: false),
             Array.Empty<HoyoLabCapabilityTombstone>(),
             Array.Empty<HoyoLabRoleTombstone>());
-        return TryWrite(migrated, requireMissing: true);
+        return TryWrite(
+            migrated,
+            requireMissing: true,
+            cancellationToken: cancellationToken);
     }
 
-    private bool TryMutate(Func<HoyoLabGameBundle, HoyoLabGameBundle?> mutation) =>
+    private bool TryMutate(
+        Func<HoyoLabGameBundle, HoyoLabGameBundle?> mutation,
+        CancellationToken cancellationToken = default) =>
         SerializeMutation(
             () =>
             {
@@ -195,14 +213,18 @@ public sealed class HoyoLabGameBundleStore
                     var updated = mutation(current);
                     return updated is not null
                         && (ReferenceEquals(updated, current)
-                            || TryWrite(updated, requireMissing: false));
+                            || TryWrite(
+                                updated,
+                                requireMissing: false,
+                                cancellationToken: cancellationToken));
                 }
                 catch (Exception exception) when (IsExpectedFailure(exception))
                 {
                     return false;
                 }
             },
-            false);
+            false,
+            cancellationToken);
 
     private HoyoLabGameBundle? SelectRole(
         HoyoLabGameBundle bundle,
@@ -592,7 +614,10 @@ public sealed class HoyoLabGameBundleStore
         return ordered;
     }
 
-    private bool TryWrite(HoyoLabGameBundle bundle, bool requireMissing)
+    private bool TryWrite(
+        HoyoLabGameBundle bundle,
+        bool requireMissing,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(bundle);
         var now = clock.GetUtcNow().ToUniversalTime();
@@ -633,10 +658,12 @@ public sealed class HoyoLabGameBundleStore
             if (requireMissing || !entryExists)
             {
                 if (files.EntryExists(path)) return false;
+                cancellationToken.ThrowIfCancellationRequested();
                 files.MoveNew(temporary, path);
             }
             else
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 files.MoveOverwrite(temporary, path);
             }
             temporary = null;
@@ -761,39 +788,48 @@ public sealed class HoyoLabGameBundleStore
                 StringComparison.OrdinalIgnoreCase);
     }
 
-    private T SerializeMutation<T>(Func<T> mutation, T failure)
+    private T SerializeMutation<T>(
+        Func<T> mutation,
+        T failure,
+        CancellationToken cancellationToken = default)
     {
-        lock (mutationSync)
+        cancellationToken.ThrowIfCancellationRequested();
+        Mutex? mutex = null;
+        var acquired = false;
+        try
         {
-            Mutex? mutex = null;
-            var acquired = false;
+            mutex = new Mutex(initiallyOwned: false, mutationMutexName);
             try
             {
-                mutex = new Mutex(initiallyOwned: false, mutationMutexName);
-                try
-                {
-                    acquired = mutex.WaitOne(TimeSpan.FromSeconds(10));
-                }
-                catch (AbandonedMutexException)
-                {
-                    acquired = true;
-                }
-                return acquired ? mutation() : failure;
+                var signaled = cancellationToken.CanBeCanceled
+                    ? WaitHandle.WaitAny(
+                        [mutex, cancellationToken.WaitHandle],
+                        TimeSpan.FromSeconds(10))
+                    : mutex.WaitOne(TimeSpan.FromSeconds(10)) ? 0 : WaitHandle.WaitTimeout;
+                if (signaled == 1) throw new OperationCanceledException(cancellationToken);
+                acquired = signaled == 0;
             }
-            catch (Exception exception) when (exception is IOException
-                or UnauthorizedAccessException
-                or WaitHandleCannotBeOpenedException)
+            catch (AbandonedMutexException exception) when (exception.MutexIndex is 0 or -1)
             {
-                return failure;
+                acquired = true;
             }
-            finally
+            if (!acquired) return failure;
+            cancellationToken.ThrowIfCancellationRequested();
+            return mutation();
+        }
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or WaitHandleCannotBeOpenedException)
+        {
+            return failure;
+        }
+        finally
+        {
+            if (acquired)
             {
-                if (acquired)
-                {
-                    try { mutex?.ReleaseMutex(); } catch (ApplicationException) { }
-                }
-                try { mutex?.Dispose(); } catch (Exception) { }
+                try { mutex?.ReleaseMutex(); } catch (ApplicationException) { }
             }
+            try { mutex?.Dispose(); } catch (Exception) { }
         }
     }
 
