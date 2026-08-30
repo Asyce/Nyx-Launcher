@@ -651,21 +651,31 @@ public sealed class HoyoLabGameBundleStoreTests
     }
 
     [Fact]
-    public void Consent_disable_clears_only_that_capability_and_fresh_data_removes_only_its_older_tombstone()
+    public void Consent_disable_uses_strict_timestamps_and_fresh_data_removes_only_its_older_tombstone()
     {
         using var root = new TemporaryRoot();
         var future = Now.AddMinutes(4);
         var newer = Now.AddMinutes(5);
-        var roles = new[] { RoleData(1), RoleData(2) };
+        var roles = new[] { RoleData(1), RoleData(2), RoleData(3) };
         var store = Store(root.Path);
         Assert.True(store.TrySave(Bundle(roles, roles[0].Role.Binding)));
         Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Resources, true));
         Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Achievements, true));
         Assert.True(store.TryRecordResource(roles[0].Role.Binding, Resource(future)));
+        Assert.True(store.TryRecordResource(roles[1].Role.Binding, Resource(FirstObservation)));
+        Assert.True(store.TryRecordResource(roles[2].Role.Binding, Resource(Now)));
         Assert.True(store.TryRecordCompletedAchievements(
             roles[0].Role.Binding,
             [1, 7],
             future));
+        Assert.True(store.TryRecordCompletedAchievements(
+            roles[1].Role.Binding,
+            [1, 7],
+            FirstObservation));
+        Assert.True(store.TryRecordCompletedAchievements(
+            roles[2].Role.Binding,
+            [1, 7],
+            Now));
 
         Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Resources, false));
         Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Achievements, false));
@@ -679,21 +689,35 @@ public sealed class HoyoLabGameBundleStoreTests
             Assert.Null(item.CompletedHsrAchievementIds);
             Assert.Null(item.Observations.Achievements);
         });
-        Assert.Equal(2, disabled.CapabilityTombstones.Count(item =>
+        Assert.Equal(3, disabled.CapabilityTombstones.Count(item =>
             item.Capability == HoyoLabGameBundleRules.Resources));
-        Assert.Equal(2, disabled.CapabilityTombstones.Count(item =>
+        Assert.Equal(3, disabled.CapabilityTombstones.Count(item =>
             item.Capability == HoyoLabGameBundleRules.Achievements));
-        Assert.Equal(future, disabled.CapabilityTombstones.Single(item =>
+        Assert.Equal(future.AddSeconds(1), disabled.CapabilityTombstones.Single(item =>
             item.Binding == roles[0].Role.Binding
             && item.Capability == HoyoLabGameBundleRules.Resources).DeletedAt);
-        Assert.Equal(future, disabled.CapabilityTombstones.Single(item =>
+        Assert.Equal(future.AddSeconds(1), disabled.CapabilityTombstones.Single(item =>
             item.Binding == roles[0].Role.Binding
             && item.Capability == HoyoLabGameBundleRules.Achievements).DeletedAt);
+        Assert.All(disabled.CapabilityTombstones.Where(item =>
+                item.Binding == roles[1].Role.Binding),
+            item => Assert.Equal(Now, item.DeletedAt));
+        Assert.All(disabled.CapabilityTombstones.Where(item =>
+                item.Binding == roles[2].Role.Binding),
+            item => Assert.Equal(Now.AddSeconds(1), item.DeletedAt));
+
+        var disabledBytes = File.ReadAllBytes(BundlePath(root.Path));
+        Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Resources, false));
+        Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Achievements, false));
+        Assert.Equal(disabledBytes, File.ReadAllBytes(BundlePath(root.Path)));
 
         Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Resources, true));
         Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Achievements, true));
         Assert.False(store.TryRecordResource(roles[0].Role.Binding, Resource(FirstObservation)));
         Assert.False(store.TryRecordResource(roles[0].Role.Binding, Resource(future)));
+        Assert.False(store.TryRecordResource(
+            roles[0].Role.Binding,
+            Resource(future.AddSeconds(1))));
         Assert.False(store.TryRecordCompletedAchievements(
             roles[0].Role.Binding,
             [1, 7],
@@ -702,6 +726,10 @@ public sealed class HoyoLabGameBundleStoreTests
             roles[0].Role.Binding,
             [1, 7],
             future));
+        Assert.False(store.TryRecordCompletedAchievements(
+            roles[0].Role.Binding,
+            [1, 7],
+            future.AddSeconds(1)));
         Assert.True(store.TryRecordResource(roles[0].Role.Binding, Resource(newer)));
         Assert.True(store.TryRecordCompletedAchievements(
             roles[0].Role.Binding,
@@ -715,6 +743,52 @@ public sealed class HoyoLabGameBundleStoreTests
         Assert.Contains(restored.CapabilityTombstones, item =>
             item.Binding == roles[1].Role.Binding
             && item.Capability == HoyoLabGameBundleRules.Resources);
+    }
+
+    [Theory]
+    [InlineData("resources")]
+    [InlineData("achievements")]
+    public void Consent_disable_fails_atomically_when_any_role_is_at_the_maximum_future_boundary(
+        string capability)
+    {
+        using var root = new TemporaryRoot();
+        var roles = new[] { RoleData(1), RoleData(2) };
+        var store = Store(root.Path);
+        Assert.True(store.TrySave(Bundle(
+            roles,
+            roles[0].Role.Binding,
+            Consents(resources: true, achievements: true))));
+        if (capability == HoyoLabGameBundleRules.Resources)
+        {
+            Assert.True(store.TryRecordResource(
+                roles[0].Role.Binding,
+                Resource(FirstObservation)));
+            Assert.True(store.TryRecordResource(
+                roles[1].Role.Binding,
+                Resource(Now.AddMinutes(5))));
+        }
+        else
+        {
+            Assert.True(store.TryRecordCompletedAchievements(
+                roles[0].Role.Binding,
+                [1],
+                FirstObservation));
+            Assert.True(store.TryRecordCompletedAchievements(
+                roles[1].Role.Binding,
+                [1],
+                Now.AddMinutes(5)));
+        }
+        var before = File.ReadAllBytes(BundlePath(root.Path));
+
+        Assert.False(store.TrySetCapabilityConsent(capability, false));
+
+        Assert.Equal(before, File.ReadAllBytes(BundlePath(root.Path)));
+        var unchanged = store.TryLoad()!;
+        Assert.True(unchanged.Consents.IsEnabled(capability));
+        Assert.All(unchanged.Roles, role =>
+            Assert.NotNull(capability == HoyoLabGameBundleRules.Resources
+                ? role.Observations.Resources
+                : role.Observations.Achievements));
     }
 
     [Fact]
@@ -754,10 +828,11 @@ public sealed class HoyoLabGameBundleStoreTests
     }
 
     [Fact]
-    public void Future_observations_raise_role_and_capability_delete_barriers()
+    public void Role_delete_is_strictly_later_than_each_capability_and_the_newest_observation()
     {
         using var root = new TemporaryRoot();
-        var future = Now.AddMinutes(4);
+        var resourceObservation = Now.AddMinutes(4);
+        var achievementObservation = Now.AddMinutes(3);
         var newer = Now.AddMinutes(5);
         var role = RoleData(1);
         var store = Store(root.Path);
@@ -765,27 +840,77 @@ public sealed class HoyoLabGameBundleStoreTests
             [role],
             role.Role.Binding,
             Consents(resources: true, achievements: true))));
-        Assert.True(store.TryRecordResource(role.Role.Binding, Resource(future)));
-        Assert.True(store.TryRecordCompletedAchievements(role.Role.Binding, [1, 7], future));
+        Assert.True(store.TryRecordResource(role.Role.Binding, Resource(resourceObservation)));
+        Assert.True(store.TryRecordCompletedAchievements(
+            role.Role.Binding,
+            [1, 7],
+            achievementObservation));
 
         Assert.True(store.TryDeleteRole(role.Role.Binding));
         var deleted = store.TryLoad()!;
-        Assert.Equal(future, Assert.Single(deleted.RoleTombstones).DeletedAt);
-        Assert.All(deleted.CapabilityTombstones.Where(item => item.Binding == role.Role.Binding),
-            item => Assert.Equal(future, item.DeletedAt));
+        Assert.Equal(resourceObservation.AddSeconds(1),
+            Assert.Single(deleted.RoleTombstones).DeletedAt);
+        Assert.Equal(resourceObservation.AddSeconds(1), deleted.CapabilityTombstones.Single(item =>
+            item.Binding == role.Role.Binding
+            && item.Capability == HoyoLabGameBundleRules.Resources).DeletedAt);
+        Assert.Equal(achievementObservation.AddSeconds(1), deleted.CapabilityTombstones.Single(item =>
+            item.Binding == role.Role.Binding
+            && item.Capability == HoyoLabGameBundleRules.Achievements).DeletedAt);
         Assert.False(store.TrySelectRole(role.Role));
 
         var laterStore = Store(root.Path, clock: new FixedTimeProvider(newer));
         Assert.True(laterStore.TrySelectRole(role.Role));
         Assert.False(laterStore.TryRecordResource(role.Role.Binding, Resource(FirstObservation)));
-        Assert.False(laterStore.TryRecordResource(role.Role.Binding, Resource(future)));
+        Assert.False(laterStore.TryRecordResource(role.Role.Binding, Resource(resourceObservation)));
+        Assert.False(laterStore.TryRecordResource(
+            role.Role.Binding,
+            Resource(resourceObservation.AddSeconds(1))));
         Assert.False(laterStore.TryRecordCompletedAchievements(
             role.Role.Binding,
             [1, 7],
             FirstObservation));
-        Assert.False(laterStore.TryRecordCompletedAchievements(role.Role.Binding, [1, 7], future));
+        Assert.False(laterStore.TryRecordCompletedAchievements(
+            role.Role.Binding,
+            [1, 7],
+            achievementObservation));
+        Assert.False(laterStore.TryRecordCompletedAchievements(
+            role.Role.Binding,
+            [1, 7],
+            achievementObservation.AddSeconds(1)));
         Assert.True(laterStore.TryRecordResource(role.Role.Binding, Resource(newer)));
         Assert.True(laterStore.TryRecordCompletedAchievements(role.Role.Binding, [1, 7], newer));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Role_delete_at_a_time_boundary_preserves_canonical_bytes(bool dateTimeRangeEnd)
+    {
+        using var root = new TemporaryRoot();
+        var clock = dateTimeRangeEnd ? DateTimeOffset.MaxValue : Now;
+        var maximumObservation = dateTimeRangeEnd
+            ? new DateTimeOffset(
+                DateTimeOffset.MaxValue.Ticks
+                    - DateTimeOffset.MaxValue.Ticks % TimeSpan.TicksPerSecond,
+                TimeSpan.Zero)
+            : Now.AddMinutes(5);
+        var role = RoleData(1);
+        var store = Store(root.Path, clock: new FixedTimeProvider(clock));
+        Assert.True(store.TrySave(Bundle(
+            [role],
+            role.Role.Binding,
+            Consents(resources: true, achievements: true))));
+        Assert.True(store.TryRecordResource(role.Role.Binding, Resource(FirstObservation)));
+        Assert.True(store.TryRecordCompletedAchievements(
+            role.Role.Binding,
+            [1, 7],
+            maximumObservation));
+        var before = File.ReadAllBytes(BundlePath(root.Path));
+
+        Assert.False(store.TryDeleteRole(role.Role.Binding));
+
+        Assert.Equal(before, File.ReadAllBytes(BundlePath(root.Path)));
+        Assert.Equal(role.Role.Binding, store.TryLoad()!.SelectedRole);
     }
 
     [Fact]

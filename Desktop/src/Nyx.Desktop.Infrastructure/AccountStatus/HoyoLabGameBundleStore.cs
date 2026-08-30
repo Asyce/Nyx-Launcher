@@ -287,7 +287,7 @@ public sealed class HoyoLabGameBundleStore
         };
     }
 
-    private HoyoLabGameBundle SetCapabilityConsent(
+    private HoyoLabGameBundle? SetCapabilityConsent(
         HoyoLabGameBundle bundle,
         string capability,
         bool enabled)
@@ -307,11 +307,17 @@ public sealed class HoyoLabGameBundleStore
             .ToHashSet();
         var tombstones = bundle.CapabilityTombstones.ToList();
         foreach (var role in bundle.Roles)
+        {
+            var deletedAt = StrictDeletionTimestamp(
+                now,
+                ObservationFor(role, capability));
+            if (deletedAt is null) return null;
             UpsertCapabilityTombstone(
                 tombstones,
                 role.Role.Binding,
                 capability,
-                Latest(now, ObservationFor(role, capability)));
+                deletedAt.Value);
+        }
         return bundle with
         {
             Roles = bundle.Roles.Select(role => ClearCapability(role, capability)).ToArray(),
@@ -407,30 +413,42 @@ public sealed class HoyoLabGameBundleStore
         if (!bundle.Roles.Any(role => role.Role.Binding == binding)) return null;
         var now = UtcNowSecond();
         var deletedRole = bundle.Roles.Single(role => role.Role.Binding == binding);
+        var roleDeletedAt = StrictDeletionTimestamp(
+            now,
+            new[]
+            {
+                deletedRole.Observations.Resources,
+                deletedRole.Observations.Achievements,
+            }.Max());
+        var capabilityDeletions = new[]
+        {
+            (HoyoLabGameBundleRules.Resources, StrictDeletionTimestamp(
+                now,
+                deletedRole.Observations.Resources)),
+            (HoyoLabGameBundleRules.Achievements, StrictDeletionTimestamp(
+                now,
+                deletedRole.Observations.Achievements)),
+        };
+        if (roleDeletedAt is null || capabilityDeletions.Any(item => item.Item2 is null))
+            return null;
         var roles = bundle.Roles.Where(role => role.Role.Binding != binding).ToArray();
         var roleTombstones = bundle.RoleTombstones.ToList();
         UpsertRoleTombstone(
             roleTombstones,
             binding,
-            Latest(
-                Latest(now, deletedRole.Observations.Resources),
-                deletedRole.Observations.Achievements));
+            roleDeletedAt.Value);
         var protectedRole = new HashSet<PublisherRoleBinding> { binding };
         var prunedRoles = PruneRoleTombstones(roleTombstones, protectedRole);
 
         var capabilityTombstones = bundle.CapabilityTombstones.ToList();
         var protectedCapabilities = new HashSet<(PublisherRoleBinding, string)>();
-        foreach (var capability in new[]
-                 {
-                     HoyoLabGameBundleRules.Resources,
-                     HoyoLabGameBundleRules.Achievements,
-                 })
+        foreach (var (capability, deletedAt) in capabilityDeletions)
         {
             UpsertCapabilityTombstone(
                 capabilityTombstones,
                 binding,
                 capability,
-                Latest(now, ObservationFor(deletedRole, capability)));
+                deletedAt!.Value);
             protectedCapabilities.Add((binding, capability));
         }
         var active = roles.Select(role => role.Role.Binding).ToHashSet();
@@ -523,8 +541,23 @@ public sealed class HoyoLabGameBundleStore
         ? role.Observations.Resources
         : role.Observations.Achievements;
 
-    private static DateTimeOffset Latest(DateTimeOffset first, DateTimeOffset? second) =>
-        second > first ? second.Value : first;
+    private static DateTimeOffset? StrictDeletionTimestamp(
+        DateTimeOffset now,
+        DateTimeOffset? observation)
+    {
+        var candidateNow = now < DateTimeOffset.UnixEpoch
+            ? DateTimeOffset.UnixEpoch
+            : now;
+        var maximum = now > DateTimeOffset.MaxValue.AddMinutes(-5)
+            ? DateTimeOffset.MaxValue
+            : now.AddMinutes(5);
+        if (candidateNow > maximum) return null;
+        if (observation is null || observation < candidateNow) return candidateNow;
+        if (observation >= maximum
+            || observation > DateTimeOffset.MaxValue.AddSeconds(-1))
+            return null;
+        return observation.Value.AddSeconds(1);
+    }
 
     private static bool CanReplaceTombstone(
         IReadOnlyList<HoyoLabCapabilityTombstone> tombstones,

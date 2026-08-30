@@ -46,6 +46,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="AccountStatus\Fixtures\hoyo-sync-vector-v1.json"
+          CopyToOutputDirectory="PreserveNewest"
+          TargetPath="Fixtures\hoyo-sync-vector-v1.json" />
     <None Include="..\..\..\contracts\pengo-achievements-v1.fixture.json"
           Link="Contracts\pengo-achievements-v1.fixture.json"
           CopyToOutputDirectory="PreserveNewest" />

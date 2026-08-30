@@ -11,3 +11,4 @@ Site/src/data/generated/launcher-art/*.webp binary
 contracts/pengo-achievements-v1.fixture.json text eol=lf
 contracts/gear-export-*.fixture.json text eol=lf
 contracts/genshin-artifact-map-7.0-v1.json text eol=lf
+Desktop/tests/Nyx.Desktop.Tests/AccountStatus/Fixtures/hoyo-sync-vector-v1.json text eol=lf
