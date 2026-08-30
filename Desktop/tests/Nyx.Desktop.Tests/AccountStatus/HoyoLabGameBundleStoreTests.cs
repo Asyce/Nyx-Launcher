@@ -513,13 +513,20 @@ public sealed class HoyoLabGameBundleStoreTests
         Assert.Equal(HoyoLabGameBundleRules.MaximumRoles, Store(root.Path).TryLoad()!.Roles.Count);
     }
 
-    [Fact]
-    public async Task Cancellation_while_named_mutex_is_contended_never_reads_or_writes_canonical_state()
+    [Theory]
+    [InlineData("consent")]
+    [InlineData("resource")]
+    [InlineData("delete")]
+    public async Task Cancellation_while_named_mutex_is_contended_never_reads_or_writes_canonical_state(
+        string mutationKind)
     {
         using var root = new TemporaryRoot();
         var store = Store(root.Path);
         var role = RoleData(1);
-        Assert.True(store.TrySave(Bundle([role], role.Role.Binding)));
+        Assert.True(store.TrySave(Bundle(
+            [role],
+            role.Role.Binding,
+            Consents(resources: true))));
         var before = File.ReadAllBytes(BundlePath(root.Path));
         using var release = new ManualResetEventSlim();
         var held = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -544,10 +551,19 @@ public sealed class HoyoLabGameBundleStoreTests
         var mutation = Task.Run(() =>
         {
             started.SetResult(true);
-            return store.TrySetCapabilityConsent(
-                HoyoLabGameBundleRules.Resources,
-                true,
-                cancellation.Token);
+            return mutationKind switch
+            {
+                "consent" => store.TrySetCapabilityConsent(
+                    HoyoLabGameBundleRules.Resources,
+                    false,
+                    cancellation.Token),
+                "resource" => store.TryRecordResource(
+                    role.Role.Binding,
+                    Resource(SecondObservation),
+                    cancellation.Token),
+                "delete" => store.TryDeleteRole(role.Role.Binding, cancellation.Token),
+                _ => throw new InvalidOperationException(),
+            };
         });
         try
         {
@@ -724,6 +740,9 @@ public sealed class HoyoLabGameBundleStoreTests
         var empty = store.TryLoad()!;
         Assert.Empty(empty.Roles);
         Assert.Null(empty.SelectedRole);
+        Assert.Contains(empty.RoleTombstones, item => item.Binding == second.Role.Binding);
+        Assert.Equal(2, empty.CapabilityTombstones.Count(item =>
+            item.Binding == second.Role.Binding));
         Assert.False(store.TryDeleteRole(second.Role.Binding));
 
         Assert.False(store.TrySelectRole(second.Role));

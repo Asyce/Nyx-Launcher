@@ -530,7 +530,7 @@ public sealed class IrisLauncherShellTests
 
         Assert.Contains("IsValidManualInstallRoot(selected.Id, folder.Path)", settings, StringComparison.Ordinal);
         Assert.Contains("CustomArgumentParser.TryParse(officialLaunchArguments.Text", settings, StringComparison.Ordinal);
-        Assert.Contains("Keeps your publisher login saved on this PC. Turning it off removes saved passwords.", settings, StringComparison.Ordinal);
+        Assert.Contains("Keeps your Endfield login saved on this PC. Turning it off removes saved Endfield passwords.", settings, StringComparison.Ordinal);
     }
 
     [Fact]

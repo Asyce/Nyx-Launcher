@@ -1551,6 +1551,50 @@ public sealed partial class MainPage : Page
         var chooseCharacterButton = CreateHoyoLabManagerButton(
             "Choose Region",
             "Choose the region for this game");
+        ToggleSwitch? rememberHsrResources = null;
+        ToggleSwitch? rememberHsrAchievements = null;
+        StackPanel? hsrCapabilityPanel = null;
+        if (gameId == "hsr")
+        {
+            rememberHsrResources = new ToggleSwitch
+            {
+                Header = "Remember Star Rail resources",
+                IsEnabled = false,
+                OnContent = "Remember",
+                OffContent = "Do not remember",
+            };
+            AutomationProperties.SetName(
+                rememberHsrResources,
+                "Remember Star Rail resources for the active HoYoLAB account");
+            AutomationProperties.SetHelpText(
+                rememberHsrResources,
+                "These switches apply to the active HoYoLAB account, not the highlighted account. Turning one off removes only Nyx's extra remembered copy; the existing energy display and earlier achievement exports stay unchanged.");
+            rememberHsrAchievements = new ToggleSwitch
+            {
+                Header = "Remember Star Rail achievements",
+                IsEnabled = false,
+                OnContent = "Remember",
+                OffContent = "Do not remember",
+            };
+            AutomationProperties.SetName(
+                rememberHsrAchievements,
+                "Remember Star Rail achievements for the active HoYoLAB account");
+            AutomationProperties.SetHelpText(
+                rememberHsrAchievements,
+                "These switches apply to the active HoYoLAB account, not the highlighted account. Turning one off removes only Nyx's extra remembered copy; the existing energy display and earlier achievement exports stay unchanged.");
+            var hsrCapabilityHelp = new TextBlock
+            {
+                Text = "These switches apply to the active HoYoLAB account, not the highlighted account. Turning one off removes only Nyx's extra remembered copy; the existing energy display and earlier achievement exports stay unchanged.",
+                Foreground = (Brush)Application.Current.Resources["MistBrush"],
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
+            };
+            AutomationProperties.SetName(hsrCapabilityHelp, "Star Rail remembered data help");
+            hsrCapabilityPanel = new StackPanel { Spacing = 6 };
+            hsrCapabilityPanel.Children.Add(rememberHsrResources);
+            hsrCapabilityPanel.Children.Add(rememberHsrAchievements);
+            hsrCapabilityPanel.Children.Add(hsrCapabilityHelp);
+        }
         var actionButtons = new Grid
         {
             ColumnSpacing = 6,
@@ -1586,6 +1630,8 @@ public sealed partial class MainPage : Page
         content.Children.Add(slots);
         content.Children.Add(labelBox);
         content.Children.Add(actionButtons);
+        if (hsrCapabilityPanel is not null)
+            content.Children.Add(hsrCapabilityPanel);
         content.Children.Add(managerStatus);
 
         var dialog = new ContentDialog
@@ -1609,6 +1655,8 @@ public sealed partial class MainPage : Page
         var suppressSelectionChanged = false;
         var managerActionInFlight = false;
         string? pendingRegionSlotId = null;
+        HoyoLabGameBundle? hsrGameBundle = null;
+        var suppressHsrCapabilityChanged = false;
 
         HoyoLabManagerSlotItem? SelectedItem() =>
             slots.SelectedItem as HoyoLabManagerSlotItem;
@@ -1650,7 +1698,7 @@ public sealed partial class MainPage : Page
         {
             var selected = SelectedItem();
             var hasSelected = selected is not null;
-            var enabled = !managerActionInFlight;
+            var enabled = !managerActionInFlight && !publisherAccountActionInFlight;
             slots.IsEnabled = enabled;
             labelBox.IsEnabled = enabled;
             useButton.IsEnabled = enabled && hasSelected && selected!.Slot.RemovalPending == false;
@@ -1663,6 +1711,62 @@ public sealed partial class MainPage : Page
                     publisherAccounts.HoyoLabAccounts.ActiveSlotId,
                     selected!.Slot.Id,
                     StringComparison.Ordinal);
+            var hsrSnapshot = hsrGameBundle;
+            var hasActiveHsrRole = hsrSnapshot?.SelectedRole is { } activeHsrRole
+                && hsrSnapshot.Roles.Any(role => role.Role.Binding == activeHsrRole);
+            if (rememberHsrResources is not null)
+                rememberHsrResources.IsEnabled = enabled && hasActiveHsrRole;
+            if (rememberHsrAchievements is not null)
+                rememberHsrAchievements.IsEnabled = enabled && hasActiveHsrRole;
+        }
+
+        void ApplyHsrCapabilityConsent(HoyoLabGameBundle? snapshot)
+        {
+            if (rememberHsrResources is null || rememberHsrAchievements is null)
+                return;
+
+            hsrGameBundle = snapshot;
+            var hasActiveHsrRole = snapshot?.SelectedRole is { } activeHsrRole
+                && snapshot.Roles.Any(role => role.Role.Binding == activeHsrRole);
+            suppressHsrCapabilityChanged = true;
+            try
+            {
+                rememberHsrResources.IsOn = hasActiveHsrRole
+                    && snapshot?.Consents.Resources == true;
+                rememberHsrAchievements.IsOn = hasActiveHsrRole
+                    && snapshot?.Consents.Achievements == true;
+            }
+            finally
+            {
+                suppressHsrCapabilityChanged = false;
+            }
+            UpdateManagerActionStates();
+        }
+
+        void FailClosedHsrCapabilityConsent()
+        {
+            ApplyHsrCapabilityConsent(snapshot: null);
+            managerStatus.Text = "Star Rail data controls are temporarily unavailable.";
+        }
+
+        async Task ReloadHsrCapabilityConsentAsync(CancellationToken cancellationToken)
+        {
+            if (rememberHsrResources is null || rememberHsrAchievements is null)
+                return;
+
+            try
+            {
+                ApplyHsrCapabilityConsent(
+                    await publisherAccounts.GetHsrGameBundleSnapshotAsync(cancellationToken));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                ApplyHsrCapabilityConsent(snapshot: null);
+            }
+            catch (Exception)
+            {
+                FailClosedHsrCapabilityConsent();
+            }
         }
 
         async Task RunManagerActionAsync(
@@ -1686,10 +1790,19 @@ public sealed partial class MainPage : Page
             }
             finally
             {
-                managerActionInFlight = false;
-                publisherAccountActionInFlight = false;
-                RenderManagerSlots(clearSelection ? null : preserveSelection);
-                RenderSelection();
+                try
+                {
+                    RenderManagerSlots(clearSelection ? null : preserveSelection);
+                    await ReloadHsrCapabilityConsentAsync(
+                        pageLease?.CancellationToken ?? CancellationToken.None);
+                }
+                finally
+                {
+                    managerActionInFlight = false;
+                    publisherAccountActionInFlight = false;
+                    UpdateManagerActionStates();
+                    RenderSelection();
+                }
             }
         }
 
@@ -1857,7 +1970,90 @@ public sealed partial class MainPage : Page
             QueueRegionChoice(selected.Id);
         };
 
+        async Task SetHsrCapabilityConsentAsync(ToggleSwitch toggle, string capability)
+        {
+            try
+            {
+                if (suppressHsrCapabilityChanged)
+                    return;
+                if (managerActionInFlight || publisherAccountActionInFlight)
+                {
+                    suppressHsrCapabilityChanged = true;
+                    try
+                    {
+                        toggle.IsOn = hsrGameBundle?.Consents.IsEnabled(capability) == true;
+                    }
+                    finally
+                    {
+                        suppressHsrCapabilityChanged = false;
+                    }
+                    return;
+                }
+
+                var requested = toggle.IsOn;
+                var saved = false;
+                var completed = false;
+                var failed = false;
+                await RunManagerActionAsync(
+                    async cancellationToken =>
+                    {
+                        try
+                        {
+                            saved = await publisherAccounts.SetHsrCapabilityConsentAsync(
+                                capability,
+                                requested,
+                                cancellationToken);
+                            completed = true;
+                            if (saved)
+                            {
+                                managerStatus.Text = requested
+                                    ? "Star Rail data will be remembered."
+                                    : "Star Rail data will no longer be remembered.";
+                            }
+                        }
+                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                        {
+                            throw;
+                        }
+                        catch (Exception)
+                        {
+                            failed = true;
+                        }
+                    },
+                    selectedSlotId);
+                if (failed)
+                {
+                    FailClosedHsrCapabilityConsent();
+                    return;
+                }
+                if (completed && (!saved || hsrGameBundle is null))
+                    managerStatus.Text = "Star Rail data could not be updated; the switch was reverted.";
+            }
+            catch (OperationCanceledException) when (
+                (pageLease?.CancellationToken ?? CancellationToken.None).IsCancellationRequested)
+            {
+            }
+            catch (Exception)
+            {
+                FailClosedHsrCapabilityConsent();
+            }
+        }
+
+        if (rememberHsrResources is not null && rememberHsrAchievements is not null)
+        {
+            rememberHsrResources.Toggled += (_, _) =>
+                _ = SetHsrCapabilityConsentAsync(
+                    rememberHsrResources,
+                    HoyoLabGameBundleRules.Resources);
+            rememberHsrAchievements.Toggled += (_, _) =>
+                _ = SetHsrCapabilityConsentAsync(
+                    rememberHsrAchievements,
+                    HoyoLabGameBundleRules.Achievements);
+        }
+
         RenderManagerSlots(preserveSelection: null);
+        await ReloadHsrCapabilityConsentAsync(
+            pageLease?.CancellationToken ?? CancellationToken.None);
         try
         {
             while (true)
@@ -3272,7 +3468,7 @@ public sealed partial class MainPage : Page
         };
         var publisherPasswordSaving = new ToggleSwitch
         {
-            Header = "Locally save browser login?",
+            Header = "Locally save Endfield login?",
             IsOn = before.Preferences.PublisherPasswordSavingEnabled,
             OnContent = "Save and autofill",
             OffContent = "Never save",
@@ -3621,7 +3817,7 @@ public sealed partial class MainPage : Page
         launcherPanel.Children.Add(publisherPasswordSaving);
         launcherPanel.Children.Add(new TextBlock
         {
-            Text = "Keeps your publisher login saved on this PC. Turning it off removes saved passwords.",
+            Text = "Keeps your Endfield login saved on this PC. Turning it off removes saved Endfield passwords.",
             Foreground = (Brush)Application.Current.Resources["MistBrush"],
             FontSize = 11,
             TextWrapping = TextWrapping.Wrap,
@@ -4183,9 +4379,9 @@ public sealed partial class MainPage : Page
                 app.ApplyContentRefreshPreferences();
                 if (before.Preferences.PublisherPasswordSavingEnabled
                     && !publisherPasswordSaving.IsOn
-                    && !await app.PublisherAccounts.ClearSavedPasswordsAsync())
+                    && !await app.PublisherAccounts.ClearSavedSkportPasswordsAsync())
                 {
-                    message.Text = "Password saving is off, but Nyx could not remove old saved passwords. Disconnecting the publisher account also deletes its private profile.";
+                    message.Text = "Endfield password saving is off, but Nyx could not remove old saved Endfield passwords. Disconnecting that account also deletes its private profile.";
                 }
                 if (manualInstallRootChanged && !selected.IsCustom)
                 {

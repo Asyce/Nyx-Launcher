@@ -936,6 +936,18 @@ public partial class App : Application
     {
         var accounts = _publisherAccounts;
         if (accounts is null) return;
+        try
+        {
+            _ = await accounts.ClearSavedHoyoLabPasswordsAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
         foreach (var provider in new[] { "HoYoLAB", "SKPORT" })
         {
             try

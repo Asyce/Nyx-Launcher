@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -71,9 +72,9 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         this.profileDirectory = Path.GetFullPath(profileDirectory);
         this.provider = provider;
         this.timeProvider = timeProvider ?? TimeProvider.System;
-        this.passwordSavingEnabled = passwordSavingEnabled;
+        this.passwordSavingEnabled = provider == "SKPORT" && passwordSavingEnabled;
         this.passwordCleanupCompleted = passwordCleanupCompleted;
-        passwordNavigationGate = new(passwordSavingEnabled);
+        passwordNavigationGate = new(this.passwordSavingEnabled);
         InitializeComponent();
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(TitleBarDrag);
@@ -191,7 +192,7 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
             }
             core.WebResourceRequested += Core_WebResourceRequested;
         }
-        else if (purpose != PublisherSessionPurpose.Connect)
+        else
         {
             core.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
             core.WebResourceRequested += Core_WebResourceRequested;
@@ -2195,10 +2196,56 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
             args.Cancel = true;
     }
 
-    private void Core_WebResourceRequested(
+    private async void Core_WebResourceRequested(
         CoreWebView2 sender,
         CoreWebView2WebResourceRequestedEventArgs args)
     {
+        if (purpose == PublisherSessionPurpose.Connect)
+        {
+            using var deferral = args.GetDeferral();
+            byte[]? requestBody = null;
+            var connectAuthorized = false;
+            try
+            {
+                string? contentType = null;
+                var content = args.Request.Content;
+                if (content is not null)
+                {
+                    if (!content.CanRead) return;
+                    var position = content.Position;
+                    try
+                    {
+                        content.Seek(position);
+                        using var clone = content.CloneStream();
+                        using var stream = clone.AsStreamForRead();
+                        requestBody = await ReadBoundedAsync(
+                            stream,
+                            PublisherAccountCatalog.MaximumConnectRequestBodyBytes,
+                            lifetime.Token);
+                        contentType = args.Request.Headers.GetHeader("Content-Type");
+                    }
+                    finally
+                    {
+                        content.Seek(position);
+                    }
+                    if (requestBody is null) return;
+                }
+                connectAuthorized = TryAuthorizeWebResourceRequest(args, requestBody, contentType);
+            }
+            catch (Exception)
+            {
+                connectAuthorized = false;
+            }
+            finally
+            {
+                if (requestBody is not null)
+                    CryptographicOperations.ZeroMemory(requestBody);
+                if (!connectAuthorized)
+                    TryBlockWebResourceRequest(sender, args);
+            }
+            return;
+        }
+
         var authorized = TryAuthorizeWebResourceRequest(args);
         if (purpose == PublisherSessionPurpose.Achievements
             && Uri.TryCreate(args.Request.Uri, UriKind.Absolute, out var requestUri)
@@ -2218,7 +2265,9 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
     }
 
     private bool TryAuthorizeWebResourceRequest(
-        CoreWebView2WebResourceRequestedEventArgs args)
+        CoreWebView2WebResourceRequestedEventArgs args,
+        ReadOnlyMemory<byte>? requestBody = null,
+        string? contentType = null)
     {
         var context = MapResourceContext(args.ResourceContext);
         if (purpose == PublisherSessionPurpose.Resource
@@ -2236,8 +2285,8 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
                 args.Request.Method,
                 context,
                 claimWriteAuthority,
-                requestBody: null,
-                contentType: null))
+                requestBody: requestBody,
+                contentType: contentType))
             return false;
 
         var expectedAchievementRole = Volatile.Read(ref expectedHsrAchievementRole);

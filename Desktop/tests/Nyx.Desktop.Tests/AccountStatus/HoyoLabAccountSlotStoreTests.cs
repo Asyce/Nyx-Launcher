@@ -237,6 +237,41 @@ public sealed class HoyoLabAccountSlotStoreTests
     }
 
     [Fact]
+    public void Failed_legacy_adoption_then_successful_restart_never_adopts_a_root_v2_bundle()
+    {
+        using var root = new TemporaryRoot();
+        Directory.CreateDirectory(Path.Combine(root.Path, "HoYoLAB"));
+        var source = LegacyFile(
+            root.Path,
+            ".protected-role-bindings",
+            "hsr.bin",
+            new byte[16 * 1024 + 1]);
+        var legacyBundle = Path.Combine(
+            root.Path,
+            ".protected-hoyolab-game-bundles",
+            "hsr-v2.bin");
+        Directory.CreateDirectory(Path.GetDirectoryName(legacyBundle)!);
+        File.WriteAllBytes(legacyBundle, [1, 2, 3]);
+
+        var failed = Store(root.Path, idFactory: () => FirstId).TryInitialize();
+        Assert.Equal(HoyoLabAccountSlotInitializationState.LegacyCompatibility, failed.State);
+        Assert.False(File.Exists(IndexPath(root.Path)));
+
+        File.WriteAllBytes(source, [7, 8, 9]);
+        var restartedStore = Store(root.Path, idFactory: () => FirstId);
+        var restarted = restartedStore.TryInitialize();
+
+        Assert.True(restarted.IsReady);
+        var adopted = Assert.Single(restarted.Index!.Slots);
+        Assert.True(restartedStore.TryGetProtectedStateRoot(adopted, out var protectedRoot));
+        Assert.False(File.Exists(Path.Combine(
+            protectedRoot,
+            ".protected-hoyolab-game-bundles",
+            "hsr-v2.bin")));
+        Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(legacyBundle));
+    }
+
+    [Fact]
     public void Adoption_rejects_a_regular_file_where_a_legacy_protected_directory_is_expected()
     {
         using var root = new TemporaryRoot();

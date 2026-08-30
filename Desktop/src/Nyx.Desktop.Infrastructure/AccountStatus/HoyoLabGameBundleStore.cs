@@ -141,12 +141,14 @@ public sealed class HoyoLabGameBundleStore
             cancellationToken);
     }
 
-    public bool TryDeleteRole(PublisherRoleBinding binding)
+    public bool TryDeleteRole(
+        PublisherRoleBinding binding,
+        CancellationToken cancellationToken = default)
     {
         if (binding is null
             || !PublisherAccountCatalog.IsValidRoleBinding(HoyoLabGameBundleRules.GameId, binding))
             return false;
-        return TryMutate(bundle => DeleteRole(bundle, binding));
+        return TryMutate(bundle => DeleteRole(bundle, binding), cancellationToken);
     }
 
     public bool TryDelete() => SerializeMutation(TryDeleteCore, false);

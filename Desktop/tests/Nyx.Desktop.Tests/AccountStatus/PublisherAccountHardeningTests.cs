@@ -3845,17 +3845,26 @@ public sealed class PublisherAccountHardeningTests
         Assert.Contains("core.Reload()", browser, StringComparison.Ordinal);
         Assert.Contains("AddWebResourceRequestedFilter", browser, StringComparison.Ordinal);
         Assert.Contains("Core_WebResourceRequested", browser, StringComparison.Ordinal);
-        Assert.Contains("purpose != PublisherSessionPurpose.Connect", browser, StringComparison.Ordinal);
+        Assert.Contains("purpose == PublisherSessionPurpose.Connect", browser, StringComparison.Ordinal);
         Assert.Contains("purpose == PublisherSessionPurpose.CheckIn", browser, StringComparison.Ordinal);
         Assert.Contains("GetCheckInWebResourceFilterPatterns(gameId)", browser, StringComparison.Ordinal);
         Assert.DoesNotContain("SensitiveRequestBodyStream", browser, StringComparison.Ordinal);
         Assert.DoesNotContain("var requestContent = args.Request.Content", browser, StringComparison.Ordinal);
         var requestFilter = Slice(
             browser,
-            "private void Core_WebResourceRequested",
+            "private async void Core_WebResourceRequested",
             "private bool TryAuthorizeWebResourceRequest");
-        Assert.DoesNotContain("PublisherSessionPurpose.Connect", requestFilter, StringComparison.Ordinal);
-        Assert.DoesNotContain("GetDeferral", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("PublisherSessionPurpose.Connect", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("args.GetDeferral()", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("content.CloneStream()", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("content.Seek(position)", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("PublisherAccountCatalog.MaximumConnectRequestBodyBytes", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("args.Request.Headers.GetHeader(\"Content-Type\")", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("TryAuthorizeWebResourceRequest(args, requestBody, contentType)", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("CryptographicOperations.ZeroMemory(requestBody)", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("TryBlockWebResourceRequest(sender, args)", requestFilter, StringComparison.Ordinal);
+        Assert.DoesNotContain("Console", requestFilter, StringComparison.Ordinal);
+        Assert.DoesNotContain("Trace", requestFilter, StringComparison.Ordinal);
         Assert.DoesNotContain("IsConnectProfileMutationRequest", browser, StringComparison.Ordinal);
         var connectProfileBoundary = browser.IndexOf(
             "profileMutationJournal!.MarkMayHaveChanged();",
@@ -3987,7 +3996,7 @@ public sealed class PublisherAccountHardeningTests
         Assert.Contains("TryLoadRoleRecord(entry.GameId, operation)", resolver, StringComparison.Ordinal);
         Assert.Contains("PublisherDailyRolePolicy.Resolve(", resolver, StringComparison.Ordinal);
         Assert.Contains(
-            "TryDeleteProtectedGameState(entry.GameId, entry.Provider, operation)",
+            "TryDeleteProtectedGameState(",
             resolver,
             StringComparison.Ordinal);
         Assert.Contains("await rolePicker(resolution.Choices", resolver, StringComparison.Ordinal);
@@ -4046,7 +4055,7 @@ public sealed class PublisherAccountHardeningTests
     }
 
     [Fact]
-    public void Private_browser_password_storage_defaults_on_and_opt_out_removes_only_saved_passwords()
+    public void Hoyo_browser_password_storage_is_forced_off_and_cleanup_removes_only_saved_passwords()
     {
         var browser = ReadAppFile("PublisherSessionWindow.xaml.cs");
         var browserMarkup = ReadAppFile("PublisherSessionWindow.xaml");
@@ -4067,6 +4076,18 @@ public sealed class PublisherAccountHardeningTests
             app,
             StringComparison.Ordinal);
         Assert.Contains("AppWindow.Resize(new SizeInt32(1280, 720))", browser, StringComparison.Ordinal);
+        var browserConstructor = Slice(
+            browser,
+            "public PublisherSessionWindow(",
+            "public async Task InitializeAsync");
+        Assert.Contains(
+            "this.passwordSavingEnabled = provider == \"SKPORT\" && passwordSavingEnabled;",
+            browserConstructor,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "passwordNavigationGate = new(this.passwordSavingEnabled);",
+            browserConstructor,
+            StringComparison.Ordinal);
         Assert.Contains("core.Settings.IsGeneralAutofillEnabled = false;", browser, StringComparison.Ordinal);
         Assert.Contains(
             "core.Settings.IsPasswordAutosaveEnabled = passwordSavingEnabled;",
@@ -4094,10 +4115,8 @@ public sealed class PublisherAccountHardeningTests
             "CoreWebView2BrowsingDataKinds.Cookies",
             browser,
             StringComparison.Ordinal);
-        Assert.Contains("ApplyPasswordSavingPreference(enabled: false);", service, StringComparison.Ordinal);
-        Assert.True(
-            service.IndexOf("ApplyPasswordSavingPreference(enabled: false);", StringComparison.Ordinal)
-            < service.IndexOf("ClearSavedPasswordsAsync(\"HoYoLAB\"", StringComparison.Ordinal));
+        Assert.Contains("public Task<bool> ClearSavedHoyoLabPasswordsAsync", service, StringComparison.Ordinal);
+        Assert.Contains("public Task<bool> ClearSavedSkportPasswordsAsync", service, StringComparison.Ordinal);
         Assert.Contains(
             "Future publisher windows retry the exact",
             service,
@@ -4116,7 +4135,7 @@ public sealed class PublisherAccountHardeningTests
             StringComparison.Ordinal);
         Assert.Contains("Directory.Delete(profile, recursive);", service, StringComparison.Ordinal);
         Assert.Contains(
-            "Header = \"Locally save browser login?\"",
+            "Header = \"Locally save Endfield login?\"",
             settings,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -4132,11 +4151,11 @@ public sealed class PublisherAccountHardeningTests
             settings,
             StringComparison.Ordinal);
         Assert.Contains(
-            "&& !await app.PublisherAccounts.ClearSavedPasswordsAsync()",
+            "&& !await app.PublisherAccounts.ClearSavedSkportPasswordsAsync()",
             settings,
             StringComparison.Ordinal);
         Assert.Contains(
-            "Disconnecting the publisher account also deletes its private profile.",
+            "Disconnecting that account also deletes its private profile.",
             settings,
             StringComparison.Ordinal);
         Assert.DoesNotContain(
@@ -4144,7 +4163,7 @@ public sealed class PublisherAccountHardeningTests
             browserMarkup,
             StringComparison.Ordinal);
         Assert.Contains(
-            "Keeps your publisher login saved on this PC. Turning it off removes saved passwords.",
+            "Keeps your Endfield login saved on this PC. Turning it off removes saved Endfield passwords.",
             settings,
             StringComparison.Ordinal);
         Assert.DoesNotContain(
@@ -4162,6 +4181,26 @@ public sealed class PublisherAccountHardeningTests
             "dto.Preferences?.PublisherPasswordSavingEnabled ?? true",
             migrations,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Startup_hoyo_password_cleanup_precedes_revocation_recovery_in_one_flow()
+    {
+        var app = ReadAppFile("App.xaml.cs");
+        var recovery = Slice(
+            app,
+            "private async Task RecoverPendingPublisherRevocationsAsync()",
+            "private bool TryPersistPublisherCleanupPending(");
+        var passwordCleanup = recovery.IndexOf(
+            "await accounts.ClearSavedHoyoLabPasswordsAsync()",
+            StringComparison.Ordinal);
+        var revocationLoop = recovery.IndexOf(
+            "foreach (var provider in new[] { \"HoYoLAB\", \"SKPORT\" })",
+            StringComparison.Ordinal);
+
+        Assert.True(passwordCleanup >= 0 && passwordCleanup < revocationLoop);
+        Assert.Equal(1, CountOccurrences(app, "_ = RecoverPendingPublisherRevocationsAsync();"));
+        Assert.Equal(1, CountOccurrences(app, "ClearSavedHoyoLabPasswordsAsync"));
     }
 
     [Fact]
@@ -5074,7 +5113,7 @@ public sealed class PublisherAccountHardeningTests
             read,
             StringComparison.Ordinal);
         var cleanup = refresh.IndexOf(
-            "TryDeleteProtectedGameState(entry.GameId, entry.Provider, operation)",
+            "TryDeleteProtectedGameState(",
             diagnostic,
             StringComparison.Ordinal);
         var catchBlock = refresh.IndexOf(
@@ -5420,13 +5459,13 @@ public sealed class PublisherAccountHardeningTests
             service,
             "private async Task<PublisherResourceSnapshot?> RefreshResourceCoreAsync",
             "public Task<DailyCheckInResult> CheckInAsync");
-        Assert.Equal(2, CountOccurrences(refresh, "if (!TryDeleteProtectedGameState(entry.GameId, entry.Provider, operation))"));
+        Assert.Equal(2, CountOccurrences(refresh, "if (!TryDeleteProtectedGameState("));
 
         var daily = Slice(
             service,
             "private async Task<PublisherDailyRoleResolution> ResolveDailyRoleAsync",
             "private async Task<PublisherSessionProof> ProbeConnectionCoreAsync");
-        Assert.Contains("if (!TryDeleteProtectedGameState(entry.GameId, entry.Provider, operation))", daily, StringComparison.Ordinal);
+        Assert.Contains("if (!TryDeleteProtectedGameState(", daily, StringComparison.Ordinal);
         Assert.Contains("PublisherDailyRoleResolutionState.NeedsReview", daily, StringComparison.Ordinal);
 
         var interrupted = Slice(
