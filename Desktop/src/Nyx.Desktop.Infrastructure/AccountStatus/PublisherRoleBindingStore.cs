@@ -377,6 +377,7 @@ internal interface IPublisherRoleBindingFileBoundary
     FileAttributes GetAttributes(string path);
     FileStream OpenRead(string path);
     FileStream CreateNewWriteThrough(string path);
+    void MoveNew(string source, string destination);
     void MoveOverwrite(string source, string destination);
     void Delete(string path);
 }
@@ -421,6 +422,9 @@ internal sealed class SystemPublisherRoleBindingFileBoundary : IPublisherRoleBin
         FileShare.None,
         4096,
         FileOptions.WriteThrough);
+
+    public void MoveNew(string source, string destination) =>
+        File.Move(source, destination, overwrite: false);
 
     public void MoveOverwrite(string source, string destination) =>
         File.Move(source, destination, overwrite: true);

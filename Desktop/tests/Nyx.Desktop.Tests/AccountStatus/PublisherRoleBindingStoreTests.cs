@@ -374,6 +374,9 @@ public sealed class PublisherRoleBindingStoreTests
         public FileStream CreateNewWriteThrough(string path) =>
             inner.CreateNewWriteThrough(path);
 
+        public void MoveNew(string source, string destination) =>
+            inner.MoveNew(source, destination);
+
         public void MoveOverwrite(string source, string destination)
         {
             if (FailMove) throw new IOException("Injected interrupted move.");

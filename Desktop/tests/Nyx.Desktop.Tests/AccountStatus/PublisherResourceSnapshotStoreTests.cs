@@ -146,6 +146,7 @@ public sealed class PublisherResourceSnapshotStoreTests
                 : inner.GetAttributes(path);
         public FileStream OpenRead(string path) => inner.OpenRead(path);
         public FileStream CreateNewWriteThrough(string path) => inner.CreateNewWriteThrough(path);
+        public void MoveNew(string source, string destination) => inner.MoveNew(source, destination);
         public void MoveOverwrite(string source, string destination) =>
             inner.MoveOverwrite(source, destination);
         public void Delete(string path) => inner.Delete(path);
