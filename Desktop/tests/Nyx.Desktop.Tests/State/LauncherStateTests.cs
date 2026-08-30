@@ -6,6 +6,7 @@ using Nyx.Desktop.Core.Games;
 using Nyx.Desktop.Core.State;
 using Nyx.Desktop.Core.Features;
 using Nyx.Desktop.Infrastructure.State;
+using Nyx_Desktop_App;
 
 namespace Nyx.Desktop.Tests.State;
 
@@ -17,7 +18,7 @@ public sealed class LauncherStateTests
         var result = LauncherStateMigrations.Read(
             """{"version":6,"selectedGameId":"zzz","officialLaunchOptions":{"gi":{"rawArguments":"--name \"Traveler One\"","enabled":true},"hsr":{"rawArguments":"--saved while off","enabled":false},"zzz":{"rawArguments":"\"unterminated","enabled":true},"wuwa":7,"ae":{"rawArguments":"--future","enabled":true,"schemaVersion":2},"future":{"rawArguments":"--bad","enabled":true}}}""");
 
-        Assert.Equal(LauncherStateReadStatus.Loaded, result.Status);
+        Assert.Equal(LauncherStateReadStatus.Migrated, result.Status);
         Assert.Equal("zzz", result.State!.SelectedGameId);
         Assert.Equal(["gi", "hsr", "zzz", "wuwa", "ae"], result.State.OfficialLaunchOptions.Keys);
         Assert.Equal(new OfficialGameLaunchOptions { RawArguments = "--name \"Traveler One\"", Enabled = true }, result.State.OfficialLaunchOptions["gi"]);
@@ -110,175 +111,72 @@ public sealed class LauncherStateTests
     }
 
     [Fact]
-    public void Version_five_migrates_to_empty_endfield_playtime_without_changing_flags()
+    public void Version_five_and_six_start_v7_playtime_empty_and_never_migrate_endfield_history()
     {
-        var result = LauncherStateMigrations.Read("""
-        {
-          "version":5,
-          "preferences":{"featureFlags":{"endfieldPulls":true,"endfieldAchievements":false}},
-          "endfieldPlaytime":{
-            "incompleteSessions":4,
-            "intervals":[{"startUtc":"2026-08-29T10:00:00+00:00","endUtc":"2026-08-29T11:00:00+00:00","timeZoneId":"UTC"}],
-            "pendingStart":{"startedAt":"2026-08-29T12:00:00+00:00","timeZoneId":"UTC"}
-          }
-        }
+        var v5 = LauncherStateMigrations.Read("""
+        {"version":5,"playtimeSecondsByGame":{"gi":42},"endfieldPlaytime":{"intervals":[{}]}}
+        """);
+        var v6 = LauncherStateMigrations.Read("""
+        {"version":6,"playtimeSecondsByGame":{"gi":42},"endfieldPlaytime":{"intervals":[{}]}}
         """);
 
-        Assert.Equal(LauncherStateReadStatus.Migrated, result.Status);
-        var state = Assert.IsType<LauncherState>(result.State);
-        Assert.Equal(0, state.EndfieldPlaytime.IncompleteSessions);
-        Assert.Empty(state.EndfieldPlaytime.Intervals);
-        Assert.Null(state.EndfieldPlaytime.PendingStart);
-        Assert.True(state.Preferences.FeatureFlags.EndfieldPulls);
-        Assert.False(state.Preferences.FeatureFlags.EndfieldAchievements);
+        Assert.Equal(LauncherStateReadStatus.Migrated, v5.Status);
+        Assert.Equal(LauncherStateReadStatus.Migrated, v6.Status);
+        Assert.Empty(v5.State!.PlaytimeSecondsByGame);
+        Assert.Empty(v6.State!.PlaytimeSecondsByGame);
+        Assert.Contains("\"version\": 7", LauncherStateMigrations.Write(v6.State));
+        Assert.DoesNotContain("endfieldPlaytime", LauncherStateMigrations.Write(v6.State), StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Valid_v6_endfield_playtime_round_trips_intervals_pending_and_flags()
+    public void V7_playtime_seconds_round_trip_and_normalization_keep_only_allowed_nonnegative_values()
     {
         var result = LauncherStateMigrations.Read("""
         {
-          "version":6,
-          "preferences":{"featureFlags":{"endfieldPulls":true,"endfieldAchievements":false}},
-          "endfieldPlaytime":{
-            "incompleteSessions":7,
-            "intervals":[
-              {"startUtc":"2026-08-29T11:00:00+00:00","endUtc":"2026-08-29T11:30:00+00:00","timeZoneId":"UTC"},
-              {"startUtc":"2026-08-29T10:00:00+00:00","endUtc":"2026-08-29T11:00:00+00:00","timeZoneId":"UTC"}
-            ],
-            "pendingStart":{"startedAt":"2026-08-29T12:00:00+00:00","timeZoneId":"UTC"}
+          "version":7,
+          "customGames":[{"id":"custom-test","name":"Test","executablePath":"C:\\Games\\game.exe","iconPath":"C:\\Games\\icon.png"}],
+          "playtimeSecondsByGame":{
+            "gi":42,
+            "custom-test":7,
+            "hsr":-9223372036854775809,
+            "zzz":9223372036854775808,
+            "future":99,
+            "wuwa":"bad",
+            "ae":1.5
           }
         }
         """);
 
-        Assert.Equal(LauncherStateReadStatus.Loaded, result.Status);
-        var state = Assert.IsType<LauncherState>(result.State);
-        Assert.Equal(7, state.EndfieldPlaytime.IncompleteSessions);
-        Assert.Equal(2, state.EndfieldPlaytime.Intervals.Count);
-        Assert.Equal(
-            DateTimeOffset.Parse("2026-08-29T10:00:00+00:00"),
-            state.EndfieldPlaytime.Intervals[0].StartUtc);
-        Assert.Equal(DateTimeOffset.Parse("2026-08-29T12:00:00+00:00"), state.EndfieldPlaytime.PendingStart!.StartedAt);
-        Assert.Equal("UTC", state.EndfieldPlaytime.PendingStart.TimeZoneId);
-        Assert.True(state.Preferences.FeatureFlags.EndfieldPulls);
-        Assert.False(state.Preferences.FeatureFlags.EndfieldAchievements);
+        var totals = result.State!.PlaytimeSecondsByGame;
+        Assert.Equal(42, totals["gi"]);
+        Assert.Equal(7, totals["custom-test"]);
+        Assert.Equal(0, totals["hsr"]);
+        Assert.Equal(long.MaxValue, totals["zzz"]);
+        Assert.DoesNotContain("future", totals.Keys);
+        Assert.DoesNotContain("wuwa", totals.Keys);
+        Assert.DoesNotContain("ae", totals.Keys);
 
-        var roundTrip = LauncherStateMigrations.Read(LauncherStateMigrations.Write(state));
-        Assert.Equal(LauncherStateReadStatus.Loaded, roundTrip.Status);
-        Assert.Equal(state.EndfieldPlaytime.Intervals, roundTrip.State!.EndfieldPlaytime.Intervals);
-        Assert.Equal(state.EndfieldPlaytime.PendingStart, roundTrip.State.EndfieldPlaytime.PendingStart);
-        Assert.Equal(state.EndfieldPlaytime.IncompleteSessions, roundTrip.State.EndfieldPlaytime.IncompleteSessions);
-        Assert.True(roundTrip.State.Preferences.FeatureFlags.EndfieldPulls);
-        Assert.False(roundTrip.State.Preferences.FeatureFlags.EndfieldAchievements);
+        var roundTrip = LauncherStateMigrations.Read(LauncherStateMigrations.Write(result.State));
+        Assert.Equal(totals, roundTrip.State!.PlaytimeSecondsByGame);
+        Assert.DoesNotContain("endfieldPlaytime", LauncherStateMigrations.Write(result.State), StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Endfield_v6_discards_intervals_from_the_rejected_log_based_candidate()
+    public void V7_playtime_serialization_has_only_the_total_dictionary()
     {
-        var result = LauncherStateMigrations.Read("""
+        var written = LauncherStateMigrations.Write(LauncherState.Defaults() with
         {
-          "version":6,
-          "endfieldPlaytime":{
-            "intervals":[
-              {"kind":0,"startUtc":"2026-08-29T10:00:00+00:00","endUtc":"2026-08-29T11:00:00+00:00","timeZoneId":"UTC"},
-              {"kind":1,"startUtc":"2026-08-29T12:00:00+00:00","endUtc":"2026-08-29T13:00:00+00:00","timeZoneId":"UTC"}
-            ]
-          }
-        }
-        """);
+            PlaytimeSecondsByGame = new Dictionary<string, long>
+            {
+                ["gi"] = long.MaxValue,
+            },
+        });
 
-        Assert.Empty(result.State!.EndfieldPlaytime.Intervals);
-    }
-
-    [Fact]
-    public void Endfield_playtime_filters_invalid_values_deduplicates_overlaps_and_sorts_deterministically()
-    {
-        var result = LauncherStateMigrations.Read("""
-        {
-          "version":6,
-          "endfieldPlaytime":{
-            "incompleteSessions":-3,
-            "intervals":[
-              {"startUtc":"2026-01-01T04:00:00+00:00","endUtc":"2026-01-01T05:00:00+00:00","timeZoneId":"UTC"},
-              {"startUtc":"2026-01-01T02:00:00+00:00","endUtc":"2026-01-01T03:00:00+00:00","timeZoneId":"UTC"},
-              {"startUtc":"2026-01-01T02:00:00+00:00","endUtc":"2026-01-01T03:00:00+00:00","timeZoneId":"UTC"},
-              {"startUtc":"2026-01-01T02:30:00+00:00","endUtc":"2026-01-01T03:30:00+00:00","timeZoneId":"UTC"},
-              {"startUtc":"2026-01-01T06:00:00-05:00","endUtc":"2026-01-01T07:00:00-05:00","timeZoneId":"UTC"},
-              {"startUtc":"2026-01-01T06:00:00+00:00","endUtc":"2026-01-01T07:00:00+00:00","timeZoneId":"not-a-zone"},
-              {"startUtc":"2026-01-01T08:00:00+00:00","endUtc":"2026-01-01T08:00:00+00:00","timeZoneId":"UTC"},
-              {"startUtc":"2026-01-01T09:00:00+00:00","endUtc":"2026-01-09T09:00:00+00:00","timeZoneId":"UTC"}
-            ]
-          }
-        }
-        """);
-
-        var intervals = result.State!.EndfieldPlaytime.Intervals;
-        Assert.Equal(2, intervals.Count);
-        Assert.Equal(0, result.State.EndfieldPlaytime.IncompleteSessions);
-        Assert.Equal(DateTimeOffset.Parse("2026-01-01T02:00:00+00:00"), intervals[0].StartUtc);
-        Assert.Equal(DateTimeOffset.Parse("2026-01-01T04:00:00+00:00"), intervals[1].StartUtc);
-    }
-
-    [Theory]
-    [InlineData(-1, 0)]
-    [InlineData(0, 0)]
-    [InlineData(int.MaxValue, int.MaxValue)]
-    public void Endfield_incomplete_session_counter_is_nonnegative_and_saturates(int input, int expected)
-    {
-        var result = LauncherStateMigrations.Read(
-            $"{{\"version\":6,\"endfieldPlaytime\":{{\"incompleteSessions\":{input}}}}}");
-
-        Assert.Equal(expected, result.State!.EndfieldPlaytime.IncompleteSessions);
-    }
-
-    [Theory]
-    [InlineData("""{"version":6,"endfieldPlaytime":{"pendingStart":{"startedAt":"2026-08-29T12:00:00-05:00","timeZoneId":"UTC"}}}""")]
-    [InlineData("""{"version":6,"endfieldPlaytime":{"pendingStart":{"startedAt":"2026-08-29T12:00:00+00:00","timeZoneId":"not-a-zone"}}}""")]
-    [InlineData("""{"version":6,"endfieldPlaytime":{"pendingStart":{"timeZoneId":"UTC"}}}""")]
-    public void Endfield_pending_start_is_rejected_without_a_valid_utc_instant_and_zone(string json)
-    {
-        var result = LauncherStateMigrations.Read(json);
-
-        Assert.Null(result.State!.EndfieldPlaytime.PendingStart);
-    }
-
-    [Fact]
-    public void Endfield_playtime_serialization_contains_only_normalized_fields()
-    {
-        var result = LauncherStateMigrations.Read("""
-        {
-          "version":6,
-          "endfieldPlaytime":{
-            "incompleteSessions":5,
-            "intervals":[{"startUtc":"2026-08-29T10:00:00+00:00","endUtc":"2026-08-29T11:00:00+00:00","timeZoneId":"UTC"}],
-            "pendingStart":{"startedAt":"2026-08-29T12:00:00+00:00","timeZoneId":"UTC"},
-            "selectedLogRoot":"discard",
-            "raw":"discard",
-            "line":"discard",
-            "filename":"discard",
-            "warning":"discard",
-            "url":"discard",
-            "token":"discard"
-          }
-        }
-        """);
-
-        var written = LauncherStateMigrations.Write(result.State!);
         using var document = JsonDocument.Parse(written);
-        var playtime = document.RootElement.GetProperty("endfieldPlaytime");
-        Assert.Equal(
-            ["incompleteSessions", "intervals", "pendingStart"],
-            playtime.EnumerateObject().Select(static property => property.Name).Order());
-        var interval = Assert.Single(playtime.GetProperty("intervals").EnumerateArray());
-        Assert.Equal(
-            ["endUtc", "startUtc", "timeZoneId"],
-            interval.EnumerateObject().Select(static property => property.Name).Order());
-
-        var forbidden = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "raw", "line", "filename", "selectedLogRoot", "warning", "url", "token",
-        };
-        Assert.All(PropertyNames(playtime), name => Assert.False(forbidden.Contains(name), name));
+        Assert.Equal(7, document.RootElement.GetProperty("version").GetInt32());
+        var playtime = document.RootElement.GetProperty("playtimeSecondsByGame");
+        Assert.Equal(long.MaxValue, playtime.GetProperty("gi").GetInt64());
+        Assert.DoesNotContain("endfieldPlaytime", written, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1590,6 +1488,141 @@ public sealed class LauncherStateTests
     }
 
     [Fact]
+    public void Controller_reset_preserves_the_newest_validated_playtime_snapshot()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nyx-state-controller-playtime-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new LauncherStateStore(directory);
+            store.Save(LauncherState.Defaults() with
+            {
+                PlaytimeSecondsByGame = new Dictionary<string, long>
+                {
+                    ["gi"] = 10,
+                },
+            });
+            var controller = new LauncherStateController(store);
+
+            Assert.True(controller.TryReset(new Dictionary<string, long>
+            {
+                ["gi"] = 99,
+                ["hsr"] = 4,
+                ["custom-removed"] = 12,
+            }));
+
+            var saved = store.Load().State!;
+            Assert.Equal("gi", saved.SelectedGameId);
+            Assert.Equal(
+                new Dictionary<string, long> { ["gi"] = 99, ["hsr"] = 4 },
+                saved.PlaytimeSecondsByGame);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Store_reset_without_a_snapshot_preserves_current_playtime_and_cleanup_safety()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nyx-state-reset-playtime-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new LauncherStateStore(directory);
+            store.Save(LauncherState.Defaults() with
+            {
+                SelectedGameId = "hsr",
+                PlaytimeSecondsByGame = new Dictionary<string, long>
+                {
+                    ["gi"] = 42,
+                    ["hsr"] = 7,
+                },
+                Preferences = LauncherState.Defaults().Preferences with
+                {
+                    FeatureFlags = LauncherFeatureFlags.Defaults() with
+                    {
+                        HoyoLabAccountAccess = true,
+                        HoyoLabAccountCleanupPending = true,
+                    },
+                },
+            });
+
+            var reset = store.ResetToDefaults();
+
+            Assert.True(reset.IsUsable);
+            var saved = store.Load().State!;
+            Assert.Equal("gi", saved.SelectedGameId);
+            Assert.Equal(
+                new Dictionary<string, long> { ["gi"] = 42, ["hsr"] = 7 },
+                saved.PlaytimeSecondsByGame);
+            Assert.True(saved.Preferences.FeatureFlags.HoyoLabAccountCleanupPending);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("HoYoLAB")]
+    [InlineData("SKPORT")]
+    public void Interrupted_reset_preserves_reconciled_cleanup_safety_in_backup(string provider)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nyx-state-reset-cleanup-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new LauncherStateStore(directory);
+            var primaryFlags = provider switch
+            {
+                "HoYoLAB" => LauncherFeatureFlags.Defaults() with { HoyoLabAccountAccess = true },
+                "SKPORT" => LauncherFeatureFlags.Defaults() with { SkportAccountAccess = true },
+                _ => throw new ArgumentOutOfRangeException(nameof(provider)),
+            };
+            var backupFlags = provider switch
+            {
+                "HoYoLAB" => LauncherFeatureFlags.Defaults() with { HoyoLabAccountCleanupPending = true },
+                "SKPORT" => LauncherFeatureFlags.Defaults() with { SkportAccountCleanupPending = true },
+                _ => throw new ArgumentOutOfRangeException(nameof(provider)),
+            };
+            File.WriteAllText(store.StatePath, LauncherStateMigrations.Write(
+                LauncherState.Defaults() with
+                {
+                    SelectedGameId = "hsr",
+                    Preferences = LauncherState.Defaults().Preferences with { FeatureFlags = primaryFlags },
+                }));
+            File.WriteAllText(store.BackupPath, LauncherStateMigrations.Write(
+                LauncherState.Defaults() with
+                {
+                    SelectedGameId = "zzz",
+                    Preferences = LauncherState.Defaults().Preferences with { FeatureFlags = backupFlags },
+                }));
+
+            using (new FileStream(store.StatePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                var exception = Record.Exception(() => store.ResetToDefaults());
+                Assert.True(exception is IOException or UnauthorizedAccessException);
+            }
+
+            var recovery = LauncherStateMigrations.Read(File.ReadAllText(store.BackupPath)).State!;
+            Assert.Equal("hsr", recovery.SelectedGameId);
+            if (provider == "HoYoLAB")
+            {
+                Assert.True(recovery.Preferences.FeatureFlags.HoyoLabAccountCleanupPending);
+                Assert.False(recovery.Preferences.FeatureFlags.HoyoLabAccountAccess);
+            }
+            else
+            {
+                Assert.True(recovery.Preferences.FeatureFlags.SkportAccountCleanupPending);
+                Assert.False(recovery.Preferences.FeatureFlags.SkportAccountAccess);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Recovered_backup_does_not_silently_authorize_replacing_bad_primary()
     {
         var directory = Path.Combine(Path.GetTempPath(), "nyx-state-recovery-block-" + Guid.NewGuid().ToString("N"));
@@ -1617,6 +1650,121 @@ public sealed class LauncherStateTests
                 "launcher-state-v1.json.recovery.*"));
             Assert.Equal(malformed, File.ReadAllText(recoveryCopy));
             Assert.True(store.CanSave);
+            Assert.Equal("hsr", store.Load().State!.SelectedGameId);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Prepared_restore_keeps_captured_target_when_playtime_save_rotates_backup()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nyx-state-prepared-restore-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new LauncherStateStore(directory);
+            var capturedGame = new CustomGameDefinition
+            {
+                Id = "custom-captured",
+                Name = "Captured",
+                ExecutablePath = @"C:\Games\captured.exe",
+                IconPath = @"C:\Games\captured.png",
+            };
+            var rotatedGame = new CustomGameDefinition
+            {
+                Id = "custom-rotated",
+                Name = "Rotated",
+                ExecutablePath = @"C:\Games\rotated.exe",
+                IconPath = @"C:\Games\rotated.png",
+            };
+            var captured = LauncherCustomGameStateMerge.Add(
+                LauncherState.Defaults() with { SelectedGameId = "hsr" },
+                capturedGame);
+            var primary = LauncherCustomGameStateMerge.Add(
+                LauncherState.Defaults() with { SelectedGameId = "ae" },
+                rotatedGame);
+            store.Save(captured);
+            store.Save(primary);
+
+            var preparedResult = store.PrepareLastKnownGoodRestore(out var prepared);
+            Assert.True(preparedResult.IsUsable);
+            Assert.NotNull(prepared);
+            Assert.Equal("custom-captured", Assert.Single(prepared.Target.CustomGames).Id);
+
+            store.Update(state => state with
+            {
+                SelectedGameId = "zzz",
+                PlaytimeSecondsByGame = new Dictionary<string, long> { ["gi"] = 41 },
+            });
+            var restored = store.CommitPreparedLastKnownGoodRestore(
+                prepared,
+                new Dictionary<string, long> { ["gi"] = 99 });
+
+            Assert.Equal(LauncherStateReadStatus.Recovered, restored.Status);
+            Assert.Equal(prepared.Target.SelectedGameId, restored.State!.SelectedGameId);
+            Assert.Equal("custom-captured", Assert.Single(restored.State.CustomGames).Id);
+            Assert.Equal(99, restored.State.PlaytimeSecondsByGame["gi"]);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Controller_prepared_restore_allows_only_playtime_to_change_before_commit()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nyx-state-controller-prepared-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new LauncherStateStore(directory);
+            store.Save(LauncherState.Defaults() with { SelectedGameId = "hsr" });
+            store.Save(LauncherState.Defaults() with { SelectedGameId = "zzz" });
+            var controller = new LauncherStateController(store);
+            var expected = controller.Snapshot;
+            var preparedResult = controller.PrepareLastKnownGoodRestore(out var prepared);
+            Assert.True(preparedResult.IsUsable);
+            Assert.NotNull(prepared);
+
+            Assert.True(controller.TryUpdate(state => state with
+            {
+                PlaytimeSecondsByGame = new Dictionary<string, long> { ["gi"] = 41 },
+            }));
+            Assert.True(controller.TryCommitPreparedRestore(
+                prepared,
+                expected,
+                new Dictionary<string, long> { ["gi"] = 99 },
+                out var failure));
+
+            Assert.Equal(LauncherStateUpdateFailure.None, failure);
+            Assert.Equal("hsr", controller.Snapshot.SelectedGameId);
+            Assert.Equal(99, controller.Snapshot.PlaytimeSecondsByGame["gi"]);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Controller_reserved_replace_rejects_a_concurrent_settings_mutation()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nyx-state-controller-conflict-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new LauncherStateStore(directory);
+            store.Save(LauncherState.Defaults());
+            var controller = new LauncherStateController(store);
+            var expected = controller.Snapshot;
+            var target = expected with { SelectedGameId = "ae" };
+            Assert.True(controller.TryUpdate(state => state with { SelectedGameId = "hsr" }));
+
+            Assert.False(controller.TryReplaceSettings(expected, target, out var failure));
+
+            Assert.Equal(LauncherStateUpdateFailure.ConcurrentMutation, failure);
+            Assert.Equal("hsr", controller.Snapshot.SelectedGameId);
             Assert.Equal("hsr", store.Load().State!.SelectedGameId);
         }
         finally

@@ -658,14 +658,35 @@ public sealed class IrisLauncherShellTests
         var page = ReadAppFile("MainPage.xaml.cs");
         var controller = ReadAppFile("LauncherStateController.cs");
 
-        Assert.Contains("out var settingsFailure", page, StringComparison.Ordinal);
-        Assert.Contains("out var addFailure", page, StringComparison.Ordinal);
+        Assert.Contains("var settingsFailure = await CommitCustomSessionMutationAsync", page, StringComparison.Ordinal);
+        Assert.Contains("var addFailure = await CommitCustomSessionMutationAsync", page, StringComparison.Ordinal);
         Assert.True(
             page.Split("That executable is already in your game rail.", StringSplitOptions.None).Length - 1 >= 2,
             "Both locked Settings and Add Game conflicts must show the duplicate message.");
-        Assert.Contains("sessions.TryRemoveCustomAdapter(game.Id);", page, StringComparison.Ordinal);
+        Assert.Contains("TryReserveCustomAdapterMutations", page, StringComparison.Ordinal);
+        Assert.Contains("reservation.Commit();", page, StringComparison.Ordinal);
         Assert.Contains("catch (CustomGameExecutableConflictException)", controller, StringComparison.Ordinal);
         Assert.Contains("LauncherStateUpdateFailure.CustomGameExecutableConflict", controller, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Settings_only_reset_and_restore_receive_the_live_playtime_snapshot()
+    {
+        var app = ReadAppFile("App.xaml.cs");
+        var page = ReadAppFile("MainPage.xaml.cs");
+        var controller = ReadAppFile("LauncherStateController.cs");
+
+        Assert.Contains(
+            "public bool TryReset(IReadOnlyDictionary<string, long>? playtimeSecondsByGame = null)",
+            controller,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "playtimeSecondsByGame ?? snapshot.PlaytimeSecondsByGame",
+            controller,
+            StringComparison.Ordinal);
+        Assert.Contains("gamePlaytime.SnapshotTotals(),", page, StringComparison.Ordinal);
+        Assert.Contains("CommitCustomSessionMutationAsync(", page, StringComparison.Ordinal);
+        Assert.Contains("currentPlaytimeTotals: () => _gamePlaytime?.SnapshotTotals()", app, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -152,7 +152,7 @@ public sealed class CustomGameTests
             Assert.Equal(LocalReadinessEvidence.Ready, evidence.Readiness);
             Assert.Equal(ExactProcessPresence.Present, evidence.Overall);
             var result = await adapter.RequestValidatedLaunchAsync(CancellationToken.None);
-            Assert.Equal(GameLaunchDispatchStatus.Accepted, result.Status);
+            Assert.Equal(GameLaunchDispatchStatus.AlreadyRunning, result.Status);
             Assert.Equal(0, starter.Starts);
 
             inspector.Presence = ExactProcessPresence.Absent;
@@ -161,6 +161,53 @@ public sealed class CustomGameTests
             Assert.Equal(1, starter.Starts);
         }
         finally { File.Delete(exe); }
+    }
+
+    [Fact]
+    public async Task Custom_adapter_treats_main_executable_as_runtime_when_no_runtime_path_exists()
+    {
+        var inspector = new FakeInspector { Presence = ExactProcessPresence.Present };
+        var game = new CustomGameDefinition
+        {
+            Id = "custom-runtime-main",
+            Name = "Game",
+            ExecutablePath = @"C:\Games\game.exe",
+            IconPath = @"C:\Games\icon.png",
+        };
+
+        var evidence = await new CustomGameSessionAdapter(
+            game,
+            inspector,
+            new FakeStarter(),
+            new FakeProbe()).ObserveSessionAsync(CancellationToken.None);
+
+        Assert.Equal(ExactProcessPresence.Absent, evidence.Bootstrap);
+        Assert.Equal(ExactProcessPresence.Present, evidence.Runtime);
+        Assert.Equal([game.ExecutablePath], inspector.CheckedPaths);
+    }
+
+    [Fact]
+    public async Task Custom_adapter_uses_main_as_bootstrap_and_runtime_path_as_runtime_when_configured()
+    {
+        var inspector = new FakeInspector { Presence = ExactProcessPresence.Present };
+        var game = new CustomGameDefinition
+        {
+            Id = "custom-runtime-child",
+            Name = "Game",
+            ExecutablePath = @"C:\Games\launcher.exe",
+            IconPath = @"C:\Games\icon.png",
+            RuntimePath = @"C:\Games\game.exe",
+        };
+
+        var evidence = await new CustomGameSessionAdapter(
+            game,
+            inspector,
+            new FakeStarter(),
+            new FakeProbe()).ObserveSessionAsync(CancellationToken.None);
+
+        Assert.Equal(ExactProcessPresence.Present, evidence.Bootstrap);
+        Assert.Equal(ExactProcessPresence.Present, evidence.Runtime);
+        Assert.Equal([game.ExecutablePath, game.RuntimePath], inspector.CheckedPaths);
     }
 
     [Fact]
@@ -185,6 +232,7 @@ public sealed class CustomGameTests
         var launch = await adapter.RequestValidatedLaunchAsync(CancellationToken.None);
 
         Assert.Equal(LocalReadinessEvidence.NeedsReview, observation.Readiness);
+        Assert.Equal(ExactProcessPresence.Uncertain, observation.Runtime);
         Assert.Equal(GameLaunchDispatchStatus.NeedsReview, launch.Status);
         Assert.Equal(0, starter.Starts);
     }
@@ -199,7 +247,9 @@ public sealed class CustomGameTests
         Assert.Contains(".Select(static game => CustomGameSessionFactory.Create(game))", app, StringComparison.Ordinal);
         Assert.DoesNotContain("TryCreateValidated(game", app, StringComparison.Ordinal);
         Assert.Contains("sessions.TryGetSnapshot(selected.Id", page, StringComparison.Ordinal);
-        Assert.Contains("SynchronizeCustomSessions(launcherState.Snapshot)", page, StringComparison.Ordinal);
+        Assert.Contains("CommitCustomSessionMutationAsync(", page, StringComparison.Ordinal);
+        Assert.Contains("TryReserveCustomAdapterMutations", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("SynchronizeCustomSessions", page, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -293,7 +343,12 @@ public sealed class CustomGameTests
     private sealed class FakeInspector : ICustomGameProcessInspector
     {
         public ExactProcessPresence Presence { get; set; }
-        public ExactProcessPresence Check(string executablePath) => Presence;
+        public List<string> CheckedPaths { get; } = [];
+        public ExactProcessPresence Check(string executablePath)
+        {
+            CheckedPaths.Add(executablePath);
+            return Presence;
+        }
     }
 
     private sealed class FakeStarter : ICustomGameProcessStarter

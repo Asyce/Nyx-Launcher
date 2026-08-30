@@ -81,6 +81,21 @@ public sealed class PublisherGameSessionAdapterTests
     }
 
     [Fact]
+    public async Task Dispatch_returns_already_running_when_service_did_not_start_process()
+    {
+        var adapter = CreateAdapter(
+            "ae",
+            EndfieldRoot,
+            launch: _ => Result(
+                PublisherGameLaunchStatus.Running,
+                StartedByThisCall: false));
+
+        var result = await adapter.RequestValidatedLaunchAsync(default);
+
+        Assert.Equal(GameLaunchDispatchStatus.AlreadyRunning, result.Status);
+    }
+
+    [Fact]
     public async Task Missing_locator_is_not_found_and_never_dispatches()
     {
         var launchCount = 0;
@@ -411,8 +426,9 @@ public sealed class PublisherGameSessionAdapterTests
     private static PublisherGameDirectLaunchResult Result(
         PublisherGameLaunchStatus status,
         RunningProcessStatus bootstrap = RunningProcessStatus.NotRunning,
-        RunningProcessStatus runtime = RunningProcessStatus.NotRunning) =>
-        new(status, Bootstrap: bootstrap, Runtime: runtime);
+        RunningProcessStatus runtime = RunningProcessStatus.NotRunning,
+        bool StartedByThisCall = true) =>
+        new(status, Bootstrap: bootstrap, Runtime: runtime, StartedByThisCall: StartedByThisCall);
 
     private static GameSessionCoordinator CreateCoordinator(
         TimeProvider? timeProvider,

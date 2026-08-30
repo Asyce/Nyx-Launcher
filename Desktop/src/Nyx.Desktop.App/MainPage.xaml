@@ -1438,22 +1438,6 @@
                                     FontSize="8"
                                     Tag="hoyolab" />
                             </Grid>
-                            <Button
-                                x:Name="PlaytimeStatsButton"
-                                Grid.Row="1"
-                                Grid.ColumnSpan="2"
-                                Height="28"
-                                MinHeight="28"
-                                Margin="8,0"
-                                HorizontalAlignment="Stretch"
-                                HorizontalContentAlignment="Center"
-                                AutomationProperties.Name="Open Endfield playtime statistics"
-                                Click="PlaytimeStatsButton_Click"
-                                Content="Playtime Stats"
-                                FontFamily="{StaticResource NyxBodyFont}"
-                                FontSize="10"
-                                Style="{StaticResource NyxOfficialLauncherStyle}"
-                                Visibility="Collapsed" />
                         </Grid>
 
                         <TextBlock
@@ -1497,6 +1481,7 @@
                         VerticalAlignment="Bottom"
                         RowSpacing="0">
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -1796,9 +1781,21 @@
                                  </Border>
                              </Grid>
                          </Button>
+                         <TextBlock
+                             x:Name="LaunchPlayTimeText"
+                             Grid.Row="4"
+                             Margin="12,2,12,2"
+                             HorizontalAlignment="Center"
+                             AutomationProperties.Name="Play Time: 0m. Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded."
+                             FontFamily="{StaticResource NyxDataFont}"
+                             FontSize="10"
+                             Foreground="{ThemeResource MistBrush}"
+                             Text="Play Time: 0m"
+                             TextWrapping="NoWrap"
+                             ToolTipService.ToolTip="Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded." />
                          <Grid
                              x:Name="LaunchUtilityButtons"
-                             Grid.Row="4"
+                             Grid.Row="5"
                              Margin="12,0,12,0"
                              HorizontalAlignment="Stretch"
                              ColumnSpacing="8">

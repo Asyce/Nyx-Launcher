@@ -5,6 +5,12 @@ using Nyx.Desktop.Core.State;
 
 namespace Nyx.Desktop.Infrastructure.State;
 
+public sealed record PreparedLauncherStateRestore(LauncherState Target);
+
+public sealed class LauncherStateMutationConflictException : InvalidOperationException
+{
+}
+
 /// <summary>Per-user state store with same-volume temporary replacement and backup recovery.</summary>
 public sealed class LauncherStateStore
 {
@@ -105,28 +111,82 @@ public sealed class LauncherStateStore
     /// Restores the validated last-known-good payload without treating the
     /// current (possibly malformed) primary file as a new backup.
     /// </summary>
-    public LauncherStateReadResult RestoreLastKnownGood()
+    public LauncherStateReadResult RestoreLastKnownGood(
+        IReadOnlyDictionary<string, long>? currentPlaytimeSecondsByGame = null)
+    {
+        var preparedResult = PrepareLastKnownGoodRestore(out var prepared);
+        return prepared is null
+            ? preparedResult
+            : CommitPreparedLastKnownGoodRestore(
+                prepared,
+                currentPlaytimeSecondsByGame);
+    }
+
+    /// <summary>Captures one immutable, validated backup target before UI reservation.</summary>
+    public LauncherStateReadResult PrepareLastKnownGoodRestore(
+        out PreparedLauncherStateRestore? prepared)
     {
         using var stateLock = AcquireStateLock();
         var payload = ReadFile(backupPath);
         if (payload is null)
         {
+            prepared = null;
             return new(LauncherStateReadStatus.Malformed, null, "No last-known-good settings backup exists.");
         }
 
         var result = LauncherStateMigrations.Read(payload);
         if (!result.IsUsable)
         {
+            prepared = null;
             return result;
         }
+
+        var primaryPayload = ReadFile(statePath);
+        var primaryResult = primaryPayload is null
+            ? null
+            : LauncherStateMigrations.Read(primaryPayload);
+        var current = primaryResult?.State is { } primaryState
+            ? ReconcilePublisherCleanupPending(primaryState, result.State)
+            : LoadCore().State;
+        var target = PreserveSettingsOnlyData(
+            result.State!,
+            current,
+            currentPlaytimeSecondsByGame: null);
+        prepared = new(target);
+        return result with { State = target };
+    }
+
+    /// <summary>
+    /// Commits the captured restore target with only the newest playtime and
+    /// fail-closed publisher cleanup bits merged under the state lock.
+    /// </summary>
+    public LauncherStateReadResult CommitPreparedLastKnownGoodRestore(
+        PreparedLauncherStateRestore prepared,
+        IReadOnlyDictionary<string, long>? currentPlaytimeSecondsByGame = null,
+        LauncherState? expectedSettings = null)
+    {
+        ArgumentNullException.ThrowIfNull(prepared);
+        using var stateLock = AcquireStateLock();
+        var current = LoadCore().State;
+        if (expectedSettings is not null
+            && current is not null
+            && !SettingsEqualExceptPlaytime(expectedSettings, current))
+        {
+            throw new LauncherStateMutationConflictException();
+        }
+
+        var restored = PreserveSettingsOnlyData(
+            prepared.Target,
+            current,
+            currentPlaytimeSecondsByGame);
 
         var tempPath = statePath + ".tmp." + Guid.NewGuid().ToString("N");
         try
         {
             PreservePrimaryForRecovery();
-            WriteAndFlush(tempPath, LauncherStateMigrations.Write(result.State!));
+            WriteAndFlush(tempPath, LauncherStateMigrations.Write(restored));
             ReplaceAtomically(tempPath, statePath);
-            return result with { Status = LauncherStateReadStatus.Recovered };
+            return new(LauncherStateReadStatus.Recovered, restored);
         }
         finally
         {
@@ -356,10 +416,23 @@ public sealed class LauncherStateStore
     /// Explicitly replaces an unusable primary with defaults without promoting
     /// the unusable payload to the last-known-good backup.
     /// </summary>
-    public LauncherStateReadResult ResetToDefaults()
+    public LauncherStateReadResult ResetToDefaults(
+        IReadOnlyDictionary<string, long>? currentPlaytimeSecondsByGame = null,
+        LauncherState? expectedSettings = null)
     {
         using var stateLock = AcquireStateLock();
-        var defaults = LauncherState.Defaults();
+        var current = LoadCore().State;
+        if (expectedSettings is not null
+            && current is not null
+            && !SettingsEqualExceptPlaytime(expectedSettings, current))
+        {
+            throw new LauncherStateMutationConflictException();
+        }
+
+        var defaults = PreserveSettingsOnlyData(
+            LauncherState.Defaults(),
+            current,
+            currentPlaytimeSecondsByGame);
         var tempPath = statePath + ".tmp." + Guid.NewGuid().ToString("N");
         try
         {
@@ -367,7 +440,18 @@ public sealed class LauncherStateStore
             {
                 if (PrimaryIsWritable())
                 {
-                    CopyReplacing(statePath, backupPath);
+                    var flags = current?.Preferences.FeatureFlags;
+                    if (flags is not null
+                        && (flags.HoyoLabAccountCleanupPending || flags.SkportAccountCleanupPending))
+                    {
+                        // Preserve the reconciled fail-closed marker before the
+                        // primary can be replaced by reset defaults.
+                        WriteStateReplacing(backupPath, current!);
+                    }
+                    else
+                    {
+                        CopyReplacing(statePath, backupPath);
+                    }
                 }
                 else
                 {
@@ -383,6 +467,32 @@ public sealed class LauncherStateStore
         {
             TryDelete(tempPath);
         }
+    }
+
+    private static LauncherState PreserveSettingsOnlyData(
+        LauncherState replacement,
+        LauncherState? current,
+        IReadOnlyDictionary<string, long>? currentPlaytimeSecondsByGame)
+    {
+        var preserved = replacement with
+        {
+            PlaytimeSecondsByGame = currentPlaytimeSecondsByGame
+                ?? current?.PlaytimeSecondsByGame
+                ?? replacement.PlaytimeSecondsByGame,
+        };
+        return LauncherStateMigrations.Normalize(
+            current is null
+                ? preserved
+                : ReconcilePublisherCleanupPending(preserved, current));
+    }
+
+    private static bool SettingsEqualExceptPlaytime(LauncherState left, LauncherState right)
+    {
+        var empty = new Dictionary<string, long>(StringComparer.Ordinal);
+        return string.Equals(
+            LauncherStateMigrations.Write(left with { PlaytimeSecondsByGame = empty }),
+            LauncherStateMigrations.Write(right with { PlaytimeSecondsByGame = empty }),
+            StringComparison.Ordinal);
     }
 
     private IDisposable AcquireStateLock()

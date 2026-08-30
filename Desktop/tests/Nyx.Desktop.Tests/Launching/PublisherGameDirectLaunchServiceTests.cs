@@ -106,6 +106,7 @@ public sealed class PublisherGameDirectLaunchServiceTests
         var result = fixture.Service.LaunchGame("ae", EndfieldRoot);
 
         Assert.Equal(PublisherGameLaunchStatus.Running, result.Status);
+        Assert.True(result.StartedByThisCall);
         Assert.Equal(2, fixture.Validator.Calls.Count);
         Assert.Single(fixture.Starter.Starts);
         Assert.All(fixture.Validator.Inspections, inspection => Assert.True(inspection.Disposed));
@@ -306,6 +307,21 @@ public sealed class PublisherGameDirectLaunchServiceTests
         Assert.Equal(PublisherGameLaunchStatus.NeedsReview, uncertain.Service.LaunchGame("ae", EndfieldRoot).Status);
         Assert.Empty(seen.Starter.ElevatedStarts);
         Assert.Empty(uncertain.Starter.ElevatedStarts);
+    }
+
+    [Fact]
+    public void Process_appearing_at_dispatch_is_reported_as_preexisting()
+    {
+        var fixture = new Fixture(
+            "ae",
+            EndfieldRoot,
+            [RunningProcessStatus.NotRunning, RunningProcessStatus.Running]);
+
+        var result = fixture.Service.LaunchGame("ae", EndfieldRoot);
+
+        Assert.Equal(PublisherGameLaunchStatus.Running, result.Status);
+        Assert.False(result.StartedByThisCall);
+        Assert.Empty(fixture.Starter.Starts);
     }
 
     [Fact]

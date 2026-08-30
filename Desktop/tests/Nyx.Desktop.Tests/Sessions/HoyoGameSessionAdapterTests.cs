@@ -69,13 +69,26 @@ public sealed class HoyoGameSessionAdapterTests
         var adapter = CreateAdapter(launch: root =>
         {
             launchedRoot = root;
-            return new(status);
+            return new(status, StartedByThisCall: true);
         });
 
         var result = await adapter.RequestValidatedLaunchAsync(default);
 
         Assert.Equal(expected, result.Status);
         Assert.Equal(HsrRoot, launchedRoot);
+    }
+
+    [Fact]
+    public async Task Dispatch_returns_already_running_when_service_did_not_start_process()
+    {
+        var adapter = CreateAdapter(
+            launch: _ => new(
+                HoyoGameLaunchStatus.Running,
+                StartedByThisCall: false));
+
+        var result = await adapter.RequestValidatedLaunchAsync(default);
+
+        Assert.Equal(GameLaunchDispatchStatus.AlreadyRunning, result.Status);
     }
 
     [Fact]
@@ -90,7 +103,7 @@ public sealed class HoyoGameSessionAdapterTests
             launch: _ =>
             {
                 launchCount++;
-                return new(HoyoGameLaunchStatus.Running);
+                return new(HoyoGameLaunchStatus.Running, StartedByThisCall: true);
             });
 
         Assert.Equal(LocalReadinessEvidence.Ready, (await adapter.ObserveSessionAsync(default)).Readiness);
@@ -113,7 +126,7 @@ public sealed class HoyoGameSessionAdapterTests
             (_, arguments) =>
             {
                 starts.Add(arguments.ToArray());
-                return new(HoyoGameLaunchStatus.Running);
+                return new(HoyoGameLaunchStatus.Running, StartedByThisCall: true);
             },
             () =>
             {
@@ -172,7 +185,7 @@ public sealed class HoyoGameSessionAdapterTests
             launch: _ =>
             {
                 launchCount++;
-                return new(HoyoGameLaunchStatus.Running);
+                return new(HoyoGameLaunchStatus.Running, StartedByThisCall: true);
             });
         await using var coordinator = CreateCoordinator(null, adapter);
 
@@ -212,7 +225,7 @@ public sealed class HoyoGameSessionAdapterTests
             {
                 Assert.Equal(replacement, root);
                 launchCount++;
-                return new(HoyoGameLaunchStatus.Running);
+                return new(HoyoGameLaunchStatus.Running, StartedByThisCall: true);
             });
         var time = new MutableTimeProvider();
         await using var coordinator = CreateCoordinator(time, adapter);
@@ -246,7 +259,7 @@ public sealed class HoyoGameSessionAdapterTests
             launch: _ =>
             {
                 launchCount++;
-                return new(HoyoGameLaunchStatus.Running);
+                return new(HoyoGameLaunchStatus.Running, StartedByThisCall: true);
             });
 
         Assert.Equal(LocalReadinessEvidence.Ready, (await adapter.ObserveSessionAsync(default)).Readiness);
@@ -295,7 +308,7 @@ public sealed class HoyoGameSessionAdapterTests
             launch: _ =>
             {
                 launchCount++;
-                return new(HoyoGameLaunchStatus.Running);
+                return new(HoyoGameLaunchStatus.Running, StartedByThisCall: true);
             });
         await using var coordinator = CreateCoordinator(null, freshAdapter);
 
@@ -341,7 +354,7 @@ public sealed class HoyoGameSessionAdapterTests
             launch: _ =>
             {
                 launchCount++;
-                return new(HoyoGameLaunchStatus.Running);
+                return new(HoyoGameLaunchStatus.Running, StartedByThisCall: true);
             });
         var time = new MutableTimeProvider();
         await using var coordinator = CreateCoordinator(time, adapter);
@@ -412,7 +425,7 @@ public sealed class HoyoGameSessionAdapterTests
 
             entered.Signal();
             release.Wait(TimeSpan.FromSeconds(2));
-            return new(HoyoGameLaunchStatus.Running);
+            return new(HoyoGameLaunchStatus.Running, StartedByThisCall: true);
         }
 
         var hsr = CreateAdapter(launch: _ => BlockingLaunch("hsr"));
@@ -458,7 +471,7 @@ public sealed class HoyoGameSessionAdapterTests
             gameId,
             discover ?? (() => Ready(gameId, root)),
             check ?? (_ => new(HoyoGameLaunchStatus.Ready)),
-            launch ?? (_ => new(HoyoGameLaunchStatus.Running)));
+            launch ?? (_ => new(HoyoGameLaunchStatus.Running, StartedByThisCall: true)));
 
     private static HoyoGameInspectionResult Ready() => Ready("hsr", HsrRoot);
 

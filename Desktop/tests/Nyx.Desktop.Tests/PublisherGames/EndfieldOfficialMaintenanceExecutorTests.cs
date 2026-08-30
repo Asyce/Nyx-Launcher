@@ -171,7 +171,7 @@ public sealed class EndfieldOfficialMaintenanceExecutorTests
             "ae",
             () => @"C:\Games\GRYPHLINK",
             _ => new(PublisherGameLaunchStatus.Ready),
-            _ => new(PublisherGameLaunchStatus.Running));
+            _ => new(PublisherGameLaunchStatus.Running, StartedByThisCall: true));
 
         var launch = await adapter.RequestValidatedLaunchAsync(default);
 

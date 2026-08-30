@@ -4,6 +4,7 @@ using Nyx.Desktop.Core.Genshin;
 using Nyx.Desktop.Core.Launching;
 using Nyx.Desktop.Core.Sessions;
 using Nyx.Desktop.Infrastructure.Genshin;
+using Nyx.Desktop.Infrastructure.Playtime;
 using Nyx.Desktop.Infrastructure.Sessions;
 
 namespace Nyx.Desktop.Tests.Sessions;
@@ -121,7 +122,7 @@ public sealed class GenshinGameSessionAdapterTests
             launch: root =>
             {
                 launchedRoot = root;
-                return new(status, FailureReason: reason);
+                return new(status, FailureReason: reason, StartedByThisCall: true);
             });
 
         var result = await adapter.RequestValidatedLaunchAsync(CancellationToken.None);
@@ -129,6 +130,90 @@ public sealed class GenshinGameSessionAdapterTests
         Assert.Equal(expected, result.Status);
         Assert.Equal(GameRoot, launchedRoot);
         Assert.Equal(reason, adapter.LastLaunchFailureReason);
+    }
+
+    [Fact]
+    public async Task Dispatch_returns_already_running_when_service_did_not_start_process()
+    {
+        var adapter = CreateAdapter(
+            launch: _ => new(
+                GenshinLaunchStatus.Running,
+                StartedByThisCall: false));
+
+        var result = await adapter.RequestValidatedLaunchAsync(CancellationToken.None);
+
+        Assert.Equal(GameLaunchDispatchStatus.AlreadyRunning, result.Status);
+    }
+
+    [Fact]
+    public async Task Root_change_requires_an_uncertain_sample_before_the_new_root_can_be_observed()
+    {
+        var root = GameRoot;
+        var oldRunning = true;
+        var newRunning = false;
+        var replacement = @"C:\Games\Genshin Replacement";
+        var adapter = CreateAdapter(
+            discover: () => new(root, null),
+            check: checkedRoot => new(
+                checkedRoot == GameRoot
+                    ? (oldRunning ? GenshinLaunchStatus.Running : GenshinLaunchStatus.Ready)
+                    : (newRunning ? GenshinLaunchStatus.Running : GenshinLaunchStatus.Ready),
+                StartedByThisCall: false));
+
+        Assert.Equal(ExactProcessPresence.Present, (await adapter.ObserveSessionAsync(default)).Overall);
+        root = replacement;
+        oldRunning = false;
+
+        var transition = await adapter.ObserveSessionAsync(default);
+        Assert.Equal(ExactProcessPresence.Uncertain, transition.Overall);
+
+        newRunning = true;
+        var newRoot = await adapter.ObserveSessionAsync(default);
+        Assert.Equal(ExactProcessPresence.Present, newRoot.Overall);
+    }
+
+    [Fact]
+    public async Task External_process_at_a_new_root_never_inherits_Nyx_playtime_ownership()
+    {
+        var root = GameRoot;
+        var oldRunning = false;
+        var newRunning = false;
+        var replacement = @"C:\Games\Genshin Replacement";
+        var adapter = CreateAdapter(
+            discover: () => new(root, null),
+            check: checkedRoot => new(
+                checkedRoot == GameRoot
+                    ? (oldRunning ? GenshinLaunchStatus.Running : GenshinLaunchStatus.Ready)
+                    : (newRunning ? GenshinLaunchStatus.Running : GenshinLaunchStatus.Ready),
+                StartedByThisCall: false),
+            launch: _ => new(GenshinLaunchStatus.Running, StartedByThisCall: true));
+        var time = new MutableTimeProvider();
+        await using var coordinator = CreateCoordinator(adapter, time);
+        await using var pump = new GameSessionRefreshPump(coordinator, TimeSpan.FromHours(1));
+        using var playtime = new GamePlaytimeService(
+            new Dictionary<string, long>(),
+            _ => true,
+            pump,
+            time);
+
+        await pump.RefreshNowAsync();
+        Assert.Equal(GameLaunchRequestOutcome.Accepted, (await coordinator.RequestLaunchAsync("gi")).Outcome);
+        oldRunning = true;
+        await pump.RefreshNowAsync();
+        time.Advance(TimeSpan.FromMinutes(5));
+        await pump.RefreshNowAsync();
+
+        root = replacement;
+        oldRunning = false;
+        newRunning = true;
+        await pump.RefreshNowAsync();
+        Assert.Equal(TimeSpan.FromMinutes(5), playtime.Current("gi").Total);
+
+        time.Advance(TimeSpan.FromMinutes(5));
+        await pump.RefreshNowAsync();
+
+        Assert.Equal(TimeSpan.FromMinutes(5), playtime.Current("gi").Total);
+        Assert.False((await coordinator.RefreshAsync("gi")).CurrentSessionLaunchedByNyx);
     }
 
     [Fact]
@@ -154,7 +239,7 @@ public sealed class GenshinGameSessionAdapterTests
             launch: _ =>
             {
                 Interlocked.Increment(ref launchCount);
-                return new(GenshinLaunchStatus.Running);
+                return new(GenshinLaunchStatus.Running, StartedByThisCall: true);
             });
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
@@ -177,7 +262,7 @@ public sealed class GenshinGameSessionAdapterTests
             (_, arguments) =>
             {
                 starts.Add(arguments.ToArray());
-                return new(GenshinLaunchStatus.Running);
+                return new(GenshinLaunchStatus.Running, StartedByThisCall: true);
             },
             () =>
             {
@@ -207,7 +292,7 @@ public sealed class GenshinGameSessionAdapterTests
             (_, _) =>
             {
                 directStarts++;
-                return new(GenshinLaunchStatus.Running);
+                return new(GenshinLaunchStatus.Running, StartedByThisCall: true);
             },
             () => ["--first", "two"],
             () =>
@@ -219,7 +304,7 @@ public sealed class GenshinGameSessionAdapterTests
             {
                 helperStarts++;
                 Assert.Equal(["--first", "two"], arguments);
-                return new(GenshinLaunchStatus.Running);
+                return new(GenshinLaunchStatus.Running, StartedByThisCall: true);
             });
 
         var result = await adapter.RequestValidatedLaunchAsync(default);
@@ -243,14 +328,14 @@ public sealed class GenshinGameSessionAdapterTests
             (_, _) =>
             {
                 directStarts++;
-                return new(GenshinLaunchStatus.Running);
+                return new(GenshinLaunchStatus.Running, StartedByThisCall: true);
             },
             EmptyArguments,
             () => false,
             (_, _, _) =>
             {
                 helperStarts++;
-                return new(GenshinLaunchStatus.Running);
+                return new(GenshinLaunchStatus.Running, StartedByThisCall: true);
             });
 
         var result = await adapter.RequestValidatedLaunchAsync(default);
@@ -277,7 +362,7 @@ public sealed class GenshinGameSessionAdapterTests
             launch: _ =>
             {
                 Interlocked.Increment(ref launchCount);
-                return new(GenshinLaunchStatus.Running);
+                return new(GenshinLaunchStatus.Running, StartedByThisCall: true);
             });
         var time = new MutableTimeProvider();
         await using var coordinator = CreateCoordinator(adapter, time);
@@ -305,7 +390,7 @@ public sealed class GenshinGameSessionAdapterTests
                 Interlocked.Increment(ref launchCount);
                 entered.TrySetResult();
                 release.Task.GetAwaiter().GetResult();
-                return new(GenshinLaunchStatus.Running);
+                return new(GenshinLaunchStatus.Running, StartedByThisCall: true);
             });
         await using var coordinator = CreateCoordinator(adapter);
 
@@ -332,7 +417,7 @@ public sealed class GenshinGameSessionAdapterTests
                 root,
                 "6.7.0")),
             check ?? (_ => new(GenshinLaunchStatus.Ready)),
-            launch ?? (_ => new(GenshinLaunchStatus.Running)));
+            launch ?? (_ => new(GenshinLaunchStatus.Running, StartedByThisCall: true)));
 
     private static GameSessionCoordinator CreateCoordinator(
         IGameSessionAdapter genshin,
@@ -366,9 +451,18 @@ public sealed class GenshinGameSessionAdapterTests
     private sealed class MutableTimeProvider : TimeProvider
     {
         private DateTimeOffset now = new(2026, 7, 15, 10, 0, 0, TimeSpan.Zero);
+        private long timestamp;
 
         public override DateTimeOffset GetUtcNow() => now;
 
-        public void Advance(TimeSpan duration) => now += duration;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp() => timestamp;
+
+        public void Advance(TimeSpan duration)
+        {
+            now += duration;
+            timestamp += duration.Ticks;
+        }
     }
 }

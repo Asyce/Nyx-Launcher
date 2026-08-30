@@ -2,11 +2,21 @@ using Nyx.Desktop.Core.Sessions;
 
 namespace Nyx.Desktop.Infrastructure.Sessions;
 
+public enum SystemSuspendResumeEvent
+{
+    Ignore,
+    Suspend,
+    AutomaticResume,
+}
+
 public sealed class GameSessionsRefreshedEventArgs(
-    IReadOnlyDictionary<string, GameSessionSnapshot> snapshots) : EventArgs
+    IReadOnlyDictionary<string, GameSessionSnapshot> snapshots,
+    bool resetsAfterSystemResume = false) : EventArgs
 {
     public IReadOnlyDictionary<string, GameSessionSnapshot> Snapshots { get; } =
         snapshots ?? throw new ArgumentNullException(nameof(snapshots));
+
+    public bool ResetsAfterSystemResume { get; } = resetsAfterSystemResume;
 }
 
 /// <summary>
@@ -31,6 +41,9 @@ public sealed class GameSessionRefreshPump : IAsyncDisposable
     private TaskCompletionSource? invocationsDrained;
     private int activeInvocations;
     private bool admissionClosed;
+    private long publicationEpoch;
+    private bool suspended;
+    private bool resumeRequested;
     private int started;
     private int stopped;
 
@@ -58,6 +71,16 @@ public sealed class GameSessionRefreshPump : IAsyncDisposable
 
     public event EventHandler<GameSessionsRefreshedEventArgs>? Refreshed;
 
+    public event EventHandler? SystemSuspending;
+
+    public static SystemSuspendResumeEvent ClassifyPowerBroadcast(uint eventType) =>
+        eventType switch
+        {
+            4 => SystemSuspendResumeEvent.Suspend,
+            0x12 => SystemSuspendResumeEvent.AutomaticResume,
+            _ => SystemSuspendResumeEvent.Ignore,
+        };
+
     public void Start()
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref stopped) != 0, this);
@@ -71,11 +94,120 @@ public sealed class GameSessionRefreshPump : IAsyncDisposable
 
     public async ValueTask<IReadOnlyDictionary<string, GameSessionSnapshot>> RefreshNowAsync(
         CancellationToken cancellationToken = default) =>
-        await RunAdmittedRefreshAsync(resetAfterResume: false, cancellationToken).ConfigureAwait(false);
+        await RunAdmittedRefreshAsync(cancellationToken).ConfigureAwait(false);
 
     public async ValueTask<IReadOnlyDictionary<string, GameSessionSnapshot>>
-        ResetAfterResumeAndRefreshAsync(CancellationToken cancellationToken = default) =>
-        await RunAdmittedRefreshAsync(resetAfterResume: true, cancellationToken).ConfigureAwait(false);
+        ResetAfterResumeAndRefreshAsync(CancellationToken cancellationToken = default)
+    {
+        _ = RequestSystemSuspend();
+        _ = RequestSystemResume();
+        return await RunAdmittedRefreshAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Closes publication at the exact native suspend boundary.</summary>
+    public bool RequestSystemSuspend()
+    {
+        lock (publicationSync)
+        {
+            if (stopped != 0 || suspended)
+            {
+                return false;
+            }
+
+            suspended = true;
+            resumeRequested = false;
+            publicationEpoch++;
+            var handlers = SystemSuspending;
+            if (handlers is not null)
+            {
+                foreach (EventHandler handler in handlers.GetInvocationList())
+                {
+                    try
+                    {
+                        handler(this, EventArgs.Empty);
+                    }
+                    catch (Exception)
+                    {
+                        // A subscriber cannot reopen publication across sleep.
+                    }
+                }
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Requests the coordinator ownership reset before any refresh can wait on
+    /// the publication gate. One automatic resume is accepted per suspend.
+    /// </summary>
+    public bool RequestSystemResume()
+    {
+        lock (publicationSync)
+        {
+            if (stopped != 0 || !suspended || resumeRequested)
+            {
+                return false;
+            }
+
+            resumeRequested = true;
+            publicationEpoch++;
+        }
+
+        try
+        {
+            coordinator.ResetAfterSystemResumeAsync(lifetimeToken)
+                .GetAwaiter()
+                .GetResult();
+            return true;
+        }
+        catch (Exception)
+        {
+            // Remain suspended and fail closed if the reset cannot be requested.
+            lock (publicationSync)
+            {
+                if (suspended)
+                {
+                    resumeRequested = false;
+                    publicationEpoch++;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>Excludes refresh publication while one state/adapter swap commits.</summary>
+    public async ValueTask<IDisposable?> TryAcquireExclusivePublicationAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (!TryAdmitInvocation())
+        {
+            return null;
+        }
+
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            lifetimeToken);
+        try
+        {
+            await refreshGate.WaitAsync(linkedCancellation.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            ReleaseInvocation();
+            return null;
+        }
+
+        if (Volatile.Read(ref stopped) != 0)
+        {
+            refreshGate.Release();
+            ReleaseInvocation();
+            return null;
+        }
+
+        return new ExclusivePublicationLease(this);
+    }
 
     public void Stop()
     {
@@ -112,7 +244,6 @@ public sealed class GameSessionRefreshPump : IAsyncDisposable
     }
 
     private async ValueTask<IReadOnlyDictionary<string, GameSessionSnapshot>> RefreshCoreAsync(
-        bool resetAfterResume,
         CancellationToken cancellationToken)
     {
         if (Volatile.Read(ref stopped) != 0)
@@ -139,17 +270,18 @@ public sealed class GameSessionRefreshPump : IAsyncDisposable
                 return coordinator.GetAllSnapshots();
             }
 
-            if (resetAfterResume)
+            long epoch;
+            bool resetsAfterSystemResume;
+            lock (publicationSync)
             {
-                await coordinator
-                    .ResetAfterSystemResumeAsync(linkedCancellation.Token)
-                    .ConfigureAwait(false);
+                epoch = publicationEpoch;
+                resetsAfterSystemResume = suspended && resumeRequested;
             }
 
             var snapshots = await coordinator
                 .RefreshAllAsync(linkedCancellation.Token)
                 .ConfigureAwait(false);
-            Publish(snapshots);
+            Publish(snapshots, epoch, resetsAfterSystemResume);
             return snapshots;
         }
         finally
@@ -159,7 +291,6 @@ public sealed class GameSessionRefreshPump : IAsyncDisposable
     }
 
     private async ValueTask<IReadOnlyDictionary<string, GameSessionSnapshot>> RunAdmittedRefreshAsync(
-        bool resetAfterResume,
         CancellationToken cancellationToken)
     {
         if (!TryAdmitInvocation())
@@ -174,7 +305,7 @@ public sealed class GameSessionRefreshPump : IAsyncDisposable
                 await afterAdmission().ConfigureAwait(false);
             }
 
-            return await RefreshCoreAsync(resetAfterResume, cancellationToken).ConfigureAwait(false);
+            return await RefreshCoreAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -198,11 +329,29 @@ public sealed class GameSessionRefreshPump : IAsyncDisposable
         }
     }
 
-    private void Publish(IReadOnlyDictionary<string, GameSessionSnapshot> snapshots)
+    private void Publish(
+        IReadOnlyDictionary<string, GameSessionSnapshot> snapshots,
+        long epoch,
+        bool resetsAfterSystemResume)
     {
         lock (publicationSync)
         {
-            if (stopped != 0)
+            if (stopped != 0 || epoch != publicationEpoch)
+            {
+                return;
+            }
+
+            if (resetsAfterSystemResume)
+            {
+                if (!suspended || !resumeRequested)
+                {
+                    return;
+                }
+
+                suspended = false;
+                resumeRequested = false;
+            }
+            else if (suspended)
             {
                 return;
             }
@@ -213,7 +362,9 @@ public sealed class GameSessionRefreshPump : IAsyncDisposable
                 return;
             }
 
-            var args = new GameSessionsRefreshedEventArgs(snapshots);
+            var args = new GameSessionsRefreshedEventArgs(
+                snapshots,
+                resetsAfterSystemResume);
             foreach (EventHandler<GameSessionsRefreshedEventArgs> handler in handlers.GetInvocationList())
             {
                 try
@@ -290,6 +441,22 @@ public sealed class GameSessionRefreshPump : IAsyncDisposable
             invocationsDrained ??= new(
                 TaskCreationOptions.RunContinuationsAsynchronously);
             return invocationsDrained.Task;
+        }
+    }
+
+    private void ReleaseExclusivePublication()
+    {
+        refreshGate.Release();
+        ReleaseInvocation();
+    }
+
+    private sealed class ExclusivePublicationLease(GameSessionRefreshPump owner) : IDisposable
+    {
+        private GameSessionRefreshPump? owner = owner;
+
+        public void Dispose()
+        {
+            Interlocked.Exchange(ref owner, null)?.ReleaseExclusivePublication();
         }
     }
 }

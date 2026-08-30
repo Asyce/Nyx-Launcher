@@ -25,6 +25,7 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
     private readonly object admissionSync = new();
     private readonly object disposalSync = new();
     private readonly List<SessionEntry> retiredEntries = [];
+    private readonly HashSet<string> customMutationReservations = new(StringComparer.Ordinal);
     private readonly TaskCompletionSource lifetimeCancellationCompleted = new(
         TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly IGameSessionCoordinatorHooks? hooks;
@@ -116,22 +117,30 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
 
     public bool TryGetSnapshot(string gameId, out GameSessionSnapshot? snapshot)
     {
-        if (entries.TryGetValue(gameId, out var entry))
+        lock (admissionSync)
         {
-            snapshot = Read(entry);
-            return true;
+            if (entries.TryGetValue(gameId, out var entry))
+            {
+                snapshot = Read(entry);
+                return true;
+            }
         }
 
         snapshot = null;
         return false;
     }
 
-    public IReadOnlyDictionary<string, GameSessionSnapshot> GetAllSnapshots() =>
-        new ReadOnlyDictionary<string, GameSessionSnapshot>(
-            entries.ToDictionary(
-                static pair => pair.Key,
-                static pair => Read(pair.Value),
-                StringComparer.Ordinal));
+    public IReadOnlyDictionary<string, GameSessionSnapshot> GetAllSnapshots()
+    {
+        lock (admissionSync)
+        {
+            return new ReadOnlyDictionary<string, GameSessionSnapshot>(
+                entries.ToDictionary(
+                    static pair => pair.Key,
+                    static pair => Read(pair.Value),
+                    StringComparer.Ordinal));
+        }
+    }
 
     public bool TryRegisterCustomAdapter(IGameSessionAdapter adapter)
     {
@@ -145,6 +154,7 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         {
             return !admissionClosed
                 && !IsStopped
+                && !customMutationReservations.Contains(adapter.GameId)
                 && entries.TryAdd(adapter.GameId, new SessionEntry(adapter.GameId, adapter));
         }
     }
@@ -158,12 +168,113 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
 
         lock (admissionSync)
         {
-            if (admissionClosed || IsStopped || !entries.TryRemove(gameId, out var entry))
+            if (admissionClosed
+                || IsStopped
+                || customMutationReservations.Contains(gameId)
+                || !entries.TryGetValue(gameId, out var entry))
             {
                 return false;
             }
 
+            lock (entry.Sync)
+            {
+                if (entry.ActiveOperations > 0
+                    || entry.ResumeWorkerRunning
+                    || entry.OutstandingObservation is { IsCompleted: false }
+                    || entry.OutstandingDispatch is { IsCompleted: false })
+                {
+                    return false;
+                }
+
+                entry.Retiring = true;
+            }
+
+            if (!entries.TryRemove(gameId, out _))
+            {
+                lock (entry.Sync)
+                {
+                    entry.Retiring = false;
+                }
+
+                return false;
+            }
+
             retiredEntries.Add(entry);
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Reserves one exact set of custom-adapter changes without hiding the old
+    /// entries. Dispose rolls the reservation back; Commit publishes the whole
+    /// replacement set while coordinator admission is exclusively locked.
+    /// </summary>
+    public bool TryReserveCustomAdapterMutations(
+        IReadOnlyDictionary<string, IGameSessionAdapter?> mutations,
+        out CustomAdapterMutationLease? lease)
+    {
+        ArgumentNullException.ThrowIfNull(mutations);
+        lease = null;
+        if (mutations.Count == 0)
+        {
+            return false;
+        }
+
+        var frozen = mutations.ToDictionary(
+            static pair => pair.Key,
+            static pair => pair.Value,
+            StringComparer.Ordinal);
+        if (frozen.Any(static pair => !CustomGameId.IsValid(pair.Key)
+            || pair.Value is not null
+                && !string.Equals(pair.Key, pair.Value.GameId, StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        lock (admissionSync)
+        {
+            if (admissionClosed
+                || IsStopped
+                || frozen.Keys.Any(customMutationReservations.Contains))
+            {
+                return false;
+            }
+
+            var originals = new Dictionary<string, SessionEntry>(StringComparer.Ordinal);
+            foreach (var gameId in frozen.Keys)
+            {
+                if (!entries.TryGetValue(gameId, out var entry))
+                {
+                    continue;
+                }
+
+                lock (entry.Sync)
+                {
+                    if (entry.Retiring
+                        || entry.ActiveOperations > 0
+                        || entry.ResumeWorkerRunning
+                        || entry.OutstandingObservation is { IsCompleted: false }
+                        || entry.OutstandingDispatch is { IsCompleted: false })
+                    {
+                        return false;
+                    }
+                }
+
+                originals.Add(gameId, entry);
+            }
+
+            foreach (var pair in originals)
+            {
+                lock (pair.Value.Sync)
+                {
+                    pair.Value.Retiring = true;
+                }
+            }
+
+            customMutationReservations.UnionWith(frozen.Keys);
+            lease = new CustomAdapterMutationLease(
+                () => CommitCustomAdapterMutations(frozen, originals),
+                () => ReleaseCustomAdapterMutations(frozen, originals));
             return true;
         }
     }
@@ -299,6 +410,7 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
             finally
             {
                 entry.Gate.Release();
+                ReleaseEntryOperation(entry);
             }
         }
         finally
@@ -380,6 +492,7 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
             finally
             {
                 entry.Gate.Release();
+                ReleaseEntryOperation(entry);
             }
         }
         finally
@@ -396,7 +509,13 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
     public async ValueTask<IReadOnlyDictionary<string, GameSessionSnapshot>> RefreshAllAsync(
         CancellationToken cancellationToken = default)
     {
-        var refreshes = entries.Keys
+        string[] gameIds;
+        lock (admissionSync)
+        {
+            gameIds = entries.Keys.ToArray();
+        }
+
+        var refreshes = gameIds
             .Select(async gameId => new KeyValuePair<string, GameSessionSnapshot>(
                 gameId,
                 await RefreshAsync(gameId, cancellationToken).ConfigureAwait(false)))
@@ -574,15 +693,55 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         SessionEntry entry,
         CancellationToken cancellationToken)
     {
+        if (!TryReserveEntryOperation(entry))
+        {
+            return false;
+        }
+
         try
         {
-            return await entry.Gate
+            var entered = await entry.Gate
                 .WaitAsync(adapterCallTimeout, cancellationToken)
                 .ConfigureAwait(false);
+            if (!entered)
+            {
+                ReleaseEntryOperation(entry);
+            }
+
+            return entered;
         }
         catch (OperationCanceledException)
         {
+            ReleaseEntryOperation(entry);
             return false;
+        }
+    }
+
+    private bool TryReserveEntryOperation(SessionEntry entry)
+    {
+        lock (admissionSync)
+        {
+            lock (entry.Sync)
+            {
+                if (entry.Retiring)
+                {
+                    return false;
+                }
+
+                entry.ActiveOperations++;
+                return true;
+            }
+        }
+    }
+
+    private void ReleaseEntryOperation(SessionEntry entry)
+    {
+        lock (admissionSync)
+        {
+            lock (entry.Sync)
+            {
+                entry.ActiveOperations = Math.Max(0, entry.ActiveOperations - 1);
+            }
         }
     }
 
@@ -768,6 +927,7 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
             return dispatch.Status switch
             {
                 GameLaunchDispatchStatus.Accepted => SetDispatchAccepted(entry),
+                GameLaunchDispatchStatus.AlreadyRunning => SetAlreadyRunning(entry),
                 GameLaunchDispatchStatus.NeedsReview => SetNeedsReview(entry),
                 GameLaunchDispatchStatus.Failed => SetLaunchFailed(entry),
                 _ => SetLaunchFailed(entry),
@@ -823,9 +983,12 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
 
     private SessionEntry GetEntry(string gameId)
     {
-        if (entries.TryGetValue(gameId, out var entry))
+        lock (admissionSync)
         {
-            return entry;
+            if (entries.TryGetValue(gameId, out var entry))
+            {
+                return entry;
+            }
         }
 
         GameCatalog.GetRequired(gameId);
@@ -853,6 +1016,9 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
                 Status = LocalGameStatus.Starting,
                 WasBootstrapObserved = false,
                 WasRuntimeObserved = false,
+                CurrentRuntimeEvidence = ExactProcessPresence.Uncertain,
+                LastExactObservationTimestamp = null,
+                CurrentSessionLaunchedByNyx = false,
                 LaunchRequestedAt = timeProvider.GetUtcNow(),
                 BootstrapObservedAt = null,
                 LastLaunchDetectionDuration = null,
@@ -868,9 +1034,31 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
             entry.Snapshot = entry.Snapshot with
             {
                 Status = LocalGameStatus.Starting,
+                CurrentSessionLaunchedByNyx = true,
                 FailureReason = GameSessionFailureReason.None,
             };
             return new(GameLaunchRequestOutcome.Accepted, entry.Snapshot);
+        }
+    }
+
+    private static GameLaunchRequestResult SetAlreadyRunning(SessionEntry entry)
+    {
+        lock (entry.Sync)
+        {
+            entry.Snapshot = ClearAbsence(entry.Snapshot) with
+            {
+                Status = LocalGameStatus.Running,
+                LastProcessEvidence = ExactProcessPresence.Uncertain,
+                CurrentRuntimeEvidence = ExactProcessPresence.Uncertain,
+                LastExactObservationTimestamp = null,
+                WasBootstrapObserved = false,
+                WasRuntimeObserved = false,
+                CurrentSessionLaunchedByNyx = false,
+                LaunchRequestedAt = null,
+                BootstrapObservedAt = null,
+                FailureReason = GameSessionFailureReason.EvidenceUnavailable,
+            };
+            return new(GameLaunchRequestOutcome.AlreadyRunning, entry.Snapshot);
         }
     }
 
@@ -883,6 +1071,9 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
                 Status = LocalGameStatus.NeedsReview,
                 WasBootstrapObserved = false,
                 WasRuntimeObserved = false,
+                CurrentRuntimeEvidence = ExactProcessPresence.Uncertain,
+                LastExactObservationTimestamp = null,
+                CurrentSessionLaunchedByNyx = false,
                 LaunchRequestedAt = null,
                 BootstrapObservedAt = null,
                 FailureReason = GameSessionFailureReason.LaunchNeedsReview,
@@ -900,6 +1091,9 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
                 Status = LocalGameStatus.LaunchFailed,
                 WasBootstrapObserved = false,
                 WasRuntimeObserved = false,
+                CurrentRuntimeEvidence = ExactProcessPresence.Uncertain,
+                LastExactObservationTimestamp = null,
+                CurrentSessionLaunchedByNyx = false,
                 LaunchRequestedAt = null,
                 BootstrapObservedAt = null,
                 FailureReason = GameSessionFailureReason.LaunchDispatchFailed,
@@ -934,6 +1128,7 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
             {
                 Readiness = evidence.Readiness,
                 ObservationGeneration = ++entry.ObservationGeneration,
+                LastExactObservationTimestamp = timeProvider.GetTimestamp(),
             };
             entry.Snapshot = evidence.Overall switch
             {
@@ -956,6 +1151,9 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         var runtimeObserved = current.WasRuntimeObserved || runtimeFirstConfirmed;
         var bootstrapObserved = current.WasBootstrapObserved
             || evidence.Bootstrap is ExactProcessPresence.Present;
+        var sessionLaunchedByNyx = current.CurrentSessionLaunchedByNyx
+            && (!current.WasRuntimeObserved
+                || evidence.Runtime is ExactProcessPresence.Present);
         var failureReason = current.FailureReason is GameSessionFailureReason.LaunchNeedsReview
             ? current.FailureReason
             : evidence.Readiness is LocalReadinessEvidence.Ready
@@ -968,6 +1166,8 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         {
             Status = LocalGameStatus.Running,
             LastProcessEvidence = ExactProcessPresence.Present,
+            CurrentRuntimeEvidence = evidence.Runtime,
+            CurrentSessionLaunchedByNyx = sessionLaunchedByNyx,
             WasBootstrapObserved = bootstrapObserved,
             WasRuntimeObserved = runtimeObserved,
             LaunchRequestedAt = runtimeObserved ? null : current.LaunchRequestedAt,
@@ -991,6 +1191,9 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         {
             Status = status,
             LastProcessEvidence = ExactProcessPresence.Uncertain,
+            CurrentRuntimeEvidence = ExactProcessPresence.Uncertain,
+            LastExactObservationTimestamp = null,
+            CurrentSessionLaunchedByNyx = false,
             FailureReason = current.FailureReason is GameSessionFailureReason.LaunchNeedsReview
                 ? current.FailureReason
                 : GameSessionFailureReason.EvidenceUnavailable,
@@ -1018,6 +1221,9 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
             {
                 Status = status,
                 LastProcessEvidence = ExactProcessPresence.Uncertain,
+                CurrentRuntimeEvidence = ExactProcessPresence.Uncertain,
+                LastExactObservationTimestamp = null,
+                CurrentSessionLaunchedByNyx = false,
                 FailureReason = current.FailureReason is GameSessionFailureReason.LaunchNeedsReview
                     ? current.FailureReason
                     : GameSessionFailureReason.EvidenceUnavailable,
@@ -1031,7 +1237,7 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         SessionEntry entry,
         GameSessionSnapshot current)
     {
-        current = current with { LastProcessEvidence = ExactProcessPresence.Absent };
+        current = current with { LastProcessEvidence = ExactProcessPresence.Absent, CurrentRuntimeEvidence = ExactProcessPresence.Absent };
         var now = timeProvider.GetUtcNow();
 
         if (current.Status is LocalGameStatus.Starting)
@@ -1045,6 +1251,7 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
                     Status = LocalGameStatus.LaunchFailed,
                     WasBootstrapObserved = false,
                     WasRuntimeObserved = false,
+                    CurrentSessionLaunchedByNyx = false,
                     LaunchRequestedAt = null,
                     BootstrapObservedAt = null,
                     FailureReason = GameSessionFailureReason.StartupTimedOut,
@@ -1070,6 +1277,7 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
                     {
                         Status = LocalGameStatus.LaunchFailed,
                         WasBootstrapObserved = false,
+                        CurrentSessionLaunchedByNyx = false,
                         LaunchRequestedAt = null,
                         BootstrapObservedAt = null,
                         FailureReason = GameSessionFailureReason.StartupTimedOut,
@@ -1116,6 +1324,7 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
                 ConsecutiveAbsentSamples = 1,
                 FirstAbsentAt = observedAt,
                 FirstAbsentGeneration = current.ObservationGeneration,
+                CurrentSessionLaunchedByNyx = false,
             };
         }
 
@@ -1152,6 +1361,8 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
             Status = status,
             WasBootstrapObserved = false,
             WasRuntimeObserved = false,
+            CurrentRuntimeEvidence = ExactProcessPresence.Absent,
+            CurrentSessionLaunchedByNyx = false,
             LaunchRequestedAt = null,
             BootstrapObservedAt = null,
             FailureReason = status is LocalGameStatus.NeedsReview
@@ -1184,7 +1395,7 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
             {
                 lock (entry.Sync)
                 {
-                    if (IsStopped)
+                    if (IsStopped || entry.Retiring)
                     {
                         return;
                     }
@@ -1213,6 +1424,49 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         }
     }
 
+    private void CommitCustomAdapterMutations(
+        IReadOnlyDictionary<string, IGameSessionAdapter?> mutations,
+        IReadOnlyDictionary<string, SessionEntry> originals)
+    {
+        lock (admissionSync)
+        {
+            foreach (var pair in mutations)
+            {
+                if (originals.TryGetValue(pair.Key, out var original))
+                {
+                    _ = entries.TryRemove(
+                        new KeyValuePair<string, SessionEntry>(pair.Key, original));
+                    retiredEntries.Add(original);
+                }
+
+                if (pair.Value is not null)
+                {
+                    entries[pair.Key] = new SessionEntry(pair.Key, pair.Value);
+                }
+            }
+
+            customMutationReservations.ExceptWith(mutations.Keys);
+        }
+    }
+
+    private void ReleaseCustomAdapterMutations(
+        IReadOnlyDictionary<string, IGameSessionAdapter?> mutations,
+        IReadOnlyDictionary<string, SessionEntry> originals)
+    {
+        lock (admissionSync)
+        {
+            foreach (var pair in originals)
+            {
+                lock (pair.Value.Sync)
+                {
+                    pair.Value.Retiring = false;
+                }
+            }
+
+            customMutationReservations.ExceptWith(mutations.Keys);
+        }
+    }
+
     private async Task ProcessPendingResumeResetsAsync(
         SessionEntry entry,
         TaskCompletionSource workerCompletion)
@@ -1221,12 +1475,20 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         {
             while (!IsStopped)
             {
+                if (!TryReserveEntryOperation(entry))
+                {
+                    break;
+                }
+
+                var entered = false;
                 try
                 {
                     await entry.Gate.WaitAsync(lifetime.Token).ConfigureAwait(false);
+                    entered = true;
                 }
                 catch (OperationCanceledException)
                 {
+                    ReleaseEntryOperation(entry);
                     break;
                 }
 
@@ -1236,7 +1498,12 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
                 }
                 finally
                 {
-                    entry.Gate.Release();
+                    if (entered)
+                    {
+                        entry.Gate.Release();
+                    }
+
+                    ReleaseEntryOperation(entry);
                 }
 
                 lock (entry.Sync)
@@ -1284,6 +1551,11 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
                 LastProcessEvidence = current.Status is LocalGameStatus.Starting or LocalGameStatus.Running
                     ? ExactProcessPresence.Uncertain
                     : current.LastProcessEvidence,
+                CurrentRuntimeEvidence = current.Status is LocalGameStatus.Starting or LocalGameStatus.Running
+                    ? ExactProcessPresence.Uncertain
+                    : current.CurrentRuntimeEvidence,
+                LastExactObservationTimestamp = null,
+                CurrentSessionLaunchedByNyx = false,
                 ObservationGeneration = entry.ObservationGeneration,
                 RequestedResumeGeneration = entry.RequestedResumeGeneration,
                 AppliedResumeGeneration = entry.AppliedResumeGeneration,
@@ -1342,6 +1614,44 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
             new(false, outcome, DispatchTask: null);
     }
 
+    public sealed class CustomAdapterMutationLease : IDisposable
+    {
+        private readonly object sync = new();
+        private readonly Action commit;
+        private readonly Action release;
+        private bool completed;
+
+        internal CustomAdapterMutationLease(Action commit, Action release)
+        {
+            this.commit = commit;
+            this.release = release;
+        }
+
+        public void Commit()
+        {
+            lock (sync)
+            {
+                ObjectDisposedException.ThrowIf(completed, this);
+                commit();
+                completed = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            lock (sync)
+            {
+                if (completed)
+                {
+                    return;
+                }
+
+                release();
+                completed = true;
+            }
+        }
+    }
+
     private sealed class SessionEntry
     {
         public SessionEntry(string gameId, IGameSessionAdapter adapter)
@@ -1363,7 +1673,12 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
                 RequestedResumeGeneration: 0,
                 AppliedResumeGeneration: 0,
                 GameSessionFailureReason.LocalReadinessUnavailable,
-                CoordinatorStopped: false);
+                CoordinatorStopped: false)
+            {
+                CurrentRuntimeEvidence = ExactProcessPresence.Uncertain,
+                LastExactObservationTimestamp = null,
+                CurrentSessionLaunchedByNyx = false,
+            };
         }
 
         public object Sync { get; } = new();
@@ -1379,6 +1694,10 @@ public sealed class GameSessionCoordinator : IAsyncDisposable
         public Task<GameSessionEvidence>? OutstandingObservation { get; set; }
 
         public Task<GameLaunchDispatchResult>? OutstandingDispatch { get; set; }
+
+        public bool Retiring { get; set; }
+
+        public int ActiveOperations { get; set; }
 
         public long RequestedResumeGeneration { get; set; }
 

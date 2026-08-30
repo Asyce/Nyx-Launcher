@@ -1,10 +1,10 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Nyx.Desktop.Core.Exports;
 using Nyx.Desktop.Core.Features;
 using Nyx.Desktop.Core.Games;
-using Nyx.Desktop.Core.Playtime;
 
 namespace Nyx.Desktop.Core.State;
 
@@ -68,28 +68,6 @@ public static class LauncherStateMigrations
         ArgumentNullException.ThrowIfNull(state);
         var dto = ToDto(state);
         return Normalize(dto);
-    }
-
-    internal static EndfieldPlaytimeState Normalize(EndfieldPlaytimeState state)
-    {
-        ArgumentNullException.ThrowIfNull(state);
-        return NormalizeEndfieldPlaytime(new()
-        {
-            IncompleteSessions = state.IncompleteSessions,
-            Intervals = state.Intervals.Select(static value => new EndfieldPlaytimeIntervalDto
-            {
-                StartUtc = value.StartUtc,
-                EndUtc = value.EndUtc,
-                TimeZoneId = value.TimeZoneId,
-            }).ToArray(),
-            PendingStart = state.PendingStart is null
-                ? null
-                : new EndfieldPlaytimePendingStartDto
-                {
-                    StartedAt = state.PendingStart.StartedAt,
-                    TimeZoneId = state.PendingStart.TimeZoneId,
-                },
-        });
     }
 
     private static LauncherState Normalize(StateDto dto)
@@ -251,9 +229,9 @@ public static class LauncherStateMigrations
                     dto.Preferences?.FeatureFlags,
                     dto.Version ?? 0),
             },
-            EndfieldPlaytime = (dto.Version ?? 0) >= 6
-                ? NormalizeEndfieldPlaytime(dto.EndfieldPlaytime)
-                : new(),
+            PlaytimeSecondsByGame = (dto.Version ?? 0) >= 7
+                ? NormalizePlaytimeSeconds(dto.PlaytimeSecondsByGame, customs)
+                : EmptyPlaytimeSeconds(),
         };
     }
 
@@ -355,79 +333,109 @@ public static class LauncherStateMigrations
                     EndfieldAchievements = state.Preferences.FeatureFlags.EndfieldAchievements,
                 },
         },
-        EndfieldPlaytime = ToEndfieldPlaytimeDto(state.EndfieldPlaytime),
+        PlaytimeSecondsByGame = state.PlaytimeSecondsByGame?.ToDictionary(
+            static pair => pair.Key,
+            static pair => JsonSerializer.SerializeToElement(pair.Value, JsonOptions),
+            StringComparer.Ordinal),
     };
 
-    private static EndfieldPlaytimeState NormalizeEndfieldPlaytime(EndfieldPlaytimeDto? dto)
+    private static IReadOnlyDictionary<string, long> NormalizePlaytimeSeconds(
+        Dictionary<string, JsonElement>? values,
+        IReadOnlyList<CustomGameDefinition> customGames)
     {
-        var intervals = new List<EndfieldPlaytimeInterval>();
-        foreach (var value in dto?.Intervals ?? [])
+        var allowedIds = GameCatalog.All
+            .Select(static game => game.Id)
+            .Concat(customGames.Select(static game => game.Id))
+            .ToHashSet(StringComparer.Ordinal);
+        var normalized = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (var pair in values ?? [])
         {
-            if (value is null
-                || value.Kind is not null
-                || value.StartUtc is not { Offset: var startOffset } start
-                || startOffset != TimeSpan.Zero
-                || value.EndUtc is not { Offset: var endOffset } end
-                || endOffset != TimeSpan.Zero
-                || NormalizeTimeZoneId(value.TimeZoneId) is not { } zoneId)
+            if (!allowedIds.Contains(pair.Key)
+                || !TryNormalizePlaytimeSeconds(pair.Value, out var seconds))
             {
                 continue;
             }
 
-            var interval = new EndfieldPlaytimeInterval(
-                start,
-                end,
-                zoneId);
-            if (interval.IsValid) intervals.Add(interval);
+            normalized[pair.Key] = seconds;
         }
 
-        EndfieldPlaytimePendingStart? pending = null;
-        if (dto?.PendingStart is { StartedAt: { Offset: var pendingOffset } startedAt } candidate
-            && pendingOffset == TimeSpan.Zero
-            && startedAt != default
-            && NormalizeTimeZoneId(candidate.TimeZoneId) is { } pendingZone)
+        return new ReadOnlyDictionary<string, long>(normalized);
+    }
+
+    private static IReadOnlyDictionary<string, long> EmptyPlaytimeSeconds() =>
+        new ReadOnlyDictionary<string, long>(
+            new Dictionary<string, long>(StringComparer.Ordinal));
+
+    private static bool TryNormalizePlaytimeSeconds(JsonElement value, out long seconds)
+    {
+        seconds = 0;
+        if (value.ValueKind is not JsonValueKind.Number)
         {
-            pending = new()
-            {
-                StartedAt = startedAt,
-                TimeZoneId = pendingZone,
-            };
+            return false;
         }
 
-        return new()
+        if (value.TryGetInt64(out var integer))
         {
-            IncompleteSessions = Math.Max(0, dto?.IncompleteSessions ?? 0),
-            Intervals = EndfieldPlaytime.LimitForStorage(intervals),
-            PendingStart = pending,
-        };
-    }
+            seconds = Math.Max(0, integer);
+            return true;
+        }
 
-    private static EndfieldPlaytimeDto ToEndfieldPlaytimeDto(EndfieldPlaytimeState? state)
-    {
-        var normalized = Normalize(state ?? new());
-        return new()
+        if (value.TryGetDecimal(out var decimalValue))
         {
-            IncompleteSessions = normalized.IncompleteSessions,
-            Intervals = normalized.Intervals.Select(static value => new EndfieldPlaytimeIntervalDto
+            if (decimal.Truncate(decimalValue) != decimalValue)
             {
-                StartUtc = value.StartUtc,
-                EndUtc = value.EndUtc,
-                TimeZoneId = value.TimeZoneId,
-            }).ToArray(),
-            PendingStart = normalized.PendingStart is null
-                ? null
-                : new EndfieldPlaytimePendingStartDto
-                {
-                    StartedAt = normalized.PendingStart.StartedAt,
-                    TimeZoneId = normalized.PendingStart.TimeZoneId,
-                },
-        };
-    }
+                return false;
+            }
 
-    private static string? NormalizeTimeZoneId(string? value)
-    {
-        if (!EndfieldPlaytime.IsKnownTimeZone(value)) return null;
-        return TimeZoneInfo.FindSystemTimeZoneById(value!).Id;
+            seconds = decimalValue <= 0
+                ? 0
+                : decimalValue >= long.MaxValue
+                    ? long.MaxValue
+                    : (long)decimalValue;
+            return true;
+        }
+
+        var raw = value.GetRawText();
+        if (raw.Length == 0)
+        {
+            return false;
+        }
+
+        var negative = raw[0] == '-';
+        var digits = negative ? raw[1..] : raw;
+        if (digits.Length == 0 || digits.Any(static character => character is < '0' or > '9'))
+        {
+            return false;
+        }
+
+        if (negative)
+        {
+            return true;
+        }
+
+        var normalized = digits.TrimStart('0');
+        if (normalized.Length == 0)
+        {
+            return true;
+        }
+
+        if (normalized.Length > 19)
+        {
+            seconds = long.MaxValue;
+            return true;
+        }
+
+        if (!ulong.TryParse(
+            normalized,
+            NumberStyles.None,
+            CultureInfo.InvariantCulture,
+            out var unsigned))
+        {
+            return false;
+        }
+
+        seconds = unsigned >= long.MaxValue ? long.MaxValue : (long)unsigned;
+        return true;
     }
 
     private static LauncherFeatureFlags NormalizeFeatureFlags(FeatureFlagsDto? dto, int sourceVersion)
@@ -655,29 +663,7 @@ public static class LauncherStateMigrations
         [JsonPropertyName("appearance")] public Dictionary<string, AppearanceDto?>? Appearance { get; set; }
         [JsonPropertyName("export")] public ExportDto? Export { get; set; }
         [JsonPropertyName("preferences")] public PreferencesDto? Preferences { get; set; }
-        [JsonPropertyName("endfieldPlaytime")] public EndfieldPlaytimeDto? EndfieldPlaytime { get; set; }
-    }
-
-    private sealed class EndfieldPlaytimeDto
-    {
-        public int? IncompleteSessions { get; set; }
-        public EndfieldPlaytimeIntervalDto?[]? Intervals { get; set; }
-        public EndfieldPlaytimePendingStartDto? PendingStart { get; set; }
-    }
-
-    private sealed class EndfieldPlaytimeIntervalDto
-    {
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public int? Kind { get; set; }
-        public DateTimeOffset? StartUtc { get; set; }
-        public DateTimeOffset? EndUtc { get; set; }
-        public string? TimeZoneId { get; set; }
-    }
-
-    private sealed class EndfieldPlaytimePendingStartDto
-    {
-        public DateTimeOffset? StartedAt { get; set; }
-        public string? TimeZoneId { get; set; }
+        [JsonPropertyName("playtimeSecondsByGame")] public Dictionary<string, JsonElement>? PlaytimeSecondsByGame { get; set; }
     }
 
     private sealed class CustomGameDto

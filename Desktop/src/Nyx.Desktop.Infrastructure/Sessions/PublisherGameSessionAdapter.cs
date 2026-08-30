@@ -166,9 +166,11 @@ public sealed class PublisherGameSessionAdapter : IGameSessionAdapter
             if (!TryCaptureLaunchArguments(out var launchArguments))
                 return GameLaunchDispatchResult.NeedsReview;
 
-            return launch(discoveredRoot, launchArguments).Status switch
+            var result = launch(discoveredRoot, launchArguments);
+            return result.Status switch
             {
-                PublisherGameLaunchStatus.Running => GameLaunchDispatchResult.Accepted,
+                PublisherGameLaunchStatus.Running when result.StartedByThisCall => GameLaunchDispatchResult.Accepted,
+                PublisherGameLaunchStatus.Running => GameLaunchDispatchResult.AlreadyRunning,
                 PublisherGameLaunchStatus.LaunchFailed => GameLaunchDispatchResult.Failed,
                 _ => GameLaunchDispatchResult.NeedsReview,
             };

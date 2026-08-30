@@ -1,4 +1,5 @@
 using Microsoft.UI.Windowing;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppLifecycle;
 using System.Diagnostics;
@@ -32,12 +33,13 @@ public partial class App : Application
 {
     private const string MainApplicationId = "Pengo.Nyx.Desktop";
     private const string MainInstanceKey = "Pengo.Nyx.Desktop.Main";
+    private const uint DeviceNotifyCallback = 2;
 
     private AppInstance? _currentInstance;
     private Window? _window;
     private GameSessionCoordinator? _sessions;
     private GameSessionRefreshPump? _sessionRefresh;
-    private EndfieldPlaytimeService? _endfieldPlaytime;
+    private GamePlaytimeService? _gamePlaytime;
     private LauncherBannersContentService? _launcherBanners;
     private LauncherCacheService? _cache;
     private LauncherRecoveryService? _recovery;
@@ -60,6 +62,13 @@ public partial class App : Application
     private Task _endfieldDiscoveryTask = Task.CompletedTask;
     private string? _diagnosticsRoot;
     private string _launchStage = "app-construction";
+    private readonly object _powerCallbackSync = new();
+    private DeviceNotifyCallbackRoutine? _powerCallback;
+    private DispatcherQueue? _powerDispatcher;
+    private nint _powerRegistrationHandle;
+    private int _powerCallbackEnabled;
+    private int _powerCallbacksInFlight;
+    private TaskCompletionSource? _powerCallbacksDrained;
 
     public App()
     {
@@ -144,7 +153,9 @@ public partial class App : Application
             stateStore,
             _cache,
             rediscoverInstalls: RediscoverInstallsAsync,
-            retryContent: RefreshContentAsync);
+            retryContent: RefreshContentAsync,
+            currentPlaytimeTotals: () => _gamePlaytime?.SnapshotTotals()
+                ?? LauncherState.Snapshot.PlaytimeSecondsByGame);
         GenshinInspection = new GenshinInspectionAdapter(
             new WindowsAuthenticodeExecutableMetadataReader());
         GenshinDiscovery = new WindowsGenshinCandidateDiscovery(
@@ -258,9 +269,9 @@ public partial class App : Application
         var adapters = officialAdapters.Concat(customAdapters);
         _sessions = new GameSessionCoordinator(adapters);
         _sessionRefresh = new GameSessionRefreshPump(_sessions);
-        _endfieldPlaytime = new EndfieldPlaytimeService(
-            LauncherState.Snapshot.EndfieldPlaytime,
-            playtime => LauncherState.TryUpdate(state => state with { EndfieldPlaytime = playtime }),
+        _gamePlaytime = new GamePlaytimeService(
+            LauncherState.Snapshot.PlaytimeSecondsByGame,
+            playtime => LauncherState.TryUpdate(state => state with { PlaytimeSecondsByGame = playtime }),
             _sessionRefresh);
         _launcherBanners = new LauncherBannersContentService(
             File.ReadAllBytes(Path.Combine(
@@ -344,6 +355,11 @@ public partial class App : Application
         _launchStage = "main-window-activation";
         _window.Activate();
         _launchStage = "background-services";
+        _powerDispatcher = _window.DispatcherQueue;
+        if (!TryRegisterSuspendResumeNotifications())
+        {
+            _gamePlaytime.DisableTracking();
+        }
         _sessionRefresh.Start();
         _launcherBanners.Start();
         StartEndfieldSiblingDiscovery(wuwaRootLocator);
@@ -352,6 +368,193 @@ public partial class App : Application
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
+
+    [DllImport("Powrprof.dll")]
+    private static extern uint PowerRegisterSuspendResumeNotification(
+        uint flags,
+        ref DeviceNotifySubscribeParameters recipient,
+        out nint registrationHandle);
+
+    [DllImport("Powrprof.dll")]
+    private static extern uint PowerUnregisterSuspendResumeNotification(
+        nint registrationHandle);
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    private delegate uint DeviceNotifyCallbackRoutine(
+        nint context,
+        uint eventType,
+        nint setting);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct DeviceNotifySubscribeParameters
+    {
+        public DeviceNotifyCallbackRoutine Callback;
+        public nint Context;
+    }
+
+    private bool TryRegisterSuspendResumeNotifications()
+    {
+        _powerCallback = SuspendResumeNotification;
+        var parameters = new DeviceNotifySubscribeParameters
+        {
+            Callback = _powerCallback,
+            Context = 0,
+        };
+        lock (_powerCallbackSync)
+        {
+            _powerCallbackEnabled = 1;
+        }
+
+        try
+        {
+            var result = PowerRegisterSuspendResumeNotification(
+                DeviceNotifyCallback,
+                ref parameters,
+                out var handle);
+            if (result == 0 && handle != 0)
+            {
+                lock (_powerCallbackSync)
+                {
+                    _powerRegistrationHandle = handle;
+                }
+
+                return true;
+            }
+        }
+        catch (Exception)
+        {
+        }
+
+        lock (_powerCallbackSync)
+        {
+            _powerCallbackEnabled = 0;
+            _powerCallback = null;
+        }
+
+        return false;
+    }
+
+    private uint SuspendResumeNotification(nint context, uint eventType, nint setting)
+    {
+        lock (_powerCallbackSync)
+        {
+            if (_powerCallbackEnabled == 0)
+            {
+                return 0;
+            }
+
+            _powerCallbacksInFlight++;
+        }
+
+        try
+        {
+            if (_accountShutdownStarted || _sessionRefresh is not { } refresh)
+            {
+                return 0;
+            }
+
+            switch (GameSessionRefreshPump.ClassifyPowerBroadcast(eventType))
+            {
+                case SystemSuspendResumeEvent.Suspend:
+                    _ = refresh.RequestSystemSuspend();
+                    break;
+
+                case SystemSuspendResumeEvent.AutomaticResume:
+                    if (!refresh.RequestSystemResume())
+                    {
+                        break;
+                    }
+
+                    var dispatcher = _powerDispatcher;
+                    _ = dispatcher?.TryEnqueue(() =>
+                    {
+                        if (!_accountShutdownStarted
+                            && Volatile.Read(ref _powerCallbackEnabled) != 0)
+                        {
+                            _ = RefreshAfterSystemResumeAsync(refresh);
+                        }
+                    });
+                    break;
+            }
+        }
+        catch (Exception)
+        {
+            // The playtime service remains suspended until a reset publication succeeds.
+        }
+        finally
+        {
+            TaskCompletionSource? drained = null;
+            lock (_powerCallbackSync)
+            {
+                _powerCallbacksInFlight--;
+                if (_powerCallbacksInFlight == 0)
+                {
+                    drained = _powerCallbacksDrained;
+                }
+            }
+
+            drained?.TrySetResult();
+        }
+
+        return 0;
+    }
+
+    private async Task RefreshAfterSystemResumeAsync(GameSessionRefreshPump refresh)
+    {
+        try
+        {
+            await refresh.RefreshNowAsync();
+        }
+        catch (Exception)
+        {
+            // The periodic refresh can apply the pending reset publication later.
+        }
+    }
+
+    private Task UnregisterSuspendResumeNotifications()
+    {
+        nint handle;
+        lock (_powerCallbackSync)
+        {
+            _powerCallbackEnabled = 0;
+            handle = _powerRegistrationHandle;
+            _powerRegistrationHandle = 0;
+        }
+
+        var unregistered = handle == 0;
+        if (!unregistered)
+        {
+            try
+            {
+                unregistered = PowerUnregisterSuspendResumeNotification(handle) == 0;
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        lock (_powerCallbackSync)
+        {
+            if (unregistered)
+            {
+                _powerCallback = null;
+            }
+            else if (_powerRegistrationHandle == 0)
+            {
+                // Keep the callback rooted and retry during the next teardown path.
+                _powerRegistrationHandle = handle;
+            }
+
+            if (_powerCallbacksInFlight == 0)
+            {
+                return Task.CompletedTask;
+            }
+
+            _powerCallbacksDrained ??= new(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            return _powerCallbacksDrained.Task;
+        }
+    }
 
     private void CurrentInstance_Activated(object? sender, AppActivationArguments args)
     {
@@ -488,8 +691,8 @@ public partial class App : Application
     internal GameSessionRefreshPump SessionRefresh =>
         _sessionRefresh ?? throw new InvalidOperationException("Session refresh is not initialized.");
 
-    internal EndfieldPlaytimeService EndfieldPlaytime =>
-        _endfieldPlaytime ?? throw new InvalidOperationException("Endfield playtime is not initialized.");
+    internal GamePlaytimeService GamePlaytime =>
+        _gamePlaytime ?? throw new InvalidOperationException("Game playtime is not initialized.");
 
     internal SessionUiLifetime SessionUiLifetime { get; } = new();
 
@@ -795,11 +998,11 @@ public partial class App : Application
             _currentInstance.Activated -= CurrentInstance_Activated;
         if (_window is not null)
             _window.Activated -= Window_Activated;
+        _ = UnregisterSuspendResumeNotifications();
         if (!_stableUpdateHandoffCommitted) _stableUpdateCancellation.Cancel();
         sender.Hide();
         SessionUiLifetime.Terminate();
         CancelEndfieldSiblingDiscovery();
-        _endfieldPlaytime?.Dispose();
         _sessionRefresh?.Stop();
         _sessions?.Shutdown();
         _ = ShutDownAccountsAndCloseAsync();
@@ -827,14 +1030,16 @@ public partial class App : Application
             : CloseExportsForLauncherAsync(_exports);
 
         await AwaitEndfieldSiblingDiscoveryAsync();
-        _endfieldPlaytime?.Dispose();
+        await UnregisterSuspendResumeNotifications();
+        _powerDispatcher = null;
+        _gamePlaytime?.Dispose();
         if (_sessionRefresh is not null)
             await DisposeRefreshAsync(_sessionRefresh);
         if (_sessions is not null)
             await DisposeSessionsAsync(_sessions);
         _sessionRefresh = null;
         _sessions = null;
-        _endfieldPlaytime = null;
+        _gamePlaytime = null;
 
         await Task.WhenAll(
             bannerShutdown,
@@ -898,6 +1103,8 @@ public partial class App : Application
         LauncherState.Changed -= LauncherState_Changed;
         SessionUiLifetime.Terminate();
         CancelEndfieldSiblingDiscovery();
+        UnregisterSuspendResumeNotifications().GetAwaiter().GetResult();
+        _powerDispatcher = null;
 
         if (_window is not null)
         {
@@ -906,7 +1113,7 @@ public partial class App : Application
             _window.AppWindow.Closing -= AppWindow_Closing;
         }
 
-        _endfieldPlaytime?.Dispose();
+        _gamePlaytime?.Dispose();
         _sessionRefresh?.Stop();
         _sessions?.Shutdown();
     }

@@ -103,22 +103,157 @@ internal sealed class LauncherStateController
         return true;
     }
 
-    public bool TryReset()
+    public bool TryReplaceSettings(
+        LauncherState expected,
+        LauncherState target,
+        out LauncherStateUpdateFailure failure)
     {
-        LauncherStateReadResult reset;
+        ArgumentNullException.ThrowIfNull(expected);
+        ArgumentNullException.ThrowIfNull(target);
+        LauncherState next;
         lock (gate)
         {
+            if (!SettingsEqualExceptPlaytime(snapshot, expected))
+            {
+                failure = LauncherStateUpdateFailure.ConcurrentMutation;
+                return false;
+            }
+
             try
             {
-                reset = store.ResetToDefaults();
+                next = store.Update(current =>
+                {
+                    if (!SettingsEqualExceptPlaytime(current, expected))
+                    {
+                        throw new LauncherStateMutationConflictException();
+                    }
+
+                    return target with
+                    {
+                        PlaytimeSecondsByGame = current.PlaytimeSecondsByGame,
+                    };
+                });
+            }
+            catch (CustomGameExecutableConflictException)
+            {
+                failure = LauncherStateUpdateFailure.CustomGameExecutableConflict;
+                return false;
+            }
+            catch (LauncherStateMutationConflictException)
+            {
+                failure = LauncherStateUpdateFailure.ConcurrentMutation;
+                return false;
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
+                failure = LauncherStateUpdateFailure.Storage;
+                return false;
+            }
+
+            snapshot = next;
+            ReadStatus = LauncherStateReadStatus.Loaded;
+            failure = LauncherStateUpdateFailure.None;
+        }
+
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    public bool TryReset(IReadOnlyDictionary<string, long>? playtimeSecondsByGame = null)
+    {
+        LauncherState expected;
+        lock (gate)
+        {
+            expected = snapshot;
+        }
+
+        return TryReset(playtimeSecondsByGame, expected, out _);
+    }
+
+    public bool TryReset(
+        IReadOnlyDictionary<string, long>? playtimeSecondsByGame,
+        LauncherState expected,
+        out LauncherStateUpdateFailure failure)
+    {
+        ArgumentNullException.ThrowIfNull(expected);
+        LauncherStateReadResult reset;
+        lock (gate)
+        {
+            if (!SettingsEqualExceptPlaytime(snapshot, expected))
+            {
+                failure = LauncherStateUpdateFailure.ConcurrentMutation;
+                return false;
+            }
+
+            try
+            {
+                reset = store.ResetToDefaults(
+                    playtimeSecondsByGame ?? snapshot.PlaytimeSecondsByGame,
+                    expected);
+            }
+            catch (LauncherStateMutationConflictException)
+            {
+                failure = LauncherStateUpdateFailure.ConcurrentMutation;
+                return false;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                failure = LauncherStateUpdateFailure.Storage;
                 return false;
             }
 
             snapshot = reset.State!;
             ReadStatus = reset.Status;
+            failure = LauncherStateUpdateFailure.None;
+        }
+
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    public LauncherStateReadResult PrepareLastKnownGoodRestore(
+        out PreparedLauncherStateRestore? prepared) =>
+        store.PrepareLastKnownGoodRestore(out prepared);
+
+    public bool TryCommitPreparedRestore(
+        PreparedLauncherStateRestore prepared,
+        LauncherState expected,
+        IReadOnlyDictionary<string, long> playtimeSecondsByGame,
+        out LauncherStateUpdateFailure failure)
+    {
+        ArgumentNullException.ThrowIfNull(prepared);
+        ArgumentNullException.ThrowIfNull(expected);
+        ArgumentNullException.ThrowIfNull(playtimeSecondsByGame);
+        LauncherStateReadResult restored;
+        lock (gate)
+        {
+            if (!SettingsEqualExceptPlaytime(snapshot, expected))
+            {
+                failure = LauncherStateUpdateFailure.ConcurrentMutation;
+                return false;
+            }
+
+            try
+            {
+                restored = store.CommitPreparedLastKnownGoodRestore(
+                    prepared,
+                    playtimeSecondsByGame,
+                    expected);
+            }
+            catch (LauncherStateMutationConflictException)
+            {
+                failure = LauncherStateUpdateFailure.ConcurrentMutation;
+                return false;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                failure = LauncherStateUpdateFailure.Storage;
+                return false;
+            }
+
+            snapshot = restored.State!;
+            ReadStatus = restored.Status;
+            failure = LauncherStateUpdateFailure.None;
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
@@ -143,6 +278,15 @@ internal sealed class LauncherStateController
         Changed?.Invoke(this, EventArgs.Empty);
         return true;
     }
+
+    private static bool SettingsEqualExceptPlaytime(LauncherState left, LauncherState right)
+    {
+        var empty = new Dictionary<string, long>(StringComparer.Ordinal);
+        return string.Equals(
+            LauncherStateMigrations.Write(left with { PlaytimeSecondsByGame = empty }),
+            LauncherStateMigrations.Write(right with { PlaytimeSecondsByGame = empty }),
+            StringComparison.Ordinal);
+    }
 }
 
 internal enum LauncherStateUpdateFailure
@@ -150,4 +294,6 @@ internal enum LauncherStateUpdateFailure
     None,
     Storage,
     CustomGameExecutableConflict,
+    ConcurrentMutation,
+    SessionBusy,
 }

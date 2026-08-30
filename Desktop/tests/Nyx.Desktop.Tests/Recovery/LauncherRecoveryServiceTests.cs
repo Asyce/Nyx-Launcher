@@ -1,5 +1,6 @@
 using Nyx.Desktop.Core.Recovery;
 using Nyx.Desktop.Core.State;
+using Nyx.Desktop.Core.Features;
 using Nyx.Desktop.Infrastructure.Cache;
 using Nyx.Desktop.Infrastructure.Recovery;
 using Nyx.Desktop.Infrastructure.State;
@@ -86,6 +87,77 @@ public sealed class LauncherRecoveryServiceTests
             Assert.Equal("hsr", saved.SelectedGameId);
             Assert.Equal(@"D:\ConcurrentNyxData", saved.Preferences.DataDirectory);
             Assert.False(saved.Preferences.FeatureFlags.HsrAchievements);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Restore_last_known_good_keeps_newest_playtime_and_cleanup_safety()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "nyx-recovery-playtime-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new LauncherStateStore(root);
+            var defaults = LauncherState.Defaults();
+            var protectedFlags = LauncherFeatureFlags.Defaults() with
+            {
+                HoyoLabAccountAccess = true,
+            };
+            store.Save(defaults with
+            {
+                SelectedGameId = "gi",
+                PlaytimeSecondsByGame = new Dictionary<string, long> { ["gi"] = 10 },
+                Preferences = defaults.Preferences with { FeatureFlags = protectedFlags },
+            });
+            store.Save(defaults with
+            {
+                SelectedGameId = "hsr",
+                PlaytimeSecondsByGame = new Dictionary<string, long> { ["gi"] = 20 },
+                Preferences = defaults.Preferences with { FeatureFlags = protectedFlags },
+            });
+
+            var currentPrimary = defaults with
+            {
+                SelectedGameId = "ae",
+                PlaytimeSecondsByGame = new Dictionary<string, long>
+                {
+                    ["gi"] = 20,
+                    ["hsr"] = 3,
+                },
+                Preferences = defaults.Preferences with
+                {
+                    FeatureFlags = protectedFlags with
+                    {
+                        HoyoLabAccountCleanupPending = true,
+                    },
+                },
+            };
+            File.WriteAllText(store.StatePath, LauncherStateMigrations.Write(currentPrimary));
+
+            var newestInMemory = new Dictionary<string, long>
+            {
+                ["gi"] = 99,
+                ["hsr"] = 4,
+                ["custom-removed"] = 12,
+            };
+            var service = new LauncherRecoveryService(
+                store,
+                new LauncherCacheService(root),
+                currentPlaytimeTotals: () => newestInMemory);
+
+            var result = await service.RestoreLastKnownGoodSettingsAsync();
+
+            Assert.True(result.Succeeded);
+            var restored = store.Load().State!;
+            Assert.Equal("gi", restored.SelectedGameId);
+            Assert.Equal(
+                new Dictionary<string, long> { ["gi"] = 99, ["hsr"] = 4 },
+                restored.PlaytimeSecondsByGame);
+            Assert.True(restored.Preferences.FeatureFlags.HoyoLabAccountAccess);
+            Assert.True(restored.Preferences.FeatureFlags.HoyoLabAccountCleanupPending);
         }
         finally
         {

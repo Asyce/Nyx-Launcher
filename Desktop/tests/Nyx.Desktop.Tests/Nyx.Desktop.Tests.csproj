@@ -41,6 +41,8 @@
              Link="UI\Production\PublisherNavigationHandlerCleanup.cs" />
     <Compile Include="..\..\src\Nyx.Desktop.App\HoyoLabExportUiReservation.cs"
              Link="UI\Production\HoyoLabExportUiReservation.cs" />
+    <Compile Include="..\..\src\Nyx.Desktop.App\LauncherStateController.cs"
+             Link="State\Production\LauncherStateController.cs" />
   </ItemGroup>
 
   <ItemGroup>

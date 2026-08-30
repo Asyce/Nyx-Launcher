@@ -42,6 +42,7 @@ using Nyx.Desktop.Infrastructure.Playtime;
 using Nyx.Desktop.Infrastructure.PublisherMaintenance;
 using Nyx.Desktop.Infrastructure.PublisherGames;
 using Nyx.Desktop.Infrastructure.Sessions;
+using Nyx.Desktop.Infrastructure.State;
 using Nyx.Desktop.Infrastructure.Updating;
 using Nyx_Desktop_App.ViewModels;
 using Windows.Networking.Connectivity;
@@ -142,7 +143,7 @@ public sealed partial class MainPage : Page
 
     private readonly GameSessionCoordinator sessions;
     private readonly GameSessionRefreshPump sessionRefresh;
-    private readonly EndfieldPlaytimeService endfieldPlaytime;
+    private readonly GamePlaytimeService gamePlaytime;
     private readonly SessionUiLifetime sessionUiLifetime;
     private readonly LauncherBannersContentService launcherBanners;
     private readonly ExportCoordinator exports;
@@ -511,7 +512,7 @@ public sealed partial class MainPage : Page
         RebuildGameRail(launcherState.Snapshot);
         sessions = app.Sessions;
         sessionRefresh = app.SessionRefresh;
-        endfieldPlaytime = app.EndfieldPlaytime;
+        gamePlaytime = app.GamePlaytime;
         sessionUiLifetime = app.SessionUiLifetime;
         launcherBanners = app.LauncherBanners;
         exports = app.Exports;
@@ -2421,164 +2422,6 @@ public sealed partial class MainPage : Page
         _ => false,
     };
 
-    private async void PlaytimeStatsButton_Click(object sender, RoutedEventArgs e)
-    {
-        var lease = pageLease;
-        if (lease is null
-            || GameSelector?.SelectedItem is not GameLauncherItem { Id: "ae", IsCustom: false })
-            return;
-
-        try
-        {
-            var dialog = CreateEndfieldPlaytimeDialog(endfieldPlaytime.Current);
-            await dialog.ShowAsync().AsTask(lease.CancellationToken);
-        }
-        catch (OperationCanceledException) when (lease.CancellationToken.IsCancellationRequested)
-        {
-        }
-        catch (Exception)
-        {
-            if (!lease.CancellationToken.IsCancellationRequested)
-            {
-                HeroDescription.Text = "Nyx could not open Playtime Stats safely.";
-                SetLaunchDetail(HeroDescription.Text);
-            }
-        }
-    }
-
-    private ContentDialog CreateEndfieldPlaytimeDialog(EndfieldPlaytimeSnapshot snapshot)
-    {
-        var panel = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Stretch };
-        var disclosure = new TextBlock
-        {
-            Text = "Nyx counts only complete sessions whose exact Endfield process start and end it observed during the same Nyx run. Earlier playtime is unavailable; incomplete sessions are excluded.",
-            TextWrapping = TextWrapping.Wrap,
-            FontFamily = (FontFamily)Application.Current.Resources["NyxBodyFont"],
-            Foreground = (Brush)Application.Current.Resources["MistBrush"],
-        };
-        panel.Children.Add(disclosure);
-        AddPlaytimeStat(panel, "Status", FormatEndfieldPlaytimeStatus(snapshot));
-
-        var gameplay = snapshot.Statistics.Gameplay;
-        AddPlaytimeHeading(panel, "LOCAL PLAYTIME TRACKED BY NYX");
-        AddPlaytimeStat(panel, "Tracked total", FormatPlaytimeDuration(gameplay.Total));
-        AddPlaytimeStat(panel, "Sessions", gameplay.Sessions.ToString(CultureInfo.InvariantCulture));
-        AddPlaytimeStat(panel, "Incomplete tracked sessions", snapshot.IncompleteSessions.ToString(CultureInfo.InvariantCulture));
-        AddPlaytimeStat(panel, "Active days", gameplay.ActiveDays.ToString(CultureInfo.InvariantCulture));
-        AddPlaytimeStat(panel, "Average session", FormatPlaytimeDuration(gameplay.AverageSession));
-        AddPlaytimeStat(panel, "Average active day", FormatPlaytimeDuration(gameplay.AverageActiveDay));
-        AddPlaytimeStat(panel, "Shortest / longest", $"{FormatPlaytimeDuration(gameplay.Shortest)} / {FormatPlaytimeDuration(gameplay.Longest)}");
-        AddPlaytimeStat(panel, "Longest streak", $"{gameplay.LongestActiveDayStreak} day{(gameplay.LongestActiveDayStreak == 1 ? string.Empty : "s")}");
-        AddPlaytimeStat(
-            panel,
-            "Session lengths",
-            $"<30m {gameplay.DurationBuckets.UnderThirtyMinutes}  ·  30m–3h {gameplay.DurationBuckets.ThirtyMinutesThroughThreeHours}  ·  >3h {gameplay.DurationBuckets.OverThreeHours}");
-        AddPlaytimeStat(panel, "Night play (22:00–06:00)", FormatPlaytimeDuration(gameplay.NightTime));
-
-        var hourly = gameplay.LaunchesByLocalHour
-            .Select((count, hour) => (count, hour))
-            .Where(static value => value.count > 0)
-            .Select(static value => $"{value.hour:D2}:00 ×{value.count}");
-        AddPlaytimeStat(panel, "Launch hours", string.Join("  ·  ", hourly.DefaultIfEmpty("None yet")));
-        AddPlaytimeStat(
-            panel,
-            "Time by weekday",
-            string.Join("  ·  ", gameplay.TimeByLocalWeekday
-                .Where(static pair => pair.Value > TimeSpan.Zero)
-                .OrderBy(static pair => pair.Key)
-                .Select(pair => $"{pair.Key.ToString()[..3]} {FormatPlaytimeDuration(pair.Value)}")
-                .DefaultIfEmpty("None yet")));
-        AddPlaytimeStat(
-            panel,
-            "Time by month",
-            string.Join("  ·  ", gameplay.TimeByLocalMonth
-                .Select(pair => $"{pair.Key} {FormatPlaytimeDuration(pair.Value)}")
-                .DefaultIfEmpty("None yet")));
-
-        if (gameplay.Sessions == 0)
-        {
-            panel.Children.Add(new TextBlock
-            {
-                Text = "No complete sessions have been tracked yet. Keep Nyx open before starting Endfield and until the game closes.",
-                TextWrapping = TextWrapping.Wrap,
-                FontFamily = (FontFamily)Application.Current.Resources["NyxBodyFont"],
-                Foreground = (Brush)Application.Current.Resources["MistBrush"],
-            });
-        }
-
-        var dialog = new ContentDialog
-        {
-            XamlRoot = XamlRoot,
-            Title = "Endfield Playtime Stats",
-            Content = new ScrollViewer
-            {
-                MaxHeight = 480,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Content = panel,
-            },
-            CloseButtonText = "Close",
-            DefaultButton = ContentDialogButton.Close,
-        };
-        dialog.Resources["ContentDialogMinWidth"] = 560d;
-        dialog.Resources["ContentDialogMaxWidth"] = 560d;
-        AutomationProperties.SetName(dialog, "Endfield playtime statistics");
-        return dialog;
-    }
-
-    private static string FormatEndfieldPlaytimeStatus(EndfieldPlaytimeSnapshot snapshot)
-    {
-        var status = snapshot.IsRunning
-            ? snapshot.HasPendingSession
-                ? "Tracking this Endfield session now."
-                : "This running Endfield session is not being counted because Nyx did not observe its start after Endfield was confirmed closed."
-            : "Ready to track the next Endfield session.";
-        if (snapshot.SaveFailed)
-            return $"{status} Nyx could not save the latest playtime update and will keep trying while it is open.";
-        return snapshot.IsRunning && snapshot.HasPendingSession
-            ? $"{status} Its start is saved."
-            : status;
-    }
-
-    private static void AddPlaytimeHeading(StackPanel panel, string text) => panel.Children.Add(new TextBlock
-    {
-        Text = text,
-        Margin = new Thickness(0, 6, 0, 0),
-        FontSize = 11,
-        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-        CharacterSpacing = 120,
-    });
-
-    private static void AddPlaytimeStat(StackPanel panel, string label, string value)
-    {
-        var row = new Grid { ColumnSpacing = 16 };
-        row.ColumnDefinitions.Add(new() { Width = new GridLength(190) });
-        row.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-        var labelText = new TextBlock
-        {
-            Text = label,
-            Foreground = (Brush)Application.Current.Resources["MistBrush"],
-            TextWrapping = TextWrapping.Wrap,
-        };
-        var valueText = new TextBlock
-        {
-            Text = value,
-            TextWrapping = TextWrapping.Wrap,
-        };
-        Grid.SetColumn(valueText, 1);
-        row.Children.Add(labelText);
-        row.Children.Add(valueText);
-        panel.Children.Add(row);
-    }
-
-    private static string FormatPlaytimeDuration(TimeSpan duration)
-    {
-        if (duration <= TimeSpan.Zero) return "0m";
-        var hours = (long)duration.TotalHours;
-        return hours > 0
-            ? $"{hours}h {duration.Minutes}m"
-            : $"{Math.Max(1, duration.Minutes)}m";
-    }
-
     private async void OpenScreenshotFolderButton_Click(object sender, RoutedEventArgs e)
     {
         var lease = pageLease;
@@ -3156,28 +2999,99 @@ public sealed partial class MainPage : Page
     private void RebuildAfterStateRecovery()
     {
         if (!launcherState.TryReload()) return;
+        RebuildFromCurrentState();
+    }
+
+    private void RebuildFromCurrentState()
+    {
+        var state = launcherState.Snapshot;
         app.ApplyContentRefreshPreferences();
-        SynchronizeCustomSessions(launcherState.Snapshot);
-        RebuildGameRail(launcherState.Snapshot);
-        GameSelector.SelectedItem = Games.FirstOrDefault(game => game.Id == launcherState.Snapshot.SelectedGameId)
+        RebuildGameRail(state);
+        GameSelector.SelectedItem = Games.FirstOrDefault(game => game.Id == state.SelectedGameId)
             ?? Games.FirstOrDefault();
         RenderSelection();
     }
 
-    private void SynchronizeCustomSessions(Nyx.Desktop.Core.State.LauncherState state)
+    private async Task<LauncherStateUpdateFailure> CommitCustomSessionMutationAsync(
+        LauncherState expected,
+        IReadOnlyList<CustomGameDefinition> targetCustomGames,
+        Func<LauncherStateUpdateFailure> commitState,
+        CancellationToken cancellationToken = default)
     {
-        var savedIds = state.CustomGames.Select(static game => game.Id).ToHashSet(StringComparer.Ordinal);
-        foreach (var existingId in sessions.GetAllSnapshots().Keys
-                     .Where(static id => id.StartsWith("custom-", StringComparison.Ordinal))
-                     .Where(id => !savedIds.Contains(id)))
+        var previousById = expected.CustomGames.ToDictionary(static game => game.Id, StringComparer.Ordinal);
+        var targetById = targetCustomGames.ToDictionary(static game => game.Id, StringComparer.Ordinal);
+        var existingIds = sessions.GetAllSnapshots().Keys
+            .Where(static id => id.StartsWith("custom-", StringComparison.Ordinal))
+            .ToHashSet(StringComparer.Ordinal);
+        var mutations = new Dictionary<string, IGameSessionAdapter?>(StringComparer.Ordinal);
+
+        foreach (var existingId in existingIds)
         {
-            sessions.TryRemoveCustomAdapter(existingId);
+            if (targetById.TryGetValue(existingId, out var current)
+                && previousById.TryGetValue(existingId, out var previous)
+                && previous == current)
+            {
+                continue;
+            }
+
+            mutations[existingId] = current is null
+                ? null
+                : CustomGameSessionFactory.Create(current);
         }
 
-        foreach (var game in state.CustomGames)
+        foreach (var game in targetCustomGames)
         {
-            sessions.TryRemoveCustomAdapter(game.Id);
-            sessions.TryRegisterCustomAdapter(CustomGameSessionFactory.Create(game));
+            if (existingIds.Contains(game.Id)
+                && previousById.TryGetValue(game.Id, out var previous)
+                && previous == game)
+            {
+                continue;
+            }
+
+            mutations[game.Id] = CustomGameSessionFactory.Create(game);
+        }
+
+        foreach (var removedId in previousById.Keys.Where(id => !targetById.ContainsKey(id)))
+        {
+            mutations[removedId] = null;
+        }
+
+        if (mutations.Count == 0)
+        {
+            return commitState();
+        }
+
+        using var publication = await sessionRefresh
+            .TryAcquireExclusivePublicationAsync(cancellationToken);
+        if (publication is null
+            || !sessions.TryReserveCustomAdapterMutations(mutations, out var reservation)
+            || reservation is null)
+        {
+            return LauncherStateUpdateFailure.SessionBusy;
+        }
+
+        using (reservation)
+        {
+            var failure = commitState();
+            if (failure is not LauncherStateUpdateFailure.None)
+            {
+                return failure;
+            }
+
+            foreach (var gameId in mutations.Keys)
+            {
+                if (!targetById.ContainsKey(gameId))
+                {
+                    gamePlaytime.ForgetRemovedGame(gameId);
+                }
+                else
+                {
+                    gamePlaytime.CloseRuntime(gameId);
+                }
+            }
+
+            reservation.Commit();
+            return LauncherStateUpdateFailure.None;
         }
     }
 
@@ -3604,16 +3518,37 @@ public sealed partial class MainPage : Page
         };
         restoreSettings.Click += async (_, _) =>
         {
-            var result = await app.Recovery.RestoreLastKnownGoodSettingsAsync();
-            if (result.Succeeded)
-            {
-                RebuildAfterStateRecovery();
-                message.Text = "Last-known-good settings restored. Close and reopen Settings to review them.";
-            }
-            else
+            var expected = launcherState.Snapshot;
+            var preparedResult = launcherState.PrepareLastKnownGoodRestore(out var prepared);
+            if (!preparedResult.IsUsable || prepared is null)
             {
                 message.Text = "No usable last-known-good settings backup was found.";
+                return;
             }
+
+            LauncherStateUpdateFailure CommitRestore() =>
+                launcherState.TryCommitPreparedRestore(
+                    prepared,
+                    expected,
+                    gamePlaytime.SnapshotTotals(),
+                    out var failure)
+                        ? LauncherStateUpdateFailure.None
+                        : failure;
+            var result = await CommitCustomSessionMutationAsync(
+                expected,
+                prepared.Target.CustomGames,
+                CommitRestore,
+                pageLease?.CancellationToken ?? CancellationToken.None);
+            if (result is LauncherStateUpdateFailure.None)
+            {
+                RebuildFromCurrentState();
+                message.Text = "Last-known-good settings restored. Close and reopen Settings to review them.";
+                return;
+            }
+
+            message.Text = result is LauncherStateUpdateFailure.SessionBusy
+                ? "Nyx is still checking or starting a custom game. Try Restore again in a moment; your current settings are still safe."
+                : "Nyx could not restore those settings. Your current settings are still safe.";
         };
 
         var appearancePanel = new StackPanel { Spacing = 10 };
@@ -4089,7 +4024,7 @@ public sealed partial class MainPage : Page
                 message.Text = "Nyx could not save the new order. Your previous order is still safe.";
             }
         };
-        resetLauncherState.Click += (_, _) =>
+        resetLauncherState.Click += async (_, _) =>
         {
             if (!resetLauncherConfirmationArmed)
             {
@@ -4099,14 +4034,29 @@ public sealed partial class MainPage : Page
                 return;
             }
 
-            if (launcherState.TryReset())
+            var expected = launcherState.Snapshot;
+            LauncherStateUpdateFailure CommitReset() =>
+                launcherState.TryReset(
+                    gamePlaytime.SnapshotTotals(),
+                    expected,
+                    out var failure)
+                        ? LauncherStateUpdateFailure.None
+                        : failure;
+            var result = await CommitCustomSessionMutationAsync(
+                expected,
+                Array.Empty<CustomGameDefinition>(),
+                CommitReset,
+                pageLease?.CancellationToken ?? CancellationToken.None);
+            if (result is LauncherStateUpdateFailure.None)
             {
                 dialog.Hide();
-                RebuildAfterStateRecovery();
+                RebuildFromCurrentState();
             }
             else
             {
-                message.Text = "Nyx could not reset launcher settings. Your previous settings are still safe.";
+                message.Text = result is LauncherStateUpdateFailure.SessionBusy
+                    ? "Nyx is still checking or starting a custom game. Try Reset again in a moment; your previous settings are still safe."
+                    : "Nyx could not reset launcher settings. Your previous settings are still safe.";
             }
         };
         var manualInstallRootChanged = false;
@@ -4190,14 +4140,38 @@ public sealed partial class MainPage : Page
                             ShowAccountAndExport = showAccountAndExport.IsOn,
                         },
                 };
-                saveSucceeded = launcherState.TryUpdate(
-                    state => LauncherSettingsStateMerge.Apply(state, before, settingsEdit),
-                    out var settingsFailure);
+                var expected = launcherState.Snapshot;
+                LauncherState target;
+                try
+                {
+                    target = LauncherSettingsStateMerge.Apply(expected, before, settingsEdit);
+                }
+                catch (CustomGameExecutableConflictException)
+                {
+                    message.Text = "That executable is already in your game rail. Your previous settings are still safe.";
+                    return false;
+                }
+
+                LauncherStateUpdateFailure CommitSettings() =>
+                    launcherState.TryReplaceSettings(expected, target, out var failure)
+                        ? LauncherStateUpdateFailure.None
+                        : failure;
+                var settingsFailure = await CommitCustomSessionMutationAsync(
+                    expected,
+                    target.CustomGames,
+                    CommitSettings,
+                    pageLease?.CancellationToken ?? CancellationToken.None);
+                saveSucceeded = settingsFailure is LauncherStateUpdateFailure.None;
                 if (!saveSucceeded)
                 {
-                    message.Text = settingsFailure is LauncherStateUpdateFailure.CustomGameExecutableConflict
-                        ? "That executable is already in your game rail. Your previous settings are still safe."
-                        : "Nyx could not save Settings. Your previous settings are still safe.";
+                    message.Text = settingsFailure switch
+                    {
+                        LauncherStateUpdateFailure.CustomGameExecutableConflict =>
+                            "That executable is already in your game rail. Your previous settings are still safe.",
+                        LauncherStateUpdateFailure.SessionBusy =>
+                            "Nyx is still checking or starting this custom game. Try Save again in a moment; your previous settings are still safe.",
+                        _ => "Nyx could not save Settings. Your previous settings are still safe.",
+                    };
                     return false;
                 }
 
@@ -4205,17 +4179,6 @@ public sealed partial class MainPage : Page
                     openedManualInstallRoot,
                     editedManualInstallRoot,
                     StringComparison.Ordinal);
-
-                if (updatedCustom is not null)
-                {
-                    sessions.TryRemoveCustomAdapter(updatedCustom.Id);
-                    var savedCustom = launcherState.Snapshot.CustomGames.FirstOrDefault(
-                        game => string.Equals(game.Id, updatedCustom.Id, StringComparison.Ordinal));
-                    if (savedCustom is not null)
-                    {
-                        sessions.TryRegisterCustomAdapter(CustomGameSessionFactory.Create(savedCustom));
-                    }
-                }
 
                 app.ApplyContentRefreshPreferences();
                 if (before.Preferences.PublisherPasswordSavingEnabled
@@ -4275,18 +4238,30 @@ public sealed partial class MainPage : Page
                 return;
             }
 
-            var deleted = launcherState.TryUpdate(state => state with
+            var expected = launcherState.Snapshot;
+            var target = expected with
             {
-                CustomGames = state.CustomGames.Where(game => game.Id != custom.Id).ToArray(),
-                RailOrder = state.RailOrder.Where(id => id != custom.Id).ToArray(),
-                Appearance = state.Appearance.Where(pair => pair.Key != custom.Id).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                CustomGames = expected.CustomGames.Where(game => game.Id != custom.Id).ToArray(),
+                RailOrder = expected.RailOrder.Where(id => id != custom.Id).ToArray(),
+                Appearance = expected.Appearance.Where(pair => pair.Key != custom.Id).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
                 SelectedGameId = "gi",
-            });
-            if (!deleted)
+            };
+            LauncherStateUpdateFailure CommitDelete() =>
+                launcherState.TryReplaceSettings(expected, target, out var failure)
+                    ? LauncherStateUpdateFailure.None
+                    : failure;
+            var deleteFailure = await CommitCustomSessionMutationAsync(
+                expected,
+                target.CustomGames,
+                CommitDelete,
+                pageLease?.CancellationToken ?? CancellationToken.None);
+            if (deleteFailure is not LauncherStateUpdateFailure.None)
             {
+                HeroDescription.Text = deleteFailure is LauncherStateUpdateFailure.SessionBusy
+                    ? "Nyx is still checking or starting that custom game. Try Delete again in a moment; the game is still safe."
+                    : "Nyx could not delete that custom game. The game is still safe.";
                 return;
             }
-            sessions.TryRemoveCustomAdapter(custom.Id);
             RebuildGameRail(launcherState.Snapshot);
             GameSelector.SelectedItem = Games.FirstOrDefault(game => game.Id == "gi");
         }
@@ -4389,66 +4364,90 @@ public sealed partial class MainPage : Page
         dialog.Resources["ContentDialogMinWidth"] = addGameWidth;
         dialog.Resources["ContentDialogMaxWidth"] = addGameWidth;
         CustomGameDefinition? addedGame = null;
-        dialog.PrimaryButtonClick += (_, args) =>
+        dialog.PrimaryButtonClick += async (_, args) =>
         {
-            var id = CustomGameValidator.GenerateId();
-            var validation = CustomGameValidator.Validate(
-                new CustomGameDraft(
-                    name.Text,
-                    executable.Text,
-                    icon.Text,
-                    Id: id,
-                    CreationOrder: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()),
-                launcherState.Snapshot.CustomGames);
-            if (!validation.IsValid || validation.Game is null)
-            {
-                args.Cancel = true;
-                message.Text = validation.Error switch
-                {
-                    CustomGameValidationError.NameRequired => "Enter a game name.",
-                    CustomGameValidationError.ExecutableMissing => "The selected game executable no longer exists.",
-                    CustomGameValidationError.IconMissing => "The selected icon no longer exists.",
-                    CustomGameValidationError.DuplicateExecutable => "That executable is already in your game rail.",
-                    CustomGameValidationError.UnsafeArguments => "The saved arguments are not safe to start directly.",
-                    _ => "Choose an exact local .exe and a local icon image.",
-                };
-                message.Foreground = (Brush)Application.Current.Resources["LavenderBrush"];
-                return;
-            }
-
+            var deferral = args.GetDeferral();
             try
             {
-                var copiedIcon = userAssets.CopyImage(id, "icon", validation.Game.IconPath);
-                var game = validation.Game with { IconPath = copiedIcon };
-                if (!sessions.TryRegisterCustomAdapter(CustomGameSessionFactory.Create(game)))
+                var id = CustomGameValidator.GenerateId();
+                var validation = CustomGameValidator.Validate(
+                    new CustomGameDraft(
+                        name.Text,
+                        executable.Text,
+                        icon.Text,
+                        Id: id,
+                        CreationOrder: DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()),
+                    launcherState.Snapshot.CustomGames);
+                if (!validation.IsValid || validation.Game is null)
                 {
                     args.Cancel = true;
-                    message.Text = "Nyx could not prepare this game. Nothing was launched.";
+                    message.Text = validation.Error switch
+                    {
+                        CustomGameValidationError.NameRequired => "Enter a game name.",
+                        CustomGameValidationError.ExecutableMissing => "The selected game executable no longer exists.",
+                        CustomGameValidationError.IconMissing => "The selected icon no longer exists.",
+                        CustomGameValidationError.DuplicateExecutable => "That executable is already in your game rail.",
+                        CustomGameValidationError.UnsafeArguments => "The saved arguments are not safe to start directly.",
+                        _ => "Choose an exact local .exe and a local icon image.",
+                    };
                     message.Foreground = (Brush)Application.Current.Resources["LavenderBrush"];
                     return;
                 }
 
-                var saved = launcherState.TryUpdate(
-                    state => LauncherCustomGameStateMerge.Add(state, game),
-                    out var addFailure);
-                if (!saved)
+                try
                 {
-                    sessions.TryRemoveCustomAdapter(game.Id);
-                    args.Cancel = true;
-                    message.Text = addFailure is LauncherStateUpdateFailure.CustomGameExecutableConflict
-                        ? "That executable is already in your game rail. Nothing was launched."
-                        : "Nyx could not save this game. Nothing was launched.";
-                    message.Foreground = (Brush)Application.Current.Resources["LavenderBrush"];
-                    return;
-                }
+                    var copiedIcon = userAssets.CopyImage(id, "icon", validation.Game.IconPath);
+                    var game = validation.Game with { IconPath = copiedIcon };
+                    var expected = launcherState.Snapshot;
+                    LauncherState target;
+                    try
+                    {
+                        target = LauncherCustomGameStateMerge.Add(expected, game);
+                    }
+                    catch (CustomGameExecutableConflictException)
+                    {
+                        args.Cancel = true;
+                        message.Text = "That executable is already in your game rail. Nothing was launched.";
+                        message.Foreground = (Brush)Application.Current.Resources["LavenderBrush"];
+                        return;
+                    }
 
-                addedGame = game;
+                    LauncherStateUpdateFailure CommitAdd() =>
+                        launcherState.TryReplaceSettings(expected, target, out var failure)
+                            ? LauncherStateUpdateFailure.None
+                            : failure;
+                    var addFailure = await CommitCustomSessionMutationAsync(
+                        expected,
+                        target.CustomGames,
+                        CommitAdd,
+                        pageLease?.CancellationToken ?? CancellationToken.None);
+                    if (addFailure is not LauncherStateUpdateFailure.None)
+                    {
+                        args.Cancel = true;
+                        message.Text = addFailure switch
+                        {
+                            LauncherStateUpdateFailure.CustomGameExecutableConflict =>
+                                "That executable is already in your game rail. Nothing was launched.",
+                            LauncherStateUpdateFailure.SessionBusy =>
+                                "Nyx is still updating custom games. Try Add Game again in a moment; nothing was launched.",
+                            _ => "Nyx could not save this game. Nothing was launched.",
+                        };
+                        message.Foreground = (Brush)Application.Current.Resources["LavenderBrush"];
+                        return;
+                    }
+
+                    addedGame = game;
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
+                {
+                    args.Cancel = true;
+                    message.Text = "Nyx could not safely copy that icon into its data folder.";
+                    message.Foreground = (Brush)Application.Current.Resources["LavenderBrush"];
+                }
             }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException)
+            finally
             {
-                args.Cancel = true;
-                message.Text = "Nyx could not safely copy that icon into its data folder.";
-                message.Foreground = (Brush)Application.Current.Resources["LavenderBrush"];
+                deferral.Complete();
             }
         };
         var result = await dialog.ShowAsync();
@@ -5356,6 +5355,7 @@ public sealed partial class MainPage : Page
             return;
         }
 
+        RenderGamePlaytime(selected);
         ApplySelectedAppearance(selected.Id);
         gameSnapshot = sessions.TryGetSnapshot(selected.Id, out var selectedSnapshot)
             ? selectedSnapshot
@@ -5403,6 +5403,37 @@ public sealed partial class MainPage : Page
         ApplyPrimaryGameStatus(selected);
         SyncRedesignedControls(selected);
         ApplySavedPanelVisibility(selected);
+    }
+
+    private void RenderGamePlaytime(GameLauncherItem selected)
+    {
+        var snapshot = gamePlaytime.Current(selected.Id);
+        if (!snapshot.TrackingAvailable)
+        {
+            const string unavailable = "Play Time: tracking unavailable";
+            const string explanation =
+                "Windows sleep tracking could not start, so Nyx will not show or count play time this session.";
+            LaunchPlayTimeText.Text = unavailable;
+            AutomationProperties.SetName(LaunchPlayTimeText, $"{unavailable}. {explanation}");
+            ToolTipService.SetToolTip(LaunchPlayTimeText, explanation);
+            return;
+        }
+
+        var totalMinutes = Math.Max(0L, snapshot.TotalSeconds / 60);
+        var value = totalMinutes >= 60
+            ? $"Play Time: {totalMinutes / 60}h {totalMinutes % 60}m"
+            : $"Play Time: {totalMinutes}m";
+        if (snapshot.SaveFailed) value += " · save pending";
+
+        const string disclosure =
+            "Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded.";
+        LaunchPlayTimeText.Text = value;
+        AutomationProperties.SetName(
+            LaunchPlayTimeText,
+            snapshot.SaveFailed ? $"{value}. {disclosure} Save pending." : $"{value}. {disclosure}");
+        ToolTipService.SetToolTip(
+            LaunchPlayTimeText,
+            snapshot.SaveFailed ? $"{disclosure} Save pending." : disclosure);
     }
 
     private void ApplySavedPanelVisibility(GameLauncherItem selected)
@@ -6255,10 +6286,7 @@ public sealed partial class MainPage : Page
         NyxToolsPanel.Visibility = Visibility.Collapsed;
         ApplySavedPanelVisibility(selected);
         RenderOfficialTools(selected);
-        var showPlaytime = !selected.IsCustom && selected.Id == "ae";
-        StableExportHeading.Text = showPlaytime ? "EXPORT & STATS" : "EXPORT";
-        PlaytimeStatsButton.Visibility = showPlaytime ? Visibility.Visible : Visibility.Collapsed;
-        PlaytimeStatsButton.IsEnabled = showPlaytime;
+        StableExportHeading.Text = "EXPORT";
         if (selected.IsCustom) return;
         var definition = GameCatalog.GetRequired(selected.Id);
         var armed = launcherState.Snapshot.Export.Games.TryGetValue(selected.Id, out var saved)

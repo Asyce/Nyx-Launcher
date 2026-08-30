@@ -290,16 +290,16 @@ public sealed class CustomGameSessionAdapter : IGameSessionAdapter
         {
             return ValueTask.FromResult(new GameSessionEvidence(
                 LocalReadinessEvidence.NeedsReview,
-                ExactProcessPresence.Absent,
-                ExactProcessPresence.Absent));
+                ExactProcessPresence.Uncertain,
+                ExactProcessPresence.Uncertain));
         }
 
         try
         {
-            var bootstrap = inspector.Check(validation.Game.ExecutablePath);
-            var runtime = validation.Game.RuntimePath is null
+            var bootstrap = validation.Game.RuntimePath is null
                 ? ExactProcessPresence.Absent
-                : inspector.Check(validation.Game.RuntimePath);
+                : inspector.Check(validation.Game.ExecutablePath);
+            var runtime = inspector.Check(validation.Game.RuntimePath ?? validation.Game.ExecutablePath);
             return ValueTask.FromResult(new GameSessionEvidence(LocalReadinessEvidence.Ready, bootstrap, runtime));
         }
         catch (Exception exception) when (exception is IOException
@@ -320,7 +320,7 @@ public sealed class CustomGameSessionAdapter : IGameSessionAdapter
         cancellationToken.ThrowIfCancellationRequested();
         var observation = ObserveSessionAsync(cancellationToken).Result;
         if (observation.Overall is ExactProcessPresence.Present)
-            return ValueTask.FromResult(GameLaunchDispatchResult.Accepted);
+            return ValueTask.FromResult(GameLaunchDispatchResult.AlreadyRunning);
         if (observation.Readiness is not LocalReadinessEvidence.Ready)
             return ValueTask.FromResult(GameLaunchDispatchResult.NeedsReview);
         var validation = CustomGameValidator.Revalidate(game, pathProbe);

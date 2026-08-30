@@ -55,7 +55,8 @@ public sealed record GenshinLaunchResult(
     GenshinLaunchStatus Status,
     LaunchSpecification? Specification = null,
     GenshinInspectionReason InspectionReason = GenshinInspectionReason.None,
-    GenshinLaunchFailureReason FailureReason = GenshinLaunchFailureReason.None);
+    GenshinLaunchFailureReason FailureReason = GenshinLaunchFailureReason.None,
+    bool StartedByThisCall = false);
 
 public interface IGenshinLaunchIdentityValidator
 {
@@ -173,24 +174,27 @@ public sealed class GenshinLaunchService
         return status switch
         {
             Genshin120FpsStartStatus.Ready =>
-                freshResult with { Status = GenshinLaunchStatus.Running },
+                freshResult with { Status = GenshinLaunchStatus.Running, StartedByThisCall = true },
             Genshin120FpsStartStatus.GameStartedAttachFailed =>
                 freshResult with
                 {
                     Status = GenshinLaunchStatus.Running,
                     FailureReason = GenshinLaunchFailureReason.FpsAttachFailed,
+                    StartedByThisCall = true,
                 },
             Genshin120FpsStartStatus.GameStartedAttachTimedOut =>
                 freshResult with
                 {
                     Status = GenshinLaunchStatus.Running,
                     FailureReason = GenshinLaunchFailureReason.FpsAttachTimedOut,
+                    StartedByThisCall = true,
                 },
             Genshin120FpsStartStatus.GameStartUnconfirmed =>
                 freshResult with
                 {
                     Status = GenshinLaunchStatus.Running,
                     FailureReason = GenshinLaunchFailureReason.FpsLaunchUnconfirmed,
+                    StartedByThisCall = false,
                 },
             Genshin120FpsStartStatus.HelperUnavailable =>
                 Failed(freshResult, GenshinLaunchFailureReason.FpsHelperUnavailable),
@@ -228,7 +232,7 @@ public sealed class GenshinLaunchService
         try
         {
             processStarter.Start(freshResult.Specification);
-            return freshResult with { Status = GenshinLaunchStatus.Running };
+            return freshResult with { Status = GenshinLaunchStatus.Running, StartedByThisCall = true };
         }
         catch (Exception exception) when (IsStartFailure(exception))
         {
@@ -274,7 +278,7 @@ public sealed class GenshinLaunchService
         {
             elevatedProcessStarter!.StartValidatedGenshin(
                 new ValidatedGenshinElevationRequest(freshResult.Specification));
-            return freshResult with { Status = GenshinLaunchStatus.Running };
+            return freshResult with { Status = GenshinLaunchStatus.Running, StartedByThisCall = true };
         }
         catch (Exception exception) when (IsStartFailure(exception))
         {
@@ -349,7 +353,10 @@ public sealed class GenshinLaunchService
         return runningStatus switch
         {
             RunningProcessStatus.NotRunning => new(GenshinLaunchStatus.Ready, specification),
-            RunningProcessStatus.Running => new(GenshinLaunchStatus.Running, specification),
+            RunningProcessStatus.Running => new(
+                GenshinLaunchStatus.Running,
+                specification,
+                StartedByThisCall: false),
             _ => new(GenshinLaunchStatus.NeedsReview, specification),
         };
     }

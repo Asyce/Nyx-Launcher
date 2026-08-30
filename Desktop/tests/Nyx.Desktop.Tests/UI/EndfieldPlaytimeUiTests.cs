@@ -7,130 +7,165 @@ public sealed class EndfieldPlaytimeUiTests
     private static readonly string WorkspaceRoot = FindWorkspaceRoot();
 
     [Fact]
-    public void App_composes_playtime_from_root_state_and_disposes_it_before_session_refresh()
+    public void App_composes_shared_playtime_and_unregisters_power_callbacks_before_teardown()
     {
-        var app = ReadAppFile("App.xaml.cs");
+        var app = ReadLauncherFile("App.xaml.cs");
         var composition = Slice(app, "_sessionRefresh = new GameSessionRefreshPump", "_launcherBanners = new");
 
         ContainsNormalized(composition, "_sessionRefresh = new GameSessionRefreshPump(_sessions);");
-        ContainsNormalized(composition, "_endfieldPlaytime = new EndfieldPlaytimeService(");
-        ContainsNormalized(composition, "LauncherState.Snapshot.EndfieldPlaytime");
-        ContainsNormalized(composition, "playtime => LauncherState.TryUpdate(state => state with { EndfieldPlaytime = playtime })");
+        ContainsNormalized(composition, "_gamePlaytime = new GamePlaytimeService(");
+        ContainsNormalized(composition, "LauncherState.Snapshot.PlaytimeSecondsByGame");
+        ContainsNormalized(composition, "playtime => LauncherState.TryUpdate(state => state with { PlaytimeSecondsByGame = playtime })");
         ContainsNormalized(composition, "_sessionRefresh);");
-        Assert.True(
-            composition.IndexOf("_sessionRefresh = new GameSessionRefreshPump", StringComparison.Ordinal)
-            < composition.IndexOf("_endfieldPlaytime = new EndfieldPlaytimeService", StringComparison.Ordinal));
 
         var closing = Slice(app, "private void AppWindow_Closing", "private async Task ShutDownAccountsAndCloseAsync");
-        AssertBefore(closing, "_endfieldPlaytime?.Dispose();", "_sessionRefresh?.Stop();");
+        AssertBefore(closing, "UnregisterSuspendResumeNotifications();", "_sessionRefresh?.Stop();");
 
         var shutdown = Slice(app, "private async Task ShutDownAccountsAndCloseAsync", "internal void StartStableUpdate");
-        AssertBefore(shutdown, "_endfieldPlaytime?.Dispose();", "await DisposeRefreshAsync(_sessionRefresh);");
+        AssertBefore(shutdown, "await UnregisterSuspendResumeNotifications();", "_gamePlaytime?.Dispose();");
+        AssertBefore(shutdown, "_gamePlaytime?.Dispose();", "await DisposeRefreshAsync(_sessionRefresh);");
 
         var closed = Slice(app, "private void Window_Closed", "private async Task RefreshAfterActivationAsync");
-        AssertBefore(closed, "_endfieldPlaytime?.Dispose();", "_sessionRefresh?.Stop();");
+        AssertBefore(closed, "UnregisterSuspendResumeNotifications().GetAwaiter().GetResult();", "_gamePlaytime?.Dispose();");
+        AssertBefore(closed, "_gamePlaytime?.Dispose();", "_sessionRefresh?.Stop();");
     }
 
     [Fact]
-    public void Playtime_button_and_heading_are_visible_only_for_the_real_Endfield_entry()
+    public void Playtime_text_is_between_launch_and_utility_controls_for_every_game()
     {
-        var xaml = ReadAppFile("MainPage.xaml");
-        var button = Slice(xaml, "x:Name=\"PlaytimeStatsButton\"", "</Button>");
-        ContainsNormalized(button, "x:Name=\"PlaytimeStatsButton\"");
-        ContainsNormalized(button, "AutomationProperties.Name=\"Open Endfield playtime statistics\"");
-        ContainsNormalized(button, "Click=\"PlaytimeStatsButton_Click\"");
+        var xaml = ReadLauncherFile("MainPage.xaml");
+        var launchButton = xaml.IndexOf("x:Name=\"LaunchButton\"", StringComparison.Ordinal);
+        var playtime = xaml.IndexOf("x:Name=\"LaunchPlayTimeText\"", StringComparison.Ordinal);
+        var utilityButtons = xaml.IndexOf("x:Name=\"LaunchUtilityButtons\"", StringComparison.Ordinal);
 
-        var page = ReadAppFile("MainPage.xaml.cs");
-        var render = Slice(page, "private void RenderExportTools", "private static string FormatExportStatus");
-        ContainsNormalized(render, "var showPlaytime = !selected.IsCustom && selected.Id == \"ae\";");
-        ContainsNormalized(render, "StableExportHeading.Text = showPlaytime ? \"EXPORT & STATS\" : \"EXPORT\";");
-        ContainsNormalized(render, "PlaytimeStatsButton.Visibility = showPlaytime ? Visibility.Visible : Visibility.Collapsed;");
-        ContainsNormalized(render, "PlaytimeStatsButton.IsEnabled = showPlaytime;");
+        Assert.True(launchButton >= 0 && launchButton < playtime);
+        Assert.True(playtime < utilityButtons);
 
-        var click = Slice(page, "private async void PlaytimeStatsButton_Click", "private ContentDialog CreateEndfieldPlaytimeDialog");
-        ContainsNormalized(click, "GameSelector?.SelectedItem is not GameLauncherItem { Id: \"ae\", IsCustom: false }");
+        var text = Slice(xaml, "x:Name=\"LaunchPlayTimeText\"", "/>");
+        ContainsNormalized(text, "Grid.Row=\"4\"");
+        ContainsNormalized(text, "Text=\"Play Time: 0m\"");
+        Assert.DoesNotContain("Visibility=", text, StringComparison.Ordinal);
+        ContainsNormalized(text, "AutomationProperties.Name=\"Play Time: 0m.");
+        ContainsNormalized(text, "ToolTipService.ToolTip=\"Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded.\"");
     }
 
     [Fact]
-    public void Playtime_button_opens_a_close_only_dialog_from_the_current_snapshot()
+    public void Playtime_is_rendered_from_the_shared_service_on_selection_and_session_refresh()
     {
-        var page = ReadAppFile("MainPage.xaml.cs");
-        var click = Slice(page, "private async void PlaytimeStatsButton_Click", "private ContentDialog CreateEndfieldPlaytimeDialog");
-        ContainsNormalized(click, "GameSelector?.SelectedItem is not GameLauncherItem { Id: \"ae\", IsCustom: false }");
-        ContainsNormalized(click, "var dialog = CreateEndfieldPlaytimeDialog(endfieldPlaytime.Current);");
-        ContainsNormalized(click, "await dialog.ShowAsync().AsTask(lease.CancellationToken);");
-        Assert.DoesNotContain("ScanAsync", click, StringComparison.Ordinal);
-        Assert.DoesNotContain("FolderPicker", click, StringComparison.Ordinal);
-        Assert.DoesNotContain("ProgressRing", click, StringComparison.Ordinal);
-        Assert.DoesNotContain("ContentDialogResult", click, StringComparison.Ordinal);
-        Assert.DoesNotContain("endfieldPlaytimeActionInFlight", page, StringComparison.Ordinal);
-        Assert.DoesNotContain("ScanEndfieldPlaytimeAsync", page, StringComparison.Ordinal);
-        Assert.DoesNotContain("EndfieldPlaytimeScanStatus", page, StringComparison.Ordinal);
+        var page = ReadLauncherFile("MainPage.xaml.cs");
+        ContainsNormalized(page, "private readonly GamePlaytimeService gamePlaytime;");
+        ContainsNormalized(page, "gamePlaytime = app.GamePlaytime;");
+
+        var selection = Slice(page, "private void RenderSelection()", "private void RenderGamePlaytime");
+        ContainsNormalized(selection, "RenderGamePlaytime(selected);");
+        Assert.True(
+            selection.IndexOf("RenderGamePlaytime(selected);", StringComparison.Ordinal)
+            < selection.IndexOf("if (selected.IsCustom)", StringComparison.Ordinal));
+
+        var refresh = Slice(page, "private void SessionRefresh_Refreshed", "private void LauncherBanners_Updated");
+        ContainsNormalized(refresh, "RenderSelection();");
     }
 
     [Fact]
-    public void Playtime_dialog_discloses_tracked_gameplay_and_never_renders_private_details()
+    public void Native_suspend_resume_registration_is_rooted_guarded_and_fail_closed()
     {
-        var page = ReadAppFile("MainPage.xaml.cs");
-        var dialog = Slice(page, "private ContentDialog CreateEndfieldPlaytimeDialog", "private static void AddPlaytimeHeading");
+        var app = ReadLauncherFile("App.xaml.cs");
+        var startup = Slice(app, "_launchStage = \"main-window-activation\"", "_launcherBanners.Start();");
+        AssertBefore(startup, "_window.Activate();", "TryRegisterSuspendResumeNotifications()");
+        AssertBefore(startup, "TryRegisterSuspendResumeNotifications()", "_sessionRefresh.Start();");
+        ContainsNormalized(startup, "_gamePlaytime.DisableTracking();");
 
-        ContainsNormalized(dialog, "LOCAL PLAYTIME TRACKED BY NYX");
-        ContainsNormalized(
-            dialog,
-            "Nyx counts only complete sessions whose exact Endfield process start and end it observed during the same Nyx run. Earlier playtime is unavailable; incomplete sessions are excluded.");
-        ContainsNormalized(dialog, "Tracked total");
-        ContainsNormalized(dialog, "AddPlaytimeStat(panel, \"Status\", FormatEndfieldPlaytimeStatus(snapshot));");
-        ContainsNormalized(dialog, "snapshot.SaveFailed");
-        ContainsNormalized(dialog, "snapshot.IsRunning");
-        ContainsNormalized(dialog, "snapshot.HasPendingSession");
-        ContainsNormalized(dialog, "Tracking this Endfield session now.");
-        ContainsNormalized(dialog, "Its start is saved.");
-        ContainsNormalized(
-            dialog,
-            "This running Endfield session is not being counted because Nyx did not observe its start after Endfield was confirmed closed.");
-        ContainsNormalized(
-            dialog,
-            "Nyx could not save the latest playtime update and will keep trying while it is open.");
-        ContainsNormalized(dialog, "snapshot.IncompleteSessions");
-        ContainsNormalized(dialog, "Incomplete tracked sessions");
-        ContainsNormalized(
-            dialog,
-            "No complete sessions have been tracked yet. Keep Nyx open before starting Endfield and until the game closes.");
-        ContainsNormalized(dialog, "if (gameplay.Sessions == 0)");
+        ContainsNormalized(app, "PowerRegisterSuspendResumeNotification(");
+        ContainsNormalized(app, "PowerUnregisterSuspendResumeNotification(");
+        ContainsNormalized(app, "private DeviceNotifyCallbackRoutine? _powerCallback;");
+        ContainsNormalized(app, "_powerCallback = SuspendResumeNotification;");
+        ContainsNormalized(app, "GameSessionRefreshPump.ClassifyPowerBroadcast(eventType)");
+        ContainsNormalized(app, "dispatcher?.TryEnqueue(");
+        ContainsNormalized(app, "if (!_accountShutdownStarted");
+        ContainsNormalized(app, "_powerCallbacksInFlight++;");
+        ContainsNormalized(app, "await UnregisterSuspendResumeNotifications();");
 
-        foreach (var label in new[]
+        var activation = Slice(
+            app,
+            "private async Task RefreshAfterActivationAsync()",
+            "private static async Task DisposeRefreshAsync");
+        ContainsNormalized(activation, "await SessionRefresh.RefreshNowAsync();");
+        Assert.DoesNotContain("RequestSystemResume", activation, StringComparison.Ordinal);
+        Assert.DoesNotContain("ResetAfterResume", activation, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Custom_adapter_changes_use_one_reserved_state_then_adapter_commit()
+    {
+        var page = ReadLauncherFile("MainPage.xaml.cs");
+        var transaction = Slice(
+            page,
+            "private async Task<LauncherStateUpdateFailure> CommitCustomSessionMutationAsync",
+            "private static void ApplyNyxAccentResources");
+        ContainsNormalized(transaction, "previous == current");
+        ContainsNormalized(transaction, "previous == game");
+        ContainsNormalized(transaction, "mutations[removedId] = null;");
+        ContainsNormalized(transaction, "if (!targetById.ContainsKey(gameId))");
+        ContainsNormalized(transaction, "gamePlaytime.ForgetRemovedGame(gameId);");
+        AssertBefore(transaction, "TryAcquireExclusivePublicationAsync", "TryReserveCustomAdapterMutations");
+        AssertBefore(transaction, "var failure = commitState();", "gamePlaytime.CloseRuntime(gameId);");
+        AssertBefore(transaction, "var failure = commitState();", "gamePlaytime.ForgetRemovedGame(gameId);");
+        AssertBefore(transaction, "gamePlaytime.CloseRuntime(gameId);", "reservation.Commit();");
+        AssertBefore(transaction, "gamePlaytime.ForgetRemovedGame(gameId);", "reservation.Commit();");
+        Assert.DoesNotContain("TryRemoveCustomAdapter", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryRegisterCustomAdapter", page, StringComparison.Ordinal);
+        Assert.True(
+            page.Split("CommitCustomSessionMutationAsync(", StringSplitOptions.None).Length - 1 >= 6,
+            "Edit, delete, add, reset, restore, and the shared helper must use the reservation path.");
+    }
+
+    [Fact]
+    public void Playtime_uses_whole_minute_formats_and_an_honest_save_status_disclosure()
+    {
+        var page = ReadLauncherFile("MainPage.xaml.cs");
+        var render = Slice(page, "private void RenderGamePlaytime", "private void ApplySavedPanelVisibility");
+
+        ContainsNormalized(render, "var snapshot = gamePlaytime.Current(selected.Id);");
+        ContainsNormalized(render, "Play Time: tracking unavailable");
+        ContainsNormalized(render, "var totalMinutes = Math.Max(0L, snapshot.TotalSeconds / 60);");
+        ContainsNormalized(render, "Play Time: {totalMinutes}m");
+        ContainsNormalized(render, "Play Time: {totalMinutes / 60}h {totalMinutes % 60}m");
+        Assert.DoesNotContain("snapshot.Total.TotalMinutes", render, StringComparison.Ordinal);
+        ContainsNormalized(render, "if (snapshot.SaveFailed) value += \" · save pending\";");
+        ContainsNormalized(render, "AutomationProperties.SetName(");
+        ContainsNormalized(render, "ToolTipService.SetToolTip(");
+
+        const string disclosure =
+            "Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded.";
+        ContainsNormalized(render, disclosure);
+        ContainsNormalized(ReadLauncherFile("MainPage.xaml"), disclosure);
+    }
+
+    [Fact]
+    public void Endfield_only_playtime_control_and_private_scan_ui_are_removed()
+    {
+        var page = ReadLauncherFile("MainPage.xaml.cs");
+        var xaml = ReadLauncherFile("MainPage.xaml");
+
+        foreach (var forbidden in new[]
         {
-            "Sessions",
-            "Active days",
-            "Average session",
-            "Average active day",
-            "Shortest / longest",
-            "Longest streak",
-            "Session lengths",
-            "Night play (22:00–06:00)",
-            "Launch hours",
-            "Time by weekday",
-            "Time by month",
+            "PlaytimeStatsButton",
+            "PlaytimeStatsButton_Click",
+            "CreateEndfieldPlaytimeDialog",
+            "EndfieldPlaytimeService",
+            "endfieldPlaytime",
+            "ScanEndfieldPlaytimeAsync",
+            "EndfieldPlaytimeScanStatus",
+            "EXPORT & STATS",
         })
-            ContainsNormalized(dialog, label);
+        {
+            Assert.DoesNotContain(forbidden, page, StringComparison.Ordinal);
+            Assert.DoesNotContain(forbidden, xaml, StringComparison.Ordinal);
+        }
 
-        ContainsNormalized(dialog, "CloseButtonText = \"Close\"");
-        Assert.Contains("Application.Current.Resources", dialog, StringComparison.Ordinal);
-        Assert.DoesNotContain("(FontFamily)Resources[\"NyxBodyFont\"]", dialog, StringComparison.Ordinal);
-        Assert.DoesNotContain("(Brush)Resources[\"MistBrush\"]", dialog, StringComparison.Ordinal);
-        Assert.DoesNotContain("Scan", dialog, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Folder", dialog, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("ProgressRing", dialog, StringComparison.Ordinal);
-        Assert.DoesNotContain("Warnings", dialog, StringComparison.Ordinal);
-        Assert.DoesNotContain("Launcher", dialog, StringComparison.Ordinal);
-        Assert.DoesNotContain("Open time", dialog, StringComparison.Ordinal);
-        Assert.DoesNotContain("snapshot.Statistics.Launcher", dialog, StringComparison.Ordinal);
-        Assert.DoesNotContain("PrimaryButtonText", dialog, StringComparison.Ordinal);
-        Assert.DoesNotContain("SecondaryButtonText", dialog, StringComparison.Ordinal);
-
-        Assert.DoesNotMatch(
-            new Regex(@"(?:FileName|Exception|Exception\.Message|selectedRoot|snapshot\.(?:Path|File|Log))", RegexOptions.CultureInvariant),
-            dialog);
+        var render = Slice(page, "private void RenderGamePlaytime", "private void ApplySavedPanelVisibility");
+        foreach (var forbidden in new[] { "Scan", "Folder", "Log", "FileName", "Exception", "Path" })
+            Assert.DoesNotContain(forbidden, render, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ContainsNormalized(string source, string expected)
@@ -155,7 +190,7 @@ public sealed class EndfieldPlaytimeUiTests
         return source[start..end];
     }
 
-    private static string ReadAppFile(string fileName) => File.ReadAllText(Path.Combine(
+    private static string ReadLauncherFile(string fileName) => File.ReadAllText(Path.Combine(
         WorkspaceRoot,
         "Desktop",
         "src",

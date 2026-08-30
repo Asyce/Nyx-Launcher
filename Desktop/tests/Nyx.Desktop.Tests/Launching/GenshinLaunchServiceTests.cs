@@ -33,6 +33,7 @@ public sealed class GenshinLaunchServiceTests
         var result = fixture.Service.LaunchGame(GameRoot);
 
         Assert.Equal(GenshinLaunchStatus.Running, result.Status);
+        Assert.True(result.StartedByThisCall);
         var start = Assert.Single(fixture.Starter.Starts);
         Assert.Equal(Path.Combine(GameRoot, "GenshinImpact.exe"), start.FileName);
         Assert.Equal(GameRoot, start.WorkingDirectory);
@@ -105,6 +106,7 @@ public sealed class GenshinLaunchServiceTests
         var result = fixture.Service.LaunchGame(GameRoot);
 
         Assert.Equal(GenshinLaunchStatus.Running, result.Status);
+        Assert.False(result.StartedByThisCall);
         Assert.Empty(fixture.Starter.Starts);
         Assert.Empty(fixture.Starter.ElevatedStarts);
     }
@@ -267,6 +269,7 @@ public sealed class GenshinLaunchServiceTests
         var result = service.LaunchGame(GameRoot);
 
         Assert.Equal(GenshinLaunchStatus.Running, result.Status);
+        Assert.False(result.StartedByThisCall);
         Assert.Single(starter.Starts);
         Assert.Empty(starter.ElevatedStarts);
         Assert.Equal(3, inspector.Checks.Count);
@@ -280,6 +283,7 @@ public sealed class GenshinLaunchServiceTests
         var result = fixture.Service.LaunchGame(GameRoot, ["--name", "Traveler One"]);
 
         Assert.Equal(GenshinLaunchStatus.Running, result.Status);
+        Assert.True(result.StartedByThisCall);
         Assert.Equal(["--name", "Traveler One"], Assert.Single(fixture.Starter.Starts).Arguments);
         Assert.Equal(2, fixture.Validator.GameRoots.Count);
         Assert.Equal(2, fixture.ProcessInspector.Checks.Count);
@@ -337,6 +341,7 @@ public sealed class GenshinLaunchServiceTests
             CancellationToken.None);
 
         Assert.Equal(GenshinLaunchStatus.Running, result.Status);
+        Assert.True(result.StartedByThisCall);
         Assert.Empty(direct.Starts);
         var request = Assert.Single(helper.Requests);
         Assert.Equal(["--name", "Traveler One"], request.Specification.Arguments);
@@ -357,6 +362,7 @@ public sealed class GenshinLaunchServiceTests
         var result = service.LaunchGameWith120Fps(GameRoot);
 
         Assert.Equal(GenshinLaunchStatus.Running, result.Status);
+        Assert.False(result.StartedByThisCall);
         Assert.Empty(helper.Requests);
         Assert.Empty(fixture.Starter.Starts);
     }
@@ -386,8 +392,29 @@ public sealed class GenshinLaunchServiceTests
 
         Assert.Equal(expectedStatus, result.Status);
         Assert.Equal(expectedReason, result.FailureReason);
+        Assert.Equal(
+            helperStatus is Genshin120FpsStartStatus.Ready
+                or Genshin120FpsStartStatus.GameStartedAttachFailed
+                or Genshin120FpsStartStatus.GameStartedAttachTimedOut,
+            result.StartedByThisCall);
         Assert.Empty(direct.Starts);
         Assert.Single(helper.Requests);
+    }
+
+    [Fact]
+    public void Process_appearing_at_dispatch_is_reported_as_preexisting()
+    {
+        var service = new GenshinLaunchService(
+            new SequencedValidator(Ready(GameRoot), Ready(GameRoot)),
+            new SequencedProcessInspector(
+                RunningProcessStatus.NotRunning,
+                RunningProcessStatus.Running),
+            new FakeStarter());
+
+        var result = service.LaunchGame(GameRoot);
+
+        Assert.Equal(GenshinLaunchStatus.Running, result.Status);
+        Assert.False(result.StartedByThisCall);
     }
 
     private static GenshinInspectionResult Ready(string root) =>

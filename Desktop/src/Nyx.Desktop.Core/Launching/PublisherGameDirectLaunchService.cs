@@ -32,7 +32,8 @@ public sealed record PublisherGameDirectLaunchResult(
     PublisherGameInspectionReason InspectionReason = PublisherGameInspectionReason.None,
     PublisherGameLaunchFailureReason FailureReason = PublisherGameLaunchFailureReason.None,
     RunningProcessStatus Bootstrap = RunningProcessStatus.NotRunning,
-    RunningProcessStatus Runtime = RunningProcessStatus.NotRunning);
+    RunningProcessStatus Runtime = RunningProcessStatus.NotRunning,
+    bool StartedByThisCall = false);
 
 public sealed class ValidatedPublisherGameElevationRequest
 {
@@ -147,7 +148,7 @@ public sealed class PublisherGameDirectLaunchService
             try
             {
                 processStarter.Start(fresh.Specification);
-                return fresh with { Status = PublisherGameLaunchStatus.Running };
+                return fresh with { Status = PublisherGameLaunchStatus.Running, StartedByThisCall = true };
             }
             catch (Exception exception) when (IsBoundaryFailure(exception))
             {
@@ -196,7 +197,7 @@ public sealed class PublisherGameDirectLaunchService
                     gameId,
                     inspection.Result.CanonicalRoot!,
                     fresh.Specification));
-            return fresh with { Status = PublisherGameLaunchStatus.Running };
+            return fresh with { Status = PublisherGameLaunchStatus.Running, StartedByThisCall = true };
         }
         catch (Exception exception) when (IsBoundaryFailure(exception))
         {
@@ -292,7 +293,8 @@ public sealed class PublisherGameDirectLaunchService
             specification,
             inspection.Reason,
             Bootstrap: bootstrap,
-            Runtime: runtime);
+            Runtime: runtime,
+            StartedByThisCall: false);
     }
 
     private static bool IsAdmissibleInspection(
