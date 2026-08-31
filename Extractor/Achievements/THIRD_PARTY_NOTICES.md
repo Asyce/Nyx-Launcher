@@ -11,6 +11,7 @@ and trailing whitespace are normalized; identical normalized texts share a block
 | --- | --- | --- | --- |
 | auto-artifactarium | `04421c4f8a7ed7e7b65bb5e6e59231d4e98405cf` | Vendored Genshin transport/achievement parser with Pengo hardening. | Listed in the locked dependency table. |
 | auto-reliquary | `bc23b48cb3b1b994a5d4405cefea42eb0e1d3735` | Vendored HSR transport/achievement parser with Pengo hardening. | Listed in the locked dependency table. |
+| Reliquary 23 | `d5cf3b7e7e66470d2d8efff6676aa18762b21d3b` | Test-only HSR 4.5 command-body wire shapes; no runtime transport adoption. Exact source hashes are in `PROVENANCE.md`. | Existing IceDynamix MIT block `61b5493c729fd3f29a72ede2e52bf36e8122fc2b460a5cadbc9446cfda5fa9fe`. |
 | mhy-kcp | `1acf4ba5938ff91f7f2d2a31e16bf1f8d2db9c8f` | Vendored KCP implementation. | Listed as package `kcp` below. |
 | pktmon 0.6.2 | `33d1c0c421ed8610540bae3e34da3c1182cf28a2` | Vendored realtime-only Windows Packet Monitor subset. | Listed as `pengo-pktmon-realtime` below. |
 | rand_mt 4.2.2 | crates.io checksum `49e018c6ded60e5252609887c12eb3ca2592e9248c5894a7db3975c8a7a1e2df`, upstream commit `8d9c44fa58903d8fd86295c50513ec520d6c7678` | Vendored locked runtime source with Pengo state/index zeroization and the documented metadata-test omission. | Listed as `rand_mt` below. |
@@ -31,7 +32,7 @@ was copied or embedded.
 ## Locked Rust dependency inventory
 
 This table covers every non-root package entry in LF-normalized `Cargo.lock`
-SHA-256 `fb1ee0c281a7061936cfeb49cdb564caa87d9a31c19566b77dd969008b093aa1`.
+SHA-256 `f3ee0651e3624ca1e10a1ad7e812cf732d96066338a5bb0c920f82ef343776d3`.
 For multi-license packages, Nyx selects the
 listed permissive option. The source column names the exact license file or
 pinned upstream source whose complete text appears below.
@@ -1139,7 +1140,7 @@ SOFTWARE.
 
 ### `61b5493c729fd3f29a72ede2e52bf36e8122fc2b460a5cadbc9446cfda5fa9fe`
 
-Applies to: `auto-artifactarium 1.2.2`, `auto-reliquary 1.2.0`
+Applies to: `auto-artifactarium 1.2.2`, `auto-reliquary 1.2.0`, `Reliquary 23 test-only wire shapes`
 
 ```text
 MIT License

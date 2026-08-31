@@ -404,6 +404,7 @@ dependencies = [
  "base64",
  "ctrlc",
  "pengo-pktmon-realtime",
+ "protobuf",
  "serde_json",
  "sha2",
  "tempfile",

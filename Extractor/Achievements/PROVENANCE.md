@@ -188,3 +188,51 @@ This mapping is checked-in static data only. It is not embedded in the helper
 or package and does not enable gear export. It contains no user export,
 account or game file, capture, packet, log, token, key, or network behavior.
 Any later public packaging requires a separate permission and notice review.
+
+## HSR 4.5 synthetic command-body qualification
+
+`src/gear_observer/hsr_wire.rs` is reachable only through the existing
+`cfg(test)` gear observer. It accepts a command ID and borrowed protobuf body,
+not packets or ciphertext. Its wire shapes are adapted from MIT-licensed
+IceDynamix/reliquary 23 at commit
+`d5cf3b7e7e66470d2d8efff6676aa18762b21d3b`. The immutable raw source SHA-256
+values were checked on 2026-08-31:
+
+| Source path | SHA-256 |
+| --- | --- |
+| `src/network/command/proto/GetBagScRsp.rs` | `77f9c854a0d7253c33bfae5655a947d75f88588a3c2b6bd34ef235e2b08dde9f` |
+| `src/network/command/proto/Relic.rs` | `a93111b0d82acddfdfd3f0ac5eae1e7edbc36d8300fdd30f55ae67b90c88ebd7` |
+| `src/network/command/proto/RelicAffix.rs` | `51781661a10cd1e3267e5d3a2a5613f9e2feeffc799ae3fea70f19cac5984ebf` |
+| `src/network/command/proto/PlayerGetTokenScRsp.rs` | `b49710d182a56649d017664670a4c08d3ea4a7d9ed13e4cb2970db89c6c2f532` |
+| `src/network/command/proto/PlayerLoginFinishScRsp.rs` | `8da042b890155f31a1496872e1470fe2287c7960f2352abf9b90d0ed1af05912` |
+| `src/network/command/command_id.rs` | `b145f494da230dff5f48bd0592d32c8079b9f8e65a3fe127e0bce653f2a45610` |
+
+The related archiver reference is IceDynamix/reliquary-archiver 0.18 at
+`cb109f17a4a15b7604cfe9d078a8735e7735cd25`; no archiver code is copied into
+this slice. Both pinned `LICENSE` files normalize to the existing IceDynamix
+MIT notice SHA-256
+`61b5493c729fd3f29a72ede2e52bf36e8122fc2b460a5cadbc9446cfda5fa9fe`.
+
+Only commands 19 (token), 36 (login finish), and 513 (bag) are qualified.
+Token seed wire data is validated then discarded; description, BlackInfo,
+authkey, and unrelated messages are skipped without retaining their bytes.
+The bag result has only its return code and relic rows; every listed relic
+field and current/preview/reforge affix is decoded without stat calculations.
+
+The already-locked `protobuf` 3.7.2 is exposed as a direct dev-only dependency;
+no package or version changes. Its concrete `CodedInputStream` handles tags,
+varints, skipping, and nested limits. The existing frame and gear-row limits
+apply. The qualification profile intentionally rejects duplicate known scalar
+fields and groups, unlike general protobuf merge semantics. Omitted zero/false
+scalars and empty repeated lists remain valid. Unrelated message payloads are
+opaque: their declared wire type and length, not their internal schema, are
+checked. Results and errors do not retain the token seed or auth bytes.
+
+Tests alone supply explicit synthetic context, mapping, serialized, and imported
+counts to the unchanged observer. Decoded row count and login finish do not
+prove a full snapshot. The bag schema has no UID, pagination, total, or
+completion marker. Upstream tail-magic proof is absent, and the current
+transport heuristically finds a seed and drops direction/flow from returned
+commands. These remain blockers before any live account attribution or
+complete-bag claim. This slice changes no runtime transport, parser, exporter,
+feature flag, mapping, launcher UI, or production package behavior.
