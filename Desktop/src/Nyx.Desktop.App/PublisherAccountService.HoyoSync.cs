@@ -7,7 +7,7 @@ public sealed partial class PublisherAccountService
 {
     // Receiver-first gate. Flip only after the authorized production receiver
     // and My HoYo route have passed live verification.
-    public static bool HoyoLabManualSyncAvailable => false;
+    public static bool HoyoLabManualSyncAvailable => true;
 
     public async Task<HoyoLabSyncSummary> GetHsrSyncSummaryAsync(
         CancellationToken cancellationToken = default)

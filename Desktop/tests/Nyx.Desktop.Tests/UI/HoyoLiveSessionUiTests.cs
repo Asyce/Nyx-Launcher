@@ -1282,7 +1282,7 @@ public sealed class HoyoLiveSessionUiTests
         var app = ReadAppFile("App.xaml.cs");
         var retry = Slice(service, "public async Task<HoyoLabManualSyncResult> RetryHoyoLabSyncDeletionsAsync",
             "private async Task<HoyoLabManualSyncResult> RunHsrSyncAsync");
-        Assert.Contains("HoyoLabManualSyncAvailable => false", service, StringComparison.Ordinal);
+        Assert.Contains("HoyoLabManualSyncAvailable => true", service, StringComparison.Ordinal);
         Assert.Contains("PublisherAccountService.HoyoLabManualSyncAvailable", page, StringComparison.Ordinal);
         Assert.Contains("HoyoLabSyncButton.Visibility = !selected.IsCustom && selected.Id == \"hsr\"", shell, StringComparison.Ordinal);
         Assert.Contains("accounts.RetryHoyoLabSyncDeletionsAsync()", app, StringComparison.Ordinal);
