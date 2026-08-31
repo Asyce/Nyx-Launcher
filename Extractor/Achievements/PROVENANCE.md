@@ -1,19 +1,27 @@
 # Provenance
 
 Pinned on 2026-08-03 for this branch-only test build.
+Stardb public key maps refreshed on 2026-08-31; other pins are unchanged.
 
 The user attested that Stardb's owner directly permitted Pengo/Nyx to reuse the
 public Stardb key maps and extractor behavior. The two maps came from Stardb
-v2.20.0 commit `a0a4d55abf921be4228d6afa94ec0f814549ba16`:
+v2.21.0 commit `50c04597d37cf366290de6e316aaca98dd57acfc`:
 
 | Map | Source path | Entries | Upstream raw SHA-256 | Canonical JSON SHA-256 |
 | --- | --- | ---: | --- | --- |
 | GI | `keys/gi.json` | 10 | `e0e1fcbfb6aa5d727367a60574b7688a4da14abe12c5a3bdad3a7fc87c694d18` | `37ccd359c35b0f990032e7941ed140914a322b935706a1c66d252b27dd74f3c3` |
-| HSR | `keys/hsr.json` | 29 | `79779916153d42b35771dc5fe6620334726805c9ecd46ecfdfb383d9077a6b85` | `e9381b6b79fd2a41dd3c7ade82508c5eafec9f19e15d7fa2bc0e4a7bcdd42512` |
+| HSR | `keys/hsr.json` | 30 | `85a98f5abf9b4041d6752e8f60b6db760d5a9753ad73874a9d5744f9c1d7944a` | `8ffac930c0ff2821c0d8f9c0bcbcdaba64a8be0395c6263572c3c5afa65d34ec` |
 
 `apply_patch` changed only JSON line endings. Tests hash the sorted canonical
 JSON, so any changed, missing, or extra key fails. The raw hashes above identify
 the exact upstream files.
+
+The v2.21.0 refresh adds exactly one HSR entry and preserves all 29 v2.20.0
+entries byte-for-byte; GI upstream bytes are unchanged. A regression removes
+only the added HSR ID and checks the previous canonical hash, and checks the
+added value's standard base64 encoding and 4096-byte decoded length. This is
+static key-map compatibility, not proof of live HSR 4.5 achievement or gear
+capture compatibility; parser, capture, and export behavior remain unchanged.
 
 Pinned parser forks are vendored in this folder so their release behavior can
 be audited without relying on a moving Git checkout:
