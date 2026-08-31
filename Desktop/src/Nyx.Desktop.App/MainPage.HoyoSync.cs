@@ -101,7 +101,7 @@ public sealed partial class MainPage
         confirmationButtons.Children.Add(cancel);
         confirmationPanel.Children.Add(confirmationButtons);
 
-        var content = new StackPanel { Spacing = 10, Width = Math.Clamp(ActualWidth - 140, 280, 600) };
+        var content = new StackPanel { Spacing = 10 };
         content.Children.Add(status);
         content.Children.Add(Note("Only remembered resources and completed achievements are shared. Other games and pull history are unchanged."));
         content.Children.Add(recoveryCode);
@@ -131,6 +131,7 @@ public sealed partial class MainPage
             {
                 Content = content,
                 MaxHeight = Math.Clamp(ActualHeight - 180, 180, 640),
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             },

@@ -1323,6 +1323,8 @@ public sealed class HoyoLiveSessionUiTests
         Assert.DoesNotContain("Clipboard", page, StringComparison.Ordinal);
         Assert.DoesNotContain("WriteAll", page, StringComparison.Ordinal);
         Assert.Contains("new ScrollViewer", page, StringComparison.Ordinal);
+        Assert.Contains("var content = new StackPanel { Spacing = 10 };", page, StringComparison.Ordinal);
+        Assert.Contains("HorizontalContentAlignment = HorizontalAlignment.Stretch", page, StringComparison.Ordinal);
         Assert.Contains("VerticalScrollBarVisibility = ScrollBarVisibility.Auto", page, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.SetName(roles", page, StringComparison.Ordinal);
         Assert.Contains("Nyx cannot show the code again", page, StringComparison.Ordinal);
