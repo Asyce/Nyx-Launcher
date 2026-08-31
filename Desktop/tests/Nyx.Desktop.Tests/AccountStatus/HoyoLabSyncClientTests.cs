@@ -225,6 +225,87 @@ public sealed class HoyoLabSyncClientTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Reloaded_conditional_cleanup_sends_only_the_copied_revision_and_preserves_it_after_conflict(bool expectAbsent)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nyx-sync-conditioned-delete-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new HoyoLabSyncStateStore(directory, new CopyProtector(),
+                new SystemPublisherRoleBindingFileBoundary(), TimeProvider.System);
+            var requestedAt = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            DateTimeOffset? revision = expectAbsent ? null : DateTimeOffset.Parse(UpdatedAt);
+            using var deletion = new HoyoLabPendingDeletion(SyncId, Convert.FromHexString(Token),
+                HoyoLabSyncStateStore.AllHoyoScope, "rotation-cleanup", requestedAt,
+                requireRevisionMatch: true, expectedRevision: revision);
+            Assert.True(store.TryEnqueuePendingDeletion(deletion));
+            var restarted = new HoyoLabSyncStateStore(directory, new CopyProtector(),
+                new SystemPublisherRoleBindingFileBoundary(), TimeProvider.System);
+            using var loaded = Assert.IsType<HoyoLabSyncState>(restarted.TryLoad());
+            var pending = Assert.Single(loaded.PendingDeletions);
+            var responses = new Queue<HttpResponseMessage>([
+                JsonResponse(HttpStatusCode.Conflict,
+                    "{\"ok\":false,\"error\":{\"code\":\"stale_write\",\"message\":\"Changed\",\"requestId\":\"test-request\"},\"serverUpdatedAt\":\"" + UpdatedAt + "\"}"),
+                JsonResponse(new { ok = true, deleted = true }),
+            ]);
+            var handler = new FakeHandler((_, _) => Task.FromResult(responses.Dequeue()));
+            using var client = CreateClient(handler);
+            var conflicted = await client.DeletePendingAsync(pending);
+            Assert.True(conflicted.IsConflict);
+            Assert.Equal(DateTimeOffset.Parse(UpdatedAt), conflicted.ServerUpdatedAt);
+            using (var retained = Assert.IsType<HoyoLabSyncState>(restarted.TryLoad()))
+            {
+                Assert.True(Assert.Single(retained.PendingDeletions).RequireRevisionMatch);
+                Assert.Equal(revision, retained.PendingDeletions[0].ExpectedRevision);
+            }
+            Assert.True((await client.DeletePendingAsync(pending)).IsSuccess);
+            Assert.Equal(handler.Requests[0].Body, handler.Requests[1].Body);
+            foreach (var request in handler.Requests)
+            {
+                Assert.Equal("https://pengo.gg/api/account/sync/delete-account", request.Uri.AbsoluteUri);
+                using var document = JsonDocument.Parse(request.Body);
+                var body = document.RootElement;
+                Assert.Equal(new[] { "baseUpdatedAt", "game", "kind", "syncId", "token" },
+                    body.EnumerateObject().Select(property => property.Name).Order());
+                Assert.Equal(expectAbsent ? null : UpdatedAt, body.GetProperty("baseUpdatedAt").GetString());
+                Assert.Equal("hoyolab", body.GetProperty("kind").GetString());
+                Assert.Equal("hsr", body.GetProperty("game").GetString());
+                Assert.Equal(SyncId, body.GetProperty("syncId").GetString());
+                Assert.Equal(Token, body.GetProperty("token").GetString());
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("future")]
+    [InlineData("offset")]
+    [InlineData("submillisecond")]
+    [InlineData("before-epoch")]
+    public async Task Conditional_cleanup_rejects_invalid_saved_revisions_without_sending(string failure)
+    {
+        var handler = new FakeHandler((_, _) => Task.FromResult(JsonResponse(new { ok = true, deleted = true })));
+        using var client = CreateClient(handler);
+        var requestedAt = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        var revision = failure switch
+        {
+            "future" => requestedAt.AddDays(1),
+            "offset" => requestedAt.ToOffset(TimeSpan.FromHours(1)),
+            "submillisecond" => requestedAt.AddTicks(1),
+            _ => DateTimeOffset.UnixEpoch.AddMilliseconds(-1),
+        };
+        using var deletion = new HoyoLabPendingDeletion(SyncId, Convert.FromHexString(Token),
+            HoyoLabSyncStateStore.AllHoyoScope, "rotation-cleanup", requestedAt,
+            requireRevisionMatch: true, expectedRevision: revision);
+        Assert.Equal(HoyoLabSyncFailure.InvalidRequest, (await client.DeletePendingAsync(deletion)).Failure);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
     [InlineData("null")]
     [InlineData("disposed")]
     [InlineData("future")]

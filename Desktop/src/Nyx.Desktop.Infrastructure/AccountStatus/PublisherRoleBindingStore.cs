@@ -206,7 +206,7 @@ public sealed class PublisherRoleBindingStore
             throw new IOException("Protected role binding root cannot be a reparse point.");
     }
 
-    private string BindingPath(string gameId) => Path.Combine(root, gameId + ".bin");
+    internal string BindingPath(string gameId) => Path.Combine(root, gameId + ".bin");
 
     private static bool IsSupportedGame(string gameId) => gameId is "gi" or "hsr" or "zzz";
 

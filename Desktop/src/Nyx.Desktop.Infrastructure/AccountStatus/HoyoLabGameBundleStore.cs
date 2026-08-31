@@ -27,6 +27,7 @@ public sealed class HoyoLabGameBundleStore
     private readonly string mutationMutexName;
 
     internal string MutationMutexName => mutationMutexName;
+    internal string BundlePath => path;
 
     public HoyoLabGameBundleStore(string protectedSlotRoot)
         : this(
@@ -541,7 +542,7 @@ public sealed class HoyoLabGameBundleStore
         ? role.Observations.Resources
         : role.Observations.Achievements;
 
-    private static DateTimeOffset? StrictDeletionTimestamp(
+    internal static DateTimeOffset? StrictDeletionTimestamp(
         DateTimeOffset now,
         DateTimeOffset? observation)
     {

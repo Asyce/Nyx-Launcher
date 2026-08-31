@@ -1164,6 +1164,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <Grid Grid.Row="0" Grid.ColumnSpan="4" ColumnSpacing="7">
                                 <Grid.ColumnDefinitions>
@@ -1231,6 +1232,20 @@
                                 TextTrimming="CharacterEllipsis"
                                 AutomationProperties.Name="HoYoLAB character identity"
                                 AutomationProperties.LiveSetting="Polite" />
+                            <Button
+                                x:Name="HoyoLabSyncButton"
+                                Grid.Row="2"
+                                Grid.ColumnSpan="4"
+                                HorizontalAlignment="Left"
+                                MinHeight="28"
+                                Padding="8,0"
+                                FontFamily="{StaticResource NyxBodyFont}"
+                                FontSize="10"
+                                Style="{StaticResource NyxOfficialLauncherStyle}"
+                                AutomationProperties.Name="Star Rail sync, deletion status and My HoYo"
+                                Click="HoyoLabSyncButton_Click"
+                                Content="Sync &amp; My HoYo"
+                                Visibility="Collapsed" />
                         </Grid>
 
                         <Grid

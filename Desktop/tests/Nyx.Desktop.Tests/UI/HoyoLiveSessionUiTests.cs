@@ -1023,7 +1023,8 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("CreateHoyoLabManagerButton(\"Use\"", page, StringComparison.Ordinal);
         Assert.Contains("CreateHoyoLabManagerButton(\"Add\"", page, StringComparison.Ordinal);
         Assert.Contains("CreateHoyoLabManagerButton(\"Rename\"", page, StringComparison.Ordinal);
-        Assert.Contains("CreateHoyoLabManagerButton(\"Forget\"", page, StringComparison.Ordinal);
+        Assert.Contains("CreateHoyoLabManagerButton(\"Remove from this PC\"", page, StringComparison.Ordinal);
+        Assert.Contains("if (pendingForgetSlotId != slot.Id)", page, StringComparison.Ordinal);
         Assert.Contains("CreateHoyoLabManagerButton(\n            \"Choose Region\"", page, StringComparison.Ordinal);
         Assert.Contains("publisherAccounts.AddHoyoLabAccountAsync(", page, StringComparison.Ordinal);
         Assert.Contains("label,\n                        gameId,", page, StringComparison.Ordinal);
@@ -1270,6 +1271,61 @@ public sealed class HoyoLiveSessionUiTests
             StringComparison.Ordinal);
         Assert.Contains("? $\"{entry.Provider} connected\"", accountRender, StringComparison.Ordinal);
         Assert.Contains("AccountConnectionButton.Content = enabled ? \"Stop\" : \"Start\"", accountRender, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Manual_hsr_sync_is_receiver_gated_and_retry_is_independent_of_new_account_consent()
+    {
+        var service = ReadAppFile("PublisherAccountService.HoyoSync.cs");
+        var page = ReadAppFile("MainPage.HoyoSync.cs");
+        var shell = ReadAppFile("MainPage.xaml.cs");
+        var app = ReadAppFile("App.xaml.cs");
+        var retry = Slice(service, "public async Task<HoyoLabManualSyncResult> RetryHoyoLabSyncDeletionsAsync",
+            "private async Task<HoyoLabManualSyncResult> RunHsrSyncAsync");
+        Assert.Contains("HoyoLabManualSyncAvailable => false", service, StringComparison.Ordinal);
+        Assert.Contains("PublisherAccountService.HoyoLabManualSyncAvailable", page, StringComparison.Ordinal);
+        Assert.Contains("HoyoLabSyncButton.Visibility = !selected.IsCustom && selected.Id == \"hsr\"", shell, StringComparison.Ordinal);
+        Assert.Contains("accounts.RetryHoyoLabSyncDeletionsAsync()", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("SyncHsrNowAsync", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("ConnectHsrSyncAsync", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("consent.IsEnabled", retry, StringComparison.Ordinal);
+        Assert.Contains("coordinator.RetryDeletionsAsync", retry, StringComparison.Ordinal);
+        Assert.Contains("hoyoGate.WaitAsync", retry, StringComparison.Ordinal);
+        Assert.Contains("if (disposed || !ownsHoyoProfile || cancellation.IsCancellationRequested)", retry, StringComparison.Ordinal);
+        AssertOrdered(service, "private async Task<HoyoLabManualSyncResult> RunHsrSyncAsync",
+            "hoyoGate.WaitAsync", "ProfileAccessAllowedAfterGate", "operation.HoyoContext?.SlotId != expectedSlotId",
+            "await action", "CanPublish(\"HoYoLAB\", operation)");
+    }
+
+    [Fact]
+    public void Manual_sync_dialog_requires_opt_in_confirmation_and_clears_private_ui_state()
+    {
+        var page = ReadAppFile("MainPage.HoyoSync.cs");
+        Assert.Contains("optIn.IsChecked == true", page, StringComparison.Ordinal);
+        Assert.Contains("IsTextPredictionEnabled = false", page, StringComparison.Ordinal);
+        Assert.Contains("DefaultButton = ContentDialogButton.None", page, StringComparison.Ordinal);
+        Assert.Contains("cancel.Focus(FocusState.Programmatic)", page, StringComparison.Ordinal);
+        Assert.Contains("var action = confirmedAction", page, StringComparison.Ordinal);
+        Assert.Contains("operation", ReadAppFile("PublisherAccountService.HoyoSync.cs"), StringComparison.Ordinal);
+        Assert.Contains("syncSlot == publisherAccounts.HoyoLabAccounts.ActiveSlotId", page, StringComparison.Ordinal);
+        AssertOrdered(page, "void InvalidateContext()", "contextInvalidated = true", "displayedSlot = null",
+            "displayedConsent = false", "Enabled = false", "recoveryCode.Text = string.Empty",
+            "roles.Items.Clear()", "ClearConfirmation()", "Render()");
+        Assert.Contains("var local = ready && !contextInvalidated", page, StringComparison.Ordinal);
+        Assert.Contains("accountAction && (contextInvalidated", page, StringComparison.Ordinal);
+        Assert.Contains("RetryHoyoLabSyncDeletionsAsync, accountAction: false", page, StringComparison.Ordinal);
+        AssertOrdered(page, "void OnAccountsUpdated", "var accountChanged = syncSlot !=",
+            "consentWhenOpened != HasPublisherConsent", "if (!accountChanged) return",
+            "DispatcherQueue.TryEnqueue", "InvalidateContext()");
+        AssertOrdered(page, "dialog.Closed +=", "open = false", "cancellation.Cancel()",
+            "recoveryCode.Text = string.Empty", "roles.Items.Clear()", "bundle = null", "ClearConfirmation()");
+        Assert.Contains("new Uri(\"https://pengo.gg/nyx/my-hoyo\")", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("Clipboard", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("WriteAll", page, StringComparison.Ordinal);
+        Assert.Contains("new ScrollViewer", page, StringComparison.Ordinal);
+        Assert.Contains("VerticalScrollBarVisibility = ScrollBarVisibility.Auto", page, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.SetName(roles", page, StringComparison.Ordinal);
+        Assert.Contains("Nyx cannot show the code again", page, StringComparison.Ordinal);
     }
 
     private static string Slice(string text, string startMarker, string endMarker)

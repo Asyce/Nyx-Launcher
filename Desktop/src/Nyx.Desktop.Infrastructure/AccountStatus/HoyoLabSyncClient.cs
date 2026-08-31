@@ -157,12 +157,15 @@ internal sealed class HoyoLabSyncClient : IDisposable
             var action = deletion!.Scope == HoyoLabSyncStateStore.HsrScope
                 ? SyncAction.Delete
                 : SyncAction.DeleteAccount;
+            if (!TryFormatTimestamp(deletion.ExpectedRevision, out var baseTimestamp))
+                return InvalidRequest();
             body = SerializeRequest(
                 action,
                 deletion.SyncId,
                 Convert.ToHexStringLower(deletion.Token.Span),
+                baseTimestamp,
                 null,
-                null);
+                deletion.RequireRevisionMatch);
             if (body is null) return InvalidRequest();
             if (body.Length > MaximumRequestBytes) return RequestTooLarge();
             if (cancellationToken.IsCancellationRequested) return Canceled();
@@ -359,7 +362,8 @@ internal sealed class HoyoLabSyncClient : IDisposable
         string syncId,
         string token,
         string? baseTimestamp,
-        byte[]? envelopeJson)
+        byte[]? envelopeJson,
+        bool requireRevisionMatch = false)
     {
         using var output = new MemoryStream();
         try
@@ -371,10 +375,13 @@ internal sealed class HoyoLabSyncClient : IDisposable
                 writer.WriteString("syncId", syncId);
                 writer.WriteString("token", token);
                 writer.WriteString("game", Game);
-                if (action == SyncAction.Push)
+                if (action == SyncAction.Push || requireRevisionMatch)
                 {
                     if (baseTimestamp is null) writer.WriteNull("baseUpdatedAt");
                     else writer.WriteString("baseUpdatedAt", baseTimestamp);
+                }
+                if (action == SyncAction.Push)
+                {
                     writer.WritePropertyName("payload");
                     writer.WriteRawValue(envelopeJson, skipInputValidation: false);
                 }

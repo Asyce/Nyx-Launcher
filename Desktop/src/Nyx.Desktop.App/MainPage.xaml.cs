@@ -1538,7 +1538,6 @@ public sealed partial class MainPage : Page
             FontSize = 10,
             Foreground = (Brush)Application.Current.Resources["MistBrush"],
             TextWrapping = TextWrapping.Wrap,
-            MaxLines = 2,
         };
         AutomationProperties.SetName(managerStatus, "HoYoLAB account manager status");
         AutomationProperties.SetLiveSetting(managerStatus, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
@@ -1547,7 +1546,7 @@ public sealed partial class MainPage : Page
         var useButton = CreateHoyoLabManagerButton("Use", "Use the selected HoYoLAB account");
         var addButton = CreateHoyoLabManagerButton("Add", "Add a HoYoLAB account");
         var renameButton = CreateHoyoLabManagerButton("Rename", "Rename the selected HoYoLAB account");
-        var forgetButton = CreateHoyoLabManagerButton("Forget", "Forget the selected HoYoLAB account");
+        var forgetButton = CreateHoyoLabManagerButton("Remove from this PC", "Remove this HoYoLAB account from this PC only; keep cloud data and pull history");
         var chooseCharacterButton = CreateHoyoLabManagerButton(
             "Choose Region",
             "Choose the region for this game");
@@ -1610,9 +1609,9 @@ public sealed partial class MainPage : Page
         AddManagerAction(useButton, 0, 0);
         AddManagerAction(addButton, 0, 1);
         AddManagerAction(renameButton, 0, 2);
+        Grid.SetColumnSpan(forgetButton, 2);
         AddManagerAction(forgetButton, 1, 0);
-        Grid.SetColumnSpan(chooseCharacterButton, 2);
-        AddManagerAction(chooseCharacterButton, 1, 1);
+        AddManagerAction(chooseCharacterButton, 1, 2);
 
         void AddManagerAction(Button button, int row, int column)
         {
@@ -1652,6 +1651,7 @@ public sealed partial class MainPage : Page
         ApplyNyxAccentResources(dialog.Resources);
 
         string? selectedSlotId = null;
+        string? pendingForgetSlotId = null;
         var suppressSelectionChanged = false;
         var managerActionInFlight = false;
         string? pendingRegionSlotId = null;
@@ -1776,6 +1776,7 @@ public sealed partial class MainPage : Page
         {
             if (managerActionInFlight || publisherAccountActionInFlight)
                 return;
+            pendingForgetSlotId = null;
             managerActionInFlight = true;
             publisherAccountActionInFlight = true;
             UpdateManagerActionStates();
@@ -1846,6 +1847,7 @@ public sealed partial class MainPage : Page
         {
             if (suppressSelectionChanged)
                 return;
+            pendingForgetSlotId = null;
             selectedSlotId = SelectedItem()?.Slot.Id;
             UpdateManagerActionStates();
         };
@@ -1941,6 +1943,14 @@ public sealed partial class MainPage : Page
                 return;
             }
 
+            if (pendingForgetSlotId != slot.Id)
+            {
+                pendingForgetSlotId = slot.Id;
+                managerStatus.Text = "Press Remove from this PC again to remove this account's saved sign-in and snapshots. Cloud data and pull history stay.";
+                return;
+            }
+            pendingForgetSlotId = null;
+
             selectedSlotId = null;
             await RunManagerActionAsync(
                 async cancellationToken =>
@@ -1948,7 +1958,7 @@ public sealed partial class MainPage : Page
                     var forgotten = await publisherAccounts.ForgetHoyoLabAccountAsync(
                         slot.Id,
                         cancellationToken);
-                    managerStatus.Text = forgotten ? "Forgotten" : "Removal pending";
+                    managerStatus.Text = forgotten ? "Removed from this PC. Cloud data is unchanged." : "Removal pending";
                 },
                 preserveSelection: null,
                 clearSelection: true);
@@ -5648,6 +5658,10 @@ public sealed partial class MainPage : Page
 
     private void SyncRedesignedControls(GameLauncherItem selected)
     {
+        HoyoLabSyncButton.Visibility = !selected.IsCustom && selected.Id == "hsr"
+            && PublisherAccountService.HoyoLabManualSyncAvailable
+                ? Visibility.Visible : Visibility.Collapsed;
+        HoyoLabSyncButton.IsEnabled = !publisherAccountActionInFlight;
         if (selected.IsCustom)
         {
             RenderPreInstallNotice(selected);

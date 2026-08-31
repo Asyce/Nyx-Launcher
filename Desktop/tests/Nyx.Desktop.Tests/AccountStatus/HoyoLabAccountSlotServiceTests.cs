@@ -163,14 +163,24 @@ public sealed class HoyoLabAccountSlotServiceTests
     }
 
     [Fact]
-    public void Forget_is_write_ahead_pending_retriable_and_never_deletes_legacy_profile()
+    public void Explicit_local_removal_detaches_sync_then_clears_only_the_revalidated_account()
     {
         var method = Slice("public async Task<bool> ForgetHoyoLabAccountAsync", "public void ApplyPasswordSavingPreference");
-        AssertOrdered(method, "TryMarkRemovalPending", "TryDeleteManagedDirectory", "TryRemoveSlot");
-        Assert.Contains("target.RemovalPending", method, StringComparison.Ordinal);
-        Assert.Contains("if (!target.IsLegacy)", method, StringComparison.Ordinal);
+        var syncService = File.ReadAllText(FindRepositoryFile(
+            "Desktop", "src", "Nyx.Desktop.App", "PublisherAccountService.HoyoSync.cs"));
+        var cleanup = syncService[syncService.IndexOf("private bool TryRemoveHoyoSlotLocally", StringComparison.Ordinal)..];
+        AssertOrdered(method, "removeEverywhere: false", "previousSession.CancelAsync", "gate.WaitAsync",
+            "hoyoSlots.TryGetProtectedStateRoot", "syncCleanup.Detach", "TryPublishHoyoSyncCleanup(operation",
+            "TryRemoveHoyoSlotLocally", "&& removed");
+        AssertOrdered(cleanup, "OwnsProfile(\"HoYoLAB\")", "hoyoSlots.TryLoad()", "hoyoSlots.IsSlotRemoved",
+            "TryMarkRemovalPending", "TryGetWebView2ProfilePath", "TryDeleteExactDirectory(legacyProfile)",
+            "TryGetSlotContainerPath", "TryDeleteManagedDirectory", "TryRemoveSlot");
+        Assert.Contains("target.RemovalPending", cleanup, StringComparison.Ordinal);
+        Assert.Contains("target.IsLegacy", cleanup, StringComparison.Ordinal);
+        Assert.Contains("new PublisherRoleBindingStore(root).DeleteProvider(\"HoYoLAB\")", cleanup, StringComparison.Ordinal);
         Assert.DoesNotContain("Path.Combine(root, \"HoYoLAB\")", method, StringComparison.Ordinal);
-        Assert.Contains("SetConnection(\"HoYoLAB\", PublisherConnectionState.NotConnected)", method, StringComparison.Ordinal);
+        Assert.DoesNotContain("DeletePendingAsync", cleanup, StringComparison.Ordinal);
+        Assert.Contains("SetConnection(\"HoYoLAB\", PublisherConnectionState.NotConnected)", cleanup, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -429,7 +439,7 @@ public sealed class HoyoLabAccountSlotServiceTests
             "if (provider == \"HoYoLAB\") hoyo = terminalState");
 
         var capturedDelete = Slice(
-            "private static bool TryDeleteCapturedHoyoProtectedState",
+            "private bool TryDeleteCapturedHoyoProtectedState",
             "private void SetQuarantinedResourceFailure(");
         Assert.Contains("operation.HoyoContext is not { } context", capturedDelete, StringComparison.Ordinal);
         Assert.Contains("new PublisherResourceSnapshotStore(context.ProtectedStateRoot)", capturedDelete, StringComparison.Ordinal);

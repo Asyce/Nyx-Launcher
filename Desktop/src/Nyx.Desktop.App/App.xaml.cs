@@ -989,6 +989,16 @@ public partial class App : Application
             {
             }
         }
+        try
+        {
+            _ = await accounts.RetryHoyoLabSyncDeletionsAsync();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     private bool TryPersistPublisherCleanupPending(

@@ -7,7 +7,7 @@ using Nyx.Desktop.Infrastructure.Exports;
 
 namespace Nyx_Desktop_App;
 
-public sealed class PublisherAccountService : IAsyncDisposable
+public sealed partial class PublisherAccountService : IAsyncDisposable
 {
     private readonly string root;
     private readonly PublisherAccountConsentGate consent;
@@ -457,7 +457,13 @@ public sealed class PublisherAccountService : IAsyncDisposable
 
     public async Task<bool> ForgetHoyoLabAccountAsync(
         string slotId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        await ForgetHoyoLabAccountCoreAsync(slotId, removeEverywhere: false, cancellationToken);
+
+    private async Task<bool> ForgetHoyoLabAccountCoreAsync(
+        string slotId,
+        bool removeEverywhere,
+        CancellationToken cancellationToken)
     {
         if (!hoyoSlotManagerAvailable || !OwnsProfile("HoYoLAB")) return false;
         var target = FindHoyoSlot(slotId);
@@ -473,29 +479,21 @@ public sealed class PublisherAccountService : IAsyncDisposable
             await gate.WaitAsync(operation.Cancellation.Token);
             enteredGate = true;
             target = FindHoyoSlot(slotId);
-            if (target is null
-                || (!target.RemovalPending
-                    && !hoyoSlots.TryMarkRemovalPending(target.Id)))
+            if (target is null || !hoyoSlots.TryGetProtectedStateRoot(target, out var protectedRoot))
                 return false;
-            var wasActive = string.Equals(activeHoyoSlot?.Id, target.Id, StringComparison.Ordinal);
-            RefreshActiveHoyoSlot();
-            target = FindHoyoSlot(slotId);
-            if (target is null || !target.RemovalPending) return false;
-            if (wasActive)
-            {
-                ClearProviderState("HoYoLAB");
-                SetConnection("HoYoLAB", PublisherConnectionState.NotConnected);
-            }
-            if (!target.IsLegacy)
-            {
-                if (!hoyoSlots.TryGetSlotContainerPath(target, out var container)
-                    || !TryDeleteManagedDirectory(container))
-                    return false;
-            }
-            if (!hoyoSlots.TryRemoveSlot(target.Id)) return false;
-            RefreshActiveHoyoSlot();
-            Updated?.Invoke(this, EventArgs.Empty);
-            return true;
+            using var syncCleanup = new HoyoLabSyncCoordinator(
+                root,
+                target.Id,
+                protectedRoot,
+                publish => TryPublishHoyoSyncCleanup(operation, publish));
+            var detached = syncCleanup.Detach(
+                removeEverywhere ? HoyoLabSyncStateStore.AllHoyoScope : null,
+                operation.Cancellation.Token,
+                removeLocalSlot: removeEverywhere);
+            var removed = false;
+            return detached.Status == HoyoLabManualSyncStatus.Completed
+                && TryPublishHoyoSyncCleanup(operation, () => removed = TryRemoveHoyoSlotLocally(slotId))
+                && removed;
         }
         finally
         {
@@ -2182,7 +2180,9 @@ public sealed class PublisherAccountService : IAsyncDisposable
             }
             else
             {
-                roleBindingsCleared = roleBindings.DeleteProvider(entry.Provider);
+                roleBindingsCleared = (entry.Provider != "HoYoLAB"
+                        || TryDetachCapturedHoyoSyncState(operation))
+                    && roleBindings.DeleteProvider(entry.Provider);
                 resourceSnapshotsCleared = resourceSnapshots.DeleteProvider(entry.Provider);
                 await DeleteProfileDirectoryAsync(
                     entry.Provider,
@@ -2672,6 +2672,7 @@ public sealed class PublisherAccountService : IAsyncDisposable
             cleanupPersistence,
             provider == "HoYoLAB"
                 ? () => CanMutateHoyoProtectedState(operation)
+                    && TryDetachCapturedHoyoSyncState(operation!)
                     && hoyoGameBundle.TryDelete()
                 : null);
         SetCleanupPending(provider, !cleanupComplete);
@@ -2721,6 +2722,12 @@ public sealed class PublisherAccountService : IAsyncDisposable
         string provider,
         PublisherOperation? operation = null)
     {
+        if (provider == "HoYoLAB"
+            && (operation is null || !TryDetachCapturedHoyoSyncState(operation)))
+        {
+            QuarantineProvider(provider, operation);
+            return false;
+        }
         var legacyDeleted = PublisherProtectedStateDeletionPolicy.TryDeleteProviderState(
             () => resourceSnapshots.DeleteProvider(provider),
             () => roleBindings.DeleteProvider(provider));
@@ -2746,9 +2753,10 @@ public sealed class PublisherAccountService : IAsyncDisposable
     private bool CanDeleteAllHoyoProtectedState(PublisherOperation operation) =>
         GenerationFor("HoYoLAB").IsCurrent(operation.Generation);
 
-    private static bool TryDeleteCapturedHoyoProtectedState(PublisherOperation operation)
+    private bool TryDeleteCapturedHoyoProtectedState(PublisherOperation operation)
     {
         if (operation.HoyoContext is not { } context) return true;
+        if (!TryDetachCapturedHoyoSyncState(operation, finishCapturedCleanup: true)) return false;
         var legacyDeleted = PublisherProtectedStateDeletionPolicy.TryDeleteProviderState(
             () => new PublisherResourceSnapshotStore(context.ProtectedStateRoot)
                 .DeleteProvider("HoYoLAB"),
@@ -3436,6 +3444,11 @@ public sealed class PublisherAccountService : IAsyncDisposable
 
     private bool TryDeleteAllHoyoState(PublisherOperation operation)
     {
+        using var syncCleanup = new HoyoLabSyncCoordinator(
+            root, null, null, publish => TryPublishHoyoSyncCleanup(operation, publish));
+        if (syncCleanup.DetachAllLocal(operation.Cancellation.Token).Status
+            != HoyoLabManualSyncStatus.Completed)
+            return false;
         var accountsRoot = Path.GetFullPath(Path.Combine(root, "Accounts", "HoYoLAB"));
         var legacyProfile = Path.GetFullPath(Path.Combine(root, "HoYoLAB"));
         var legacyRoles = Path.GetFullPath(Path.Combine(root, ".protected-role-bindings"));

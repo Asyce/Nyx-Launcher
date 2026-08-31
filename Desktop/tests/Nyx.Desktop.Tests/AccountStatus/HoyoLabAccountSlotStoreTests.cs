@@ -442,6 +442,56 @@ public sealed class HoyoLabAccountSlotStoreTests
             .TryRenameSlot(FirstId, "Changed"));
     }
 
+    [Fact]
+    public void Removed_slot_requires_both_index_removal_and_absent_container()
+    {
+        using var root = new TemporaryRoot();
+        var store = Store(root.Path, idFactory: () => FirstId);
+        Assert.True(store.TryInitialize().IsReady);
+        Assert.True(store.IsSlotRemoved(FirstId));
+        Assert.True(store.TryCreateSlot("Account", out var slot));
+        Assert.False(store.IsSlotRemoved(FirstId));
+        Assert.True(store.TryGetSlotContainerPath(slot!, out var container));
+        Directory.CreateDirectory(container);
+        Assert.True(store.TryMarkRemovalPending(FirstId));
+        Assert.False(store.IsSlotRemoved(FirstId));
+        Assert.True(store.TryRemoveSlot(FirstId));
+        Assert.False(store.IsSlotRemoved(FirstId));
+        Directory.Delete(container);
+        Assert.True(Store(root.Path).IsSlotRemoved(FirstId));
+        Assert.False(store.IsSlotRemoved("../other"));
+    }
+
+    [Fact]
+    public void Removed_slot_check_fails_closed_on_corrupt_index_or_reparse_chain()
+    {
+        using var root = new TemporaryRoot();
+        var boundary = new FaultBoundary();
+        var store = Store(root.Path, boundary: boundary);
+        Assert.True(store.TryInitialize().IsReady);
+        var original = File.ReadAllBytes(IndexPath(root.Path));
+        File.WriteAllBytes(IndexPath(root.Path), [0xFF]);
+        Assert.False(store.IsSlotRemoved(FirstId));
+        Assert.Equal(new byte[] { 0xFF }, File.ReadAllBytes(IndexPath(root.Path)));
+        File.WriteAllBytes(IndexPath(root.Path), original);
+        boundary.ReparsePath = Path.Combine(root.Path, "Accounts", "HoYoLAB");
+        Assert.False(store.IsSlotRemoved(FirstId));
+        Assert.Equal(original, File.ReadAllBytes(IndexPath(root.Path)));
+    }
+
+    [Fact]
+    public void Removed_slot_check_allows_finished_global_cleanup_without_recreating_index()
+    {
+        using var root = new TemporaryRoot();
+        var store = Store(root.Path);
+        Assert.True(store.IsSlotRemoved(FirstId));
+        Assert.False(File.Exists(IndexPath(root.Path)));
+        var orphan = Path.Combine(root.Path, "Accounts", "HoYoLAB", FirstId);
+        Directory.CreateDirectory(orphan);
+        Assert.False(store.IsSlotRemoved(FirstId));
+        Assert.False(File.Exists(IndexPath(root.Path)));
+    }
+
     private static bool Parse(string json) => HoyoLabAccountSlotStore.TryParseIndex(
         Encoding.UTF8.GetBytes(json),
         out _);
