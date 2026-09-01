@@ -60,29 +60,7 @@ internal static class PublisherVisibleConnectNavigationPolicy
         Uri target)
     {
         ArgumentNullException.ThrowIfNull(target);
-        if (!target.IsAbsoluteUri
-            || !string.Equals(
-                target.Scheme,
-                Uri.UriSchemeHttps,
-                StringComparison.OrdinalIgnoreCase)
-            || !target.IsDefaultPort
-            || !string.IsNullOrEmpty(target.UserInfo))
-            return false;
-
-        if (provider == "HoYoLAB")
-        {
-            var host = target.Host;
-            return host.Equals("hoyolab.com", StringComparison.OrdinalIgnoreCase)
-                || host.EndsWith(".hoyolab.com", StringComparison.OrdinalIgnoreCase)
-                || host.Equals("hoyoverse.com", StringComparison.OrdinalIgnoreCase)
-                || host.EndsWith(".hoyoverse.com", StringComparison.OrdinalIgnoreCase);
-        }
-
-        return PublisherAccountCatalog.IsAllowedTopLevelNavigation(
-            provider,
-            PublisherSessionPurpose.Connect,
-            gameId,
-            target);
+        return PublisherAccountCatalog.IsOfficialPublisherUri(provider, gameId, target);
     }
 
     public static bool IsAllowedPopup(

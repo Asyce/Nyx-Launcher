@@ -3875,7 +3875,7 @@ public sealed class PublisherAccountHardeningTests
             "TryGetBoundedString",
             ReadCoreAccountFile("PublisherAccountContracts.cs"),
             StringComparison.Ordinal);
-        Assert.Contains("claimWriteAuthority.Arm", browser, StringComparison.Ordinal);
+        Assert.DoesNotContain("claimWriteAuthority", browser, StringComparison.Ordinal);
         Assert.DoesNotContain("PublisherLoginTriggerOutcome", browser, StringComparison.Ordinal);
         Assert.Contains("items.find(item => !item.querySelector(receivedSelector))", browser, StringComparison.Ordinal);
         var achievementScript = Slice(
@@ -3977,7 +3977,7 @@ public sealed class PublisherAccountHardeningTests
     }
 
     [Fact]
-    public void Daily_resolves_and_saves_exact_role_before_any_claim_authority_is_armed()
+    public void Daily_resolves_and_saves_exact_role_before_clicking_claim()
     {
         var service = ReadAppFile("PublisherAccountService.cs");
         var browser = ReadAppFile("PublisherSessionWindow.xaml.cs");
@@ -4008,9 +4008,8 @@ public sealed class PublisherAccountHardeningTests
 
         var preClaimProof = checkIn.IndexOf("var before = await CaptureCheckInProofAsync", StringComparison.Ordinal);
         var exactPage = checkIn.IndexOf("PublisherAccountCatalog.IsExactCheckInUri", StringComparison.Ordinal);
-        var arm = checkIn.IndexOf("claimWriteAuthority.Arm(entry.GameId)", StringComparison.Ordinal);
         var click = checkIn.IndexOf("BuildExactClaimScript(entry.GameId)", StringComparison.Ordinal);
-        Assert.True(preClaimProof >= 0 && preClaimProof < exactPage && exactPage < arm && arm < click);
+        Assert.True(preClaimProof >= 0 && preClaimProof < exactPage && exactPage < click);
         Assert.Contains("expectedBinding", checkIn, StringComparison.Ordinal);
         Assert.Contains("allowAccountWideStatus", checkIn, StringComparison.Ordinal);
         Assert.Contains("expectedBinding is not null || !allowAccountWideStatus", checkIn, StringComparison.Ordinal);

@@ -5416,7 +5416,7 @@ public sealed partial class MainPage : Page
     private void ApplyLowerActionLayout(LauncherLayoutProfile profile)
     {
         compactCodeRows = false;
-        LowerActionRegion.Height = Math.Max(profile.DeckHeight, 280);
+        LowerActionRegion.Height = Math.Max(profile.DeckHeight, 304);
         LowerActionRegion.Padding = new Thickness(26, 8, 26, 12);
         LowerActionGrid.ColumnSpacing = 16;
 

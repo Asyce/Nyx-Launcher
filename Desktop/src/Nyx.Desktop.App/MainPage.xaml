@@ -613,7 +613,7 @@
                 Grid.RowSpan="2"
                 Grid.Column="1"
                 Grid.ColumnSpan="2"
-                Height="280"
+                Height="304"
                 Margin="0"
                 Padding="26,10"
                 HorizontalAlignment="Stretch"

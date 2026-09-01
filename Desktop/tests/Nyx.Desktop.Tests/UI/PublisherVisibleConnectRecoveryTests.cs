@@ -124,8 +124,7 @@ public sealed class PublisherVisibleConnectRecoveryTests
         Assert.Contains("core.DownloadStarting += Core_DownloadStarting", popup, StringComparison.Ordinal);
         Assert.Contains("core.PermissionRequested += Core_PermissionRequested", popup, StringComparison.Ordinal);
         Assert.Contains("accounts.google.com", popup, StringComparison.Ordinal);
-        Assert.Contains("/third_party/v1/google_callback", popup, StringComparison.Ordinal);
-        Assert.Contains("/endfield/sign-in", popup, StringComparison.Ordinal);
+        Assert.Contains("PublisherAccountCatalog.IsOfficialPublisherUri(\"SKPORT\", \"ae\"", popup, StringComparison.Ordinal);
         Assert.Contains("StringComparison.OrdinalIgnoreCase", popup, StringComparison.Ordinal);
         Assert.True(
             popup.IndexOf("core.NavigationStarting +=", StringComparison.Ordinal)
@@ -167,6 +166,86 @@ public sealed class PublisherVisibleConnectRecoveryTests
             "HoYoLAB",
             "hsr",
             new Uri(target)));
+    }
+
+    [Theory]
+    [InlineData("HoYoLAB", "hsr", "https://sg-public-api.hoyolab.com/future/official/path")]
+    [InlineData("HoYoLAB", "gi", "https://webstatic.hoyoverse.com/future/official/path")]
+    [InlineData("HoYoLAB", "zzz", "https://api-takumi.mihoyo.com/future/official/path")]
+    [InlineData("HoYoLAB", "hsr", "https://hoyo.link/future")]
+    [InlineData("KURO GAMES", "wuwa", "https://prod-alicdn-gamestarter.kurogame.com/future")]
+    [InlineData("KURO GAMES", "wuwa", "https://pc-launcher-sdk-api.kurogame.net/future")]
+    [InlineData("KURO GAMES", "wuwa", "https://www.kurogames.com/future")]
+    [InlineData("KURO GAMES", "wuwa", "https://api.kurobbs.com/future")]
+    [InlineData("SKPORT", "ae", "https://game.skport.com/future")]
+    [InlineData("SKPORT", "ae", "https://launcher.gryphline.com/future")]
+    [InlineData("SKPORT", "ae", "https://ak.hypergryph.com/future")]
+    [InlineData("SKPORT", "ae", "https://web-static.hg-cdn.com/future")]
+    public void Embedded_browser_trusts_publisher_owned_https_domains(
+        string provider,
+        string gameId,
+        string target)
+    {
+        Assert.True(PublisherAccountCatalog.IsOfficialPublisherUri(
+            provider,
+            gameId,
+            new Uri(target)));
+        Assert.True(PublisherVisibleConnectNavigationPolicy.IsAllowed(
+            provider,
+            gameId,
+            new Uri(target)));
+    }
+
+    [Theory]
+    [InlineData("HoYoLAB", "hsr", "https://hoyolab.com.attacker.example/path")]
+    [InlineData("SKPORT", "ae", "https://gryphline.com.attacker.example/path")]
+    [InlineData("SKPORT", "ae", "https://hg-cdn.com.attacker.example/path")]
+    [InlineData("KURO GAMES", "wuwa", "https://kurogame.com.attacker.example/path")]
+    [InlineData("HoYoLAB", "hsr", "http://act.hoyolab.com/path")]
+    [InlineData("HoYoLAB", "hsr", "https://act.hoyolab.com:444/path")]
+    [InlineData("HoYoLAB", "ae", "https://act.hoyolab.com/path")]
+    public void Embedded_browser_still_rejects_external_or_mismatched_domains(
+        string provider,
+        string gameId,
+        string target)
+    {
+        Assert.False(PublisherAccountCatalog.IsOfficialPublisherUri(
+            provider,
+            gameId,
+            new Uri(target)));
+    }
+
+    [Fact]
+    public void Official_publisher_requests_bypass_the_legacy_path_filter_before_body_reading()
+    {
+        var source = ReadAppFile("PublisherSessionWindow.xaml.cs");
+        var handler = Slice(
+            source,
+            "private async void Core_WebResourceRequested",
+            "private bool TryAuthorizeWebResourceRequest");
+
+        var official = handler.IndexOf(
+            "PublisherAccountCatalog.IsOfficialPublisherUri",
+            StringComparison.Ordinal);
+        var connect = handler.IndexOf(
+            "if (purpose == PublisherSessionPurpose.Connect",
+            StringComparison.Ordinal);
+        var bodyRead = handler.IndexOf("ReadBoundedAsync", StringComparison.Ordinal);
+        Assert.True(official >= 0 && official < connect && connect < bodyRead);
+        var resourceObservation = handler.IndexOf(
+            "purpose == PublisherSessionPurpose.Resource",
+            StringComparison.Ordinal);
+        var trustedAuthorization = handler.IndexOf(
+            "var authorized = isOfficialPublisherRequest || TryAuthorizeWebResourceRequest(args);",
+            StringComparison.Ordinal);
+        var achievementObservation = handler.IndexOf(
+            "IsHsrAchievementListCandidate(requestUri)",
+            StringComparison.Ordinal);
+        Assert.True(
+            resourceObservation >= 0
+            && resourceObservation < connect
+            && connect < trustedAuthorization
+            && trustedAuthorization < achievementObservation);
     }
 
     [Fact]

@@ -23,7 +23,6 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
     private readonly bool passwordSavingEnabled;
     private readonly Action? passwordCleanupCompleted;
     private readonly PublisherPasswordNavigationGate passwordNavigationGate;
-    private readonly PublisherClaimWriteAuthority claimWriteAuthority = new();
     private readonly TaskCompletionSource closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource browserProcessExited =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -163,13 +162,9 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
                 """);
         }
         core.NavigationStarting += Core_NavigationStarting;
-        // Visible sign-in and daily check-in otherwise behave like the
-        // publisher's own page in a normal browser. The daily page keeps one
-        // narrow interception: the exact current claim endpoint is filtered so
-        // one explicit Nyx click can authorize one claim write, while reviewed
-        // retired endpoints are filtered only so the request policy can reject
-        // them. Both sessions remain confined to the isolated profile, fixed
-        // top-level page, and existing popup/download/permission boundaries.
+        // Publisher-owned HTTPS requests behave like the same page in a normal
+        // browser. Interception remains for capture and diagnostics; Nyx still
+        // validates the exact game, role, and response before saving any data.
         if (purpose == PublisherSessionPurpose.CheckIn)
         {
             foreach (var pattern in
@@ -735,7 +730,6 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
             cancellationToken);
         try
         {
-            using var claimWrite = claimWriteAuthority.Arm(entry.GameId);
             var clickResult = await Browser.CoreWebView2!
                 .ExecuteScriptAsync(BuildExactClaimScript(entry.GameId))
                 .AsTask(cancellationToken);
@@ -2200,7 +2194,24 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         CoreWebView2 sender,
         CoreWebView2WebResourceRequestedEventArgs args)
     {
-        if (purpose == PublisherSessionPurpose.Connect)
+        // Trust the publisher's own site without a brittle endpoint allowlist.
+        // External hosts still use the existing request policy below.
+        var isOfficialPublisherRequest = authorizedGameId is not null
+            && Uri.TryCreate(args.Request.Uri, UriKind.Absolute, out var officialUri)
+            && PublisherAccountCatalog.IsOfficialPublisherUri(
+                provider,
+                authorizedGameId,
+                officialUri);
+        if (isOfficialPublisherRequest
+            && purpose == PublisherSessionPurpose.Resource)
+        {
+            // Resource capture still needs the existing role-bound reservation,
+            // but its result must not block publisher-owned traffic.
+            _ = TryAuthorizeWebResourceRequest(args);
+        }
+
+        if (purpose == PublisherSessionPurpose.Connect
+            && !isOfficialPublisherRequest)
         {
             using var deferral = args.GetDeferral();
             byte[]? requestBody = null;
@@ -2246,7 +2257,7 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
             return;
         }
 
-        var authorized = TryAuthorizeWebResourceRequest(args);
+        var authorized = isOfficialPublisherRequest || TryAuthorizeWebResourceRequest(args);
         if (purpose == PublisherSessionPurpose.Achievements
             && Uri.TryCreate(args.Request.Uri, UriKind.Absolute, out var requestUri)
             && IsHsrAchievementListCandidate(requestUri))
@@ -2284,7 +2295,6 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
                 uri,
                 args.Request.Method,
                 context,
-                claimWriteAuthority,
                 requestBody: requestBody,
                 contentType: contentType))
             return false;
@@ -2881,6 +2891,9 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         CoreWebView2 sender,
         CoreWebView2WebResourceRequestedEventArgs args)
     {
+        if (Uri.TryCreate(args.Request.Uri, UriKind.Absolute, out var officialUri)
+            && PublisherAccountCatalog.IsOfficialPublisherUri("SKPORT", "ae", officialUri))
+            return;
         if (args.Request.Method is not ("GET" or "POST")
             || !Uri.TryCreate(args.Request.Uri, UriKind.Absolute, out var target)
             || !IsAllowedSocialLoginTopLevel(target))
@@ -2894,9 +2907,13 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         if (!target.IsAbsoluteUri
             || target.Scheme != Uri.UriSchemeHttps
             || !target.IsDefaultPort
-            || !string.IsNullOrEmpty(target.UserInfo)
-            || !string.IsNullOrEmpty(target.Fragment)
-            || target.Query.Length > 2048)
+            || !string.IsNullOrEmpty(target.UserInfo))
+            return false;
+
+        if (PublisherAccountCatalog.IsOfficialPublisherUri("SKPORT", "ae", target))
+            return true;
+
+        if (!string.IsNullOrEmpty(target.Fragment) || target.Query.Length > 2048)
             return false;
 
         var host = target.Host;
@@ -2906,26 +2923,7 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
             || host.Equals("m.facebook.com", StringComparison.OrdinalIgnoreCase)
             || host.Equals("appleid.apple.com", StringComparison.OrdinalIgnoreCase))
             return true;
-        if (host.Equals("as.gryphline.com", StringComparison.OrdinalIgnoreCase))
-            return target.AbsolutePath is "/third_party/v1/google_callback"
-                or "/third_party/v1/facebook_callback"
-                or "/third_party/v1/apple_callback";
-        return host.Equals("game.skport.com", StringComparison.OrdinalIgnoreCase)
-            && target.AbsolutePath == "/endfield/sign-in"
-            && IsAllowedSocialLoginReturnQuery(target.Query);
-    }
-
-    private static bool IsAllowedSocialLoginReturnQuery(string query)
-    {
-        if (query.Length <= 1) return false;
-        foreach (var parameter in query[1..].Split('&', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var separator = parameter.IndexOf('=');
-            var key = separator < 0 ? parameter : parameter[..separator];
-            if (key is not ("tpa_action" or "tpa_channelId" or "tpa_channelToken" or "tpa_state"))
-                return false;
-        }
-        return true;
+        return false;
     }
 
     private static void Core_SocialLoginNewWindowRequested(

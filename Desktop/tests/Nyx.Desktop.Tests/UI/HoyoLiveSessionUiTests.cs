@@ -990,6 +990,23 @@ public sealed class HoyoLiveSessionUiTests
     }
 
     [Fact]
+    public void Lower_action_region_reserves_two_line_status_height()
+    {
+        var xaml = Slice(
+            ReadAppFile("MainPage.xaml"),
+            "x:Name=\"LowerActionRegion\"",
+            "x:Name=\"LowerActionGrid\"");
+        var runtime = Slice(
+            ReadAppFile("MainPage.xaml.cs"),
+            "private void ApplyLowerActionLayout",
+            "private void ApplyCombinedStatusLayout");
+
+        Assert.True(
+            xaml.Contains("Height=\"304\"", StringComparison.Ordinal)
+            && runtime.Contains("LowerActionRegion.Height = Math.Max(profile.DeckHeight, 304);", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Redesigned_hoyo_account_panel_keeps_identity_separate_from_connection_state()
     {
         var xaml = ReadAppFile("MainPage.xaml");

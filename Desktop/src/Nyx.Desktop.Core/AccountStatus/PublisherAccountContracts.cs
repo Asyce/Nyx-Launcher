@@ -1650,8 +1650,7 @@ public static class PublisherAccountCatalog
         new ReadOnlyDictionary<string, CheckInResponseEndpoint>(
             new Dictionary<string, CheckInResponseEndpoint>(StringComparer.Ordinal)
             {
-                // Reviewed from the official production Genshin sign-in bundle
-                // on 2026-08-02. Keep the retired sg-hk4e API host denied.
+                // Current Genshin endpoints retained for exact response recognition.
                 ["gi"] = new(
                     new("https://sg-act-public-api.hoyolab.com/event/sol/info"),
                     new("https://sg-act-public-api.hoyolab.com/event/sol/sign"),
@@ -1781,6 +1780,42 @@ public static class PublisherAccountCatalog
         Entries.TryGetValue(gameId, out var entry)
             ? entry
             : throw new ArgumentOutOfRangeException(nameof(gameId));
+
+    public static bool IsOfficialPublisherUri(
+        string provider,
+        string gameId,
+        Uri uri)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        if (!Entries.TryGetValue(gameId, out var entry)
+            || !string.Equals(entry.Provider, provider, StringComparison.Ordinal)
+            || !uri.IsAbsoluteUri
+            || !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+            || !uri.IsDefaultPort
+            || !string.IsNullOrEmpty(uri.UserInfo))
+            return false;
+
+        return provider switch
+        {
+            "HoYoLAB" => IsHostOrSubdomain(uri.Host, "hoyolab.com")
+                || IsHostOrSubdomain(uri.Host, "hoyoverse.com")
+                || IsHostOrSubdomain(uri.Host, "mihoyo.com")
+                || IsHostOrSubdomain(uri.Host, "hoyo.link"),
+            "KURO GAMES" => IsHostOrSubdomain(uri.Host, "kurogame.com")
+                || IsHostOrSubdomain(uri.Host, "kurogame.net")
+                || IsHostOrSubdomain(uri.Host, "kurogames.com")
+                || IsHostOrSubdomain(uri.Host, "kurobbs.com"),
+            "SKPORT" => IsHostOrSubdomain(uri.Host, "skport.com")
+                || IsHostOrSubdomain(uri.Host, "gryphline.com")
+                || IsHostOrSubdomain(uri.Host, "hypergryph.com")
+                || IsHostOrSubdomain(uri.Host, "hg-cdn.com"),
+            _ => false,
+        };
+    }
+
+    private static bool IsHostOrSubdomain(string host, string domain) =>
+        string.Equals(host, domain, StringComparison.OrdinalIgnoreCase)
+        || host.EndsWith('.' + domain, StringComparison.OrdinalIgnoreCase);
 
     public static bool IsExactCheckInUri(string gameId, Uri uri)
     {
@@ -1937,9 +1972,8 @@ public static class PublisherAccountCatalog
                 && IsReviewedHoyoAccountDocument(uri);
         }
 
-        // Cross-origin claim APIs can issue a non-mutating CORS preflight.
-        // Keep that handshake exact-game and exact-endpoint without spending
-        // the one authorization reserved for the actual POST.
+        // The legacy fallback policy recognizes the exact non-mutating CORS
+        // preflight. Official publisher traffic bypasses this filter in-app.
         if (purpose == PublisherSessionPurpose.CheckIn
             && method == "OPTIONS"
             && context is PublisherWebResourceContext.XmlHttpRequest
@@ -2137,11 +2171,9 @@ public static class PublisherAccountCatalog
         if (method == "POST"
             && purpose == PublisherSessionPurpose.CheckIn
             && IsExactCheckInResponseUri(gameId, uri, method))
-            // Deliberate publisher-page trust boundary: Nyx authorizes one
-            // exact game's exact sign endpoint after one explicit Daily click,
-            // but does not copy the official page's request body out of the
-            // isolated browser. The one-shot permit and before/after response
-            // proofs bound the operation; body validation is not claimed.
+            // Legacy fallback policy: require a one-shot permit. The live
+            // publisher window trusts official hosts and validates the exact
+            // before/after response instead.
             return claimWriteAuthority?.TryConsume(gameId) == true;
         if (method == "GET"
             && purpose is PublisherSessionPurpose.Connect
