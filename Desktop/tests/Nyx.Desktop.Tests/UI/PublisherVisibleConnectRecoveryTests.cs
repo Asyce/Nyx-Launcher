@@ -9,17 +9,26 @@ public sealed class PublisherVisibleConnectRecoveryTests
     [InlineData("gi")]
     [InlineData("hsr")]
     [InlineData("zzz")]
-    public void Ordinary_HoYoLAB_add_and_connect_start_at_the_fixed_home(string gameId)
+    public void Ordinary_HoYoLAB_add_and_connect_start_at_the_reviewed_login(string gameId)
     {
         var entry = PublisherAccountCatalog.Get(gameId);
         var initialUri = PublisherVisibleConnectNavigationPolicy.GetInitialUri(entry);
 
-        Assert.Equal(new Uri("https://www.hoyolab.com/home"), initialUri);
+        Assert.Equal(
+            new Uri("https://account.hoyolab.com/login-platform/index.html?app_id=c9oqaq3s3gu8"),
+            initialUri);
         Assert.True(PublisherVisibleConnectNavigationPolicy.IsAllowedInitial(
             "HoYoLAB",
             PublisherSessionPurpose.Connect,
             gameId,
             initialUri));
+        Assert.True(PublisherAccountCatalog.IsAllowedWebResourceRequest(
+            "HoYoLAB",
+            PublisherSessionPurpose.Connect,
+            gameId,
+            initialUri,
+            "GET",
+            PublisherWebResourceContext.Document));
     }
 
     [Fact]
@@ -143,29 +152,13 @@ public sealed class PublisherVisibleConnectRecoveryTests
     }
 
     [Fact]
-    public void Initial_home_exception_requires_a_current_HoYo_game()
+    public void Initial_login_requires_a_current_HoYo_game()
     {
         Assert.False(PublisherVisibleConnectNavigationPolicy.IsAllowedInitial(
             "HoYoLAB",
             PublisherSessionPurpose.Connect,
             "unknown",
-            new Uri("https://www.hoyolab.com/home")));
-    }
-
-    [Theory]
-    [InlineData("https://www.hoyolab.com/home/")]
-    [InlineData("https://www.hoyolab.com/home?next=1")]
-    [InlineData("https://www.hoyolab.com/home#next")]
-    [InlineData("http://www.hoyolab.com/home")]
-    [InlineData("https://user:password@www.hoyolab.com/home")]
-    [InlineData("https://www.hoyolab.com:444/home")]
-    public void Initial_home_exception_is_exact(string target)
-    {
-        Assert.False(PublisherVisibleConnectNavigationPolicy.IsAllowedInitial(
-            "HoYoLAB",
-            PublisherSessionPurpose.Connect,
-            "hsr",
-            new Uri(target)));
+            new Uri("https://account.hoyolab.com/login-platform/index.html?app_id=c9oqaq3s3gu8")));
     }
 
     [Fact]

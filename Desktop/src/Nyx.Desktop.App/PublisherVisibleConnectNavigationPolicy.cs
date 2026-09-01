@@ -4,14 +4,14 @@ namespace Nyx_Desktop_App;
 
 internal static class PublisherVisibleConnectNavigationPolicy
 {
-    internal static Uri HoyoLabHomeUri { get; } =
-        new("https://www.hoyolab.com/home");
+    internal static Uri HoyoLabLoginUri { get; } =
+        new("https://account.hoyolab.com/login-platform/index.html?app_id=c9oqaq3s3gu8");
 
     public static Uri GetInitialUri(PublisherAccountCatalogEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
         return entry.Provider == "HoYoLAB"
-            ? HoyoLabHomeUri
+            ? HoyoLabLoginUri
             : entry.CheckInUri ?? entry.ResourceUri
                 ?? throw new InvalidOperationException("No official account page is configured.");
     }
@@ -24,18 +24,10 @@ internal static class PublisherVisibleConnectNavigationPolicy
     {
         ArgumentNullException.ThrowIfNull(target);
         return PublisherAccountCatalog.IsAllowedTopLevelNavigation(
-                provider,
-                purpose,
-                gameId,
-                target)
-            || purpose == PublisherSessionPurpose.Connect
-                && provider == "HoYoLAB"
-                && gameId is ("gi" or "hsr" or "zzz")
-                && target.IsAbsoluteUri
-                && string.Equals(
-                    target.OriginalString,
-                    HoyoLabHomeUri.AbsoluteUri,
-                    StringComparison.Ordinal);
+            provider,
+            purpose,
+            gameId,
+            target);
     }
 
     public static bool IsAllowed(

@@ -2727,16 +2727,20 @@ public static class PublisherAccountCatalog
         string.Equals(host, "account.hoyoverse.com", StringComparison.OrdinalIgnoreCase)
         || string.Equals(host, "account.hoyolab.com", StringComparison.OrdinalIgnoreCase);
 
-    private static bool IsExactCurrentHoyoLoginAsset(string path) =>
-        path is
-            "/login-platform/chunk-vendors.8caf3da0.js"
-            or "/login-platform/chunk-common.8caf3da0.js"
-            or "/login-platform/web.8caf3da0.js"
-            or "/login-platform/password-login-web.8caf3da0.js"
-            or "/login-platform/chunk-vendors.8caf3da0.css"
-            or "/login-platform/chunk-common.8caf3da0.css"
-            or "/login-platform/web.8caf3da0.css"
-            or "/login-platform/password-login-web.8caf3da0.css";
+    private static bool IsReviewedHoyoLoginAsset(string path)
+    {
+        var parts = path.Split('.');
+        return parts.Length == 3
+            && parts[0] is
+                "/login-platform/chunk-vendors"
+                or "/login-platform/chunk-common"
+                or "/login-platform/web"
+                or "/login-platform/password-login-web"
+            && parts[1].Length == 8
+            && parts[1].All(static character =>
+                char.IsAsciiDigit(character) || character is >= 'a' and <= 'f')
+            && parts[2] is "js" or "css";
+    }
 
     private static bool IsBoundedOpaqueValue(string value, int maximumLength) =>
         value.Length is > 0
@@ -2797,7 +2801,7 @@ public static class PublisherAccountCatalog
         if (string.Equals(host, "account.hoyolab.com", StringComparison.OrdinalIgnoreCase))
             return connectMode
                 && string.IsNullOrEmpty(uri.Query)
-                && IsExactCurrentHoyoLoginAsset(path);
+                && IsReviewedHoyoLoginAsset(path);
         if (string.Equals(host, "webstatic.hoyoverse.com", StringComparison.OrdinalIgnoreCase))
             return path.StartsWith("/dora/", StringComparison.Ordinal);
         if (string.Equals(host, "act.hoyoverse.com", StringComparison.OrdinalIgnoreCase))
