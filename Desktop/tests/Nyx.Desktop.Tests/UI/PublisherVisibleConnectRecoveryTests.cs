@@ -6,17 +6,17 @@ namespace Nyx.Desktop.Tests.UI;
 public sealed class PublisherVisibleConnectRecoveryTests
 {
     [Theory]
-    [InlineData("gi")]
-    [InlineData("hsr")]
-    [InlineData("zzz")]
-    public void Ordinary_HoYoLAB_add_and_connect_start_at_the_reviewed_login(string gameId)
+    [InlineData("gi", "https://act.hoyolab.com/app/community-game-records-sea/index.html#/ys")]
+    [InlineData("hsr", "https://act.hoyolab.com/app/community-game-records-sea/rpg/index.html#/hsr")]
+    [InlineData("zzz", "https://act.hoyolab.com/app/zzz-game-record/index.html#/zzz")]
+    public void Ordinary_HoYoLAB_add_and_connect_start_at_the_games_reviewed_login_page(
+        string gameId,
+        string expected)
     {
         var entry = PublisherAccountCatalog.Get(gameId);
         var initialUri = PublisherVisibleConnectNavigationPolicy.GetInitialUri(entry);
 
-        Assert.Equal(
-            new Uri("https://account.hoyolab.com/login-platform/index.html?app_id=c9oqaq3s3gu8"),
-            initialUri);
+        Assert.Equal(expected, initialUri.AbsoluteUri);
         Assert.True(PublisherVisibleConnectNavigationPolicy.IsAllowedInitial(
             "HoYoLAB",
             PublisherSessionPurpose.Connect,
@@ -26,9 +26,26 @@ public sealed class PublisherVisibleConnectRecoveryTests
             "HoYoLAB",
             PublisherSessionPurpose.Connect,
             gameId,
-            initialUri,
+            new Uri(initialUri.GetLeftPart(UriPartial.Path)),
             "GET",
             PublisherWebResourceContext.Document));
+    }
+
+    [Theory]
+    [InlineData("http://act.hoyolab.com/app/community-game-records-sea/index.html#/ys")]
+    [InlineData("https://user:password@act.hoyolab.com/app/community-game-records-sea/index.html#/ys")]
+    [InlineData("https://act.hoyolab.com:444/app/community-game-records-sea/index.html#/ys")]
+    [InlineData("https://act.hoyolab.com/app/community-game-records-sea/index.html")]
+    [InlineData("https://act.hoyolab.com/app/community-game-records-sea/index.html?gid=2#/ys")]
+    [InlineData("https://act.hoyolab.com/app/community-game-records-sea/index.html#/ys/other")]
+    [InlineData("https://act.hoyolab.com.evil.example/app/community-game-records-sea/index.html#/ys")]
+    public void Genshin_login_page_exception_is_exact(string target)
+    {
+        Assert.False(PublisherVisibleConnectNavigationPolicy.IsAllowedInitial(
+            "HoYoLAB",
+            PublisherSessionPurpose.Connect,
+            "gi",
+            new Uri(target)));
     }
 
     [Fact]
@@ -158,7 +175,7 @@ public sealed class PublisherVisibleConnectRecoveryTests
             "HoYoLAB",
             PublisherSessionPurpose.Connect,
             "unknown",
-            new Uri("https://account.hoyolab.com/login-platform/index.html?app_id=c9oqaq3s3gu8")));
+            PublisherVisibleConnectNavigationPolicy.HoyoLabGenshinLoginUri));
     }
 
     [Fact]
