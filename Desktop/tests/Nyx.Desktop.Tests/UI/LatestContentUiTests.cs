@@ -411,7 +411,7 @@ public sealed class BannerCycleUiTests
     }
 
     [Fact]
-    public void Launcher_uses_bundled_manrope_for_all_text_and_keeps_symbol_fonts_for_icons()
+    public void Launcher_uses_bundled_manrope_for_all_text()
     {
         var typography = ReadAppFile("Themes", "NyxTypography.xaml");
         var project = ReadAppFile("Nyx.Desktop.App.csproj");
@@ -448,7 +448,6 @@ public sealed class BannerCycleUiTests
         Assert.DoesNotContain("Segoe UI Variable", typography, StringComparison.Ordinal);
         Assert.DoesNotContain("Segoe UI Variable", publisherWindow, StringComparison.Ordinal);
         Assert.DoesNotContain("GI.ttf", typography, StringComparison.Ordinal);
-        Assert.Contains("FontFamily=\"Segoe Fluent Icons\"", publisherWindow, StringComparison.Ordinal);
     }
 
     [Fact]

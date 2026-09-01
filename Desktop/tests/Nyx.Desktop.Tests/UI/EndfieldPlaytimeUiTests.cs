@@ -31,7 +31,7 @@ public sealed class EndfieldPlaytimeUiTests
     }
 
     [Fact]
-    public void Playtime_text_is_outlined_above_account_resources_for_every_game()
+    public void Playtime_text_is_outlined_below_screenshots_for_every_game()
     {
         var xaml = ReadLauncherFile("MainPage.xaml");
         var display = xaml.IndexOf("x:Name=\"LaunchPlayTimeDisplay\"", StringComparison.Ordinal);
@@ -39,12 +39,18 @@ public sealed class EndfieldPlaytimeUiTests
         var launchButton = xaml.IndexOf("x:Name=\"LaunchButton\"", StringComparison.Ordinal);
         var utilityButtons = xaml.IndexOf("x:Name=\"LaunchUtilityButtons\"", StringComparison.Ordinal);
 
-        Assert.True(display >= 0 && display < resources);
-        Assert.True(resources < launchButton && launchButton < utilityButtons);
+        var screenshots = xaml.IndexOf("x:Name=\"StableOpenScreenshotFolderButton\"", StringComparison.Ordinal);
 
-        var playtimeDisplay = Slice(xaml, "x:Name=\"LaunchPlayTimeDisplay\"", "x:Name=\"LaunchResourceMetricsPanel\"");
-        ContainsNormalized(playtimeDisplay, "Grid.Row=\"2\"");
-        var outline = Slice(playtimeDisplay, "x:Name=\"LaunchPlayTimeOutlineText\"", "/>");
+        Assert.True(resources >= 0 && resources < launchButton && launchButton < utilityButtons);
+        Assert.True(screenshots > utilityButtons && display > screenshots);
+
+        var playtimeDisplay = Slice(xaml, "x:Name=\"LaunchPlayTimeDisplay\"", "x:Name=\"LaunchPlayTimeOutlineText\"");
+        ContainsNormalized(playtimeDisplay, "Grid.Row=\"1\"");
+        ContainsNormalized(playtimeDisplay, "Grid.Column=\"1\"");
+        ContainsNormalized(playtimeDisplay, "Background=\"{ThemeResource LauncherUiBackdropBrush}\"");
+        ContainsNormalized(playtimeDisplay, "BorderBrush=\"{ThemeResource DeckBorderBrush}\"");
+        ContainsNormalized(playtimeDisplay, "BorderThickness=\"1\"");
+        var outline = Slice(xaml, "x:Name=\"LaunchPlayTimeOutlineText\"", "/>");
         var text = Slice(xaml, "x:Name=\"LaunchPlayTimeText\"", "/>");
         ContainsNormalized(outline, "AutomationProperties.AccessibilityView=\"Raw\"");
         ContainsNormalized(outline, "Foreground=\"Black\"");

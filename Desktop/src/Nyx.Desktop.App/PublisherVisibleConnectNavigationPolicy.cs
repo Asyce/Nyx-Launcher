@@ -7,14 +7,19 @@ internal static class PublisherVisibleConnectNavigationPolicy
     internal static Uri HoyoLabGenshinLoginUri { get; } =
         new("https://act.hoyolab.com/app/community-game-records-sea/index.html#/ys");
 
+    internal static Uri HoyoLabHsrLoginUri { get; } =
+        new("https://account.hoyolab.com/login-platform/index.html?app_id=c9oqaq3s3gu8");
+
     public static Uri GetInitialUri(PublisherAccountCatalogEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
         return entry.Provider == "HoYoLAB"
             ? entry.GameId == "gi"
                 ? HoyoLabGenshinLoginUri
-                : entry.ResourceUri
-                    ?? throw new InvalidOperationException("No official account page is configured.")
+                : entry.GameId == "hsr"
+                    ? HoyoLabHsrLoginUri
+                    : entry.ResourceUri
+                        ?? throw new InvalidOperationException("No official account page is configured.")
             : entry.CheckInUri ?? entry.ResourceUri
                 ?? throw new InvalidOperationException("No official account page is configured.");
     }

@@ -1490,8 +1490,6 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Button
                             x:Name="PrimaryGameStatusButton"
@@ -1541,37 +1539,9 @@
                             IsTabStop="True"
                             Style="{StaticResource NyxQuietActionStyle}"
                             Visibility="Collapsed" />
-                        <Grid
-                            x:Name="LaunchPlayTimeDisplay"
-                            Grid.Row="2"
-                            Margin="12,2"
-                            HorizontalAlignment="Center">
-                            <TextBlock
-                                x:Name="LaunchPlayTimeOutlineText"
-                                AutomationProperties.AccessibilityView="Raw"
-                                FontFamily="{StaticResource NyxDataFont}"
-                                FontSize="11.5"
-                                Foreground="Black"
-                                HorizontalAlignment="Center"
-                                IsHitTestVisible="False"
-                                Text="Play Time: 0m"
-                                TextWrapping="NoWrap"
-                                VerticalAlignment="Center" />
-                            <TextBlock
-                                x:Name="LaunchPlayTimeText"
-                                AutomationProperties.Name="Play Time: 0m. Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded."
-                                FontFamily="{StaticResource NyxDataFont}"
-                                FontSize="10"
-                                Foreground="{ThemeResource MoonBrush}"
-                                HorizontalAlignment="Center"
-                                Text="Play Time: 0m"
-                                TextWrapping="NoWrap"
-                                VerticalAlignment="Center"
-                                ToolTipService.ToolTip="Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded." />
-                        </Grid>
                         <Border
                             x:Name="LaunchResourceMetricsPanel"
-                            Grid.Row="3"
+                            Grid.Row="2"
                             Padding="4,2"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
@@ -1696,7 +1666,7 @@
                         </Border>
                          <Button
                              x:Name="LaunchButton"
-                             Grid.Row="4"
+                             Grid.Row="3"
                              Width="381"
                              Margin="12,0,12,0"
                             HorizontalAlignment="Stretch"
@@ -1816,14 +1786,19 @@
                          </Button>
                          <Grid
                              x:Name="LaunchUtilityButtons"
-                             Grid.Row="5"
+                             Grid.Row="4"
                              Margin="12,0,12,0"
                              HorizontalAlignment="Stretch"
-                             ColumnSpacing="8">
+                             ColumnSpacing="8"
+                             RowSpacing="2">
                              <Grid.ColumnDefinitions>
                                  <ColumnDefinition Width="*" />
                                  <ColumnDefinition Width="*" />
                              </Grid.ColumnDefinitions>
+                             <Grid.RowDefinitions>
+                                 <RowDefinition Height="Auto" />
+                                 <RowDefinition Height="Auto" />
+                             </Grid.RowDefinitions>
                              <Button
                                  x:Name="StableOpenUpdaterButton"
                                  Grid.Column="0"
@@ -1844,27 +1819,63 @@
                                  AutomationProperties.Name="Open the selected game's screenshot folder"
                                  Click="OpenScreenshotFolderButton_Click"
                                  Content="Screenshots"
-                                 IsEnabled="False"
-                                 Style="{StaticResource NyxOfficialLauncherStyle}" />
+                                  IsEnabled="False"
+                                  Style="{StaticResource NyxOfficialLauncherStyle}" />
+                             <Button
+                                 x:Name="OfficialToolsButton"
+                                 Grid.Row="1"
+                                 Grid.Column="0"
+                                 Height="28"
+                                 MinHeight="28"
+                                 HorizontalAlignment="Stretch"
+                                 HorizontalContentAlignment="Center"
+                                 AutomationProperties.Name="Official Tools for the selected game"
+                                 Content="Official Tools"
+                                 IsTabStop="True"
+                                 Style="{StaticResource NyxOfficialLauncherStyle}"
+                                 ToolTipService.ToolTip="Open an official tool for the selected game"
+                                 Visibility="Collapsed">
+                                 <Button.Flyout>
+                                     <MenuFlyout x:Name="OfficialToolsMenuFlyout" />
+                                 </Button.Flyout>
+                             </Button>
+                             <Border
+                                 x:Name="LaunchPlayTimeDisplay"
+                                 Grid.Row="1"
+                                 Grid.Column="1"
+                                 Height="28"
+                                 Padding="4,2"
+                                 HorizontalAlignment="Stretch"
+                                 VerticalAlignment="Center"
+                                 Background="{ThemeResource LauncherUiBackdropBrush}"
+                                 BorderBrush="{ThemeResource DeckBorderBrush}"
+                                 BorderThickness="1">
+                                 <Grid>
+                                     <TextBlock
+                                         x:Name="LaunchPlayTimeOutlineText"
+                                         AutomationProperties.AccessibilityView="Raw"
+                                         FontFamily="{StaticResource NyxDataFont}"
+                                         FontSize="11.5"
+                                         Foreground="Black"
+                                         HorizontalAlignment="Center"
+                                         IsHitTestVisible="False"
+                                         Text="Play Time: 0m"
+                                         TextWrapping="NoWrap"
+                                         VerticalAlignment="Center" />
+                                     <TextBlock
+                                         x:Name="LaunchPlayTimeText"
+                                         AutomationProperties.Name="Play Time: 0m. Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded."
+                                         FontFamily="{StaticResource NyxDataFont}"
+                                         FontSize="10"
+                                         Foreground="{ThemeResource MoonBrush}"
+                                         HorizontalAlignment="Center"
+                                         Text="Play Time: 0m"
+                                         TextWrapping="NoWrap"
+                                         VerticalAlignment="Center"
+                                         ToolTipService.ToolTip="Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded." />
+                                 </Grid>
+                             </Border>
                          </Grid>
-                         <Button
-                             x:Name="OfficialToolsButton"
-                             Grid.Row="6"
-                             Height="28"
-                             MinHeight="28"
-                             Margin="12,2,12,0"
-                             HorizontalAlignment="Stretch"
-                             HorizontalContentAlignment="Center"
-                             AutomationProperties.Name="Official Tools for the selected game"
-                             Content="Official Tools"
-                             IsTabStop="True"
-                             Style="{StaticResource NyxOfficialLauncherStyle}"
-                             ToolTipService.ToolTip="Open an official tool for the selected game"
-                             Visibility="Collapsed">
-                             <Button.Flyout>
-                                 <MenuFlyout x:Name="OfficialToolsMenuFlyout" />
-                             </Button.Flyout>
-                         </Button>
                     </Grid>
                 </Grid>
             </Border>

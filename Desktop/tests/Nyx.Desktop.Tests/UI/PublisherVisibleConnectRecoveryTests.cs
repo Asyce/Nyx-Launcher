@@ -6,12 +6,13 @@ namespace Nyx.Desktop.Tests.UI;
 public sealed class PublisherVisibleConnectRecoveryTests
 {
     [Theory]
-    [InlineData("gi", "https://act.hoyolab.com/app/community-game-records-sea/index.html#/ys")]
-    [InlineData("hsr", "https://act.hoyolab.com/app/community-game-records-sea/rpg/index.html#/hsr")]
-    [InlineData("zzz", "https://act.hoyolab.com/app/zzz-game-record/index.html#/zzz")]
+    [InlineData("gi", "https://act.hoyolab.com/app/community-game-records-sea/index.html#/ys", "https://act.hoyolab.com/app/community-game-records-sea/index.html")]
+    [InlineData("hsr", "https://account.hoyolab.com/login-platform/index.html?app_id=c9oqaq3s3gu8", "https://account.hoyolab.com/login-platform/index.html?app_id=c9oqaq3s3gu8")]
+    [InlineData("zzz", "https://act.hoyolab.com/app/zzz-game-record/index.html#/zzz", "https://act.hoyolab.com/app/zzz-game-record/index.html")]
     public void Ordinary_HoYoLAB_add_and_connect_start_at_the_games_reviewed_login_page(
         string gameId,
-        string expected)
+        string expected,
+        string expectedDocument)
     {
         var entry = PublisherAccountCatalog.Get(gameId);
         var initialUri = PublisherVisibleConnectNavigationPolicy.GetInitialUri(entry);
@@ -26,7 +27,7 @@ public sealed class PublisherVisibleConnectRecoveryTests
             "HoYoLAB",
             PublisherSessionPurpose.Connect,
             gameId,
-            new Uri(initialUri.GetLeftPart(UriPartial.Path)),
+            new Uri(expectedDocument),
             "GET",
             PublisherWebResourceContext.Document));
     }

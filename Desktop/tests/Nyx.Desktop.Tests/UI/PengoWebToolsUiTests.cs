@@ -44,9 +44,12 @@ public sealed class PengoWebToolsUiTests
 
         Assert.Single(Regex.Matches(xaml, "x:Name=\"OfficialToolsButton\"").Cast<Match>());
         Assert.Single(Regex.Matches(xaml, "x:Name=\"OfficialToolsMenuFlyout\"").Cast<Match>());
-        Assert.Contains("Grid.Row=\"6\"", button, StringComparison.Ordinal);
+        Assert.Contains("Grid.Row=\"1\"", button, StringComparison.Ordinal);
+        Assert.Contains("Grid.Column=\"0\"", button, StringComparison.Ordinal);
         Assert.True(
             launch.IndexOf("x:Name=\"LaunchUtilityButtons\"", StringComparison.Ordinal)
+            < launch.IndexOf("x:Name=\"StableOpenUpdaterButton\"", StringComparison.Ordinal)
+            && launch.IndexOf("x:Name=\"StableOpenUpdaterButton\"", StringComparison.Ordinal)
             < launch.IndexOf("x:Name=\"OfficialToolsButton\"", StringComparison.Ordinal));
         Assert.Contains("HorizontalAlignment=\"Stretch\"", button, StringComparison.Ordinal);
         Assert.Contains("Height=\"28\"", button, StringComparison.Ordinal);

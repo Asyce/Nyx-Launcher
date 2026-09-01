@@ -4690,7 +4690,9 @@ public sealed class PublisherAccountHardeningTests
             "private void CloseBrowserOnce()",
             "private sealed class PendingResourceCapture"), StringComparison.Ordinal);
 
-        Assert.Contains("Click=\"CloseButton_Click\"", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Click=\"CloseButton_Click\"", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("private void CloseButton_Click", browser, StringComparison.Ordinal);
+        Assert.Contains("ExtendsContentIntoTitleBar = true;", browser, StringComparison.Ordinal);
         Assert.Contains("Click=\"DoneButton_Click\"", markup, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"RetryButton\"", markup, StringComparison.Ordinal);
         Assert.Contains("Click=\"RetryButton_Click\"", markup, StringComparison.Ordinal);

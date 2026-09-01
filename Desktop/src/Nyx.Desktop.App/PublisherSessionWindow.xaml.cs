@@ -3001,12 +3001,6 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         }
     }
 
-    private void CloseButton_Click(object sender, RoutedEventArgs e)
-    {
-        connectCompletion.TrySetResult(PublisherVisibleConnectCompletion.Canceled);
-        Close();
-    }
-
     private async void DoneButton_Click(object sender, RoutedEventArgs e) =>
         await TryCompleteVisibleConnectAsync(
             reportFailure: true,
