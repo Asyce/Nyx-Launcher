@@ -8,7 +8,7 @@ internal static class PublisherVisibleConnectNavigationPolicy
         new("https://act.hoyolab.com/app/community-game-records-sea/index.html#/ys");
 
     internal static Uri HoyoLabHsrLoginUri { get; } =
-        new("https://account.hoyolab.com/login-platform/index.html?app_id=c9oqaq3s3gu8");
+        new("https://account.hoyolab.com/login-platform/index.html?st=https%3A%2F%2Fact.hoyolab.com%2Fapp%2Fcommunity-game-records-sea%2Frpg%2Findex.html%3Fhyl_auth_required%3Dtrue%23%2Fhsr&token_type=6&client_type=4&app_id=c9oqaq3s3gu8&game_biz=hkrpg_global&lang=en-us&theme=dark-hoyolab&hide_logo=0&ux_mode=popup&iframe_level=1#/password-login");
 
     public static Uri GetInitialUri(PublisherAccountCatalogEntry entry)
     {
@@ -43,6 +43,14 @@ internal static class PublisherVisibleConnectNavigationPolicy
                 && string.Equals(
                     target.OriginalString,
                     HoyoLabGenshinLoginUri.AbsoluteUri,
+                    StringComparison.Ordinal)
+            || purpose == PublisherSessionPurpose.Connect
+                && provider == "HoYoLAB"
+                && gameId == "hsr"
+                && target.IsAbsoluteUri
+                && string.Equals(
+                    target.OriginalString,
+                    HoyoLabHsrLoginUri.AbsoluteUri,
                     StringComparison.Ordinal);
     }
 

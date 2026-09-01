@@ -7,7 +7,7 @@ public sealed class PublisherVisibleConnectRecoveryTests
 {
     [Theory]
     [InlineData("gi", "https://act.hoyolab.com/app/community-game-records-sea/index.html#/ys", "https://act.hoyolab.com/app/community-game-records-sea/index.html")]
-    [InlineData("hsr", "https://account.hoyolab.com/login-platform/index.html?app_id=c9oqaq3s3gu8", "https://account.hoyolab.com/login-platform/index.html?app_id=c9oqaq3s3gu8")]
+    [InlineData("hsr", "https://account.hoyolab.com/login-platform/index.html?st=https%3A%2F%2Fact.hoyolab.com%2Fapp%2Fcommunity-game-records-sea%2Frpg%2Findex.html%3Fhyl_auth_required%3Dtrue%23%2Fhsr&token_type=6&client_type=4&app_id=c9oqaq3s3gu8&game_biz=hkrpg_global&lang=en-us&theme=dark-hoyolab&hide_logo=0&ux_mode=popup&iframe_level=1#/password-login", "https://account.hoyolab.com/login-platform/index.html?st=https%3A%2F%2Fact.hoyolab.com%2Fapp%2Fcommunity-game-records-sea%2Frpg%2Findex.html%3Fhyl_auth_required%3Dtrue%23%2Fhsr&token_type=6&client_type=4&app_id=c9oqaq3s3gu8&game_biz=hkrpg_global&lang=en-us&theme=dark-hoyolab&hide_logo=0&ux_mode=popup&iframe_level=1")]
     [InlineData("zzz", "https://act.hoyolab.com/app/zzz-game-record/index.html#/zzz", "https://act.hoyolab.com/app/zzz-game-record/index.html")]
     public void Ordinary_HoYoLAB_add_and_connect_start_at_the_games_reviewed_login_page(
         string gameId,
