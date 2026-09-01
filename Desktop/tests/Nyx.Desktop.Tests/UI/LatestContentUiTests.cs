@@ -266,6 +266,10 @@ public sealed class BannerCycleUiTests
 
         Assert.Contains("\"gi\" => \"1. Turn on Achievements.", help, StringComparison.Ordinal);
         Assert.DoesNotContain("\"gi\" => \"1. Choose Game", help, StringComparison.Ordinal);
+        Assert.Contains(
+            "1. Connect HoYoLAB above.\\n2. Turn on Achievements.\\n3. Choose HoYoLAB as the source.",
+            help,
+            StringComparison.Ordinal);
         Assert.Contains("\"zzz\" => \"Achievement export is disabled.", help, StringComparison.Ordinal);
         Assert.Contains("\"wuwa\" => \"Achievement export is not ready.", help, StringComparison.Ordinal);
         Assert.Contains("\"ae\" => \"Achievement export is deliberately not being added", help, StringComparison.Ordinal);

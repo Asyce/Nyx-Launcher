@@ -474,6 +474,19 @@ public sealed class HoyoLabAchievementExportTests
             new Uri("https://sg-act-public-api.hoyolab.com/common/badge/v1/login/account"),
             "POST",
             PublisherWebResourceContext.Fetch));
+        Assert.True(PublisherAccountCatalog.IsAllowedWebResourceRequest(
+            "HoYoLAB",
+            PublisherSessionPurpose.Connect,
+            "hsr",
+            new Uri("https://sg-act-public-api.hoyolab.com/common/badge/v1/login/account"),
+            "POST",
+            PublisherWebResourceContext.Fetch));
+        Assert.True(AllowedConnectApi(
+            "https://api-account-os.hoyolab.com/binding/api/getUserGameRolesByLtoken?game_biz=hkrpg_global&region=prod_official_eur"));
+        Assert.True(AllowedConnectApi(
+            "https://sg-public-api.hoyolab.com/common/badge/v1/login/info?game_biz=hkrpg_global&lang=en-us&ts=1785700000000"));
+        Assert.True(AllowedConnectApi(
+            "https://sg-act-public-api.hoyolab.com/event/rpgcultivate/achievement/list?game_biz=hkrpg_global&badge_region=prod_official_eur&badge_uid=123456789&show_hide=false&need_all=true"));
         Assert.True(AllowedApi(
             "https://sg-public-api.hoyolab.com/common/badge/v1/login/info?game_biz=hkrpg_global&lang=en-us&ts=1785700000000"));
         Assert.True(AllowedApi(
@@ -552,6 +565,7 @@ public sealed class HoyoLabAchievementExportTests
     public void Unreviewed_hsr_api_shapes_are_denied(string raw)
     {
         Assert.False(AllowedApi(raw));
+        Assert.False(AllowedConnectApi(raw));
     }
 
     [Fact]
@@ -560,20 +574,27 @@ public sealed class HoyoLabAchievementExportTests
         var retired = new Uri(
             "https://api-account-os.hoyolab.com/binding/api/getUserGameRolesByCookieToken?game_biz=hkrpg_global&region=prod_official_eur");
 
-        Assert.False(PublisherAccountCatalog.IsAllowedWebResourceRequest(
-            "HoYoLAB",
+        foreach (var purpose in new[]
+        {
             PublisherSessionPurpose.Achievements,
-            "hsr",
-            retired,
-            "GET",
-            PublisherWebResourceContext.Fetch));
-        Assert.False(PublisherAccountCatalog.IsAllowedWebResourceRequest(
-            "HoYoLAB",
-            PublisherSessionPurpose.Achievements,
-            "hsr",
-            retired,
-            "OPTIONS",
-            PublisherWebResourceContext.Other));
+            PublisherSessionPurpose.Connect,
+        })
+        {
+            Assert.False(PublisherAccountCatalog.IsAllowedWebResourceRequest(
+                "HoYoLAB",
+                purpose,
+                "hsr",
+                retired,
+                "GET",
+                PublisherWebResourceContext.Fetch));
+            Assert.False(PublisherAccountCatalog.IsAllowedWebResourceRequest(
+                "HoYoLAB",
+                purpose,
+                "hsr",
+                retired,
+                "OPTIONS",
+                PublisherWebResourceContext.Other));
+        }
     }
 
     [Theory]
@@ -603,19 +624,42 @@ public sealed class HoyoLabAchievementExportTests
     [Fact]
     public void Achievement_session_denies_unreviewed_writes()
     {
-        Assert.False(PublisherAccountCatalog.IsAllowedWebResourceRequest(
-            "HoYoLAB",
+        foreach (var purpose in new[]
+        {
             PublisherSessionPurpose.Achievements,
-            "hsr",
-            new Uri("https://sg-act-public-api.hoyolab.com/common/badge/v1/login/account"),
-            "DELETE",
-            PublisherWebResourceContext.Fetch));
+            PublisherSessionPurpose.Connect,
+        })
+        {
+            Assert.False(PublisherAccountCatalog.IsAllowedWebResourceRequest(
+                "HoYoLAB",
+                purpose,
+                "hsr",
+                new Uri("https://sg-act-public-api.hoyolab.com/common/badge/v1/login/account"),
+                "DELETE",
+                PublisherWebResourceContext.Fetch));
+            Assert.False(PublisherAccountCatalog.IsAllowedWebResourceRequest(
+                "HoYoLAB",
+                purpose,
+                "hsr",
+                new Uri("https://sg-act-public-api.hoyolab.com/event/rpgcultivate/achievement/list?game_biz=hkrpg_global&badge_region=prod_official_eur&badge_uid=123456789&show_hide=false&need_all=true"),
+                "POST",
+                PublisherWebResourceContext.Fetch));
+        }
     }
 
     private static bool AllowedApi(string raw) =>
         PublisherAccountCatalog.IsAllowedWebResourceRequest(
             "HoYoLAB",
             PublisherSessionPurpose.Achievements,
+            "hsr",
+            new Uri(raw),
+            "GET",
+            PublisherWebResourceContext.Fetch);
+
+    private static bool AllowedConnectApi(string raw) =>
+        PublisherAccountCatalog.IsAllowedWebResourceRequest(
+            "HoYoLAB",
+            PublisherSessionPurpose.Connect,
             "hsr",
             new Uri(raw),
             "GET",

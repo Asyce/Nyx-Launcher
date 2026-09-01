@@ -223,7 +223,15 @@ public sealed class HoyoLabAccountSlotServiceTests
             "ProfileAccessAllowedAfterGate",
             "TryMigrateHsrBundleFromV1(operation)",
             "CanPublish(\"HoYoLAB\", operation)",
-            "hoyoGameBundle.TrySetCapabilityConsent(");
+            "hoyoGameBundle.TrySetCapabilityConsent(",
+            "resourceBinding = hoyoGameBundle.TryLoad()?.SelectedRole",
+            "TryLoadResourceSnapshot(",
+            "TryMirrorHsrResource(resourceBinding, resource, operation)",
+            "return CanPublish(\"HoYoLAB\", operation)");
+        Assert.Contains(
+            "enabled && capability == HoyoLabGameBundleRules.Resources",
+            setter,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -344,7 +352,10 @@ public sealed class HoyoLabAccountSlotServiceTests
         var setter = Slice(
             "public async Task<bool> SetHsrCapabilityConsentAsync",
             "public HoyoLabAccountIdentity? GetHoyoLabIdentity");
-        AssertLockedMutation(setter, "hoyoGameBundle.TrySetCapabilityConsent");
+        AssertLockedMutation(
+            setter,
+            "hoyoGameBundle.TrySetCapabilityConsent",
+            "if (!saved || !CanPublish(\"HoYoLAB\", operation)) return false");
 
         var migration = Slice(
             "private bool TryMigrateHsrBundleFromV1",
@@ -665,7 +676,10 @@ public sealed class HoyoLabAccountSlotServiceTests
         }
     }
 
-    private static void AssertLockedMutation(string value, string mutation)
+    private static void AssertLockedMutation(
+        string value,
+        string mutation,
+        string finalRecheck = "return saved && CanPublish(\"HoYoLAB\", operation)")
     {
         AssertOrdered(
             value,
@@ -673,7 +687,7 @@ public sealed class HoyoLabAccountSlotServiceTests
             "if (!CanPublish(\"HoYoLAB\", operation)) return false",
             mutation,
             "operation.Cancellation.Token",
-            "return saved && CanPublish(\"HoYoLAB\", operation)");
+            finalRecheck);
     }
 
     private static HoyoLabAccountSlot Slot(string label) => new(

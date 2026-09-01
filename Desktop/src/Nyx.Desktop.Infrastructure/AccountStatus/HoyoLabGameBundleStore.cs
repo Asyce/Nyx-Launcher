@@ -187,10 +187,10 @@ public sealed class HoyoLabGameBundleStore
             ],
             role.Binding,
             new(
-                Resources: resource is not null,
+                Resources: true,
                 Inventory: false,
                 Builds: false,
-                Achievements: false,
+                Achievements: true,
                 Exploration: false,
                 Endgame: false,
                 Events: false,

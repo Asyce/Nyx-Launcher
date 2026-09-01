@@ -4736,7 +4736,7 @@ public sealed partial class MainPage : Page
             "zzz" => "Achievement export is disabled. Nyx does not yet have a complete exact-role individual state, and the catalog still needs icon and ID-total reconciliation. Counts and showcases are not enough to build a safe export.",
             "wuwa" => "Achievement export is not ready. The candidate list, release boundary, and two required IDs remain unresolved, and Nyx has no complete account-state source.",
             "ae" => "Achievement export is deliberately not being added for Arknights: Endfield right now.",
-            _ when source == AchievementExportSources.HoyoLab => "1. Connect HoYoLAB above.\n2. Choose HoYoLAB as the source.\n3. Turn on Achievements.\n4. Nyx exports immediately; the game can stay closed.",
+            _ when source == AchievementExportSources.HoyoLab => "1. Connect HoYoLAB above.\n2. Turn on Achievements.\n3. Choose HoYoLAB as the source.\n4. Nyx exports immediately; the game can stay closed.",
             _ => "1. Choose Game as the source.\n2. Turn on Achievements.\n3. Launch the game through Nyx.\n4. Enter the game normally and follow the small capture window.",
         };
         await ShowExportHelpAsync("Achievement export", instructions);

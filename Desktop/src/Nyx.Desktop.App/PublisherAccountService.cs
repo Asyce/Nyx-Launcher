@@ -230,6 +230,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
                 return false;
             if (!CanUseHsrGameBundle(operation)) return false;
             _ = TryMigrateHsrBundleFromV1(operation);
+            PublisherRoleBinding? resourceBinding = null;
             lock (sync)
             {
                 if (!CanPublish("HoYoLAB", operation)) return false;
@@ -237,8 +238,17 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
                     capability,
                     enabled,
                     operation.Cancellation.Token);
-                return saved && CanPublish("HoYoLAB", operation);
+                if (!saved || !CanPublish("HoYoLAB", operation)) return false;
+                if (enabled && capability == HoyoLabGameBundleRules.Resources)
+                    resourceBinding = hoyoGameBundle.TryLoad()?.SelectedRole;
             }
+            if (resourceBinding is not null
+                && TryLoadResourceSnapshot(
+                    HoyoLabGameBundleRules.GameId,
+                    resourceBinding,
+                    operation) is { } resource)
+                _ = TryMirrorHsrResource(resourceBinding, resource, operation);
+            return CanPublish("HoYoLAB", operation);
         }
         finally
         {

@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Nyx.Desktop.Core.AccountStatus;
 using Nyx.Desktop.Infrastructure.AccountStatus;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace Nyx_Desktop_App;
 
@@ -63,6 +64,14 @@ public sealed partial class MainPage
             TextWrapping = TextWrapping.Wrap,
         };
         AutomationProperties.SetName(recoveryCode, "Private HoYo recovery code; keep it safe");
+        var copiedTip = new ToolTip { Content = Note("Copied!") };
+        var copiedTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1200) };
+        copiedTimer.Tick += (_, _) =>
+        {
+            copiedTimer.Stop();
+            copiedTip.IsOpen = false;
+            ToolTipService.SetToolTip(recoveryCode, null);
+        };
         var optIn = new CheckBox
         {
             Content = Note("I want to save an encrypted Star Rail copy on Pengo. Sync only when I ask."),
@@ -291,6 +300,28 @@ public sealed partial class MainPage
 
         generate.Click += (_, _) => { recoveryCode.Text = HoyoLabSyncCoordinator.GenerateRecoveryCode(); };
         recoveryCode.TextChanged += (_, _) => Render();
+        recoveryCode.Tapped += (_, _) =>
+        {
+            var code = recoveryCode.Text.Trim();
+            if (string.IsNullOrWhiteSpace(code)) return;
+            try
+            {
+                var package = new DataPackage();
+                package.SetText(code);
+                Clipboard.SetContent(package);
+                copiedTimer.Stop();
+                ToolTipService.SetToolTip(recoveryCode, copiedTip);
+                copiedTip.IsOpen = true;
+                copiedTimer.Start();
+            }
+            catch (Exception)
+            {
+                copiedTimer.Stop();
+                copiedTip.IsOpen = false;
+                ToolTipService.SetToolTip(recoveryCode, null);
+                message.Text = "Could not copy. Select the code and press Ctrl+C.";
+            }
+        };
         optIn.Checked += (_, _) => Render();
         optIn.Unchecked += (_, _) => Render();
         connect.Click += async (_, _) =>
@@ -364,6 +395,9 @@ public sealed partial class MainPage
         {
             open = false;
             cancellation.Cancel();
+            copiedTimer.Stop();
+            copiedTip.IsOpen = false;
+            ToolTipService.SetToolTip(recoveryCode, null);
             recoveryCode.Text = string.Empty;
             roles.Items.Clear();
             bundle = null;
@@ -380,6 +414,9 @@ public sealed partial class MainPage
         {
             open = false;
             cancellation.Cancel();
+            copiedTimer.Stop();
+            copiedTip.IsOpen = false;
+            ToolTipService.SetToolTip(recoveryCode, null);
             recoveryCode.Text = string.Empty;
             roles.Items.Clear();
             bundle = null;

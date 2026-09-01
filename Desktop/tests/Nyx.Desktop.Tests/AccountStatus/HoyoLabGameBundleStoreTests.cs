@@ -340,6 +340,7 @@ public sealed class HoyoLabGameBundleStoreTests
         Assert.Equal(role, migrated.Roles[0].Role);
         Assert.Equal(role.Binding, migrated.SelectedRole);
         Assert.True(migrated.Consents.Resources);
+        Assert.True(migrated.Consents.Achievements);
         Assert.Equal(resource with { IsStale = true }, migrated.Roles[0].Resource);
         Assert.Empty(TemporaryFiles(root.Path));
     }

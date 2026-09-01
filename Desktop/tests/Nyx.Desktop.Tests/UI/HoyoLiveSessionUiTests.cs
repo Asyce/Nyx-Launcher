@@ -1318,9 +1318,22 @@ public sealed class HoyoLiveSessionUiTests
             "consentWhenOpened != HasPublisherConsent", "if (!accountChanged) return",
             "DispatcherQueue.TryEnqueue", "InvalidateContext()");
         AssertOrdered(page, "dialog.Closed +=", "open = false", "cancellation.Cancel()",
-            "recoveryCode.Text = string.Empty", "roles.Items.Clear()", "bundle = null", "ClearConfirmation()");
+            "copiedTimer.Stop()", "copiedTip.IsOpen = false", "recoveryCode.Text = string.Empty",
+            "roles.Items.Clear()", "bundle = null", "ClearConfirmation()");
         Assert.Contains("new Uri(\"https://pengo.gg/nyx/my-hoyo\")", page, StringComparison.Ordinal);
-        Assert.DoesNotContain("Clipboard", page, StringComparison.Ordinal);
+        var copy = Slice(page, "recoveryCode.Tapped +=", "optIn.Checked +=");
+        AssertOrdered(copy, "var code = recoveryCode.Text.Trim()", "if (string.IsNullOrWhiteSpace(code)) return",
+            "package.SetText(code)", "Clipboard.SetContent(package)",
+            "ToolTipService.SetToolTip(recoveryCode, copiedTip)", "copiedTip.IsOpen = true",
+            "copiedTimer.Start()");
+        Assert.Contains("Content = Note(\"Copied!\")", page, StringComparison.Ordinal);
+        Assert.Contains("ToolTipService.SetToolTip(recoveryCode, null)", page, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "var copiedTip = new ToolTip { Content = Note(\"Copied!\") };\n        ToolTipService.SetToolTip(recoveryCode, copiedTip);",
+            page,
+            StringComparison.Ordinal);
+        Assert.Contains("Could not copy. Select the code and press Ctrl+C.", copy, StringComparison.Ordinal);
+        Assert.DoesNotContain("Clipboard.Get", page, StringComparison.Ordinal);
         Assert.DoesNotContain("WriteAll", page, StringComparison.Ordinal);
         Assert.Contains("new ScrollViewer", page, StringComparison.Ordinal);
         Assert.Contains("var content = new StackPanel { Spacing = 10 };", page, StringComparison.Ordinal);

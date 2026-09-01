@@ -2154,8 +2154,11 @@ public static class PublisherAccountCatalog
             && IsNoRequestBody(requestBody)
             && IsExactResourceRoleDiscoveryRequest(gameId, uri, method))
             return true;
+        // Visible achievement sign-in is a Connect session, but the official
+        // page still needs the same exact badge and read-only export APIs.
         if (gameId == "hsr"
-            && purpose == PublisherSessionPurpose.Achievements
+            && (purpose is PublisherSessionPurpose.Connect
+                or PublisherSessionPurpose.Achievements)
             && IsExactHsrAchievementApiRequest(uri, method))
             return true;
         if (gameId == "hsr"
