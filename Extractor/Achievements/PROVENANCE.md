@@ -78,7 +78,7 @@ by tests:
 | Catalog | IDs | LF-normalized raw SHA-256 |
 | --- | ---: | --- |
 | GI | 1,844 | `34b5f76579e435249e456ff4eba6a767f8562275f24270ee6111d0f46bfd268e` |
-| HSR | 1,869 | `1686a1deb2a03e758e1047684acc9e760d5c793b2e2717bb4d1bc9eeb7c60502` |
+| HSR | 1,921 | `827c248889146ef686dcca52e445615a2c9db9b025c4bddfc739b44498662149` |
 
 The build accepts only the repository's exact reviewed JSON bytes after the
 single Windows-safe conversion from CRLF to LF. A bare carriage return,

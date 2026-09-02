@@ -337,7 +337,7 @@ mod tests {
     #[test]
     fn embedded_catalog_counts_are_pinned() {
         assert_eq!(GI_IDS.len(), 1844);
-        assert_eq!(HSR_IDS.len(), 1869);
+        assert_eq!(HSR_IDS.len(), 1921);
         assert!(GI_IDS.windows(2).all(|pair| pair[0] < pair[1]));
         assert!(HSR_IDS.windows(2).all(|pair| pair[0] < pair[1]));
         let contracts = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../contracts");
@@ -360,7 +360,7 @@ mod tests {
         );
         assert_eq!(
             format!("{:x}", Sha256::digest(&hsr)),
-            "1686a1deb2a03e758e1047684acc9e760d5c793b2e2717bb4d1bc9eeb7c60502"
+            "827c248889146ef686dcca52e445615a2c9db9b025c4bddfc739b44498662149"
         );
         let gi_value: serde_json::Value = serde_json::from_slice(&gi).unwrap();
         let hsr_value: serde_json::Value = serde_json::from_slice(&hsr).unwrap();
@@ -389,6 +389,24 @@ mod tests {
             )
             .unwrap(),
             vec![81700]
+        );
+    }
+
+    #[test]
+    fn hsr_4_5_completed_id_is_accepted() {
+        assert!(HSR_IDS.contains(&4035501));
+        assert_eq!(
+            validate_complete_snapshot(
+                Game::Hsr,
+                &[AchievementRecord {
+                    id: 4035501,
+                    status: 2,
+                }],
+                HSR_IDS,
+                GI_IDS,
+            )
+            .unwrap(),
+            vec![4035501]
         );
     }
 }

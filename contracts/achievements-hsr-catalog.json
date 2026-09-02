@@ -1,21 +1,21 @@
 {
   "schemaVersion": 1,
   "game": "hsr",
-  "catalogVersion": "4.4",
-  "releasedVersion": "4.4",
-  "generatedAt": "2026-07-27T04:06:34.043Z",
-  "dataTimestamp": "2026-07-21T19:00:05.000Z",
+  "catalogVersion": "4.5",
+  "releasedVersion": "4.5",
+  "generatedAt": "2026-09-02T00:41:42.996Z",
+  "dataTimestamp": "2026-08-26T19:32:44.000Z",
   "source": {
     "name": "starrail-data achievement data",
     "repository": "https://github.com/theBowja/starrail-data",
-    "dataUrl": "https://raw.githubusercontent.com/theBowja/starrail-data/a19b55763591fc35a72179dfd204f33fc4ac8964/data/EN/achievements.json",
+    "dataUrl": "https://raw.githubusercontent.com/theBowja/starrail-data/5647046915735e1b93c675bb7430bbdea421b9d8/data/EN/achievements.json",
     "license": "MIT",
     "licenseUrl": "https://github.com/theBowja/starrail-data/blob/main/LICENSE",
-    "commit": "a19b55763591fc35a72179dfd204f33fc4ac8964"
+    "commit": "5647046915735e1b93c675bb7430bbdea421b9d8"
   },
   "categoryCount": 9,
-  "achievementCount": 1869,
-  "count": 1869,
+  "achievementCount": 1921,
+  "count": 1921,
   "categories": [
     {
       "id": "hsr-1",
@@ -2353,6 +2353,96 @@
       "rarity": "Mid",
       "version": "4.4",
       "sortOrder": 8278
+    },
+    {
+      "id": "4035501",
+      "categoryId": "hsr-3",
+      "name": "Richest Person in Astropolis",
+      "description": "Start with a modest goal ※ A person in extreme rage can spend 8.8 billion credits in a single day",
+      "reward": 10,
+      "rarity": "Mid",
+      "version": "4.5",
+      "sortOrder": 8259
+    },
+    {
+      "id": "4035502",
+      "categoryId": "hsr-3",
+      "name": "The Backrooms",
+      "description": "If you accidentally cut out of reality in the wrong place... ※ Fall into the footage review room, a room you can't leave until you've finished editing every last clip",
+      "reward": 10,
+      "rarity": "Mid",
+      "version": "4.5",
+      "sortOrder": 8258
+    },
+    {
+      "id": "4035503",
+      "categoryId": "hsr-3",
+      "name": "1 vs. 2 Billion",
+      "description": "The ultimate last-ditch comeback! ※ Robin has accepted the challenge, and her opponents will be Ratite's 20 billion fans",
+      "reward": 10,
+      "rarity": "Mid",
+      "version": "4.5",
+      "sortOrder": 8257
+    },
+    {
+      "id": "4035504",
+      "categoryId": "hsr-3",
+      "name": "The Long Vacation",
+      "description": "Either everybody wins, or nobody does ※ You won the challenge and somehow bought an astronomically priced insurance policy for the Astral Express",
+      "reward": 10,
+      "rarity": "Mid",
+      "version": "4.5",
+      "sortOrder": 8256
+    },
+    {
+      "id": "4035505",
+      "categoryId": "hsr-3",
+      "name": "Leap Across a Thousand Stars",
+      "description": "Astral Express, all aboard! ※ Warp to Astropolis",
+      "reward": 10,
+      "rarity": "Mid",
+      "version": "4.5",
+      "sortOrder": 8255
+    },
+    {
+      "id": "4035506",
+      "categoryId": "hsr-3",
+      "name": "A Brand New Start!",
+      "description": "No matter where you go, never stop chasing that top headline! ※ Establish a branch of Furbobo Weekly in Astropolis",
+      "reward": 10,
+      "rarity": "Mid",
+      "version": "4.5",
+      "sortOrder": 8254
+    },
+    {
+      "id": "4035507",
+      "categoryId": "hsr-3",
+      "name": "Trailblazer Doesn't Roll the Dice",
+      "description": "You should all be grateful the acting navigator doesn't roll dice ※ Show everyone Asat Pramad's Die, then mercifully put it away",
+      "reward": 10,
+      "rarity": "Mid",
+      "version": "4.5",
+      "sortOrder": 8253
+    },
+    {
+      "id": "4035508",
+      "categoryId": "hsr-3",
+      "name": "Second Encanvas",
+      "description": "Amber eyes cast down, the world in canvas reborn ※ After a millennium, Planarcadia is sealed away once more",
+      "reward": 10,
+      "rarity": "Mid",
+      "version": "4.5",
+      "sortOrder": 8252
+    },
+    {
+      "id": "4035509",
+      "categoryId": "hsr-3",
+      "name": "Aha! Aha?",
+      "description": "Just who exactly ARE you!? ※ I was hoping to blend in as a normal person... but fine, I'll come clean",
+      "reward": 10,
+      "rarity": "Mid",
+      "version": "4.5",
+      "sortOrder": 8251
     },
     {
       "id": "4040201",
@@ -5863,6 +5953,216 @@
       "rarity": "Low",
       "version": "4.4",
       "sortOrder": 6440
+    },
+    {
+      "id": "4045501",
+      "categoryId": "hsr-4",
+      "name": "Stellarian and the City of a Thousand Stars",
+      "description": "Open Astropolis treasures #1 times",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6395
+    },
+    {
+      "id": "4045502",
+      "categoryId": "hsr-4",
+      "name": "Footprints in Amber",
+      "description": "You witnessed the footprints of yourself, now treasured and preserved within the spacetime continuum.",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6394
+    },
+    {
+      "id": "4045503",
+      "categoryId": "hsr-4",
+      "name": "You Gotta Help Yourself Cook",
+      "description": "You entered the imagenesis book replicated by Mr. Arita and retrieved the hidden pages.",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6393
+    },
+    {
+      "id": "4045504",
+      "categoryId": "hsr-4",
+      "name": "Sunny Days, Sunny Songs",
+      "description": "Complete the \"Jump Time\" at Astropolis",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6392
+    },
+    {
+      "id": "4045505",
+      "categoryId": "hsr-4",
+      "name": "Rhythm Heaven and Dungeon",
+      "description": "Collect all Music Notes during \"Jump Time\" at Astropolis",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6391
+    },
+    {
+      "id": "4045506",
+      "categoryId": "hsr-4",
+      "name": "Arcadia Variation: Cloud Factory",
+      "description": "Play a Bizarre Melody to find the mysterious creature hiding in the Astropolis Central District",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6390
+    },
+    {
+      "id": "4045507",
+      "categoryId": "hsr-4",
+      "name": "Arcadia Variation: The Fox and the Grapes",
+      "description": "Play a Bizarre Melody to find the mysterious creature hiding in the Lodestar Tower",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6389
+    },
+    {
+      "id": "4045508",
+      "categoryId": "hsr-4",
+      "name": "Sunny Rogue, Reverse a Thousand Stars",
+      "description": "Collect #1 Golden Wispae in Planarcadia and Astropolis combined",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6388
+    },
+    {
+      "id": "4045509",
+      "categoryId": "hsr-4",
+      "name": "You... You Let It Go?",
+      "description": "Kick a beach volleyball into the ocean and you can never retrieve it again",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6387
+    },
+    {
+      "id": "4045510",
+      "categoryId": "hsr-4",
+      "name": "Boarding Action",
+      "description": "Hit #1 or more Sprint Balls consecutively in \"Interplanar Jump!\"",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6386
+    },
+    {
+      "id": "4045511",
+      "categoryId": "hsr-4",
+      "name": "Rocket Fist",
+      "description": "Use the leveled-up Sprint ability to knock away monsters in \"Interplanar Jump!\"",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6385
+    },
+    {
+      "id": "4045512",
+      "categoryId": "hsr-4",
+      "name": "Star Cleaner",
+      "description": "Use the Sprint ability to smash fragile modules in \"Interplanar Jump!\"",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6384
+    },
+    {
+      "id": "4045513",
+      "categoryId": "hsr-4",
+      "name": "On This Arduous Journey, Straight to the Grind",
+      "description": "Take the shuttle ride for the first time from Astropolis to Lodestar Tower",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6383
+    },
+    {
+      "id": "4045514",
+      "categoryId": "hsr-4",
+      "name": "Cut In",
+      "description": "Access the mysterious backrooms through the secret passage at the ring-shaped workstation",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6382
+    },
+    {
+      "id": "4045515",
+      "categoryId": "hsr-4",
+      "name": "Settle Down",
+      "description": "Witness a trapped soul's end in the backrooms",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6381
+    },
+    {
+      "id": "4045516",
+      "categoryId": "hsr-4",
+      "name": "Bouncy Me",
+      "description": "In \"Interplanar Jump!\", bounce back and forth between two Sprint Balls for #1 second(s) and above",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6380
+    },
+    {
+      "id": "4045517",
+      "categoryId": "hsr-4",
+      "name": "Space Military Cadet",
+      "description": "In \"Interplanar Jump!\", use Sprint to knock back #1 or more Hedgehogs and Floatspirits, while not landing during the process",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6379
+    },
+    {
+      "id": "4045518",
+      "categoryId": "hsr-4",
+      "name": "███ple Run Without the Running",
+      "description": "Complete the Sprint Training in \"Interplanar Jump!\" without using Interact and hold to Sprint",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6378
+    },
+    {
+      "id": "4045519",
+      "categoryId": "hsr-4",
+      "name": "Sanabi",
+      "description": "In \"Interplanar Jump!\", use the Sprint ability to Interrupt a Sprint Ball's sprint and return to the original Sprint Ball",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6377
+    },
+    {
+      "id": "4045520",
+      "categoryId": "hsr-4",
+      "name": "The Shadow Out of Time",
+      "description": "Take first place in the Shadow Sprint of \"Interplanar Jump!\" in Astropolis",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6376
+    },
+    {
+      "id": "4045521",
+      "categoryId": "hsr-4",
+      "name": "Flight Champion",
+      "description": "Complete the \"Astropolis Aerobatics Grand Prix\" in \"Interplanar Jump!\"",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6375
     },
     {
       "id": "4051001",
@@ -12915,6 +13215,176 @@
       "sortOrder": 2762
     },
     {
+      "id": "4055501",
+      "categoryId": "hsr-5",
+      "name": "You and I, We Like Durians",
+      "description": "Witness an \"unconventional\" beachside sales livestream on the shores of Astropolis",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2727
+    },
+    {
+      "id": "4055502",
+      "categoryId": "hsr-5",
+      "name": "Old Friends Await",
+      "description": "Reunite with four old friends in Astropolis ※ Velite, Mingxi, Tamila, Popott... Do you still remember them?",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2726
+    },
+    {
+      "id": "4055503",
+      "categoryId": "hsr-5",
+      "name": "Well, Well-Known",
+      "description": "Chat with Owlbert and Carmella",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2725
+    },
+    {
+      "id": "4055504",
+      "categoryId": "hsr-5",
+      "name": "Get Famous ASAP",
+      "description": "If you had the chance to become a superstar, how much would you be willing to sacrifice? ※ Witness the birth of a rising screen talent",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2724
+    },
+    {
+      "id": "4055505",
+      "categoryId": "hsr-5",
+      "name": "The World of the Living Dead",
+      "description": "Work, die, then work some more ※ Witness the love-hate saga between Skott and an old friend",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2723
+    },
+    {
+      "id": "4055506",
+      "categoryId": "hsr-5",
+      "name": "Just a Detective",
+      "description": "Clay may shape the idol, yet falsehood forges justice ※ Unravel the mystery behind Bob XV's disappearance",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2722
+    },
+    {
+      "id": "4055507",
+      "categoryId": "hsr-5",
+      "name": "To the Beautiful Days That Keep Coming Back Around",
+      "description": "Let the ghost and detective's story unfold naturally",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2721
+    },
+    {
+      "id": "4055508",
+      "categoryId": "hsr-5",
+      "name": "So Much Love to Give",
+      "description": "Nominate King Heartthrob as the next Tousled Detective",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2720
+    },
+    {
+      "id": "4055509",
+      "categoryId": "hsr-5",
+      "name": "The Cosmic River Rolls Ever East",
+      "description": "Take revenge on the traitor ghosts and split their world into three ways",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2719
+    },
+    {
+      "id": "4055510",
+      "categoryId": "hsr-5",
+      "name": "Legend of the Sandcondor Heroes",
+      "description": "Smash any sandcastle",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2718
+    },
+    {
+      "id": "4055511",
+      "categoryId": "hsr-5",
+      "name": "The Presentation of Self in Everyday Life",
+      "description": "Read any \"Character Name Card\"",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2717
+    },
+    {
+      "id": "4055512",
+      "categoryId": "hsr-5",
+      "name": "Actually Exists",
+      "description": "See? Owlbert never bluffs! Haha, ha... Anyway, the tour's over and done with, so... can I have my money back now? ...No refund system?",
+      "reward": 10,
+      "rarity": "Mid",
+      "version": "4.5",
+      "sortOrder": 2716
+    },
+    {
+      "id": "4055513",
+      "categoryId": "hsr-5",
+      "name": "So They Do Buy Souvenirs",
+      "description": "Acquire any Astropolis specialty souvenir",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2715
+    },
+    {
+      "id": "4055514",
+      "categoryId": "hsr-5",
+      "name": "Cosmic Cup: Whirlwind Rush",
+      "description": "Win the Cosmic Cup championship in \"Overdrive: Whirlwind Grand Prix\"",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2714
+    },
+    {
+      "id": "4055515",
+      "categoryId": "hsr-5",
+      "name": "Four Tires and a Jack",
+      "description": "Conduct R&D action #1 time(s) in \"Overdrive: Whirlwind Grand Prix\"",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2713
+    },
+    {
+      "id": "4055516",
+      "categoryId": "hsr-5",
+      "name": "Car Crash Simulator",
+      "description": "Knock away a total of #1 opponent vehicles in \"Overdrive: Whirlwind Grand Prix\"",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2712
+    },
+    {
+      "id": "4055517",
+      "categoryId": "hsr-5",
+      "name": "Astropolis God of Speed",
+      "description": "Break the track record in any Lap Time Challenge in \"Overdrive: Whirlwind Grand Prix\"",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 2711
+    },
+    {
       "id": "4060101",
       "categoryId": "hsr-6",
       "name": "Shadows Die Ad Infinitum (I)",
@@ -16323,6 +16793,56 @@
       "rarity": "Low",
       "version": "4.4",
       "sortOrder": 6440
+    },
+    {
+      "id": "4075501",
+      "categoryId": "hsr-7",
+      "name": "You Shouldn't Have!",
+      "description": "In combat against the \"Lighthouse,\" dispel its \"Smite Evil\" state via attacks",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6433
+    },
+    {
+      "id": "4075502",
+      "categoryId": "hsr-7",
+      "name": "POV: Bro Won't Sing at Karaoke",
+      "description": "In a single combat, use ally character Robin • Summeretto's Summer Songbirds to deal the final hit to \"Harmonious Choir\" The Great Septimus",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6432
+    },
+    {
+      "id": "4075503",
+      "categoryId": "hsr-7",
+      "name": "THIS IS IT",
+      "description": "In a single combat, Robin • Summeretto's Vibes reach the maximum limit",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6431
+    },
+    {
+      "id": "4075504",
+      "categoryId": "hsr-7",
+      "name": "An Invincible Summer",
+      "description": "In a single combat, Aventurine • Waveflair uses \"All In! To Summer's Blaze\" while Fervor is at max",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6430
+    },
+    {
+      "id": "4075505",
+      "categoryId": "hsr-7",
+      "name": "POV: Meeting Your Rival at a Party but You Choose Peace",
+      "description": "In a single combat, Aventurine • Waveflair uses \"Cheers! To Summer's Blaze\" or \"All In! To Summer's Blaze\" to deal the final hit to \"Dreamjolt Troupe's Bubble Hound\"",
+      "reward": 5,
+      "rarity": "Low",
+      "version": "4.5",
+      "sortOrder": 6429
     },
     {
       "id": "4080101",

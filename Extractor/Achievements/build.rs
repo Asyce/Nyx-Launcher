@@ -150,8 +150,8 @@ fn main() {
     let (hsr_version, hsr_ids) = catalog_data(
         &hsr_path,
         "hsr",
-        "1686a1deb2a03e758e1047684acc9e760d5c793b2e2717bb4d1bc9eeb7c60502",
-        1869,
+        "827c248889146ef686dcca52e445615a2c9db9b025c4bddfc739b44498662149",
+        1921,
     );
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR missing"));
     let source = generated_source(&gi_version, &gi_ids, &hsr_version, &hsr_ids);

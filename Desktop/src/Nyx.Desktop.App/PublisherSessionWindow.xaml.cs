@@ -14,6 +14,7 @@ namespace Nyx_Desktop_App;
 public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
 {
     private const int ResourceCaptureTimeoutSeconds = 12;
+    private const string HsrAchievementRequestTokenHeader = "X-Nyx-Achievement-Request";
     private static readonly Uri WebView2DownloadUri =
         new("https://developer.microsoft.com/en-us/microsoft-edge/webview2/consumer/");
     private static readonly TimeSpan BrowserProcessExitTimeout = TimeSpan.FromSeconds(5);
@@ -30,6 +31,7 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly CancellationTokenSource lifetime = new();
     private readonly object browserProcessExitHandlerGate = new();
+    private readonly object hsrAchievementListGate = new();
     private Uri? approvedTopLevelUri;
     private Uri? visibleConnectUri;
     private SessionProbeCapture? pendingSessionProbe;
@@ -50,7 +52,9 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
     private int browserCloseStarted;
     private int browserProcessExitBarrierArmed;
     private int visibleConnectOperationInFlight;
-    private int hsrAchievementListNetworkState;
+    private HsrAchievementListNetworkState hsrAchievementListNetworkState;
+    private string? hsrAchievementListRequestToken;
+    private string? hsrAchievementListRequestUri;
     private bool webView2RuntimeUnavailable;
     private bool windowClosed;
     private bool disposed;
@@ -356,6 +360,8 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         Uri uri,
         CancellationToken cancellationToken)
     {
+        if (IsVisibleHsrAchievementConnect)
+            ResetHsrAchievementListRequest();
         var presentation = await PublisherVisibleConnectFlow.AttemptPageAsync(
             operationCancellation => NavigateWithOutcomeAsync(uri, operationCancellation),
             cancellationToken);
@@ -385,16 +391,31 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
                         == PublisherSessionProof.Authenticated
                     : provider == "SKPORT"
                         && (endfieldIdentity = await TryReadEndfieldRegionAsync(lifetime.Token)) is not null;
-                if (baselineEstablished && !wasAuthenticated && authenticated)
+                var isAchievementConnect = IsVisibleHsrAchievementConnect;
+                var achievementPageReady = isAchievementConnect
+                    && GetHsrAchievementListNetworkState()
+                        == HsrAchievementListNetworkState.ResponseAccepted;
+                var shouldAutoComplete = PublisherVisibleConnectFlow.ShouldAutoComplete(
+                    isAchievementConnect,
+                    baselineEstablished,
+                    wasAuthenticated,
+                    authenticated,
+                    achievementPageReady);
+                if (shouldAutoComplete)
                 {
-                    await TryCompleteVisibleConnectAsync(
+                    if (await TryCompleteVisibleConnectAsync(
                         reportFailure: false,
                         endfieldIdentity: endfieldIdentity,
-                        cancellationToken: lifetime.Token);
-                    return;
+                        cancellationToken: lifetime.Token))
+                    {
+                        return;
+                    }
+                }
+                else
+                {
+                    wasAuthenticated = authenticated;
                 }
 
-                wasAuthenticated = authenticated;
                 baselineEstablished = true;
                 await Task.Delay(TimeSpan.FromSeconds(1), lifetime.Token);
             }
@@ -407,6 +428,12 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
             // Done remains available when automatic detection cannot complete.
         }
     }
+
+    private bool IsVisibleHsrAchievementConnect =>
+        purpose == PublisherSessionPurpose.Connect
+        && string.Equals(authorizedGameId, "hsr", StringComparison.Ordinal)
+        && visibleConnectUri is not null
+        && PublisherAccountCatalog.IsExactAchievementPageUri("hsr", visibleConnectUri);
 
     public Task<PublisherVisibleConnectCompletion> WaitForConnectCompletionAsync(
         CancellationToken cancellationToken) =>
@@ -619,8 +646,7 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
                         when (exception.Code == "hoyolab-list-request-failed")
                     {
                         throw new ExportProviderException(
-                            (HsrAchievementListNetworkState)Volatile.Read(
-                                ref hsrAchievementListNetworkState) switch
+                            GetHsrAchievementListNetworkState() switch
                             {
                                 HsrAchievementListNetworkState.None =>
                                     "hoyolab-list-client-no-request",
@@ -2258,18 +2284,33 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         }
 
         var authorized = isOfficialPublisherRequest || TryAuthorizeWebResourceRequest(args);
-        if (purpose == PublisherSessionPurpose.Achievements
-            && Uri.TryCreate(args.Request.Uri, UriKind.Absolute, out var requestUri)
-            && IsHsrAchievementListCandidate(requestUri))
+        var requestUri = Uri.TryCreate(
+                args.Request.Uri,
+                UriKind.Absolute,
+                out var parsedRequestUri)
+            && IsHsrAchievementListCandidate(parsedRequestUri)
+                ? parsedRequestUri
+                : null;
+        var observesHsrAchievementList = purpose == PublisherSessionPurpose.Achievements
+            || IsVisibleHsrAchievementConnect;
+        if (observesHsrAchievementList && requestUri is not null)
         {
-            var next = authorized
+            ResetHsrAchievementListRequest();
+            var exactListRequest = purpose == PublisherSessionPurpose.Achievements
+                ? TryAuthorizeWebResourceRequest(args)
+                : PublisherAccountCatalog.IsExactHsrAchievementPageListRequest(
+                    requestUri,
+                    args.Request.Method);
+            var next = exactListRequest
                 ? string.Equals(args.Request.Method, "GET", StringComparison.Ordinal)
                     ? HsrAchievementListNetworkState.RequestAllowed
                     : HsrAchievementListNetworkState.PreflightAllowed
-                : ClassifyBlockedHsrAchievementListRequest(
-                    requestUri,
-                    args.Request.Method);
-            Interlocked.Exchange(ref hsrAchievementListNetworkState, (int)next);
+                : ClassifyBlockedHsrAchievementListRequest(requestUri, args.Request.Method);
+            if (exactListRequest
+                && string.Equals(args.Request.Method, "GET", StringComparison.Ordinal))
+                TryRecordHsrAchievementListRequest(args.Request, requestUri);
+            else
+                SetHsrAchievementListNetworkState(next);
         }
         if (!authorized)
             TryBlockWebResourceRequest(sender, args);
@@ -2411,18 +2452,23 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
         CoreWebView2 sender,
         CoreWebView2WebResourceResponseReceivedEventArgs args)
     {
-        if (purpose == PublisherSessionPurpose.Achievements
+        if ((purpose == PublisherSessionPurpose.Achievements
+                || IsVisibleHsrAchievementConnect)
             && string.Equals(args.Request.Method, "GET", StringComparison.Ordinal)
             && Uri.TryCreate(args.Request.Uri, UriKind.Absolute, out var listUri)
             && IsHsrAchievementListCandidate(listUri))
         {
-            var responseState = args.Response.StatusCode == 200
-                && HasJsonContentType(args.Response.Headers.GetHeader("Content-Type"))
-                ? HsrAchievementListNetworkState.ResponseAccepted
-                : HsrAchievementListNetworkState.ResponseFailed;
-            Interlocked.Exchange(
-                ref hsrAchievementListNetworkState,
-                (int)responseState);
+            if (TryGetCurrentHsrAchievementListRequest(
+                args.Request,
+                listUri,
+                out var requestToken,
+                out var acceptedUri))
+            {
+                _ = CompleteHsrAchievementListResponseAsync(
+                    args,
+                    requestToken,
+                    acceptedUri);
+            }
         }
 
         var sessionProbe = Volatile.Read(ref pendingSessionProbe);
@@ -2503,6 +2549,147 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
             return;
 
         _ = CompleteResourceCaptureAsync(args, capture, binding);
+    }
+
+    private HsrAchievementListNetworkState GetHsrAchievementListNetworkState()
+    {
+        lock (hsrAchievementListGate)
+            return hsrAchievementListNetworkState;
+    }
+
+    private void SetHsrAchievementListNetworkState(HsrAchievementListNetworkState state)
+    {
+        lock (hsrAchievementListGate)
+        {
+            hsrAchievementListRequestToken = null;
+            hsrAchievementListRequestUri = null;
+            hsrAchievementListNetworkState = state;
+        }
+    }
+
+    private bool TryRecordHsrAchievementListRequest(
+        CoreWebView2WebResourceRequest request,
+        Uri uri)
+    {
+        var token = Guid.NewGuid().ToString("N");
+        try
+        {
+            request.Headers.SetHeader(HsrAchievementRequestTokenHeader, token);
+        }
+        catch
+        {
+            return false;
+        }
+
+        lock (hsrAchievementListGate)
+        {
+            hsrAchievementListRequestToken = token;
+            hsrAchievementListRequestUri = PublisherAccountCatalog.NormalizeTopLevelUri(uri);
+            hsrAchievementListNetworkState = HsrAchievementListNetworkState.RequestAllowed;
+        }
+        return true;
+    }
+
+    private void ResetHsrAchievementListRequest()
+    {
+        SetHsrAchievementListNetworkState(HsrAchievementListNetworkState.None);
+    }
+
+    private bool TryGetCurrentHsrAchievementListRequest(
+        CoreWebView2WebResourceRequest request,
+        Uri uri,
+        out string requestToken,
+        out string requestUri)
+    {
+        requestToken = string.Empty;
+        requestUri = PublisherAccountCatalog.NormalizeTopLevelUri(uri);
+        try
+        {
+            requestToken = request.Headers.GetHeader(HsrAchievementRequestTokenHeader);
+        }
+        catch
+        {
+            return false;
+        }
+
+        lock (hsrAchievementListGate)
+            return PublisherVisibleConnectFlow.IsCurrentHsrAchievementRequest(
+                hsrAchievementListRequestToken,
+                hsrAchievementListRequestUri,
+                requestToken,
+                requestUri);
+    }
+
+    private void PublishHsrAchievementListResponse(
+        string requestToken,
+        string requestUri,
+        HsrAchievementListNetworkState state)
+    {
+        lock (hsrAchievementListGate)
+        {
+            if (PublisherVisibleConnectFlow.IsCurrentHsrAchievementRequest(
+                hsrAchievementListRequestToken,
+                hsrAchievementListRequestUri,
+                requestToken,
+                requestUri))
+                hsrAchievementListNetworkState = state;
+        }
+    }
+
+    private async Task CompleteHsrAchievementListResponseAsync(
+        CoreWebView2WebResourceResponseReceivedEventArgs args,
+        string requestToken,
+        string acceptedUri)
+    {
+        byte[]? body = null;
+        try
+        {
+            var response = args.Response;
+            if (response.StatusCode != 200
+                || !HasJsonContentType(response.Headers.GetHeader("Content-Type")))
+            {
+                PublishHsrAchievementListResponse(
+                    requestToken,
+                    acceptedUri,
+                    HsrAchievementListNetworkState.ResponseFailed);
+                return;
+            }
+
+            using var content = await response.GetContentAsync().AsTask(lifetime.Token);
+            using var stream = content.AsStreamForRead();
+            body = await ReadBoundedAsync(
+                stream,
+                PublisherAccountCatalog.MaximumResourceResponseBytes,
+                lifetime.Token);
+            if (body is null
+                || !HoyoLabHsrAchievementResultParser.IsSuccessfulListEnvelope(body))
+            {
+                PublishHsrAchievementListResponse(
+                    requestToken,
+                    acceptedUri,
+                    HsrAchievementListNetworkState.ResponseFailed);
+                return;
+            }
+
+            PublishHsrAchievementListResponse(
+                requestToken,
+                acceptedUri,
+                HsrAchievementListNetworkState.ResponseAccepted);
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+        {
+        }
+        catch
+        {
+            PublishHsrAchievementListResponse(
+                requestToken,
+                acceptedUri,
+                HsrAchievementListNetworkState.ResponseFailed);
+        }
+        finally
+        {
+            if (body is not null) Array.Clear(body);
+        }
     }
 
     private static async Task CompleteSessionProbeAsync(
@@ -3027,6 +3214,14 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
                 .WaitAsync(TimeSpan.FromSeconds(ResourceCaptureTimeoutSeconds + 3), cancellationToken);
             if (proof == PublisherSessionProof.Authenticated)
             {
+                if (IsVisibleHsrAchievementConnect
+                    && GetHsrAchievementListNetworkState()
+                        != HsrAchievementListNetworkState.ResponseAccepted)
+                {
+                    if (reportFailure)
+                        StatusText.Text = "The HSR achievement page has not finished loading. Keep this window open and try Done again.";
+                    return false;
+                }
                 if (provider == "SKPORT")
                 {
                     var identity = endfieldIdentity

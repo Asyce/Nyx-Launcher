@@ -2558,6 +2558,58 @@ public static class PublisherAccountCatalog
                 || string.Equals(noSessionRetry, "true", StringComparison.Ordinal));
     }
 
+    public static bool IsExactHsrAchievementPageListRequest(Uri uri, string method)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        if (!IsExactHsrAchievementListEndpoint(uri)
+            || method is not ("GET" or "OPTIONS"))
+            return false;
+        if (IsExactHsrAchievementApiRequest(uri, method))
+            return true;
+
+        var query = ParseBoundedQuery(
+            uri.Query,
+            "game_biz",
+            "badge_region",
+            "badge_uid",
+            "show_hide",
+            "need_all",
+            "page_size",
+            "page_num",
+            "game",
+            "t",
+            "noSessionRetry");
+        return query is not null
+            && query.Count is >= 7 and <= 10
+            && query.TryGetValue("game_biz", out var gameBiz)
+            && string.Equals(gameBiz, "hkrpg_global", StringComparison.Ordinal)
+            && query.TryGetValue("badge_region", out var region)
+            && ResourceServers["hsr"].Contains(region)
+            && query.TryGetValue("badge_uid", out var uid)
+            && uid.Length is >= 1 and <= 20
+            && uid[0] != '0'
+            && uid.All(char.IsAsciiDigit)
+            && query.TryGetValue("show_hide", out var showHide)
+            && string.Equals(showHide, "false", StringComparison.Ordinal)
+            && query.TryGetValue("need_all", out var needAll)
+            && string.Equals(needAll, "false", StringComparison.Ordinal)
+            && query.TryGetValue("page_size", out var pageSize)
+            && string.Equals(pageSize, "20", StringComparison.Ordinal)
+            && query.TryGetValue("page_num", out var pageNumber)
+            && pageNumber.Length is >= 1 and <= 3
+            && pageNumber[0] != '0'
+            && pageNumber.All(char.IsAsciiDigit)
+            && int.TryParse(pageNumber, out var parsedPage)
+            && parsedPage is >= 1 and <= 100
+            && (!query.TryGetValue("game", out var game)
+                || string.Equals(game, "hkrpg", StringComparison.Ordinal))
+            && (!query.TryGetValue("t", out var timestamp)
+                || (timestamp.Length is >= 10 and <= 16
+                    && timestamp.All(char.IsAsciiDigit)))
+            && (!query.TryGetValue("noSessionRetry", out var noSessionRetry)
+                || string.Equals(noSessionRetry, "true", StringComparison.Ordinal));
+    }
+
     public static bool IsExactHsrAchievementListRequestForRole(
         Uri uri,
         string method,

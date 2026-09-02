@@ -144,13 +144,50 @@ public sealed class PublisherVisibleConnectRecoveryTests
             "public Task<PublisherVisibleConnectCompletion> WaitForConnectCompletionAsync");
 
         var baseline = monitor.IndexOf("var baselineEstablished = false", StringComparison.Ordinal);
-        var transition = monitor.IndexOf(
-            "baselineEstablished && !wasAuthenticated && authenticated",
+        var decision = monitor.IndexOf(
+            "PublisherVisibleConnectFlow.ShouldAutoComplete",
             StringComparison.Ordinal);
+        var completion = monitor.IndexOf("TryCompleteVisibleConnectAsync", StringComparison.Ordinal);
         var update = monitor.IndexOf("wasAuthenticated = authenticated", StringComparison.Ordinal);
-        Assert.True(baseline >= 0 && baseline < transition && transition < update);
+        Assert.True(baseline >= 0 && baseline < decision && decision < completion && completion < update);
+        Assert.Contains("else", monitor[completion..update], StringComparison.Ordinal);
         Assert.Contains("baselineEstablished = true", monitor, StringComparison.Ordinal);
         Assert.DoesNotContain("ReviewedEndfieldIdentity", monitor, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Hsr_achievement_connect_auto_completes_only_after_the_official_list_responds()
+    {
+        var source = ReadAppFile("PublisherSessionWindow.xaml.cs");
+        var monitor = Slice(
+            source,
+            "private async Task MonitorVisibleConnectAsync",
+            "public Task<PublisherVisibleConnectCompletion> WaitForConnectCompletionAsync");
+        var request = Slice(
+            source,
+            "private async void Core_WebResourceRequested",
+            "private bool TryAuthorizeWebResourceRequest");
+        var response = Slice(
+            source,
+            "private void Core_WebResourceResponseReceived",
+            "private static async Task CompleteSessionProbeAsync");
+
+        Assert.Contains("PublisherAccountCatalog.IsExactAchievementPageUri", monitor, StringComparison.Ordinal);
+        Assert.Contains("PublisherVisibleConnectFlow.ShouldAutoComplete", monitor, StringComparison.Ordinal);
+        Assert.Contains("HsrAchievementListNetworkState.ResponseAccepted", monitor, StringComparison.Ordinal);
+        Assert.Contains("if (shouldAutoComplete)", monitor, StringComparison.Ordinal);
+        Assert.Contains("await TryCompleteVisibleConnectAsync", monitor, StringComparison.Ordinal);
+        Assert.Contains("IsVisibleHsrAchievementConnect", request, StringComparison.Ordinal);
+        Assert.Contains("IsExactHsrAchievementPageListRequest", request, StringComparison.Ordinal);
+        Assert.Contains("TryRecordHsrAchievementListRequest(args.Request", request, StringComparison.Ordinal);
+        Assert.Contains("IsVisibleHsrAchievementConnect", response, StringComparison.Ordinal);
+        Assert.Contains("HsrAchievementRequestTokenHeader", response, StringComparison.Ordinal);
+        Assert.Contains("request.Headers.SetHeader", response, StringComparison.Ordinal);
+        Assert.Contains("request.Headers.GetHeader", response, StringComparison.Ordinal);
+        Assert.Contains("lock (hsrAchievementListGate)", response, StringComparison.Ordinal);
+        Assert.Contains("IsCurrentHsrAchievementRequest", response, StringComparison.Ordinal);
+        Assert.Contains("IsSuccessfulListEnvelope", response, StringComparison.Ordinal);
+        Assert.Contains("ResetHsrAchievementListRequest", source, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -239,7 +276,7 @@ public sealed class PublisherVisibleConnectRecoveryTests
             "var authorized = isOfficialPublisherRequest || TryAuthorizeWebResourceRequest(args);",
             StringComparison.Ordinal);
         var achievementObservation = handler.IndexOf(
-            "IsHsrAchievementListCandidate(requestUri)",
+            "IsHsrAchievementListCandidate(parsedRequestUri)",
             StringComparison.Ordinal);
         Assert.True(
             resourceObservation >= 0

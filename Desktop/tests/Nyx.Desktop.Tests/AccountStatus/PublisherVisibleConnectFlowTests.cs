@@ -5,6 +5,58 @@ namespace Nyx.Desktop.Tests.AccountStatus;
 public sealed class PublisherVisibleConnectFlowTests
 {
     [Fact]
+    public void Achievement_response_requires_the_current_concrete_request_token()
+    {
+        const string uri = "https://sg-act-public-api.hoyolab.com/event/rpgcultivate/achievement/list?page_num=1";
+
+        Assert.True(PublisherVisibleConnectFlow.IsCurrentHsrAchievementRequest(
+            "new-request",
+            uri,
+            "new-request",
+            uri));
+        Assert.False(PublisherVisibleConnectFlow.IsCurrentHsrAchievementRequest(
+            "new-request",
+            uri,
+            "old-same-uri-request",
+            uri));
+        Assert.False(PublisherVisibleConnectFlow.IsCurrentHsrAchievementRequest(
+            "second-overlapping-request",
+            uri,
+            "first-overlapping-request",
+            uri));
+        Assert.False(PublisherVisibleConnectFlow.IsCurrentHsrAchievementRequest(
+            "new-request",
+            uri,
+            "new-request",
+            uri + "&page_num=2"));
+    }
+
+    [Theory]
+    [InlineData(false, false, false, true, true, false)]
+    [InlineData(false, true, false, true, false, true)]
+    [InlineData(false, true, true, true, true, false)]
+    [InlineData(true, true, false, true, false, false)]
+    [InlineData(true, false, true, true, true, true)]
+    [InlineData(true, true, false, false, true, false)]
+    public void Auto_completion_uses_auth_transition_except_for_ready_hsr_achievements(
+        bool isHsrAchievementConnect,
+        bool baselineEstablished,
+        bool wasAuthenticated,
+        bool authenticated,
+        bool achievementPageReady,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            PublisherVisibleConnectFlow.ShouldAutoComplete(
+                isHsrAchievementConnect,
+                baselineEstablished,
+                wasAuthenticated,
+                authenticated,
+                achievementPageReady));
+    }
+
+    [Fact]
     public async Task Close_cancels_without_probe_and_returns_a_retryable_terminal_state()
     {
         var probes = 0;
