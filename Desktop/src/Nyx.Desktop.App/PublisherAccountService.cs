@@ -3250,7 +3250,11 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
                 if (!CanPublish("HoYoLAB", operation)) return false;
                 var saved = hoyoGameBundle.TryRecordResource(
                     binding,
-                    resource with { IsStale = true },
+                    resource with
+                    {
+                        ObservedAt = DateTimeOffset.FromUnixTimeSeconds(resource.ObservedAt.ToUnixTimeSeconds()),
+                        IsStale = true,
+                    },
                     operation.Cancellation.Token);
                 return saved && CanPublish("HoYoLAB", operation);
             }

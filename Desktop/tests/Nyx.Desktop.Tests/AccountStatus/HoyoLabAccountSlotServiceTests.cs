@@ -274,6 +274,19 @@ public sealed class HoyoLabAccountSlotServiceTests
     }
 
     [Fact]
+    public void Hsr_resource_mirror_matches_the_persisted_snapshot_second_precision()
+    {
+        var resource = Slice(
+            "private bool TryMirrorHsrResource",
+            "private bool TryMirrorHsrAchievements");
+
+        Assert.Contains(
+            "ObservedAt = DateTimeOffset.FromUnixTimeSeconds(resource.ObservedAt.ToUnixTimeSeconds())",
+            resource,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Legacy_compatibility_never_reads_writes_or_migrates_the_v2_bundle()
     {
         var availability = Slice(
