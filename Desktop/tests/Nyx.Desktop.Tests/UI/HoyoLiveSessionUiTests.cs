@@ -1305,7 +1305,7 @@ public sealed class HoyoLiveSessionUiTests
         var retry = Slice(service, "public async Task<HoyoLabManualSyncResult> RetryHoyoLabSyncDeletionsAsync",
             "private async Task<HoyoLabManualSyncResult> RunHoyoSyncAsync");
         Assert.Contains("HoyoLabManualSyncAvailable => true", service, StringComparison.Ordinal);
-        Assert.Contains("public static bool GenshinManualSyncAvailable => false;", service, StringComparison.Ordinal);
+        Assert.Contains("public static bool GenshinManualSyncAvailable => true;", service, StringComparison.Ordinal);
         Assert.Contains("public static bool IsHoyoLabManualSyncAvailable(string gameId)", service, StringComparison.Ordinal);
         Assert.Contains("var fixedGame = selected.Id;", page, StringComparison.Ordinal);
         Assert.Contains("await ShowHoyoLabSyncAsync(fixedGame);", page, StringComparison.Ordinal);

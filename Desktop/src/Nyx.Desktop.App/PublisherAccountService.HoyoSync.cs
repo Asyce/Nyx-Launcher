@@ -9,7 +9,7 @@ public sealed partial class PublisherAccountService
     // and My HoYo route have passed live verification.
     public static bool HoyoLabManualSyncAvailable => true;
 
-    public static bool GenshinManualSyncAvailable => false;
+    public static bool GenshinManualSyncAvailable => true;
 
     public static bool IsHoyoLabManualSyncAvailable(string gameId) =>
         HoyoLabManualSyncAvailable && (gameId == "hsr" || gameId == "gi" && GenshinManualSyncAvailable);

@@ -20,7 +20,7 @@ public static class LauncherBannersManifestParser
         new("gi", "battle-records", "Battle Records", new Uri("https://act.hoyolab.com/app/community-game-records-sea/index.html?gid=2#/ys")),
         new("gi", "upgrade-guide", "Upgrade Guide", new Uri("https://act.hoyolab.com/ys/event/bbs-lineup-ys-sea/index.html")),
         new("hsr", "wiki", "Wiki", new Uri("https://wiki.hoyolab.com/pc/hsr/home")),
-        new("hsr", "material-calculator", "Material Calculator", new Uri("https://act.hoyolab.com/sr/event/calculator/index.html")),
+        new("hsr", "material-calculator", "Material Calculator", new Uri("https://act.hoyolab.com/sr/event/cultivation-tool/index.html?game_biz=hkrpg_global&hyl_auth_required=true&hyl_hide_status_bar=true&hyl_landscape=true&hyl_presentation_style=fullscreen&mode=fullscreen&utm_campaign=CultivationTool&utm_id=6&utm_medium=tools&utm_source=hoyolab&win_mode=fullscreen#/tools/calculation?target=Character")),
         new("hsr", "battle-records", "Battle Records", new Uri("https://act.hoyolab.com/app/community-game-records-sea/index.html?gid=6#/hsr")),
         new("hsr", "upgrade-guide", "Upgrade Guide", new Uri("https://act.hoyolab.com/sr/event/cultivation-tool/#/tools/suggestion")),
         new("zzz", "wiki", "Wiki", new Uri("https://wiki.hoyolab.com/pc/zzz/home")),
@@ -149,7 +149,11 @@ public static class LauncherBannersManifestParser
             string.Equals(tool.Game, game, StringComparison.Ordinal)
             && string.Equals(tool.Id, id, StringComparison.Ordinal)
             && string.Equals(tool.Label, label, StringComparison.Ordinal)
-            && string.Equals(tool.Url.OriginalString, url.OriginalString, StringComparison.Ordinal));
+            && (string.Equals(tool.Url.OriginalString, url.OriginalString, StringComparison.Ordinal)
+                || (game == "hsr"
+                    && id == "material-calculator"
+                    && label == "Material Calculator"
+                    && string.Equals(url.OriginalString, "https://act.hoyolab.com/sr/event/calculator/index.html", StringComparison.Ordinal))));
 
     private static LauncherBannersHealth ParseHealth(JsonElement element)
     {

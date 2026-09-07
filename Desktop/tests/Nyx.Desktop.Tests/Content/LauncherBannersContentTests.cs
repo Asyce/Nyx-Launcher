@@ -149,6 +149,25 @@ public sealed class LauncherBannersContentTests
             LauncherBannersManifestParser.ParseTools(JsonSerializer.SerializeToUtf8Bytes(root), observedAt: now));
     }
 
+    [Fact]
+    public void Tools_parser_accepts_legacy_hsr_material_calculator_and_returns_the_canonical_url()
+    {
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        const string legacyUrl = "https://act.hoyolab.com/sr/event/calculator/index.html";
+        const string canonicalUrl = "https://act.hoyolab.com/sr/event/cultivation-tool/index.html?game_biz=hkrpg_global&hyl_auth_required=true&hyl_hide_status_bar=true&hyl_landscape=true&hyl_presentation_style=fullscreen&mode=fullscreen&utm_campaign=CultivationTool&utm_id=6&utm_medium=tools&utm_source=hoyolab&win_mode=fullscreen#/tools/calculation?target=Character";
+        var parsed = LauncherBannersManifestParser.ParseTools(
+            ToolsJson(now.AddMinutes(-10), [("hsr", "material-calculator", "Material Calculator", legacyUrl)]),
+            observedAt: now);
+
+        Assert.Equal(canonicalUrl, Assert.Single(parsed.Tools).Url.OriginalString);
+        Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.ParseTools(
+            ToolsJson(now.AddMinutes(-10), [("hsr", "material-calculator", "Material Calculator", legacyUrl + "?x=1")]),
+            observedAt: now));
+        Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.ParseTools(
+            ToolsJson(now.AddMinutes(-10), [("hsr", "wiki", "Wiki", legacyUrl)]),
+            observedAt: now));
+    }
+
     [Theory]
     [InlineData("gi", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/genshin/home", true)]
     [InlineData("gi", "wiki", "Wiki", "http://wiki.hoyolab.com/pc/genshin/home", false)]
@@ -1930,7 +1949,7 @@ public sealed class LauncherBannersContentTests
         ("gi", "battle-records", "Battle Records", "https://act.hoyolab.com/app/community-game-records-sea/index.html?gid=2#/ys"),
         ("gi", "upgrade-guide", "Upgrade Guide", "https://act.hoyolab.com/ys/event/bbs-lineup-ys-sea/index.html"),
         ("hsr", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/hsr/home"),
-        ("hsr", "material-calculator", "Material Calculator", "https://act.hoyolab.com/sr/event/calculator/index.html"),
+        ("hsr", "material-calculator", "Material Calculator", "https://act.hoyolab.com/sr/event/cultivation-tool/index.html?game_biz=hkrpg_global&hyl_auth_required=true&hyl_hide_status_bar=true&hyl_landscape=true&hyl_presentation_style=fullscreen&mode=fullscreen&utm_campaign=CultivationTool&utm_id=6&utm_medium=tools&utm_source=hoyolab&win_mode=fullscreen#/tools/calculation?target=Character"),
         ("hsr", "battle-records", "Battle Records", "https://act.hoyolab.com/app/community-game-records-sea/index.html?gid=6#/hsr"),
         ("hsr", "upgrade-guide", "Upgrade Guide", "https://act.hoyolab.com/sr/event/cultivation-tool/#/tools/suggestion"),
         ("zzz", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/zzz/home"),
