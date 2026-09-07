@@ -100,9 +100,10 @@ public partial class App : Application
     private static string FormatSafeExceptionChain(Exception exception)
     {
         var lines = new List<string>();
-        for (var current = exception; current is not null && lines.Count < 5; current = current.InnerException)
+        var exceptionCount = 0;
+        for (var current = exception; current is not null && exceptionCount < 5; current = current.InnerException, exceptionCount++)
         {
-            lines.Add($"exception-{lines.Count}: {current.GetType().Name} hresult=0x{current.HResult:X8}");
+            lines.Add($"exception-{exceptionCount}: {current.GetType().Name} hresult=0x{current.HResult:X8}");
             var frames = new StackTrace(current, fNeedFileInfo: false).GetFrames();
             if (frames is not null)
             {
@@ -115,6 +116,23 @@ public partial class App : Application
             }
         }
         return string.Join('\n', lines);
+    }
+
+    private void RecordAccountFailure(string provider, string operation, Exception? exception)
+    {
+        try
+        {
+            var folder = _diagnosticsRoot;
+            if (folder is null) return;
+            Directory.CreateDirectory(folder);
+            var details = exception is null ? "No exception supplied." : FormatSafeExceptionChain(exception);
+            // Fixed provider and compiler-supplied method names only; no account,
+            // role, URL, exception message, or browser data enters this record.
+            File.WriteAllText(
+                Path.Combine(folder, "last-account-failure.txt"),
+                $"{DateTimeOffset.UtcNow:O}\nprovider: {provider}\noperation: {operation}\n{details}");
+        }
+        catch (Exception) { }
     }
 
     internal static void SetLaunchStage(string stage)
@@ -303,7 +321,8 @@ public partial class App : Application
                 TryPersistPublisherCleanupPending(
                     provider,
                     cleanupPending,
-                    accountAccess));
+                    accountAccess),
+            recordAccountFailure: RecordAccountFailure);
         _pullExports = new RoutedPullExportProvider(() =>
         {
             var root = GetManualInstallRoot("wuwa") ?? wuwaRootLocator.LocateRoot();

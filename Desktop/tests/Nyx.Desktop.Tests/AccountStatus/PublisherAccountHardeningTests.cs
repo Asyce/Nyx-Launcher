@@ -4321,7 +4321,7 @@ public sealed class PublisherAccountHardeningTests
             "TrySetCanceledConnectState(entry.Provider, cancellationWrite);",
             StringComparison.Ordinal);
         var quarantine = teardownCatch.IndexOf(
-            "QuarantineProvider(entry.Provider, operation);",
+            "QuarantineProvider(entry.Provider, operation, exception);",
             StringComparison.Ordinal);
         var projectCancellation = teardownCatch.IndexOf(
             "PublisherTeardownCancellationPolicy.ThrowIfCanceled(cancellationToken, exception);",
@@ -5099,6 +5099,36 @@ public sealed class PublisherAccountHardeningTests
     }
 
     [Fact]
+    public void Account_quarantine_records_only_safe_failure_details_without_changing_cleanup()
+    {
+        var service = ReadAppFile("PublisherAccountService.cs");
+        var quarantine = Slice(service, "private void QuarantineProvider(", "private bool TryDeleteProtectedGameState(");
+        var app = ReadAppFile("App.xaml.cs");
+        var formatter = Slice(app, "private static string FormatSafeExceptionChain", "private void RecordAccountFailure");
+        var record = Slice(app, "private void RecordAccountFailure", "internal static void SetLaunchStage");
+
+        Assert.Contains("[CallerMemberName] string caller", quarantine, StringComparison.Ordinal);
+        Assert.Contains("recordAccountFailure?.Invoke(provider, caller, failure)", quarantine, StringComparison.Ordinal);
+        Assert.Contains("catch (Exception)", quarantine, StringComparison.Ordinal);
+        Assert.True(quarantine.IndexOf("hoyoQuarantined = true", StringComparison.Ordinal)
+            < quarantine.IndexOf("recordAccountFailure?.Invoke", StringComparison.Ordinal));
+        Assert.True(quarantine.IndexOf("recordAccountFailure?.Invoke", StringComparison.Ordinal)
+            < quarantine.IndexOf("PublisherQuarantineCleanupStore.TryClean", StringComparison.Ordinal));
+        Assert.Contains("recordAccountFailure: RecordAccountFailure", app, StringComparison.Ordinal);
+        Assert.Contains("last-account-failure.txt", record, StringComparison.Ordinal);
+        Assert.Contains("FormatSafeExceptionChain(exception)", record, StringComparison.Ordinal);
+        Assert.Contains("if (folder is null) return", record, StringComparison.Ordinal);
+        Assert.Contains("catch (Exception)", record, StringComparison.Ordinal);
+        Assert.Contains("exceptionCount < 5", formatter, StringComparison.Ordinal);
+        Assert.Contains("current = current.InnerException, exceptionCount++", formatter, StringComparison.Ordinal);
+        Assert.Contains("fNeedFileInfo: false", formatter, StringComparison.Ordinal);
+        Assert.Contains("frames.Take(8)", formatter, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Message", formatter + record, StringComparison.Ordinal);
+        Assert.DoesNotContain(".ToString()", formatter + record, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Data", formatter + record, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Resource_service_preserves_a_fixed_result_across_browser_teardown_quarantine()
     {
         var service = ReadAppFile("PublisherAccountService.cs");
@@ -5121,10 +5151,10 @@ public sealed class PublisherAccountHardeningTests
             "catch (Exception exception) when (exception is not OperationCanceledException)",
             StringComparison.Ordinal);
         var teardownCatch = refresh.IndexOf(
-            "catch (PublisherSessionTeardownException)",
+            "catch (PublisherSessionTeardownException exception)",
             StringComparison.Ordinal);
         var quarantine = refresh.IndexOf(
-            "QuarantineProvider(entry.Provider, operation);",
+            "QuarantineProvider(entry.Provider, operation, exception);",
             teardownCatch,
             StringComparison.Ordinal);
         var fixedFailure = refresh.IndexOf(
@@ -5204,7 +5234,7 @@ public sealed class PublisherAccountHardeningTests
             "private async Task<PublisherResourceSnapshot?> RefreshResourceCoreAsync",
             "public Task<DailyCheckInResult> CheckInAsync");
         var teardown = refresh.IndexOf(
-            "catch (PublisherSessionTeardownException)",
+            "catch (PublisherSessionTeardownException exception)",
             StringComparison.Ordinal);
         var nextCatch = refresh.IndexOf(
             "catch (OperationCanceledException)",

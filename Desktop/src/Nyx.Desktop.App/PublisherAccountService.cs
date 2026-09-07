@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Nyx.Desktop.Core.AccountStatus;
 using Nyx.Desktop.Core.Exports;
 using Nyx.Desktop.Infrastructure.AccountStatus;
@@ -18,6 +19,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
     private HoyoLabGameBundleStore genshinGameBundle;
     private readonly PublisherConsentRevocationStore revocations;
     private readonly Func<string, bool, bool?, bool>? persistCleanupPending;
+    private readonly Action<string, string, Exception?>? recordAccountFailure;
     private readonly PengoAchievementCatalogReader achievementCatalog;
     private readonly PengoAchievementExportWriter achievementWriter;
     private readonly AchievementAccountBindingStore achievementBindings;
@@ -83,10 +85,12 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
         string? achievementBindingRoot = null,
         bool publisherPasswordSavingEnabled = false,
         string? hsrAchievementCatalogPath = null,
-        Func<string, bool, bool?, bool>? persistCleanupPending = null)
+        Func<string, bool, bool?, bool>? persistCleanupPending = null,
+        Action<string, string, Exception?>? recordAccountFailure = null)
     {
         this.root = Path.GetFullPath(root);
         this.persistCleanupPending = persistCleanupPending;
+        this.recordAccountFailure = recordAccountFailure;
         Directory.CreateDirectory(this.root);
         if ((File.GetAttributes(this.root) & FileAttributes.ReparsePoint) != 0)
             throw new InvalidOperationException("Publisher profile root cannot be a reparse point.");
@@ -715,9 +719,9 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
             TrySetConnection(provider, PublisherConnectionState.Connected, operation);
             return artifact;
         }
-        catch (PublisherSessionTeardownException)
+        catch (PublisherSessionTeardownException exception)
         {
-            QuarantineProvider(provider, operation);
+            QuarantineProvider(provider, operation, exception);
             throw new ExportProviderException("hoyolab-profile-unavailable");
         }
         catch (ExportProviderException)
@@ -924,7 +928,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
         {
             if (cancellationToken.IsCancellationRequested)
                 TrySetCanceledConnectState(entry.Provider, cancellationWrite);
-            QuarantineProvider(entry.Provider, operation);
+            QuarantineProvider(entry.Provider, operation, exception);
             PublisherTeardownCancellationPolicy.ThrowIfCanceled(cancellationToken, exception);
             return PublisherConnectionState.NeedsReview;
         }
@@ -1291,9 +1295,9 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
             TrySetConnection(entry.Provider, nextState, operation);
             return null;
         }
-        catch (PublisherSessionTeardownException)
+        catch (PublisherSessionTeardownException exception)
         {
-            QuarantineProvider(entry.Provider, operation);
+            QuarantineProvider(entry.Provider, operation, exception);
             SetQuarantinedResourceFailure(
                 entry.GameId,
                 entry.Provider,
@@ -1471,9 +1475,9 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
                     else
                         result = new(gameId, DailyCheckInState.CouldNotCheck, "The selected character could not be proven.", DateTimeOffset.UtcNow);
                 }
-                catch (PublisherSessionTeardownException)
+                catch (PublisherSessionTeardownException exception)
                 {
-                    QuarantineProvider(provider, operation);
+                    QuarantineProvider(provider, operation, exception);
                     result = new(gameId, DailyCheckInState.CouldNotCheck, "The isolated browser needs review.", DateTimeOffset.UtcNow);
                 }
                 catch (Exception exception) when (exception is not OperationCanceledException)
@@ -1894,7 +1898,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
         {
             if (cancellationToken.IsCancellationRequested)
                 TrySetCanceledConnectState(entry.Provider, cancellationWrite);
-            QuarantineProvider(entry.Provider, operation);
+            QuarantineProvider(entry.Provider, operation, exception);
             PublisherTeardownCancellationPolicy.ThrowIfCanceled(cancellationToken, exception);
             return new(PublisherConnectionState.NeedsReview, null);
         }
@@ -2696,7 +2700,9 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
 
     private void QuarantineProvider(
         string provider,
-        PublisherOperation? operation = null)
+        PublisherOperation? operation = null,
+        Exception? failure = null,
+        [CallerMemberName] string caller = "")
     {
         if (operation is not null && !CanPublish(provider, operation)) return;
         lock (sync)
@@ -2704,6 +2710,8 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
             if (provider == "HoYoLAB") hoyoQuarantined = true;
             else if (provider == "SKPORT") skportQuarantined = true;
         }
+        try { recordAccountFailure?.Invoke(provider, caller, failure); }
+        catch (Exception) { } // Diagnostics must not interrupt the existing cleanup.
         Func<string, bool, bool>? cleanupPersistence = persistCleanupPending is null
             ? null
             : (persistProvider, pending) =>
