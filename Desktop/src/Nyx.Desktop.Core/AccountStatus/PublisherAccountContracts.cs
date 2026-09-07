@@ -570,8 +570,8 @@ public sealed record PublisherRoleChoice(PublisherRoleBinding Binding, string Di
     public override string ToString() => nameof(PublisherRoleChoice);
 }
 
-// Nickname is a transient chooser hint. Persistence boundaries accept only
-// PublisherRoleBinding, so this value never reaches settings or disk.
+// Official nicknames remain attached through role selection. Durable identity
+// uses PublisherRoleRecord in protected account storage, not launcher settings.
 public sealed record PublisherResourceCandidate(
     PublisherRoleBinding Binding,
     PublisherResourceSnapshot? Snapshot,

@@ -1188,7 +1188,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
                 resourceRead = new(
                     selectedSnapshot,
                     PublisherResourceReadOutcome.Valid,
-                    [new(selectedChoice.Binding, selectedSnapshot)],
+                    candidates.Where(candidate => candidate.Binding == selectedChoice.Binding).ToArray(),
                     PublisherResourceCaptureDiagnostic.Valid);
                 SetResourceDiagnosticIfCurrent(
                     entry.GameId,

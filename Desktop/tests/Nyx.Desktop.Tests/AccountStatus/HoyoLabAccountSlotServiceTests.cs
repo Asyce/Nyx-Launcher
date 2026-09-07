@@ -665,6 +665,18 @@ public sealed class HoyoLabAccountSlotServiceTests
     }
 
     [Fact]
+    public void Chosen_resource_role_preserves_official_identity_candidates()
+    {
+        var selection = Slice("var selectedSnapshot =", "var nextState = PublisherAccountStatePolicy.ForAuthenticatedResourceRead");
+        Assert.Contains(
+            "candidates.Where(candidate => candidate.Binding == selectedChoice.Binding).ToArray()",
+            selection,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("new(selectedChoice.Binding, selectedSnapshot)", selection, StringComparison.Ordinal);
+        AssertOrdered(selection, "resourceRead = new(", "SaveRoleRecord(", "officialCandidates,");
+    }
+
+    [Fact]
     public void Cached_resources_are_built_locally_then_committed_atomically()
     {
         var method = Slice("private void RestoreCachedResources()", "private void TrySetCanceledConnectState");
