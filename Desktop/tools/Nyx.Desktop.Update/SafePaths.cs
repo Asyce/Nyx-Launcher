@@ -319,7 +319,10 @@ public static class SafePaths
             ref disposition,
             (uint)Marshal.SizeOf<FileDispositionInformationEx>()))
         {
-            throw new UpdateContractException("UnsafePath");
+            var nativeError = Marshal.GetLastPInvokeError();
+            var exception = new UpdateContractException("UnsafePath");
+            exception.Data["NativeErrorCode"] = nativeError;
+            throw exception;
         }
     }
 

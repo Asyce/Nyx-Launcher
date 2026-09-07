@@ -95,6 +95,22 @@ public sealed class PackagingScriptTests
     }
 
     [Fact]
+    public void Updater_verify_finishes_before_accessing_installed_state()
+    {
+        var program = File.ReadAllText(Path.Combine(DesktopRoot, "tools", "Nyx.Desktop.Update", "Program.cs"));
+        var verificationStart = program.IndexOf("if (args is [\"verify\", ..])", StringComparison.Ordinal);
+        var layoutStart = program.IndexOf("#if NYX_UPDATER_DISPOSABLE_SMOKE", StringComparison.Ordinal);
+        Assert.InRange(verificationStart, 0, layoutStart - 1);
+        var verification = program[verificationStart..layoutStart];
+        Assert.Contains("UpdateManifestFile.Read(verifyManifestPath)", verification, StringComparison.Ordinal);
+        Assert.Contains("UpdatePackageStager.VerifyDownload(manifest, verifyPackagePath)", verification, StringComparison.Ordinal);
+        Assert.Contains("return 0;", verification, StringComparison.Ordinal);
+        Assert.Contains("return 2;", verification, StringComparison.Ordinal);
+        Assert.DoesNotContain("UpdateLayout.", program[..layoutStart], StringComparison.Ordinal);
+        Assert.DoesNotContain("UpdateTransaction.", program[..layoutStart], StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Windows_workflow_pins_security_and_names_the_release_repository()
     {
         var repositoryRoot = Path.GetFullPath(Path.Combine(DesktopRoot, ".."));

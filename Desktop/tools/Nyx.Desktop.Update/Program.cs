@@ -8,6 +8,20 @@ internal static class UpdaterProgram
     {
         try
         {
+            if (args is ["verify", ..])
+            {
+                if (args is not ["verify", "--manifest", var verifyManifestPath, "--package", var verifyPackagePath])
+                {
+                    Console.Error.WriteLine("NYX_UPDATE=REJECTED CODE=INVALID_ARGUMENTS");
+                    return 2;
+                }
+
+                var manifest = UpdateManifestFile.Read(verifyManifestPath);
+                UpdatePackageStager.VerifyDownload(manifest, verifyPackagePath);
+                Console.WriteLine($"NYX_UPDATE=VERIFIED VERSION={manifest.Version}");
+                return 0;
+            }
+
 #if NYX_UPDATER_DISPOSABLE_SMOKE
             var layout = DisposableSmokeLayout();
 #else
@@ -65,14 +79,6 @@ internal static class UpdaterProgram
                 Directory.CreateDirectory(layout.StagingRoot);
                 _ = UpdatePackageStager.Stage(manifest, packagePath, layout.StagingRoot);
                 Console.WriteLine($"NYX_UPDATE=STAGED VERSION={manifest.Version}");
-                return 0;
-            }
-
-            if (args is ["verify", "--manifest", var verifyManifestPath, "--package", var verifyPackagePath])
-            {
-                var manifest = UpdateManifestFile.Read(verifyManifestPath);
-                UpdatePackageStager.VerifyDownload(manifest, verifyPackagePath);
-                Console.WriteLine($"NYX_UPDATE=VERIFIED VERSION={manifest.Version}");
                 return 0;
             }
 
