@@ -432,47 +432,47 @@ public sealed class StableUpdateTests
                     }));
             Assert.Equal("CallerProcessInvalid", exception.Code);
         });
-        Assert.True(confirmationAtCommit.Wait(TimeSpan.FromSeconds(5)));
-
-        var recovery = Task.Run(() => StableUpdateRunner.RecoverUnconfirmedChild(
-            StableUpdateRunner.PendingMonitorResult.TimedOut,
-            _ =>
-            {
-                Interlocked.Increment(ref attempts);
-                var result = UpdateTransaction.TryExpireConfirmation(
-                    layout,
-                    TimeSpan.FromMilliseconds(20));
-                if (result is ConfirmationExpirationResult.Expired)
-                    order.Add("expire-under-update-lock");
-                return result;
-            },
-            TimeSpan.FromSeconds(5),
-            () =>
-            {
-                order.Add("close-exact-child");
-                Assert.Equal(
-                    "ConfirmationExpired",
-                    Assert.Throws<UpdateContractException>(() => ConfirmCurrent(layout)).Code);
-                order.Add("late-confirm-rejected");
-                Assert.True(File.Exists(layout.PendingPath));
-                return true;
-            },
-            milliseconds =>
-            {
-                if (milliseconds == 0) return false;
-                order.Add("wait-during-grace");
-                return true;
-            },
-            () => throw new InvalidOperationException("The cooperative child must not be terminated."),
-            () =>
-            {
-                Assert.True(UpdateTransaction.Rollback(layout));
-                order.Add("rollback-and-relaunch");
-            },
-            TimeSpan.FromMilliseconds(1)));
+        var recovery = Task.CompletedTask;
 
         try
         {
+            Assert.True(confirmationAtCommit.Wait(TimeSpan.FromSeconds(5)));
+            recovery = Task.Run(() => StableUpdateRunner.RecoverUnconfirmedChild(
+                StableUpdateRunner.PendingMonitorResult.TimedOut,
+                _ =>
+                {
+                    Interlocked.Increment(ref attempts);
+                    var result = UpdateTransaction.TryExpireConfirmation(
+                        layout,
+                        TimeSpan.FromMilliseconds(20));
+                    if (result is ConfirmationExpirationResult.Expired)
+                        order.Add("expire-under-update-lock");
+                    return result;
+                },
+                TimeSpan.FromSeconds(5),
+                () =>
+                {
+                    order.Add("close-exact-child");
+                    Assert.Equal(
+                        "ConfirmationExpired",
+                        Assert.Throws<UpdateContractException>(() => ConfirmCurrent(layout)).Code);
+                    order.Add("late-confirm-rejected");
+                    Assert.True(File.Exists(layout.PendingPath));
+                    return true;
+                },
+                milliseconds =>
+                {
+                    if (milliseconds == 0) return false;
+                    order.Add("wait-during-grace");
+                    return true;
+                },
+                () => throw new InvalidOperationException("The cooperative child must not be terminated."),
+                () =>
+                {
+                    Assert.True(UpdateTransaction.Rollback(layout));
+                    order.Add("rollback-and-relaunch");
+                },
+                TimeSpan.FromMilliseconds(1)));
             Assert.True(SpinWait.SpinUntil(
                 () => Volatile.Read(ref attempts) >= 2,
                 TimeSpan.FromSeconds(5)));
@@ -480,9 +480,8 @@ public sealed class StableUpdateTests
         finally
         {
             releaseConfirmation.Set();
+            await Task.WhenAll(confirmation, recovery);
         }
-        await confirmation.WaitAsync(TimeSpan.FromSeconds(5));
-        await recovery.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(
             [
@@ -522,28 +521,28 @@ public sealed class StableUpdateTests
                 confirmationAtCommit.Set();
                 releaseConfirmation.Wait();
             }));
-        Assert.True(confirmationAtCommit.Wait(TimeSpan.FromSeconds(5)));
-
-        var recovery = Task.Run(() => StableUpdateRunner.RecoverUnconfirmedChild(
-            StableUpdateRunner.PendingMonitorResult.TimedOut,
-            _ =>
-            {
-                Interlocked.Increment(ref attempts);
-                return UpdateTransaction.TryExpireConfirmation(
-                    layout,
-                    TimeSpan.FromMilliseconds(20));
-            },
-            TimeSpan.FromSeconds(5),
-            () => throw new InvalidOperationException("A confirmed child must not be closed."),
-            milliseconds => milliseconds == 0
-                ? false
-                : throw new InvalidOperationException("A confirmed child must not be awaited for shutdown."),
-            () => throw new InvalidOperationException("A confirmed child must not be terminated."),
-            () => throw new InvalidOperationException("A confirmed update must not roll back."),
-            TimeSpan.FromMilliseconds(1)));
+        var recovery = Task.CompletedTask;
 
         try
         {
+            Assert.True(confirmationAtCommit.Wait(TimeSpan.FromSeconds(5)));
+            recovery = Task.Run(() => StableUpdateRunner.RecoverUnconfirmedChild(
+                StableUpdateRunner.PendingMonitorResult.TimedOut,
+                _ =>
+                {
+                    Interlocked.Increment(ref attempts);
+                    return UpdateTransaction.TryExpireConfirmation(
+                        layout,
+                        TimeSpan.FromMilliseconds(20));
+                },
+                TimeSpan.FromSeconds(5),
+                () => throw new InvalidOperationException("A confirmed child must not be closed."),
+                milliseconds => milliseconds == 0
+                    ? false
+                    : throw new InvalidOperationException("A confirmed child must not be awaited for shutdown."),
+                () => throw new InvalidOperationException("A confirmed child must not be terminated."),
+                () => throw new InvalidOperationException("A confirmed update must not roll back."),
+                TimeSpan.FromMilliseconds(1)));
             Assert.True(SpinWait.SpinUntil(
                 () => Volatile.Read(ref attempts) >= 2,
                 TimeSpan.FromSeconds(5)));
@@ -551,9 +550,9 @@ public sealed class StableUpdateTests
         finally
         {
             releaseConfirmation.Set();
+            await Task.WhenAll(confirmation, recovery);
         }
-        Assert.True(await confirmation.WaitAsync(TimeSpan.FromSeconds(5)));
-        await recovery.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(await confirmation);
 
         Assert.False(File.Exists(layout.PendingPath));
         Assert.Equal("2.0.0.0", UpdateTransaction.ReadActive(layout.ActivePath)!.Version);
