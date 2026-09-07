@@ -77,7 +77,7 @@ public sealed class UninstallAndMigrationTests
                     injected = true;
                 }));
 
-            Assert.True(injected);
+            Assert.True(injected, $"Deletion stopped before the substitution checkpoint: {exception}");
             Assert.Equal("UnsafePath", exception.Code);
             Assert.Equal("outside", File.ReadAllText(sentinel));
             Assert.Equal("owned", File.ReadAllText(Path.Combine(moved, "owned.txt")));
