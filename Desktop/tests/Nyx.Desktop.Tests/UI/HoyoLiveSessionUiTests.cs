@@ -1301,6 +1301,7 @@ public sealed class HoyoLiveSessionUiTests
         var service = ReadAppFile("PublisherAccountService.HoyoSync.cs");
         var page = ReadAppFile("MainPage.HoyoSync.cs");
         var shell = ReadAppFile("MainPage.xaml.cs");
+        var xaml = ReadAppFile("MainPage.xaml");
         var app = ReadAppFile("App.xaml.cs");
         var retry = Slice(service, "public async Task<HoyoLabManualSyncResult> RetryHoyoLabSyncDeletionsAsync",
             "private async Task<HoyoLabManualSyncResult> RunHoyoSyncAsync");
@@ -1315,6 +1316,8 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("ConnectHoyoSyncAsync(gameId, syncSlot!, enteredCode, ct)", page, StringComparison.Ordinal);
         Assert.Contains("SyncHoyoNowAsync(gameId, syncSlot!, ct)", page, StringComparison.Ordinal);
         Assert.Contains("DeleteHoyoCloudCopyAsync(gameId, syncSlot!, ct)", page, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Selected game sync, deletion status and My HoYo\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("AutomationProperties.Name=\"Star Rail sync, deletion status and My HoYo\"", xaml, StringComparison.Ordinal);
         Assert.Contains("HoyoLabSyncButton.Visibility = !selected.IsCustom", shell, StringComparison.Ordinal);
         Assert.Contains("PublisherAccountService.IsHoyoLabManualSyncAvailable(selected.Id)", shell, StringComparison.Ordinal);
         Assert.Contains("accounts.RetryHoyoLabSyncDeletionsAsync()", app, StringComparison.Ordinal);

@@ -49,7 +49,7 @@ public sealed class UninstallAndMigrationTests
     {
         using var fixture = new PackageFixture();
         var layout = fixture.CreateLayout();
-        WriteCompleteLayout(layout);
+        // Reach the substitution before any unrelated file deletion.
         var target = SelectRoot(layout, rootName);
         var nested = Path.Combine(target, "race-child");
         var moved = target + "-captured-child";
