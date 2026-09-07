@@ -5099,6 +5099,21 @@ public sealed class PublisherAccountHardeningTests
     }
 
     [Fact]
+    public void Restored_account_access_reinitializes_slots_only_after_cleanup_is_complete()
+    {
+        var service = ReadAppFile("PublisherAccountService.cs");
+        var apply = Slice(service, "private void ApplyProviderConsentSnapshot(", "private void ClearProviderState(");
+        var pendingGuard = apply.IndexOf("enabled = enabled && !cleanupPending && !revocations.IsPending(provider)", StringComparison.Ordinal);
+        var initialize = apply.IndexOf("enabled = EnsureHoyoSlotManagerInitialized()", StringComparison.Ordinal);
+        var enable = apply.IndexOf("consent.Set(provider, enabled)", StringComparison.Ordinal);
+
+        Assert.Contains("if (enabled && provider == \"HoYoLAB\")", apply, StringComparison.Ordinal);
+        Assert.True(pendingGuard >= 0 && pendingGuard < initialize && initialize < enable);
+        Assert.DoesNotContain("revocations.Clear", apply, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryPersistPublisherCleanupPending", apply, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Account_quarantine_records_only_safe_failure_details_without_changing_cleanup()
     {
         var service = ReadAppFile("PublisherAccountService.cs");

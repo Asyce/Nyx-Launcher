@@ -2419,6 +2419,8 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
         else if (provider == "SKPORT") Volatile.Write(ref skportCleanupPending, cleanupPending);
         else throw new ArgumentOutOfRangeException(nameof(provider));
         enabled = enabled && !cleanupPending && !revocations.IsPending(provider);
+        if (enabled && provider == "HoYoLAB")
+            enabled = EnsureHoyoSlotManagerInitialized();
         bool wasEnabled;
         lock (sync)
         {
