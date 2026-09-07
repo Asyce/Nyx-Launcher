@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Nyx.Desktop.Core.AccountStatus;
 using Nyx.Desktop.Infrastructure.AccountStatus;
 
 namespace Nyx.Desktop.Tests.AccountStatus;
@@ -61,6 +62,29 @@ public sealed class HoyoLabSyncClientTests
             Assert.False(root.TryGetProperty("force", out _));
             Assert.False(root.TryGetProperty("Origin", out _));
         }
+    }
+
+    [Fact]
+    public async Task Supported_genshin_game_is_sent_and_unknown_games_are_rejected()
+    {
+        var handler = new FakeHandler((_, _) => Task.FromResult(JsonResponse(
+            new { ok = true, updatedAt = UpdatedAt, size = 17 })));
+        using var client = CreateClient(handler);
+        using var secrets = Secrets();
+
+        var genshin = await client.PushAsync(
+            secrets,
+            VectorEnvelope(),
+            gameId: HoyoLabGameBundleRules.GenshinGameId);
+        var unknown = await client.StatusAsync(secrets, gameId: "zzz");
+
+        Assert.Equal(HoyoLabSyncFailure.None, genshin.Failure);
+        Assert.Equal(HoyoLabSyncFailure.InvalidRequest, unknown.Failure);
+        Assert.Single(handler.Requests);
+        using var document = JsonDocument.Parse(handler.Requests[0].Body);
+        Assert.Equal(
+            HoyoLabGameBundleRules.GenshinGameId,
+            document.RootElement.GetProperty("game").GetString());
     }
 
     [Fact]

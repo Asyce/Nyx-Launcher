@@ -841,7 +841,7 @@ public sealed class HoyoLabSyncCoordinatorTests
         Assert.True(sawCompensation);
         Assert.True(sawOldPendingAfterPromotion);
         Assert.Equal(
-            ["pull", "status", "push", "delete-account"],
+            ["pull", "pull", "status", "status", "push", "delete-account"],
             harness.Cloud.Requests.Select(static item => item.Action));
         using var replacementSecrets = Secrets(result.RecoveryCode!);
         Assert.Equal(replacementSyncId, replacementSecrets.SyncId);
@@ -939,17 +939,23 @@ public sealed class HoyoLabSyncCoordinatorTests
             harness.Cloud.Requests,
             static item => item.Action == "delete-account");
         Assert.Equal(Fixture.SyncId, oldDelete.SyncId);
-        var oldCondition = oldDelete.Root.GetProperty("baseUpdatedAt");
+        var oldCondition = oldDelete.Root.GetProperty("baseUpdatedAtByGame");
+        Assert.Equal(["gi", "hsr"], oldCondition.EnumerateObject()
+            .Select(static property => property.Name).Order(StringComparer.Ordinal));
+        var oldHsrCondition = oldCondition.GetProperty("hsr");
+        var oldGiCondition = oldCondition.GetProperty("gi");
         if (oldRevision is { } expectedOldRevision)
-            Assert.Equal(FormatTimestamp(expectedOldRevision), oldCondition.GetString());
+            Assert.Equal(FormatTimestamp(expectedOldRevision), oldHsrCondition.GetString());
         else
-            Assert.Equal(JsonValueKind.Null, oldCondition.ValueKind);
+            Assert.Equal(JsonValueKind.Null, oldHsrCondition.ValueKind);
+        Assert.Equal(JsonValueKind.Null, oldGiCondition.ValueKind);
         using (var state = LoadState(harness.ManagedSlotRoot))
         {
             var pending = Assert.Single(state.PendingDeletions);
             Assert.Equal(Fixture.SyncId, pending.SyncId);
             Assert.True(pending.RequireRevisionMatch);
-            Assert.Equal(oldRevision, pending.ExpectedRevision);
+            Assert.Null(pending.ExpectedRevision);
+            Assert.Equal(new HoyoLabGameRevisions(oldRevision, null), pending.ExpectedRevisionsByGame);
         }
         Assert.Equal(newerRevision, harness.Cloud.GetRevision(Fixture.SyncId));
         using (var oldSecrets = Secrets(DisplayCode))
@@ -962,13 +968,16 @@ public sealed class HoyoLabSyncCoordinatorTests
         var retryDelete = Assert.Single(harness.Cloud.Requests);
         Assert.Equal("delete-account", retryDelete.Action);
         Assert.Equal(
-            oldDelete.Root.GetProperty("baseUpdatedAt").GetRawText(),
-            retryDelete.Root.GetProperty("baseUpdatedAt").GetRawText());
+            oldDelete.Root.GetProperty("baseUpdatedAtByGame").GetRawText(),
+            retryDelete.Root.GetProperty("baseUpdatedAtByGame").GetRawText());
         Assert.Equal(newerRevision, harness.Cloud.GetRevision(Fixture.SyncId));
         using (var after = LoadState(harness.ManagedSlotRoot))
             Assert.Single(after.PendingDeletions);
 
-        harness.Cloud.Remove(Fixture.SyncId);
+        if (oldCopyExists)
+            harness.Cloud.RemoveAccount(Fixture.SyncId);
+        else
+            harness.Cloud.Remove(Fixture.SyncId);
         harness.Cloud.ClearRequests();
         var absentRetry = await harness.Coordinator.RetryDeletionsAsync();
 
@@ -1005,8 +1014,210 @@ public sealed class HoyoLabSyncCoordinatorTests
         Assert.Equal(replacementSyncId, state.CurrentCredential!.SyncId);
         var oldPending = Assert.Single(state.PendingDeletions);
         Assert.Equal(Fixture.SyncId, oldPending.SyncId);
-        Assert.Equal(["pull", "status", "push", "delete-account"],
+        Assert.Equal(["pull", "pull", "status", "status", "push", "delete-account"],
             harness.Cloud.Requests.Select(static item => item.Action));
+    }
+
+    [Fact]
+    public async Task Dual_game_sync_and_rotation_preserve_both_game_bundles()
+    {
+        using var harness = new Harness(VectorBundle());
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        SaveBundle(
+            harness.ProtectedRoot,
+            GenshinBundleWithResource(Now.AddHours(-2), 80),
+            HoyoLabGameBundleRules.GenshinGameId);
+        harness.Cloud.ClearRequests();
+
+        var genshinSync = await harness.Coordinator.SyncNowAsync(
+            gameId: HoyoLabGameBundleRules.GenshinGameId);
+
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, genshinSync.Status);
+        Assert.Equal(
+            ["pull", "push"],
+            harness.Cloud.Requests.Select(static item => item.Action));
+        Assert.All(harness.Cloud.Requests, request =>
+            Assert.Equal(HoyoLabGameBundleRules.GenshinGameId, request.GameId));
+
+        harness.Cloud.ClearRequests();
+        var rotation = await harness.Coordinator.RotateAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, rotation.Status);
+        Assert.NotNull(rotation.RecoveryCode);
+        Assert.Equal(
+            ["pull", "pull", "status", "status", "push", "push", "delete-account"],
+            harness.Cloud.Requests.Select(static item => item.Action));
+        Assert.Equal(
+            ["hsr", "gi", "hsr", "gi", "hsr", "gi", "hsr"],
+            harness.Cloud.Requests.Select(static item => item.GameId));
+        using var replacementSecrets = Secrets(rotation.RecoveryCode!);
+        Assert.Equal(
+            HoyoLabGameBundleRules.GameId,
+            harness.Cloud.GetBundle(replacementSecrets.SyncId, replacementSecrets).GameId);
+        Assert.Equal(
+            HoyoLabGameBundleRules.GenshinGameId,
+            harness.Cloud.GetBundle(
+                replacementSecrets.SyncId,
+                replacementSecrets,
+                HoyoLabGameBundleRules.GenshinGameId).GameId);
+        Assert.False(harness.Cloud.HasCopy(Fixture.SyncId, HoyoLabGameBundleRules.GameId));
+        Assert.False(harness.Cloud.HasCopy(Fixture.SyncId, HoyoLabGameBundleRules.GenshinGameId));
+    }
+
+    [Fact]
+    public async Task Failed_second_rotation_push_keeps_old_current_and_restart_cleans_replacement()
+    {
+        using var harness = new Harness(VectorBundle());
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        SaveBundle(
+            harness.ProtectedRoot,
+            GenshinBundleWithResource(Now.AddHours(-2), 80),
+            HoyoLabGameBundleRules.GenshinGameId);
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.SyncNowAsync(
+                gameId: HoyoLabGameBundleRules.GenshinGameId)).Status);
+        harness.Cloud.ClearRequests();
+        string? replacementSyncId = null;
+        var failGenshinPush = true;
+        harness.Cloud.OnRequest = request =>
+        {
+            if (request.Action == "status") replacementSyncId = request.SyncId;
+            if (request.Action == "push"
+                && request.GameId == HoyoLabGameBundleRules.GenshinGameId
+                && failGenshinPush)
+            {
+                failGenshinPush = false;
+                throw new HttpRequestException("second game push offline");
+            }
+            return null;
+        };
+
+        var failed = await harness.Coordinator.RotateAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.NetworkUnavailable, failed.Status);
+        Assert.Null(failed.RecoveryCode);
+        Assert.NotNull(replacementSyncId);
+        using (var state = LoadState(harness.ManagedSlotRoot))
+        {
+            Assert.Equal(Fixture.SyncId, state.CurrentCredential!.SyncId);
+            var compensation = Assert.Single(state.PendingDeletions);
+            Assert.Equal(replacementSyncId, compensation.SyncId);
+            Assert.Equal(HoyoLabSyncStateStore.AllHoyoScope, compensation.Scope);
+        }
+        Assert.True(harness.Cloud.HasCopy(Fixture.SyncId, HoyoLabGameBundleRules.GameId));
+        Assert.True(harness.Cloud.HasCopy(Fixture.SyncId, HoyoLabGameBundleRules.GenshinGameId));
+        Assert.True(harness.Cloud.HasCopy(replacementSyncId!, HoyoLabGameBundleRules.GameId));
+        Assert.False(harness.Cloud.HasCopy(replacementSyncId!, HoyoLabGameBundleRules.GenshinGameId));
+
+        harness.Coordinator.Dispose();
+        harness.Cloud.ClearRequests();
+        using var restart = CreateCoordinator(
+            harness.PublisherRoot,
+            harness.SlotId,
+            harness.ProtectedRoot,
+            harness.Authority,
+            harness.Cloud);
+        var cleanup = await restart.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, cleanup.Status);
+        Assert.Equal("delete-account", Assert.Single(harness.Cloud.Requests).Action);
+        Assert.False(harness.Cloud.HasCopy(replacementSyncId!, HoyoLabGameBundleRules.GameId));
+        Assert.False(harness.Cloud.HasCopy(replacementSyncId!, HoyoLabGameBundleRules.GenshinGameId));
+        using var after = LoadState(harness.ManagedSlotRoot);
+        Assert.Equal(Fixture.SyncId, after.CurrentCredential!.SyncId);
+        Assert.Empty(after.PendingDeletions);
+    }
+
+    [Fact]
+    public async Task Remote_only_genshin_bundle_is_copied_during_rotation()
+    {
+        using var harness = new Harness(VectorBundle());
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        var genshin = GenshinBundleWithResource(Now.AddHours(-1), 120);
+        harness.Cloud.SeedBundle(
+            Fixture.SyncId,
+            DisplayCode,
+            genshin,
+            Now.AddMinutes(-1),
+            HoyoLabGameBundleRules.GenshinGameId);
+        harness.Cloud.ClearRequests();
+
+        var rotation = await harness.Coordinator.RotateAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, rotation.Status);
+        using var replacementSecrets = Secrets(rotation.RecoveryCode!);
+        Assert.Equal(
+            HoyoLabGameBundleRules.GameId,
+            harness.Cloud.GetBundle(replacementSecrets.SyncId, replacementSecrets).GameId);
+        Assert.Equal(
+            HoyoLabGameBundleRules.GenshinGameId,
+            harness.Cloud.GetBundle(
+                replacementSecrets.SyncId,
+                replacementSecrets,
+                HoyoLabGameBundleRules.GenshinGameId).GameId);
+        Assert.False(harness.Cloud.HasCopy(Fixture.SyncId, HoyoLabGameBundleRules.GameId));
+        Assert.False(harness.Cloud.HasCopy(Fixture.SyncId, HoyoLabGameBundleRules.GenshinGameId));
+        var localGenshin = new HoyoLabGameBundleStore(
+            harness.ProtectedRoot,
+            harness.Protector,
+            harness.Files,
+            harness.Clock,
+            HoyoLabGameBundleRules.GenshinGameId).TryLoad();
+        Assert.Null(localGenshin);
+    }
+
+    [Fact]
+    public async Task Game_detach_deletes_only_the_selected_remote_copy_and_keeps_current_credential()
+    {
+        using var harness = new Harness(VectorBundle());
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        SaveBundle(
+            harness.ProtectedRoot,
+            GenshinBundleWithResource(Now.AddHours(-2), 80),
+            HoyoLabGameBundleRules.GenshinGameId);
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.SyncNowAsync(
+                gameId: HoyoLabGameBundleRules.GenshinGameId)).Status);
+        harness.Cloud.ClearRequests();
+
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            harness.Coordinator.Detach(HoyoLabSyncStateStore.GenshinScope).Status);
+        using (var queued = LoadState(harness.ManagedSlotRoot))
+        {
+            Assert.Equal(Fixture.SyncId, queued.CurrentCredential!.SyncId);
+            Assert.Equal(
+                HoyoLabSyncStateStore.GenshinScope,
+                Assert.Single(queued.PendingDeletions).Scope);
+        }
+
+        var result = await harness.Coordinator.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, result.Status);
+        var request = Assert.Single(harness.Cloud.Requests);
+        Assert.Equal("delete", request.Action);
+        Assert.Equal(HoyoLabGameBundleRules.GenshinGameId, request.GameId);
+        Assert.True(harness.Cloud.HasCopy(Fixture.SyncId, HoyoLabGameBundleRules.GameId));
+        Assert.False(harness.Cloud.HasCopy(Fixture.SyncId, HoyoLabGameBundleRules.GenshinGameId));
+        using var state = LoadState(harness.ManagedSlotRoot);
+        Assert.Equal(Fixture.SyncId, state.CurrentCredential!.SyncId);
+        Assert.Empty(state.PendingDeletions);
+        Assert.Equal(
+            HoyoLabGameBundleRules.GameId,
+            LoadBundle(harness.ProtectedRoot).GameId);
+        Assert.Equal(
+            HoyoLabGameBundleRules.GenshinGameId,
+            LoadBundle(harness.ProtectedRoot, HoyoLabGameBundleRules.GenshinGameId).GameId);
     }
 
     [Fact]
@@ -1633,14 +1844,31 @@ public sealed class HoyoLabSyncCoordinatorTests
         new HoyoLabSyncClient(handler, TimeSpan.FromSeconds(1)),
         new FixedTimeProvider(Now));
 
-    private static HoyoLabGameBundle LoadBundle(string protectedRoot)
+    private static HoyoLabGameBundle LoadBundle(
+        string protectedRoot,
+        string gameId = HoyoLabGameBundleRules.GameId)
     {
         var store = new HoyoLabGameBundleStore(
             protectedRoot,
             new CopyProtector(),
             new SystemPublisherRoleBindingFileBoundary(),
-            new FixedTimeProvider(Now));
+            new FixedTimeProvider(Now),
+            gameId);
         return Assert.IsType<HoyoLabGameBundle>(store.TryLoad());
+    }
+
+    private static void SaveBundle(
+        string protectedRoot,
+        HoyoLabGameBundle bundle,
+        string gameId)
+    {
+        var store = new HoyoLabGameBundleStore(
+            protectedRoot,
+            new CopyProtector(),
+            new SystemPublisherRoleBindingFileBoundary(),
+            new FixedTimeProvider(Now),
+            gameId);
+        Assert.True(store.TrySave(bundle));
     }
 
     private static HoyoLabSyncState LoadState(
@@ -1763,6 +1991,33 @@ public sealed class HoyoLabSyncCoordinatorTests
         };
     }
 
+    private static HoyoLabGameBundle GenshinBundleWithResource(
+        DateTimeOffset observedAt,
+        int current) => new(
+            HoyoLabGameBundleRules.SchemaVersion,
+            HoyoLabGameBundleRules.GenshinGameId,
+            [
+                new(
+                    new(
+                        GenshinBinding,
+                        "Test Traveler",
+                        PublisherRoleRecordRules.CanonicalRegionLabel(GenshinBinding.Server)),
+                    new(observedAt, null, null, null, null, null, null, null),
+                    new(
+                        HoyoLabGameBundleRules.GenshinGameId,
+                        HoyoLabGameBundleRules.ResourceName(HoyoLabGameBundleRules.GenshinGameId),
+                        current,
+                        200,
+                        observedAt,
+                        RecoverySeconds: 38_400,
+                        Reserve: null),
+                    null),
+            ],
+            GenshinBinding,
+            new(true, false, false, false, false, false, false, false),
+            [],
+            []);
+
     private static HoyoLabGameBundle TwoRoleBundle(PublisherRoleBinding selected)
     {
         var bundle = VectorBundle();
@@ -1829,6 +2084,9 @@ public sealed class HoyoLabSyncCoordinatorTests
 
     private static PublisherRoleBinding FixtureBinding { get; } =
         new(FixtureUid, "prod_official_eur");
+
+    private static PublisherRoleBinding GenshinBinding { get; } =
+        new("123456789", "os_euro");
 
     private static PublisherRoleBinding SurvivorBinding { get; } =
         new("987654321", "prod_official_usa");
@@ -1962,6 +2220,7 @@ public sealed class HoyoLabSyncCoordinatorTests
     private sealed record RequestSnapshot(
         string Action,
         string SyncId,
+        string GameId,
         Uri Uri,
         byte[] Body,
         JsonElement Root);
@@ -1973,7 +2232,8 @@ public sealed class HoyoLabSyncCoordinatorTests
 
     private sealed class FakeCloud : HttpMessageHandler
     {
-        private readonly Dictionary<string, RemoteCopy> copies = new(StringComparer.Ordinal);
+        private readonly Dictionary<(string SyncId, string GameId), RemoteCopy> copies = [];
+        private readonly HashSet<string> accounts = new(StringComparer.Ordinal);
 
         internal List<RequestSnapshot> Requests { get; } = [];
         internal Func<RequestSnapshot, HttpResponseMessage?>? OnRequest { get; set; }
@@ -1990,6 +2250,7 @@ public sealed class HoyoLabSyncCoordinatorTests
             var snapshot = new RequestSnapshot(
                 request.RequestUri!.Segments[^1].Trim('/'),
                 root.GetProperty("syncId").GetString()!,
+                root.GetProperty("game").GetString()!,
                 request.RequestUri,
                 body,
                 root);
@@ -2000,24 +2261,50 @@ public sealed class HoyoLabSyncCoordinatorTests
 
         internal void ClearRequests() => Requests.Clear();
 
-        internal void Remove(string syncId) => copies.Remove(syncId);
+        internal bool HasCopy(
+            string syncId,
+            string gameId = HoyoLabGameBundleRules.GameId) => copies.ContainsKey((syncId, gameId));
 
-        internal void CopyTo(FakeCloud target, string syncId) =>
-            target.copies[syncId] = copies[syncId];
-
-        internal void SetRevision(string syncId, DateTimeOffset updatedAt)
+        internal void RemoveAccount(string syncId)
         {
-            var copy = copies[syncId];
-            copies[syncId] = copy with { UpdatedAt = updatedAt };
+            foreach (var key in copies.Keys.Where(key => key.SyncId == syncId).ToArray())
+                copies.Remove(key);
+            accounts.Remove(syncId);
         }
 
-        internal DateTimeOffset GetRevision(string syncId) => copies[syncId].UpdatedAt;
+        internal void Remove(
+            string syncId,
+            string gameId = HoyoLabGameBundleRules.GameId) => copies.Remove((syncId, gameId));
+
+        internal void CopyTo(
+            FakeCloud target,
+            string syncId,
+            string gameId = HoyoLabGameBundleRules.GameId)
+        {
+            target.copies[(syncId, gameId)] = copies[(syncId, gameId)];
+            target.accounts.Add(syncId);
+        }
+
+        internal void SetRevision(
+            string syncId,
+            DateTimeOffset updatedAt,
+            string gameId = HoyoLabGameBundleRules.GameId)
+        {
+            var key = (syncId, gameId);
+            var copy = copies[key];
+            copies[key] = copy with { UpdatedAt = updatedAt };
+        }
+
+        internal DateTimeOffset GetRevision(
+            string syncId,
+            string gameId = HoyoLabGameBundleRules.GameId) => copies[(syncId, gameId)].UpdatedAt;
 
         internal HoyoLabGameBundle GetBundle(
             string syncId,
-            HoyoLabSyncCrypto.DerivedSecrets secrets)
+            HoyoLabSyncCrypto.DerivedSecrets secrets,
+            string gameId = HoyoLabGameBundleRules.GameId)
         {
-            var payload = Encoding.UTF8.GetBytes(copies[syncId].PayloadJson);
+            var payload = Encoding.UTF8.GetBytes(copies[(syncId, gameId)].PayloadJson);
             try
             {
                 Assert.True(HoyoLabSyncCrypto.TryParseEnvelope(payload, out var envelope));
@@ -2025,7 +2312,8 @@ public sealed class HoyoLabSyncCoordinatorTests
                     secrets,
                     envelope,
                     Now,
-                    out var bundle));
+                    out var bundle,
+                    gameId: gameId));
                 return Assert.IsType<HoyoLabGameBundle>(bundle);
             }
             finally
@@ -2038,7 +2326,8 @@ public sealed class HoyoLabSyncCoordinatorTests
             string syncId,
             string code,
             HoyoLabGameBundle bundle,
-            DateTimeOffset updatedAt)
+            DateTimeOffset updatedAt,
+            string gameId = HoyoLabGameBundleRules.GameId)
         {
             using var secrets = Secrets(code);
             Assert.True(HoyoLabSyncCrypto.TryEncryptBundle(
@@ -2047,13 +2336,14 @@ public sealed class HoyoLabSyncCoordinatorTests
                 Now,
                 FixedNonce((byte)(updatedAt.Minute + 1)),
                 out var envelope));
-            SeedRaw(syncId, envelope!, updatedAt);
+            SeedRaw(syncId, envelope!, updatedAt, gameId);
         }
 
         internal void SeedRaw(
             string syncId,
             HoyoLabSyncCrypto.Envelope envelope,
-            DateTimeOffset updatedAt)
+            DateTimeOffset updatedAt,
+            string gameId = HoyoLabGameBundleRules.GameId)
         {
             Assert.True(HoyoLabSyncCrypto.TrySerializeEnvelope(envelope, out var bytes));
             try
@@ -2061,10 +2351,11 @@ public sealed class HoyoLabSyncCoordinatorTests
                 var ciphertext = Convert.FromBase64String(envelope.Ciphertext);
                 try
                 {
-                    copies[syncId] = new(
+                    copies[(syncId, gameId)] = new(
                         Encoding.UTF8.GetString(bytes),
                         updatedAt,
                         ciphertext.Length);
+                    accounts.Add(syncId);
                 }
                 finally
                 {
@@ -2079,13 +2370,13 @@ public sealed class HoyoLabSyncCoordinatorTests
 
         private HttpResponseMessage Respond(RequestSnapshot request) => request.Action switch
         {
-            "pull" => copies.TryGetValue(request.SyncId, out var copy)
+            "pull" => copies.TryGetValue((request.SyncId, request.GameId), out var copy)
                 ? PullResponse(copy)
                 : JsonResponse(HttpStatusCode.NotFound, "{}"),
-            "status" => copies.ContainsKey(request.SyncId)
+            "status" => copies.TryGetValue((request.SyncId, request.GameId), out var statusCopy)
                 ? JsonResponse(HttpStatusCode.OK, "{\"ok\":true,\"exists\":true,\"updatedAt\":\""
-                    + FormatTimestamp(copies[request.SyncId].UpdatedAt)
-                    + "\",\"size\":" + copies[request.SyncId].Size + "}")
+                    + FormatTimestamp(statusCopy.UpdatedAt)
+                    + "\",\"size\":" + statusCopy.Size + "}")
                 : JsonResponse(HttpStatusCode.NotFound, "{}"),
             "push" => SavePush(request),
             "delete" or "delete-account" => Delete(request),
@@ -2095,8 +2386,8 @@ public sealed class HoyoLabSyncCoordinatorTests
         private HttpResponseMessage SavePush(RequestSnapshot request)
         {
             if (TryGetRevisionCondition(request, out var expected)
-                && !MatchesRevision(request.SyncId, expected))
-                return ConflictResponse(copies.TryGetValue(request.SyncId, out var current)
+                && !MatchesRevision(request.SyncId, request.GameId, expected))
+                return ConflictResponse(copies.TryGetValue((request.SyncId, request.GameId), out var current)
                     ? current.UpdatedAt
                     : null);
             var payload = request.Root.GetProperty("payload").GetRawText();
@@ -2105,7 +2396,8 @@ public sealed class HoyoLabSyncCoordinatorTests
             try
             {
                 var updatedAt = Now;
-                copies[request.SyncId] = new(payload, updatedAt, ciphertext.Length);
+                copies[(request.SyncId, request.GameId)] = new(payload, updatedAt, ciphertext.Length);
+                accounts.Add(request.SyncId);
                 return JsonResponse(HttpStatusCode.OK, "{\"ok\":true,\"updatedAt\":\""
                     + FormatTimestamp(updatedAt) + "\",\"size\":" + ciphertext.Length + "}");
             }
@@ -2117,21 +2409,54 @@ public sealed class HoyoLabSyncCoordinatorTests
 
         private HttpResponseMessage Delete(RequestSnapshot request)
         {
-            if (request.Action == "delete-account" && !copies.ContainsKey(request.SyncId))
+            if (request.Action == "delete-account")
+            {
+                if (!accounts.Contains(request.SyncId))
+                    return JsonResponse(HttpStatusCode.OK, "{\"ok\":true,\"deleted\":true}");
+                if (request.Root.TryGetProperty("baseUpdatedAtByGame", out _))
+                {
+                    if (!TryGetGameRevisionCondition(request, out var expected)
+                        || !MatchesGameRevisions(request.SyncId, expected))
+                        return ConflictResponse(
+                            CurrentRevision(request.SyncId, HoyoLabGameBundleRules.GameId),
+                            CurrentRevision(request.SyncId, HoyoLabGameBundleRules.GenshinGameId));
+                }
+                else if (TryGetRevisionCondition(request, out var scalar))
+                {
+                    if (copies.ContainsKey((request.SyncId, HoyoLabGameBundleRules.GenshinGameId)))
+                        return ConflictResponse(CurrentRevision(request.SyncId, HoyoLabGameBundleRules.GameId),
+                            CurrentRevision(request.SyncId, HoyoLabGameBundleRules.GenshinGameId));
+                    if (!MatchesRevision(request.SyncId, HoyoLabGameBundleRules.GameId, scalar))
+                        return ConflictResponse(CurrentRevision(request.SyncId, HoyoLabGameBundleRules.GameId));
+                }
+                foreach (var key in copies.Keys.Where(key => key.SyncId == request.SyncId).ToArray())
+                    copies.Remove(key);
+                accounts.Remove(request.SyncId);
                 return JsonResponse(HttpStatusCode.OK, "{\"ok\":true,\"deleted\":true}");
-            if (TryGetRevisionCondition(request, out var expected)
-                && !MatchesRevision(request.SyncId, expected))
-                return ConflictResponse(copies.TryGetValue(request.SyncId, out var current)
+            }
+            if (TryGetRevisionCondition(request, out var expectedGame)
+                && !MatchesRevision(request.SyncId, request.GameId, expectedGame))
+                return ConflictResponse(copies.TryGetValue((request.SyncId, request.GameId), out var current)
                     ? current.UpdatedAt
                     : null);
-            copies.Remove(request.SyncId);
+            copies.Remove((request.SyncId, request.GameId));
             return JsonResponse(HttpStatusCode.OK, "{\"ok\":true,\"deleted\":true}");
         }
 
-        private bool MatchesRevision(string syncId, DateTimeOffset? expected) =>
+        private bool MatchesRevision(
+            string syncId,
+            string gameId,
+            DateTimeOffset? expected) =>
             expected is null
-                ? !copies.ContainsKey(syncId)
-                : copies.TryGetValue(syncId, out var current) && current.UpdatedAt == expected;
+                ? !copies.ContainsKey((syncId, gameId))
+                : copies.TryGetValue((syncId, gameId), out var current) && current.UpdatedAt == expected;
+
+        private bool MatchesGameRevisions(string syncId, HoyoLabGameRevisions expected) =>
+            MatchesRevision(syncId, HoyoLabGameBundleRules.GameId, expected.Hsr)
+            && MatchesRevision(syncId, HoyoLabGameBundleRules.GenshinGameId, expected.Genshin);
+
+        private DateTimeOffset? CurrentRevision(string syncId, string gameId) =>
+            copies.TryGetValue((syncId, gameId), out var copy) ? copy.UpdatedAt : null;
 
         private static bool TryGetRevisionCondition(
             RequestSnapshot request,
@@ -2149,6 +2474,41 @@ public sealed class HoyoLabSyncCoordinatorTests
                     out var parsed))
                 return false;
             expected = parsed;
+            return true;
+        }
+
+        private static bool TryGetGameRevisionCondition(
+            RequestSnapshot request,
+            out HoyoLabGameRevisions expected)
+        {
+            expected = new(null, null);
+            if (!request.Root.TryGetProperty("baseUpdatedAtByGame", out var value)
+                || value.ValueKind != JsonValueKind.Object)
+                return false;
+            if (value.EnumerateObject().Select(property => property.Name)
+                .Order(StringComparer.Ordinal)
+                .SequenceEqual(["gi", "hsr"], StringComparer.Ordinal) is false)
+                return false;
+            if (!TryGetGameRevision(value.GetProperty("hsr"), out var hsr)
+                || !TryGetGameRevision(value.GetProperty("gi"), out var gi))
+                return false;
+            expected = new(hsr, gi);
+            return true;
+        }
+
+        private static bool TryGetGameRevision(JsonElement value, out DateTimeOffset? revision)
+        {
+            revision = null;
+            if (value.ValueKind == JsonValueKind.Null) return true;
+            if (value.ValueKind != JsonValueKind.String
+                || !DateTimeOffset.TryParseExact(
+                    value.GetString(),
+                    "yyyy-MM-dd'T'HH:mm:ss.fff'Z'",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                    out var parsed))
+                return false;
+            revision = parsed;
             return true;
         }
 
@@ -2225,6 +2585,16 @@ public sealed class HoyoLabSyncCoordinatorTests
         "{\"ok\":false,\"error\":{\"code\":\"stale_write\",\"message\":\"stale\",\"requestId\":\"req-test\"},\"serverUpdatedAt\":"
         + (serverUpdatedAt is null ? "null" : "\"" + FormatTimestamp(serverUpdatedAt.Value) + "\"")
         + "}");
+
+    private static HttpResponseMessage ConflictResponse(
+        DateTimeOffset? hsr,
+        DateTimeOffset? genshin) => JsonResponse(
+        HttpStatusCode.Conflict,
+        "{\"ok\":false,\"error\":{\"code\":\"stale_write\",\"message\":\"stale\",\"requestId\":\"req-test\"},\"serverUpdatedAtByGame\":{\"hsr\":"
+        + (hsr is null ? "null" : "\"" + FormatTimestamp(hsr.Value) + "\"")
+        + ",\"gi\":"
+        + (genshin is null ? "null" : "\"" + FormatTimestamp(genshin.Value) + "\"")
+        + "}}");
 
     private static HttpResponseMessage JsonResponse(HttpStatusCode status, string body)
     {

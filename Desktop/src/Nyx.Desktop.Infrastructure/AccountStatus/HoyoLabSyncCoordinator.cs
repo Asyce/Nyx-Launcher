@@ -40,7 +40,7 @@ public sealed record HoyoLabSyncSummary(
 }
 
 /// <summary>
-/// Manual HSR sync and previously authorized deletion only. The publisher service
+/// Manual HoYo sync and previously authorized deletion only. The publisher service
 /// holds its existing operation gate and supplies its atomic generation check.
 /// </summary>
 public sealed class HoyoLabSyncCoordinator : IDisposable
@@ -53,7 +53,7 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
     private readonly string managedRoot;
     private readonly string? slotId;
     private readonly HoyoLabSyncStateStore? currentStore;
-    private readonly HoyoLabGameBundleStore? bundles;
+    private readonly Dictionary<string, HoyoLabGameBundleStore> bundles = new(StringComparer.Ordinal);
     private readonly IPublisherRoleBindingProtector protector;
     private readonly IPublisherRoleBindingFileBoundary files;
     private readonly HoyoLabSyncClient client;
@@ -109,7 +109,8 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
         if (slotId is not null)
         {
             currentStore = StoreFor(slotId);
-            bundles = new(protectedSlotRoot!, protector, files, clock);
+            foreach (var game in HoyoLabGameBundleRules.SupportedGames)
+                bundles.Add(game, new(protectedSlotRoot!, protector, files, clock, game));
         }
     }
 
@@ -139,9 +140,10 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
 
     public async Task<HoyoLabManualSyncResult> ConnectAsync(
         string recoveryCode,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string gameId = HoyoLabGameBundleRules.GameId)
     {
-        if (currentStore is null || bundles is null) return Result(HoyoLabManualSyncStatus.NotEnabled);
+        if (currentStore is null || !bundles.ContainsKey(gameId)) return Result(HoyoLabManualSyncStatus.NotEnabled);
         if (!HoyoLabSyncCrypto.TryDerive(recoveryCode, out var derived))
             return Result(HoyoLabManualSyncStatus.InvalidRecoveryCode);
         using var secrets = derived!;
@@ -158,32 +160,40 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
         if (!CanCreateCurrentStore()) return Result(HoyoLabManualSyncStatus.LocalStorageUnavailable);
         if (!Apply(() => currentStore.TrySetCurrentCredential(credential, cancellationToken), cancellationToken))
             return WriteFailure(cancellationToken);
-        return await SyncCoreAsync(secrets, cancellationToken).ConfigureAwait(false);
+        return await SyncCoreAsync(secrets, cancellationToken, gameId).ConfigureAwait(false);
     }
 
     public async Task<HoyoLabManualSyncResult> SyncNowAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string gameId = HoyoLabGameBundleRules.GameId)
     {
+        if (!bundles.ContainsKey(gameId)) return Result(HoyoLabManualSyncStatus.NotEnabled);
         using var state = currentStore?.TryLoad();
         if (state?.CurrentCredential is not { } credential)
             return Result(HoyoLabManualSyncStatus.NotEnabled);
         var identityStatus = CheckIdentity(credential.SyncId, rejectOtherCurrent: true);
         if (identityStatus != HoyoLabManualSyncStatus.Completed) return Result(identityStatus);
         using var secrets = SecretsFor(credential);
-        return await SyncCoreAsync(secrets, cancellationToken).ConfigureAwait(false);
+        return await SyncCoreAsync(secrets, cancellationToken, gameId).ConfigureAwait(false);
     }
 
     public async Task<HoyoLabManualSyncResult> RotateAsync(
         CancellationToken cancellationToken = default)
     {
         using var state = currentStore?.TryLoad();
-        if (state?.CurrentCredential is not { } current || bundles is null)
+        if (state?.CurrentCredential is not { } current || bundles.Count == 0)
             return Result(HoyoLabManualSyncStatus.NotEnabled);
         var identityStatus = CheckIdentity(current.SyncId, rejectOtherCurrent: true);
         if (identityStatus != HoyoLabManualSyncStatus.Completed) return Result(identityStatus);
         using var oldSecrets = SecretsFor(current);
-        var preparedBundle = await ReadMergedAsync(oldSecrets, cancellationToken).ConfigureAwait(false);
-        if (preparedBundle.Status != HoyoLabManualSyncStatus.Completed) return Result(preparedBundle.Status);
+        var prepared = new Dictionary<string, ReadResult>(StringComparer.Ordinal);
+        foreach (var game in HoyoLabGameBundleRules.SupportedGames)
+        {
+            var copy = await ReadMergedAsync(oldSecrets, cancellationToken, game, allowRemoteOnly: true).ConfigureAwait(false);
+            if (copy.Status != HoyoLabManualSyncStatus.Completed) return Result(copy.Status);
+            prepared.Add(game, copy);
+        }
+        if (prepared.Values.All(copy => copy.Bundle is null)) return Result(HoyoLabManualSyncStatus.NoLocalData);
 
         var code = GenerateRecoveryCode();
         if (!HoyoLabSyncCrypto.TryDerive(code, out var derived))
@@ -192,30 +202,42 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
         using var replacementCredential = CredentialFor(replacement);
         identityStatus = CheckIdentity(replacement.SyncId, rejectOtherCurrent: true);
         if (identityStatus != HoyoLabManualSyncStatus.Completed) return Result(identityStatus);
-        var target = await RequestAsync(
-            () => client.StatusAsync(replacement, cancellationToken),
-            cancellationToken).ConfigureAwait(false);
-        if (!target.IsAbsent)
-            return Result(target.IsSuccess ? HoyoLabManualSyncStatus.Conflict : Map(target.Failure));
+        foreach (var game in HoyoLabGameBundleRules.SupportedGames)
+        {
+            var target = await RequestAsync(
+                () => client.StatusAsync(replacement, cancellationToken, game),
+                cancellationToken).ConfigureAwait(false);
+            if (!target.IsAbsent)
+                return Result(target.IsSuccess ? HoyoLabManualSyncStatus.Conflict : Map(target.Failure));
+        }
 
         using var compensation = TokenDeletion(replacementCredential, HoyoLabSyncStateStore.AllHoyoScope);
         using var oldDeletion = TokenDeletion(
             current, HoyoLabSyncStateStore.AllHoyoScope,
-            requireRevisionMatch: true, expectedRevision: preparedBundle.UpdatedAt);
+            requireRevisionMatch: true,
+            expectedRevisionsByGame: new(prepared["hsr"].UpdatedAt, prepared["gi"].UpdatedAt));
         if (!Apply(() => currentStore!.TryEnqueuePendingDeletion(compensation, cancellationToken), cancellationToken))
             return WriteFailure(cancellationToken);
-        if (!HoyoLabSyncCrypto.TryEncryptBundle(replacement, preparedBundle.Bundle, UtcNow(), out var envelope))
-            return Result(HoyoLabManualSyncStatus.InvalidCloudData);
-        var pushed = await RequestAsync(
-            () => client.PushAsync(replacement, envelope, null, cancellationToken),
-            cancellationToken).ConfigureAwait(false);
-        if (!pushed.IsSuccess) return Result(Map(pushed.Failure));
+        DateTimeOffset? lastUpdatedAt = null;
+        foreach (var (game, copy) in prepared)
+        {
+            if (copy.Bundle is null) continue;
+            if (!HoyoLabSyncCrypto.TryEncryptBundle(replacement, copy.Bundle, UtcNow(), out var envelope))
+                return Result(HoyoLabManualSyncStatus.InvalidCloudData);
+            var pushed = await RequestAsync(
+                () => client.PushAsync(replacement, envelope, null, cancellationToken, game),
+                cancellationToken).ConfigureAwait(false);
+            if (!pushed.IsSuccess) return Result(Map(pushed.Failure));
+            lastUpdatedAt = pushed.UpdatedAt;
+        }
         if (!Apply(
-                () => bundles.TrySave(preparedBundle.Bundle!)
+                () => prepared.All(entry => entry.Value.Bundle is null
+                        || !files.EntryExists(bundles[entry.Key].BundlePath)
+                        || bundles[entry.Key].TrySave(entry.Value.Bundle))
                     && currentStore!.TryRotateCurrentCredential(
                         current,
                         replacementCredential,
-                        pushed.UpdatedAt,
+                        lastUpdatedAt,
                         oldDeletion,
                         compensation,
                         cancellationToken),
@@ -226,7 +248,7 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
         // retains only its protected compensation token and the old live key.
         _ = await RetryDeletionsAsync(cancellationToken).ConfigureAwait(false);
         return IsCurrent(cancellationToken)
-            ? new(HoyoLabManualSyncStatus.Completed, pushed.UpdatedAt, code)
+            ? new(HoyoLabManualSyncStatus.Completed, lastUpdatedAt, code)
             : Result(HoyoLabManualSyncStatus.Canceled);
     }
 
@@ -236,7 +258,7 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
         bool removeLocalSlot = false)
     {
         if ((deletionScope is not null
-                && deletionScope is not (HoyoLabSyncStateStore.HsrScope or HoyoLabSyncStateStore.AllHoyoScope))
+                && deletionScope is not (HoyoLabSyncStateStore.HsrScope or HoyoLabSyncStateStore.GenshinScope or HoyoLabSyncStateStore.AllHoyoScope))
             || (removeLocalSlot && deletionScope != HoyoLabSyncStateStore.AllHoyoScope))
             return Result(HoyoLabManualSyncStatus.Conflict);
         if (!IsCurrent(cancellationToken)) return Result(HoyoLabManualSyncStatus.Canceled);
@@ -249,7 +271,9 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
                 : Result(HoyoLabManualSyncStatus.Completed);
         using var deletion = deletionScope is null ? null : TokenDeletion(current, deletionScope, removeLocalSlot);
         if (!Apply(
-                () => currentStore!.TryDetachCurrentCredential(current, deletion, cancellationToken),
+                () => deletion is not null && HoyoLabGameBundleRules.IsSupportedGame(deletion.Scope)
+                    ? currentStore!.TryQueueGameDeletion(deletion, cancellationToken)
+                    : currentStore!.TryDetachCurrentCredential(current, deletion, cancellationToken),
                 cancellationToken))
             return WriteFailure(cancellationToken);
         TrimEmptyStore(slotId!, currentStore!);
@@ -258,13 +282,14 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
 
     public HoyoLabManualSyncResult QueueRoleDeletion(
         PublisherRoleBinding binding,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string gameId = HoyoLabGameBundleRules.GameId)
     {
         using var state = currentStore?.TryLoad();
-        if (state?.CurrentCredential is not { } current || bundles is null)
+        if (state?.CurrentCredential is not { } current || !bundles.TryGetValue(gameId, out var gameBundles))
             return Result(HoyoLabManualSyncStatus.NotEnabled);
         var previous = state.PendingRoleDeletions.FirstOrDefault(item =>
-            item.SyncId == current.SyncId && item.Binding == binding);
+            item.SyncId == current.SyncId && item.GameId == gameId && item.Binding == binding);
         if (previous is not null)
         {
             var removed = RemoveLocalRole(slotId!, previous, cancellationToken);
@@ -274,7 +299,7 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
         }
         if (state.PendingDeletions.Any(item => item.SyncId == current.SyncId))
             return Result(HoyoLabManualSyncStatus.DeletionPending);
-        var bundle = bundles.TryLoad();
+        var bundle = gameBundles.TryLoad();
         var role = bundle?.Roles.SingleOrDefault(item => item.Role.Binding == binding);
         if (role is null) return Result(HoyoLabManualSyncStatus.NoLocalData);
         var now = UtcNow();
@@ -292,7 +317,7 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
             now,
             role.Observations.Resources,
             role.Observations.Achievements,
-            deletionAt.Value);
+            deletionAt.Value, gameId);
         if (!Apply(
             () => currentStore!.TryEnqueuePendingRoleDeletion(deletion, cancellationToken),
             cancellationToken))
@@ -371,7 +396,8 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
             }
             foreach (var deletion in state.PendingDeletions)
             {
-                if (state.CurrentCredential?.SyncId == deletion.SyncId)
+                if (state.CurrentCredential?.SyncId == deletion.SyncId
+                    && deletion.Scope == HoyoLabSyncStateStore.AllHoyoScope)
                     return Result(HoyoLabManualSyncStatus.Conflict);
                 if (deletion.RemoveLocalSlot
                     && (removeLocalSlot is null
@@ -404,21 +430,22 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
 
     private async Task<HoyoLabManualSyncResult> SyncCoreAsync(
         HoyoLabSyncCrypto.DerivedSecrets secrets,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string gameId)
     {
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            var merged = await ReadMergedAsync(secrets, cancellationToken).ConfigureAwait(false);
+            var merged = await ReadMergedAsync(secrets, cancellationToken, gameId).ConfigureAwait(false);
             if (merged.Status != HoyoLabManualSyncStatus.Completed) return Result(merged.Status);
             if (!HoyoLabSyncCrypto.TryEncryptBundle(secrets, merged.Bundle, UtcNow(), out var envelope))
                 return Result(HoyoLabManualSyncStatus.InvalidCloudData);
             var pushed = await RequestAsync(
-                () => client.PushAsync(secrets, envelope, merged.UpdatedAt, cancellationToken),
+                () => client.PushAsync(secrets, envelope, merged.UpdatedAt, cancellationToken, gameId),
                 cancellationToken).ConfigureAwait(false);
             if (pushed.IsConflict && attempt == 0) continue;
             if (!pushed.IsSuccess) return Result(Map(pushed.Failure));
             if (!Apply(
-                    () => bundles!.TrySave(merged.Bundle!)
+                    () => bundles[gameId].TrySave(merged.Bundle!)
                         && currentStore!.TrySetWorkerRevision(pushed.UpdatedAt, cancellationToken),
                     cancellationToken))
                 return WriteFailure(cancellationToken);
@@ -429,12 +456,17 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
 
     private async Task<ReadResult> ReadMergedAsync(
         HoyoLabSyncCrypto.DerivedSecrets secrets,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string gameId,
+        bool allowRemoteOnly = false)
     {
-        var local = bundles?.TryLoad();
-        if (local is null) return new(HoyoLabManualSyncStatus.NoLocalData);
-        var remote = await ReadRemoteAsync(secrets, cancellationToken).ConfigureAwait(false);
+        var store = bundles[gameId];
+        var local = store.TryLoad();
+        if (local is null && files.EntryExists(store.BundlePath)) return new(HoyoLabManualSyncStatus.LocalStorageUnavailable);
+        if (local is null && !allowRemoteOnly) return new(HoyoLabManualSyncStatus.NoLocalData);
+        var remote = await ReadRemoteAsync(secrets, cancellationToken, gameId).ConfigureAwait(false);
         if (remote.Status != HoyoLabManualSyncStatus.Completed) return remote;
+        if (local is null) return remote;
         if (remote.Bundle is null) return new(HoyoLabManualSyncStatus.Completed, local);
         var merged = HoyoLabGameBundleMerge.Merge(local, remote.Bundle, UtcNow());
         return merged.Outcome == HoyoLabGameBundleMergeOutcome.Conflict
@@ -444,10 +476,11 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
 
     private async Task<ReadResult> ReadRemoteAsync(
         HoyoLabSyncCrypto.DerivedSecrets secrets,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string gameId)
     {
         var pulled = await RequestAsync(
-            () => client.PullAsync(secrets, cancellationToken),
+            () => client.PullAsync(secrets, cancellationToken, gameId),
             cancellationToken).ConfigureAwait(false);
         try
         {
@@ -455,7 +488,7 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
             if (!pulled.IsSuccess) return new(Map(pulled.Failure));
             if (pulled.Payload is null
                 || !HoyoLabSyncCrypto.TryParseEnvelope(pulled.Payload, out var envelope)
-                || !HoyoLabSyncCrypto.TryDecryptBundle(secrets, envelope, UtcNow(), out var bundle))
+                || !HoyoLabSyncCrypto.TryDecryptBundle(secrets, envelope, UtcNow(), out var bundle, gameId: gameId))
                 return new(HoyoLabManualSyncStatus.InvalidCloudData);
             return new(HoyoLabManualSyncStatus.Completed, bundle, pulled.UpdatedAt);
         }
@@ -473,7 +506,7 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
             deletion.SyncId, deletion.Token.ToArray(), deletion.Key.ToArray(), null);
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            var remote = await ReadRemoteAsync(secrets, cancellationToken).ConfigureAwait(false);
+            var remote = await ReadRemoteAsync(secrets, cancellationToken, deletion.GameId).ConfigureAwait(false);
             if (remote.Status != HoyoLabManualSyncStatus.Completed) return remote.Status;
             if (remote.Bundle is null) return HoyoLabManualSyncStatus.Completed;
             var role = remote.Bundle.Roles.SingleOrDefault(item => item.Role.Binding == deletion.Binding);
@@ -488,7 +521,7 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
                 || !HoyoLabSyncCrypto.TryEncryptBundle(secrets, updated, UtcNow(), out var envelope))
                 return HoyoLabManualSyncStatus.Conflict;
             var pushed = await RequestAsync(
-                () => client.PushAsync(secrets, envelope, remote.UpdatedAt, cancellationToken),
+                () => client.PushAsync(secrets, envelope, remote.UpdatedAt, cancellationToken, deletion.GameId),
                 cancellationToken).ConfigureAwait(false);
             if (pushed.IsConflict && attempt == 0) continue;
             return pushed.IsSuccess ? HoyoLabManualSyncStatus.Completed : Map(pushed.Failure);
@@ -531,7 +564,7 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
             if (!IsCurrent(cancellationToken)) return HoyoLabManualSyncStatus.Canceled;
             if (!IsSafeDirectoryChain(protectedRoot)) return HoyoLabManualSyncStatus.LocalStorageUnavailable;
             if (!Directory.Exists(protectedRoot)) return HoyoLabManualSyncStatus.Completed;
-            var localBundles = new HoyoLabGameBundleStore(protectedRoot, protector, files, clock);
+            var localBundles = new HoyoLabGameBundleStore(protectedRoot, protector, files, clock, deletion.GameId);
             var local = localBundles.TryLoad();
             if (local is null && files.EntryExists(localBundles.BundlePath))
                 return HoyoLabManualSyncStatus.LocalStorageUnavailable;
@@ -540,14 +573,14 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
                 || NewerThanKnown(role?.Observations.Achievements, deletion.KnownAchievementsAt))
                 return HoyoLabManualSyncStatus.Conflict;
             var roles = new PublisherRoleBindingStore(protectedRoot, protector, files);
-            var selected = roles.TryLoadRecord(HoyoLabGameBundleRules.GameId);
-            if (selected is null && files.EntryExists(roles.BindingPath(HoyoLabGameBundleRules.GameId)))
+            var selected = roles.TryLoadRecord(deletion.GameId);
+            if (selected is null && files.EntryExists(roles.BindingPath(deletion.GameId)))
                 return HoyoLabManualSyncStatus.LocalStorageUnavailable;
             var snapshots = new PublisherResourceSnapshotStore(protectedRoot, protector, files);
             var removesSelected = selected?.Binding == deletion.Binding;
             if (removesSelected
                 && NewerThanKnown(
-                    snapshots.TryLoad(HoyoLabGameBundleRules.GameId, deletion.Binding)?.ObservedAt,
+                    snapshots.TryLoad(deletion.GameId, deletion.Binding)?.ObservedAt,
                     deletion.KnownResourcesAt))
                 return HoyoLabManualSyncStatus.Conflict;
             var updated = local is null ? null : RemoveRoleAt(local, deletion.Binding, deletion.DeletedAt);
@@ -556,8 +589,8 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
             return Apply(
                 () => (updated is null || localBundles.TrySave(updated))
                     && (!removesSelected
-                        || (snapshots.Delete(HoyoLabGameBundleRules.GameId)
-                            && roles.Delete(HoyoLabGameBundleRules.GameId))),
+                        || (snapshots.Delete(deletion.GameId)
+                            && roles.Delete(deletion.GameId))),
                 cancellationToken)
                 ? HoyoLabManualSyncStatus.Completed
                 : WriteFailure(cancellationToken).Status;
@@ -712,9 +745,10 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
         string scope,
         bool removeLocalSlot = false,
         bool requireRevisionMatch = false,
-        DateTimeOffset? expectedRevision = null) => new(
+        DateTimeOffset? expectedRevision = null,
+        HoyoLabGameRevisions? expectedRevisionsByGame = null) => new(
         credential.SyncId, credential.Token, scope, Guid.NewGuid().ToString("N"), UtcNow(),
-        removeLocalSlot, requireRevisionMatch, expectedRevision);
+        removeLocalSlot, requireRevisionMatch, expectedRevision, expectedRevisionsByGame);
 
     private static HoyoLabSyncCredential CredentialFor(HoyoLabSyncCrypto.DerivedSecrets secrets)
     {

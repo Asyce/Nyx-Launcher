@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Nyx.Desktop.Core.AccountStatus;
 
 namespace Nyx.Desktop.Infrastructure.AccountStatus;
 
@@ -96,39 +97,43 @@ internal sealed class HoyoLabSyncClient : IDisposable
         HoyoLabSyncCrypto.DerivedSecrets? secrets,
         HoyoLabSyncCrypto.Envelope? envelope,
         DateTimeOffset? baseUpdatedAt = null,
-        CancellationToken cancellationToken = default) => SendAsync(
+        CancellationToken cancellationToken = default,
+        string gameId = Game) => SendAsync(
         SyncAction.Push,
         secrets,
         envelope,
         baseUpdatedAt,
-        cancellationToken);
+        cancellationToken, gameId);
 
     internal Task<HoyoLabSyncOutcome> PullAsync(
         HoyoLabSyncCrypto.DerivedSecrets? secrets,
-        CancellationToken cancellationToken = default) => SendAsync(
+        CancellationToken cancellationToken = default,
+        string gameId = Game) => SendAsync(
         SyncAction.Pull,
         secrets,
         null,
         null,
-        cancellationToken);
+        cancellationToken, gameId);
 
     internal Task<HoyoLabSyncOutcome> StatusAsync(
         HoyoLabSyncCrypto.DerivedSecrets? secrets,
-        CancellationToken cancellationToken = default) => SendAsync(
+        CancellationToken cancellationToken = default,
+        string gameId = Game) => SendAsync(
         SyncAction.Status,
         secrets,
         null,
         null,
-        cancellationToken);
+        cancellationToken, gameId);
 
     internal Task<HoyoLabSyncOutcome> DeleteAsync(
         HoyoLabSyncCrypto.DerivedSecrets? secrets,
-        CancellationToken cancellationToken = default) => SendAsync(
+        CancellationToken cancellationToken = default,
+        string gameId = Game) => SendAsync(
         SyncAction.Delete,
         secrets,
         null,
         null,
-        cancellationToken);
+        cancellationToken, gameId);
 
     internal Task<HoyoLabSyncOutcome> DeleteAccountAsync(
         HoyoLabSyncCrypto.DerivedSecrets? secrets,
@@ -154,9 +159,9 @@ internal sealed class HoyoLabSyncClient : IDisposable
         byte[]? body = null;
         try
         {
-            var action = deletion!.Scope == HoyoLabSyncStateStore.HsrScope
-                ? SyncAction.Delete
-                : SyncAction.DeleteAccount;
+            var action = deletion!.Scope == HoyoLabSyncStateStore.AllHoyoScope
+                ? SyncAction.DeleteAccount
+                : SyncAction.Delete;
             if (!TryFormatTimestamp(deletion.ExpectedRevision, out var baseTimestamp))
                 return InvalidRequest();
             body = SerializeRequest(
@@ -165,7 +170,9 @@ internal sealed class HoyoLabSyncClient : IDisposable
                 Convert.ToHexStringLower(deletion.Token.Span),
                 baseTimestamp,
                 null,
-                deletion.RequireRevisionMatch);
+                deletion.RequireRevisionMatch,
+                action == SyncAction.Delete ? deletion.Scope : Game,
+                deletion.ExpectedRevisionsByGame);
             if (body is null) return InvalidRequest();
             if (body.Length > MaximumRequestBytes) return RequestTooLarge();
             if (cancellationToken.IsCancellationRequested) return Canceled();
@@ -202,11 +209,13 @@ internal sealed class HoyoLabSyncClient : IDisposable
         HoyoLabSyncCrypto.DerivedSecrets? secrets,
         HoyoLabSyncCrypto.Envelope? envelope,
         DateTimeOffset? baseUpdatedAt,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string gameId = Game)
     {
         if (cancellationToken.IsCancellationRequested)
             return Canceled();
-        if (Volatile.Read(ref disposed) != 0 || secrets is null || secrets.IsDisposed)
+        if (!HoyoLabGameBundleRules.IsSupportedGame(gameId)
+            || Volatile.Read(ref disposed) != 0 || secrets is null || secrets.IsDisposed)
             return InvalidRequest();
         if (action != SyncAction.Push && (envelope is not null || baseUpdatedAt is not null))
             return InvalidRequest();
@@ -241,7 +250,7 @@ internal sealed class HoyoLabSyncClient : IDisposable
                     || envelopeJson.Length == 0))
                 return InvalidRequest();
 
-            body = SerializeRequest(action, syncId, token, baseTimestamp, envelopeJson);
+            body = SerializeRequest(action, syncId, token, baseTimestamp, envelopeJson, gameId: gameId);
             if (body is null) return InvalidRequest();
             if (body.Length > MaximumRequestBytes) return RequestTooLarge();
             if (cancellationToken.IsCancellationRequested) return Canceled();
@@ -363,7 +372,9 @@ internal sealed class HoyoLabSyncClient : IDisposable
         string token,
         string? baseTimestamp,
         byte[]? envelopeJson,
-        bool requireRevisionMatch = false)
+        bool requireRevisionMatch = false,
+        string gameId = Game,
+        HoyoLabGameRevisions? expectedRevisionsByGame = null)
     {
         using var output = new MemoryStream();
         try
@@ -374,8 +385,10 @@ internal sealed class HoyoLabSyncClient : IDisposable
                 writer.WriteString("kind", SyncKind);
                 writer.WriteString("syncId", syncId);
                 writer.WriteString("token", token);
-                writer.WriteString("game", Game);
-                if (action == SyncAction.Push || requireRevisionMatch)
+                writer.WriteString("game", gameId);
+                if (requireRevisionMatch && expectedRevisionsByGame is not null)
+                    HoyoLabSyncStateStore.WriteGameRevisions(writer, "baseUpdatedAtByGame", expectedRevisionsByGame);
+                else if (action == SyncAction.Push || requireRevisionMatch)
                 {
                     if (baseTimestamp is null) writer.WriteNull("baseUpdatedAt");
                     else writer.WriteString("baseUpdatedAt", baseTimestamp);
@@ -520,10 +533,25 @@ internal sealed class HoyoLabSyncClient : IDisposable
                 MaxDepth = 4,
             });
             var root = document.RootElement;
-            if (!HasExactProperties(root, "ok", "error", "serverUpdatedAt")
+            var perGame = root.TryGetProperty("serverUpdatedAtByGame", out var gameRevisions);
+            if (!(perGame
+                    ? HasExactProperties(root, "ok", "error", "serverUpdatedAtByGame")
+                    : HasExactProperties(root, "ok", "error", "serverUpdatedAt"))
                 || !IsBoolean(root, "ok", expected: false)
                 || !TryGetConflictError(root.GetProperty("error")))
                 return InvalidResponse();
+            if (perGame)
+            {
+                if (!HasExactProperties(gameRevisions, "hsr", "gi")) return InvalidResponse();
+                foreach (var game in HoyoLabGameBundleRules.SupportedGames)
+                {
+                    var value = gameRevisions.GetProperty(game);
+                    if (value.ValueKind != JsonValueKind.Null
+                        && (value.ValueKind != JsonValueKind.String || !TryParseTimestamp(value.GetString(), out _)))
+                        return InvalidResponse();
+                }
+                return new(HoyoLabSyncFailure.Conflict);
+            }
             var serverUpdatedAt = root.GetProperty("serverUpdatedAt");
             if (serverUpdatedAt.ValueKind == JsonValueKind.Null)
                 return new(HoyoLabSyncFailure.Conflict);

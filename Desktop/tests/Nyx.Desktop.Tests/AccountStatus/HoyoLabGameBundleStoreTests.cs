@@ -132,6 +132,84 @@ public sealed class HoyoLabGameBundleStoreTests
     }
 
     [Fact]
+    public void Genshin_bundle_is_separate_defaults_only_resources_and_preserves_existing_choices()
+    {
+        using var root = new TemporaryRoot();
+        var hsr = Store(root.Path);
+        var gi = Store(root.Path, gameId: HoyoLabGameBundleRules.GenshinGameId);
+        var hsrRole = RoleRecord(RoleId(1));
+        var giRole = new PublisherRoleRecord(new(RoleId(2), "os_euro"), "Genshin test", "Europe");
+        var hsrBundle = Bundle([RoleData(1)], hsrRole.Binding);
+        Assert.True(hsr.TrySave(hsrBundle));
+        var hsrBytes = File.ReadAllBytes(BundlePath(root.Path));
+
+        Assert.True(gi.TryMigrateFromV1(
+            giRole,
+            Resource(FirstObservation, HoyoLabGameBundleRules.GenshinGameId),
+            giRole.Binding));
+
+        var migrated = Assert.IsType<HoyoLabGameBundle>(gi.TryLoad());
+        Assert.Equal(HoyoLabGameBundleRules.GenshinGameId, migrated.GameId);
+        Assert.True(migrated.Consents.Resources);
+        Assert.False(migrated.Consents.Achievements);
+        Assert.Equal("Original Resin", migrated.Roles[0].Resource!.ResourceName);
+        Assert.True(File.Exists(BundlePath(root.Path, HoyoLabGameBundleRules.GenshinGameId)));
+        Assert.Equal(hsrBytes, File.ReadAllBytes(BundlePath(root.Path)));
+
+        Assert.True(gi.TrySetCapabilityConsent(HoyoLabGameBundleRules.Resources, false));
+        Assert.False(gi.TryMigrateFromV1(giRole));
+        Assert.False(gi.TryLoad()!.Consents.Resources);
+        Assert.Equal(hsrRole.Binding, hsr.TryLoad()!.SelectedRole);
+        Assert.Equal(hsrBytes, File.ReadAllBytes(BundlePath(root.Path)));
+    }
+
+    [Fact]
+    public void Genshin_validator_accepts_only_original_resin_and_rejects_hsr_or_future_capabilities()
+    {
+        using var root = new TemporaryRoot();
+        var role = new PublisherRoleRecord(new(RoleId(1), "os_euro"), "Genshin test", "Europe");
+        var baseBundle = Bundle(
+            [new(role, Observations(), null, null)],
+            role.Binding,
+            gameId: HoyoLabGameBundleRules.GenshinGameId);
+        var store = Store(root.Path, gameId: HoyoLabGameBundleRules.GenshinGameId);
+
+        Assert.True(store.TrySave(baseBundle));
+        Assert.False(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Achievements, true));
+        Assert.False(store.TryRecordCompletedAchievements(role.Binding, [1], FirstObservation));
+        Assert.False(store.TryRecordResource(role.Binding, Resource(FirstObservation)));
+        Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Resources, true));
+        Assert.True(store.TryRecordResource(
+            role.Binding,
+            Resource(FirstObservation, HoyoLabGameBundleRules.GenshinGameId)));
+
+        var withHsrAchievements = baseBundle with
+        {
+            Consents = Consents(achievements: true),
+            Roles =
+            [
+                RoleData(1) with
+                {
+                    Observations = Observations(achievements: FirstObservation),
+                    CompletedHsrAchievementIds = [1],
+                },
+            ],
+        };
+        Assert.False(store.TrySave(withHsrAchievements));
+        Assert.False(store.TrySave(baseBundle with
+        {
+            Consents = baseBundle.Consents with { Inventory = true },
+        }));
+        Assert.False(store.TrySave(baseBundle with
+        {
+            CapabilityTombstones =
+            [
+                new(role.Binding, HoyoLabGameBundleRules.Achievements, FirstObservation),
+            ],
+        }));
+    }
+
+    [Fact]
     public void Exact_role_capability_tombstones_preserve_other_roles_and_require_canonical_order()
     {
         using var root = new TemporaryRoot();
@@ -1038,9 +1116,10 @@ public sealed class HoyoLabGameBundleStoreTests
         PublisherRoleBinding? selected,
         HoyoLabCapabilityConsentSet? consents = null,
         IReadOnlyList<HoyoLabCapabilityTombstone>? capabilityTombstones = null,
-        IReadOnlyList<HoyoLabRoleTombstone>? roleTombstones = null) => new(
+        IReadOnlyList<HoyoLabRoleTombstone>? roleTombstones = null,
+        string gameId = HoyoLabGameBundleRules.GameId) => new(
             HoyoLabGameBundleRules.SchemaVersion,
-            HoyoLabGameBundleRules.GameId,
+            gameId,
             roles,
             selected,
             consents ?? Consents(),
@@ -1065,9 +1144,11 @@ public sealed class HoyoLabGameBundleStoreTests
 
     private static string RoleId(int index) => index.ToString("D20");
 
-    private static PublisherResourceSnapshot Resource(DateTimeOffset observedAt) => new(
-        HoyoLabGameBundleRules.GameId,
-        "Trailblaze Power",
+    private static PublisherResourceSnapshot Resource(
+        DateTimeOffset observedAt,
+        string gameId = HoyoLabGameBundleRules.GameId) => new(
+        gameId,
+        HoyoLabGameBundleRules.ResourceName(gameId),
         100,
         300,
         observedAt,
@@ -1103,11 +1184,13 @@ public sealed class HoyoLabGameBundleStoreTests
         string root,
         IPublisherRoleBindingProtector? protector = null,
         FaultBoundary? boundary = null,
-        TimeProvider? clock = null) => new(
+        TimeProvider? clock = null,
+        string gameId = HoyoLabGameBundleRules.GameId) => new(
             root,
             protector ?? new TrackingProtector(),
             boundary ?? new FaultBoundary(),
-            clock ?? new FixedTimeProvider(Now));
+            clock ?? new FixedTimeProvider(Now),
+            gameId);
 
     private static bool Parse(byte[] bytes) =>
         HoyoLabGameBundleStore.TryParseBundle(bytes, Now, out _);
@@ -1118,10 +1201,12 @@ public sealed class HoyoLabGameBundleStoreTests
             newValue,
             StringComparison.Ordinal));
 
-    private static string BundlePath(string root) => Path.Combine(
+    private static string BundlePath(
+        string root,
+        string gameId = HoyoLabGameBundleRules.GameId) => Path.Combine(
         root,
         ".protected-hoyolab-game-bundles",
-        "hsr-v2.bin");
+        gameId + "-v2.bin");
 
     private static string LegacyRolePath(string root) =>
         Path.Combine(root, ".protected-role-bindings", "hsr.bin");

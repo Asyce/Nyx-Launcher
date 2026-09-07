@@ -1131,23 +1131,25 @@ public sealed class HoyoLiveSessionUiTests
             page.Replace("\r\n", "\n", StringComparison.Ordinal),
             "private async Task ShowHoyoLabAccountManagerAsync",
             "private void AutomaticDailyCheckInToggle_Click");
-        var controls = Slice(manager, "if (gameId == \"hsr\")", "var actionButtons");
-        var apply = Slice(manager, "void ApplyHsrCapabilityConsent", "void FailClosedHsrCapabilityConsent");
-        var reload = Slice(manager, "async Task ReloadHsrCapabilityConsentAsync", "async Task RunManagerActionAsync");
+        var controls = Slice(manager, "if (gameId is \"hsr\" or \"gi\")", "var actionButtons");
+        var apply = Slice(manager, "void ApplyCapabilityConsent", "void FailClosedCapabilityConsent");
+        var reload = Slice(manager, "async Task ReloadCapabilityConsentAsync", "async Task RunManagerActionAsync");
         var setter = Slice(
             manager,
-            "async Task SetHsrCapabilityConsentAsync",
-            "if (rememberHsrResources is not null && rememberHsrAchievements is not null)");
+            "async Task SetCapabilityConsentAsync",
+            "if (rememberResources is not null)");
 
         Assert.Equal(2, Regex.Matches(controls, "new ToggleSwitch").Count);
-        Assert.Contains("Header = \"Remember Star Rail resources\"", controls, StringComparison.Ordinal);
+        Assert.Contains("var gameName = gameId == \"hsr\" ? \"Star Rail\" : \"Genshin\";", controls, StringComparison.Ordinal);
+        Assert.Contains("var resourceName = gameId == \"hsr\" ? \"resources\" : \"Resin\";", controls, StringComparison.Ordinal);
+        Assert.Contains("Header = $\"Remember {gameName} {resourceName}\"", controls, StringComparison.Ordinal);
         Assert.Contains("Header = \"Remember Star Rail achievements\"", controls, StringComparison.Ordinal);
         Assert.Contains(
             "These switches apply to the active HoYoLAB account, not the highlighted account. Turning one off removes only Nyx's extra remembered copy; the existing energy display and earlier achievement exports stay unchanged.",
             controls,
             StringComparison.Ordinal);
         Assert.Contains(
-            "Remember Star Rail resources for the active HoYoLAB account",
+            "$\"Remember {gameName} {resourceName} for the active HoYoLAB account\"",
             controls,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -1157,18 +1159,21 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Equal(2, Regex.Matches(controls, "AutomationProperties.SetHelpText\\(").Count);
         Assert.Contains("AutomationProperties.SetLiveSetting(managerStatus", manager, StringComparison.Ordinal);
         Assert.Contains("IsEnabled = false", controls, StringComparison.Ordinal);
+        Assert.Contains("if (gameId == \"hsr\")", controls, StringComparison.Ordinal);
         Assert.Contains("GetHsrGameBundleSnapshotAsync", reload, StringComparison.Ordinal);
-        Assert.Contains("snapshot?.SelectedRole is { } activeHsrRole", apply, StringComparison.Ordinal);
-        Assert.Contains("rememberHsrResources.IsEnabled = enabled && hasActiveHsrRole", manager, StringComparison.Ordinal);
-        Assert.Contains("rememberHsrAchievements.IsEnabled = enabled && hasActiveHsrRole", manager, StringComparison.Ordinal);
-        Assert.Contains("suppressHsrCapabilityChanged = true", apply, StringComparison.Ordinal);
-        Assert.Contains("suppressHsrCapabilityChanged = false", apply, StringComparison.Ordinal);
-        Assert.Contains("await ReloadHsrCapabilityConsentAsync(", manager, StringComparison.Ordinal);
+        Assert.Contains("GetGenshinGameBundleSnapshotAsync", reload, StringComparison.Ordinal);
+        Assert.Contains("snapshot?.SelectedRole is { } activeRole", apply, StringComparison.Ordinal);
+        Assert.Contains("rememberResources.IsEnabled = enabled && hasActiveRole", manager, StringComparison.Ordinal);
+        Assert.Contains("rememberAchievements.IsEnabled = enabled && hasActiveRole", manager, StringComparison.Ordinal);
+        Assert.Contains("suppressCapabilityChanged = true", apply, StringComparison.Ordinal);
+        Assert.Contains("suppressCapabilityChanged = false", apply, StringComparison.Ordinal);
+        Assert.Contains("await ReloadCapabilityConsentAsync(", manager, StringComparison.Ordinal);
         Assert.Contains("publisherAccounts.SetHsrCapabilityConsentAsync(", setter, StringComparison.Ordinal);
-        Assert.Contains("if (suppressHsrCapabilityChanged)", setter, StringComparison.Ordinal);
+        Assert.Contains("publisherAccounts.SetGenshinCapabilityConsentAsync(", setter, StringComparison.Ordinal);
+        Assert.Contains("if (suppressCapabilityChanged)", setter, StringComparison.Ordinal);
         Assert.Contains("if (managerActionInFlight || publisherAccountActionInFlight)", setter, StringComparison.Ordinal);
-        Assert.Contains("toggle.IsOn = hsrGameBundle?.Consents.IsEnabled(capability) == true", setter, StringComparison.Ordinal);
-        Assert.Contains("if (completed && (!saved || hsrGameBundle is null))", setter, StringComparison.Ordinal);
+        Assert.Contains("toggle.IsOn = gameBundle?.Consents.IsEnabled(capability) == true", setter, StringComparison.Ordinal);
+        Assert.Contains("if (completed && (!saved || gameBundle is null))", setter, StringComparison.Ordinal);
         Assert.Contains("the switch was reverted", setter, StringComparison.Ordinal);
         Assert.Contains("HoyoLabGameBundleRules.Resources", manager, StringComparison.Ordinal);
         Assert.Contains("HoyoLabGameBundleRules.Achievements", manager, StringComparison.Ordinal);
@@ -1192,7 +1197,7 @@ public sealed class HoyoLiveSessionUiTests
             "publisherAccountActionInFlight = true",
             "finally",
             "RenderManagerSlots(clearSelection ? null : preserveSelection)",
-            "await ReloadHsrCapabilityConsentAsync(",
+            "await ReloadCapabilityConsentAsync(",
             "finally",
             "managerActionInFlight = false",
             "publisherAccountActionInFlight = false",
@@ -1209,43 +1214,43 @@ public sealed class HoyoLiveSessionUiTests
             ReadAppFile("MainPage.xaml.cs").Replace("\r\n", "\n", StringComparison.Ordinal),
             "private async Task ShowHoyoLabAccountManagerAsync",
             "private void AutomaticDailyCheckInToggle_Click");
-        var apply = Slice(manager, "void ApplyHsrCapabilityConsent", "void FailClosedHsrCapabilityConsent");
-        var failClosed = Slice(manager, "void FailClosedHsrCapabilityConsent", "async Task ReloadHsrCapabilityConsentAsync");
-        var reload = Slice(manager, "async Task ReloadHsrCapabilityConsentAsync", "async Task RunManagerActionAsync");
+        var apply = Slice(manager, "void ApplyCapabilityConsent", "void FailClosedCapabilityConsent");
+        var failClosed = Slice(manager, "void FailClosedCapabilityConsent", "async Task ReloadCapabilityConsentAsync");
+        var reload = Slice(manager, "async Task ReloadCapabilityConsentAsync", "async Task RunManagerActionAsync");
         var setter = Slice(
             manager,
-            "async Task SetHsrCapabilityConsentAsync",
-            "if (rememberHsrResources is not null && rememberHsrAchievements is not null)");
+            "async Task SetCapabilityConsentAsync",
+            "if (rememberResources is not null)");
 
         AssertOrdered(
             apply,
-            "hsrGameBundle = snapshot",
-            "suppressHsrCapabilityChanged = true",
-            "rememberHsrResources.IsOn",
-            "rememberHsrAchievements.IsOn",
-            "suppressHsrCapabilityChanged = false",
+            "gameBundle = snapshot",
+            "suppressCapabilityChanged = true",
+            "rememberResources.IsOn",
+            "rememberAchievements.IsOn",
+            "suppressCapabilityChanged = false",
             "UpdateManagerActionStates()");
         AssertOrdered(
             failClosed,
-            "ApplyHsrCapabilityConsent(snapshot: null)",
-            "managerStatus.Text = \"Star Rail data controls are temporarily unavailable.\"");
+            "ApplyCapabilityConsent(snapshot: null)",
+            "managerStatus.Text = \"Remembered data controls are temporarily unavailable.\"");
         AssertOrdered(
             reload,
             "catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)",
-            "ApplyHsrCapabilityConsent(snapshot: null)",
+            "ApplyCapabilityConsent(snapshot: null)",
             "catch (Exception)",
-            "FailClosedHsrCapabilityConsent()");
+            "FailClosedCapabilityConsent()");
         AssertOrdered(
             setter,
             "try",
-            "if (suppressHsrCapabilityChanged)",
+            "if (suppressCapabilityChanged)",
             "if (managerActionInFlight || publisherAccountActionInFlight)");
         Assert.Contains("await RunManagerActionAsync(", setter, StringComparison.Ordinal);
         Assert.Contains("catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)", setter, StringComparison.Ordinal);
         Assert.Equal(2, Regex.Matches(setter, "catch \\(Exception\\)").Count);
-        Assert.Equal(2, Regex.Matches(setter, "FailClosedHsrCapabilityConsent\\(\\)").Count);
-        Assert.Equal(2, Regex.Matches(manager, "_ = SetHsrCapabilityConsentAsync\\(").Count);
-        Assert.Contains("if (completed && (!saved || hsrGameBundle is null))", setter, StringComparison.Ordinal);
+        Assert.Equal(2, Regex.Matches(setter, "FailClosedCapabilityConsent\\(\\)").Count);
+        Assert.Equal(2, Regex.Matches(manager, "_ = SetCapabilityConsentAsync\\(").Count);
+        Assert.Contains("if (completed && (!saved || gameBundle is null))", setter, StringComparison.Ordinal);
         Assert.Contains("the switch was reverted", setter, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.SetLiveSetting(managerStatus", manager, StringComparison.Ordinal);
     }
@@ -1291,27 +1296,39 @@ public sealed class HoyoLiveSessionUiTests
     }
 
     [Fact]
-    public void Manual_hsr_sync_is_receiver_gated_and_retry_is_independent_of_new_account_consent()
+    public void Manual_hoyo_sync_is_receiver_gated_and_retry_is_independent_of_new_account_consent()
     {
         var service = ReadAppFile("PublisherAccountService.HoyoSync.cs");
         var page = ReadAppFile("MainPage.HoyoSync.cs");
         var shell = ReadAppFile("MainPage.xaml.cs");
         var app = ReadAppFile("App.xaml.cs");
         var retry = Slice(service, "public async Task<HoyoLabManualSyncResult> RetryHoyoLabSyncDeletionsAsync",
-            "private async Task<HoyoLabManualSyncResult> RunHsrSyncAsync");
+            "private async Task<HoyoLabManualSyncResult> RunHoyoSyncAsync");
         Assert.Contains("HoyoLabManualSyncAvailable => true", service, StringComparison.Ordinal);
-        Assert.Contains("PublisherAccountService.HoyoLabManualSyncAvailable", page, StringComparison.Ordinal);
-        Assert.Contains("HoyoLabSyncButton.Visibility = !selected.IsCustom && selected.Id == \"hsr\"", shell, StringComparison.Ordinal);
+        Assert.Contains("public static bool GenshinManualSyncAvailable => false;", service, StringComparison.Ordinal);
+        Assert.Contains("public static bool IsHoyoLabManualSyncAvailable(string gameId)", service, StringComparison.Ordinal);
+        Assert.Contains("var fixedGame = selected.Id;", page, StringComparison.Ordinal);
+        Assert.Contains("await ShowHoyoLabSyncAsync(fixedGame);", page, StringComparison.Ordinal);
+        Assert.Contains("private async Task ShowHoyoLabSyncAsync(string gameId)", page, StringComparison.Ordinal);
+        Assert.Contains("GetHoyoSyncSummaryAsync(gameId, token)", page, StringComparison.Ordinal);
+        Assert.Contains("GetGameBundleSnapshotAsync(gameId, token)", page, StringComparison.Ordinal);
+        Assert.Contains("ConnectHoyoSyncAsync(gameId, syncSlot!, enteredCode, ct)", page, StringComparison.Ordinal);
+        Assert.Contains("SyncHoyoNowAsync(gameId, syncSlot!, ct)", page, StringComparison.Ordinal);
+        Assert.Contains("DeleteHoyoCloudCopyAsync(gameId, syncSlot!, ct)", page, StringComparison.Ordinal);
+        Assert.Contains("HoyoLabSyncButton.Visibility = !selected.IsCustom", shell, StringComparison.Ordinal);
+        Assert.Contains("PublisherAccountService.IsHoyoLabManualSyncAvailable(selected.Id)", shell, StringComparison.Ordinal);
         Assert.Contains("accounts.RetryHoyoLabSyncDeletionsAsync()", app, StringComparison.Ordinal);
-        Assert.DoesNotContain("SyncHsrNowAsync", app, StringComparison.Ordinal);
-        Assert.DoesNotContain("ConnectHsrSyncAsync", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("SyncHoyoNowAsync", app, StringComparison.Ordinal);
+        Assert.DoesNotContain("ConnectHoyoSyncAsync", app, StringComparison.Ordinal);
         Assert.DoesNotContain("consent.IsEnabled", retry, StringComparison.Ordinal);
         Assert.Contains("coordinator.RetryDeletionsAsync", retry, StringComparison.Ordinal);
         Assert.Contains("hoyoGate.WaitAsync", retry, StringComparison.Ordinal);
         Assert.Contains("if (disposed || !ownsHoyoProfile || cancellation.IsCancellationRequested)", retry, StringComparison.Ordinal);
-        AssertOrdered(service, "private async Task<HoyoLabManualSyncResult> RunHsrSyncAsync",
+        AssertOrdered(service, "private async Task<HoyoLabManualSyncResult> RunHoyoSyncAsync",
             "hoyoGate.WaitAsync", "ProfileAccessAllowedAfterGate", "operation.HoyoContext?.SlotId != expectedSlotId",
             "await action", "CanPublish(\"HoYoLAB\", operation)");
+        Assert.Contains("Review($\"Delete this account's {gameName} cloud copy?", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("cloud copy and stop syncing it here?", page, StringComparison.Ordinal);
     }
 
     [Fact]

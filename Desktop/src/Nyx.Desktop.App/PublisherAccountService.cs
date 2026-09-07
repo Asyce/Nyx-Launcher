@@ -15,6 +15,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
     private PublisherRoleBindingStore roleBindings;
     private PublisherResourceSnapshotStore resourceSnapshots;
     private HoyoLabGameBundleStore hoyoGameBundle;
+    private HoyoLabGameBundleStore genshinGameBundle;
     private readonly PublisherConsentRevocationStore revocations;
     private readonly Func<string, bool, bool?, bool>? persistCleanupPending;
     private readonly PengoAchievementCatalogReader achievementCatalog;
@@ -102,6 +103,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
         roleBindings = new(protectedStateRoot);
         resourceSnapshots = new(protectedStateRoot);
         hoyoGameBundle = new(protectedStateRoot);
+        genshinGameBundle = new(protectedStateRoot, HoyoLabGameBundleRules.GenshinGameId);
         revocations = new(this.root);
         achievementBindings = new(
             achievementBindingRoot ?? Path.Combine(this.root, ".achievement-account-binding"));
@@ -179,9 +181,19 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
     }
 
     public async Task<HoyoLabGameBundle?> GetHsrGameBundleSnapshotAsync(
+        CancellationToken cancellationToken = default) =>
+        await GetGameBundleSnapshotAsync(HoyoLabGameBundleRules.GameId, cancellationToken);
+
+    public async Task<HoyoLabGameBundle?> GetGenshinGameBundleSnapshotAsync(
+        CancellationToken cancellationToken = default) =>
+        await GetGameBundleSnapshotAsync(HoyoLabGameBundleRules.GenshinGameId, cancellationToken);
+
+    public async Task<HoyoLabGameBundle?> GetGameBundleSnapshotAsync(
+        string gameId,
         CancellationToken cancellationToken = default)
     {
-        if (!consent.IsEnabled("HoYoLAB")
+        if (!HoyoLabGameBundleRules.IsSupportedGame(gameId)
+            || !consent.IsEnabled("HoYoLAB")
             || !HasUsableHoyoAccount()
             || !OwnsProfile("HoYoLAB"))
             return null;
@@ -194,10 +206,10 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
         {
             if (!ProfileAccessAllowedAfterGate("HoYoLAB", consentRequired: true, operation))
                 return null;
-            if (!CanUseHsrGameBundle(operation)) return null;
-            _ = TryMigrateHsrBundleFromV1(operation);
+            if (!CanUseGameBundle(gameId, operation)) return null;
+            _ = TryMigrateGameBundleFromV1(gameId, operation);
             if (!CanPublish("HoYoLAB", operation)) return null;
-            var snapshot = hoyoGameBundle.TryLoad();
+            var snapshot = GameBundle(gameId).TryLoad();
             return snapshot is not null && CanPublish("HoYoLAB", operation)
                 ? HoyoLabGameBundleRules.Normalize(snapshot)
                 : null;
@@ -211,10 +223,30 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
     public async Task<bool> SetHsrCapabilityConsentAsync(
         string capability,
         bool enabled,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        await SetGameBundleCapabilityConsentAsync(
+            HoyoLabGameBundleRules.GameId,
+            capability,
+            enabled,
+            cancellationToken);
+
+    public async Task<bool> SetGenshinCapabilityConsentAsync(
+        string capability,
+        bool enabled,
+        CancellationToken cancellationToken = default) =>
+        await SetGameBundleCapabilityConsentAsync(
+            HoyoLabGameBundleRules.GenshinGameId,
+            capability,
+            enabled,
+            cancellationToken);
+
+    private async Task<bool> SetGameBundleCapabilityConsentAsync(
+        string gameId,
+        string capability,
+        bool enabled,
+        CancellationToken cancellationToken)
     {
-        if (capability is not (HoyoLabGameBundleRules.Resources
-                or HoyoLabGameBundleRules.Achievements)
+        if (!HoyoLabGameBundleRules.SupportsLocalCapability(gameId, capability)
             || !consent.IsEnabled("HoYoLAB")
             || !HasUsableHoyoAccount()
             || !OwnsProfile("HoYoLAB"))
@@ -228,26 +260,27 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
         {
             if (!ProfileAccessAllowedAfterGate("HoYoLAB", consentRequired: true, operation))
                 return false;
-            if (!CanUseHsrGameBundle(operation)) return false;
-            _ = TryMigrateHsrBundleFromV1(operation);
+            if (!CanUseGameBundle(gameId, operation)) return false;
+            _ = TryMigrateGameBundleFromV1(gameId, operation);
             PublisherRoleBinding? resourceBinding = null;
             lock (sync)
             {
                 if (!CanPublish("HoYoLAB", operation)) return false;
-                var saved = hoyoGameBundle.TrySetCapabilityConsent(
+                var bundle = GameBundle(gameId);
+                var saved = bundle.TrySetCapabilityConsent(
                     capability,
                     enabled,
                     operation.Cancellation.Token);
                 if (!saved || !CanPublish("HoYoLAB", operation)) return false;
                 if (enabled && capability == HoyoLabGameBundleRules.Resources)
-                    resourceBinding = hoyoGameBundle.TryLoad()?.SelectedRole;
+                    resourceBinding = bundle.TryLoad()?.SelectedRole;
             }
             if (resourceBinding is not null
                 && TryLoadResourceSnapshot(
-                    HoyoLabGameBundleRules.GameId,
+                    gameId,
                     resourceBinding,
                     operation) is { } resource)
-                _ = TryMirrorHsrResource(resourceBinding, resource, operation);
+                _ = TryMirrorGameResource(gameId, resourceBinding, resource, operation);
             return CanPublish("HoYoLAB", operation);
         }
         finally
@@ -1069,8 +1102,8 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
             var storedRecord = entry.Provider == "HoYoLAB"
                 ? TryLoadRoleRecord(entry.GameId, operation)
                 : null;
-            if (entry.GameId == HoyoLabGameBundleRules.GameId)
-                _ = TryMigrateHsrBundleFromV1(operation);
+            if (HoyoLabGameBundleRules.IsSupportedGame(entry.GameId))
+                _ = TryMigrateGameBundleFromV1(entry.GameId, operation);
             var storedBinding = storedRecord?.Binding;
             var activeBinding = storedBinding;
             var resourceRead = await window.ReadResourceAsync(entry, storedBinding, cancellationToken);
@@ -1203,8 +1236,8 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
                     if (!CanPublish(entry.Provider, operation)
                         || !resourceSnapshots.Save(snapshot with { IsStale = false }, activeBinding))
                         return null;
-                    if (entry.GameId == HoyoLabGameBundleRules.GameId)
-                        _ = TryMirrorHsrResource(activeBinding, snapshot, operation);
+                    if (HoyoLabGameBundleRules.IsSupportedGame(entry.GameId))
+                        _ = TryMirrorGameResource(entry.GameId, activeBinding, snapshot, operation);
                 }
                 SetResourceStateIfCurrent(
                     entry.GameId,
@@ -2184,6 +2217,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
                         roleBindings = new(root);
                         resourceSnapshots = new(root);
                         hoyoGameBundle = new(root);
+                        genshinGameBundle = new(root, HoyoLabGameBundleRules.GenshinGameId);
                     }
                     ProfileMutationsFor(entry.Provider).MarkDeleted();
                 }
@@ -2684,6 +2718,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
                 ? () => CanMutateHoyoProtectedState(operation)
                     && TryDetachCapturedHoyoSyncState(operation!)
                     && hoyoGameBundle.TryDelete()
+                    && genshinGameBundle.TryDelete()
                 : null);
         SetCleanupPending(provider, !cleanupComplete);
         ClearProviderState(provider);
@@ -2697,7 +2732,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
         PublisherOperation? operation = null)
     {
         if (provider == "HoYoLAB"
-            && gameId == HoyoLabGameBundleRules.GameId
+            && HoyoLabGameBundleRules.IsSupportedGame(gameId)
             && binding is not null
             && operation?.HoyoContext is { LegacyCompatibility: false })
         {
@@ -2706,9 +2741,9 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
             {
                 lock (sync)
                 {
-                    bundleDeleted = CanUseHsrGameBundle(operation)
-                        && hoyoGameBundle.TryDeleteRole(binding, operation.Cancellation.Token)
-                        && CanUseHsrGameBundle(operation);
+                    bundleDeleted = CanUseGameBundle(gameId, operation)
+                        && GameBundle(gameId).TryDeleteRole(binding, operation.Cancellation.Token)
+                        && CanUseGameBundle(gameId, operation);
                 }
             }
             catch (OperationCanceledException)
@@ -2743,7 +2778,8 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
             () => roleBindings.DeleteProvider(provider));
         var bundleDeleted = provider != "HoYoLAB"
             || (CanMutateHoyoProtectedState(operation)
-                && hoyoGameBundle.TryDelete());
+                && hoyoGameBundle.TryDelete()
+                && genshinGameBundle.TryDelete());
         var deleted = legacyDeleted && bundleDeleted;
         if (!deleted) QuarantineProvider(provider, operation);
         return deleted;
@@ -2756,9 +2792,16 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
         && IsCurrentHoyoContext(operation.HoyoContext);
 
     private bool CanUseHsrGameBundle(PublisherOperation? operation) =>
-        hoyoSlotManagerAvailable
+        CanUseGameBundle(HoyoLabGameBundleRules.GameId, operation);
+
+    private bool CanUseGameBundle(string gameId, PublisherOperation? operation) =>
+        HoyoLabGameBundleRules.IsSupportedGame(gameId)
+        && hoyoSlotManagerAvailable
         && operation?.HoyoContext is { LegacyCompatibility: false }
         && CanMutateHoyoProtectedState(operation);
+
+    private HoyoLabGameBundleStore GameBundle(string gameId) =>
+        gameId == HoyoLabGameBundleRules.GameId ? hoyoGameBundle : genshinGameBundle;
 
     private bool CanDeleteAllHoyoProtectedState(PublisherOperation operation) =>
         GenerationFor("HoYoLAB").IsCurrent(operation.Generation);
@@ -2772,7 +2815,10 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
                 .DeleteProvider("HoYoLAB"),
             () => new PublisherRoleBindingStore(context.ProtectedStateRoot)
                 .DeleteProvider("HoYoLAB"));
-        var bundleDeleted = new HoyoLabGameBundleStore(context.ProtectedStateRoot).TryDelete();
+        var bundleDeleted = new HoyoLabGameBundleStore(context.ProtectedStateRoot).TryDelete()
+            && new HoyoLabGameBundleStore(
+                context.ProtectedStateRoot,
+                HoyoLabGameBundleRules.GenshinGameId).TryDelete();
         return legacyDeleted && bundleDeleted;
     }
 
@@ -3081,6 +3127,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
             roleBindings = new(protectedRoot);
             resourceSnapshots = new(protectedRoot);
             hoyoGameBundle = new(protectedRoot);
+            genshinGameBundle = new(protectedRoot, HoyoLabGameBundleRules.GenshinGameId);
         }
         Updated?.Invoke(this, EventArgs.Empty);
         return true;
@@ -3100,6 +3147,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
             roleBindings = new(protectedRoot);
             resourceSnapshots = new(protectedRoot);
             hoyoGameBundle = new(protectedRoot);
+            genshinGameBundle = new(protectedRoot, HoyoLabGameBundleRules.GenshinGameId);
         }
     }
 
@@ -3188,24 +3236,24 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
     {
         if (!CanPublish("HoYoLAB", operation) || !roleBindings.Save(gameId, binding))
             return false;
-        if (gameId == HoyoLabGameBundleRules.GameId)
+        if (HoyoLabGameBundleRules.IsSupportedGame(gameId))
         {
             var record = roleBindings.TryLoadRecord(gameId);
-            if (record is not null) _ = TryMirrorHsrRole(record, operation);
+            if (record is not null) _ = TryMirrorGameRole(gameId, record, operation);
         }
         return true;
     }
 
-    private bool TryMigrateHsrBundleFromV1(PublisherOperation operation)
+    private bool TryMigrateGameBundleFromV1(string gameId, PublisherOperation operation)
     {
-        if (!CanUseHsrGameBundle(operation) || !CanPublish("HoYoLAB", operation)) return false;
-        var role = roleBindings.TryLoadRecord(HoyoLabGameBundleRules.GameId);
+        if (!CanUseGameBundle(gameId, operation) || !CanPublish("HoYoLAB", operation)) return false;
+        var role = roleBindings.TryLoadRecord(gameId);
         if (role is null) return false;
-        var resource = resourceSnapshots.TryLoad(HoyoLabGameBundleRules.GameId, role.Binding);
+        var resource = resourceSnapshots.TryLoad(gameId, role.Binding);
         lock (sync)
         {
             if (!CanPublish("HoYoLAB", operation)) return false;
-            var saved = hoyoGameBundle.TryMigrateFromV1(
+            var saved = GameBundle(gameId).TryMigrateFromV1(
                 role,
                 resource,
                 resource is null ? null : role.Binding,
@@ -3214,18 +3262,22 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
         }
     }
 
-    private bool TryMirrorHsrRole(
+    private bool TryMigrateHsrBundleFromV1(PublisherOperation operation) =>
+        TryMigrateGameBundleFromV1(HoyoLabGameBundleRules.GameId, operation);
+
+    private bool TryMirrorGameRole(
+        string gameId,
         PublisherRoleRecord role,
         PublisherOperation operation)
     {
         try
         {
-            if (!CanUseHsrGameBundle(operation)) return false;
-            _ = TryMigrateHsrBundleFromV1(operation);
+            if (!CanUseGameBundle(gameId, operation)) return false;
+            _ = TryMigrateGameBundleFromV1(gameId, operation);
             lock (sync)
             {
                 if (!CanPublish("HoYoLAB", operation)) return false;
-                var saved = hoyoGameBundle.TrySelectRole(
+                var saved = GameBundle(gameId).TrySelectRole(
                     role,
                     operation.Cancellation.Token);
                 return saved && CanPublish("HoYoLAB", operation);
@@ -3237,18 +3289,19 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
         }
     }
 
-    private bool TryMirrorHsrResource(
+    private bool TryMirrorGameResource(
+        string gameId,
         PublisherRoleBinding binding,
         PublisherResourceSnapshot resource,
         PublisherOperation operation)
     {
         try
         {
-            if (!CanUseHsrGameBundle(operation)) return false;
+            if (!CanUseGameBundle(gameId, operation)) return false;
             lock (sync)
             {
                 if (!CanPublish("HoYoLAB", operation)) return false;
-                var saved = hoyoGameBundle.TryRecordResource(
+                var saved = GameBundle(gameId).TryRecordResource(
                     binding,
                     resource with
                     {
@@ -3272,7 +3325,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
     {
         try
         {
-            if (!CanUseHsrGameBundle(operation)) return false;
+            if (!CanUseGameBundle(HoyoLabGameBundleRules.GameId, operation)) return false;
             var now = DateTimeOffset.UtcNow;
             var observedAt = new DateTimeOffset(
                 now.Ticks - now.Ticks % TimeSpan.TicksPerSecond,
@@ -3332,8 +3385,8 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
             nicknames.SingleOrDefault(),
             PublisherRoleRecordRules.CanonicalRegionLabel(binding.Server));
         if (!roleBindings.SaveRecord(gameId, record)) return false;
-        if (gameId == HoyoLabGameBundleRules.GameId)
-            _ = TryMirrorHsrRole(record, operation);
+        if (HoyoLabGameBundleRules.IsSupportedGame(gameId))
+            _ = TryMirrorGameRole(gameId, record, operation);
         return true;
     }
 

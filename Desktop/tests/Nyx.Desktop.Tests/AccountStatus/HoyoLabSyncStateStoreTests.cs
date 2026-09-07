@@ -658,7 +658,7 @@ public sealed class HoyoLabSyncStateStoreTests
     [Theory]
     [InlineData("hsr")]
     [InlineData("all-hoyolab")]
-    public void Schema_one_loads_without_role_intents_and_next_write_promotes_exact_schema_two(string scope)
+    public void Schema_one_loads_without_role_intents_and_next_write_promotes_exact_schema_three(string scope)
     {
         using var root = new TemporaryRoot();
         var store = CreateStore(root.Path);
@@ -666,15 +666,7 @@ public sealed class HoyoLabSyncStateStoreTests
         using var pending = Pending(2, scope, Now);
         Assert.True(store.TrySetCurrentCredential(credential));
         using var source = new HoyoLabSyncState(credential, Now, [pending]);
-        var legacy = StateJson(source);
-        legacy["schemaVersion"] = 1;
-        legacy.Remove("pendingRoleDeletions");
-        foreach (var item in legacy["pendingDeletions"]!.AsArray())
-        {
-            item!.AsObject().Remove("removeLocalSlot");
-            item.AsObject().Remove("requireRevisionMatch");
-            item.AsObject().Remove("expectedRevision");
-        }
+        var legacy = SchemaOneJson(source);
         WriteProtectedFixture(store.StatePath, Encoding.UTF8.GetBytes(legacy.ToJsonString()));
         var before = File.ReadAllBytes(store.StatePath);
         using (var loaded = Assert.IsType<HoyoLabSyncState>(store.TryLoad()))
@@ -692,14 +684,133 @@ public sealed class HoyoLabSyncStateStoreTests
         try
         {
             var json = JsonNode.Parse(written)!.AsObject();
-            Assert.Equal(2, json["schemaVersion"]!.GetValue<int>());
+            Assert.Equal(HoyoLabSyncStateStore.SchemaVersion, json["schemaVersion"]!.GetValue<int>());
             Assert.Empty(json["pendingRoleDeletions"]!.AsArray());
             Assert.False(json["pendingDeletions"]![0]!["removeLocalSlot"]!.GetValue<bool>());
             Assert.False(json["pendingDeletions"]![0]!["requireRevisionMatch"]!.GetValue<bool>());
             Assert.Null(json["pendingDeletions"]![0]!["expectedRevision"]);
+            Assert.Null(json["pendingDeletions"]![0]!["expectedRevisionsByGame"]);
             Assert.Equal(5, json.Count);
         }
         finally { CryptographicOperations.ZeroMemory(written); }
+    }
+
+    [Fact]
+    public void Schema_two_loads_and_rewrites_to_schema_three_without_dropping_intents()
+    {
+        using var root = new TemporaryRoot();
+        var store = CreateStore(root.Path);
+        using var credential = Credential(1);
+        using var pending = new HoyoLabPendingDeletion(
+            credential.SyncId,
+            credential.Token,
+            HoyoLabSyncStateStore.AllHoyoScope,
+            "rotation-cleanup",
+            Now,
+            requireRevisionMatch: true,
+            expectedRevision: Now.AddMinutes(-1));
+        using var role = RolePending(1);
+        using var source = new HoyoLabSyncState(credential, Now, [pending], [role]);
+        var legacy = StateJson(source);
+        legacy["schemaVersion"] = 2;
+        legacy["pendingDeletions"]![0]!.AsObject().Remove("expectedRevisionsByGame");
+        legacy["pendingRoleDeletions"]![0]!.AsObject().Remove("gameId");
+        Directory.CreateDirectory(Path.GetDirectoryName(store.StatePath)!);
+        WriteProtectedFixture(store.StatePath, Encoding.UTF8.GetBytes(legacy.ToJsonString()));
+        var before = File.ReadAllBytes(store.StatePath);
+
+        using (var loaded = Assert.IsType<HoyoLabSyncState>(store.TryLoad()))
+        {
+            var loadedCredential = Assert.IsType<HoyoLabSyncCredential>(loaded.CurrentCredential);
+            Assert.Equal(credential.SyncId, loadedCredential.SyncId);
+            Assert.Equal(credential.Token.ToArray(), loadedCredential.Token.ToArray());
+            Assert.Equal(credential.Key.ToArray(), loadedCredential.Key.ToArray());
+            Assert.Equal(Now, loaded.WorkerRevision);
+            var loadedDeletion = Assert.Single(loaded.PendingDeletions);
+            Assert.True(loadedDeletion.RequireRevisionMatch);
+            Assert.Equal(Now.AddMinutes(-1), loadedDeletion.ExpectedRevision);
+            Assert.Null(loadedDeletion.ExpectedRevisionsByGame);
+            var loadedRole = Assert.Single(loaded.PendingRoleDeletions);
+            Assert.Equal(HoyoLabGameBundleRules.GameId, loadedRole.GameId);
+            Assert.Equal(role.Binding, loadedRole.Binding);
+            Assert.Equal(role.KnownResourcesAt, loadedRole.KnownResourcesAt);
+            Assert.Equal(role.KnownAchievementsAt, loadedRole.KnownAchievementsAt);
+            Assert.Equal(role.DeletedAt, loadedRole.DeletedAt);
+        }
+        Assert.Equal(before, File.ReadAllBytes(store.StatePath));
+
+        Assert.True(store.TrySetWorkerRevision(Now.AddMinutes(1)));
+        var written = File.ReadAllBytes(store.StatePath)
+            .Select(value => (byte)(value ^ TrackingProtector.Mask)).ToArray();
+        try
+        {
+            var json = JsonNode.Parse(written)!.AsObject();
+            Assert.Equal(HoyoLabSyncStateStore.SchemaVersion, json["schemaVersion"]!.GetValue<int>());
+            Assert.True(json["pendingDeletions"]![0]!["requireRevisionMatch"]!.GetValue<bool>());
+            Assert.Equal(FormatTimestamp(Now.AddMinutes(-1)),
+                json["pendingDeletions"]![0]!["expectedRevision"]!.GetValue<string>());
+            Assert.Null(json["pendingDeletions"]![0]!["expectedRevisionsByGame"]);
+            Assert.Equal(HoyoLabGameBundleRules.GameId,
+                json["pendingRoleDeletions"]![0]!["gameId"]!.GetValue<string>());
+        }
+        finally { CryptographicOperations.ZeroMemory(written); }
+    }
+
+    [Fact]
+    public void Schema_three_preserves_strict_per_game_revision_map()
+    {
+        using var root = new TemporaryRoot();
+        var store = CreateStore(root.Path);
+        using var credential = Credential(1);
+        using var deletion = new HoyoLabPendingDeletion(
+            credential.SyncId,
+            credential.Token,
+            HoyoLabSyncStateStore.AllHoyoScope,
+            "rotation-map",
+            Now,
+            requireRevisionMatch: true,
+            expectedRevisionsByGame: new(Now.AddMinutes(-2), Now.AddMinutes(-1)));
+        Assert.True(store.TrySetCurrentCredential(credential));
+        Assert.True(store.TryEnqueuePendingDeletion(deletion));
+
+        using var loaded = Assert.IsType<HoyoLabSyncState>(store.TryLoad());
+        Assert.Equal(
+            new HoyoLabGameRevisions(Now.AddMinutes(-2), Now.AddMinutes(-1)),
+            Assert.Single(loaded.PendingDeletions).ExpectedRevisionsByGame);
+        var json = StateJson(loaded);
+        var map = json["pendingDeletions"]![0]!["expectedRevisionsByGame"]!.AsObject();
+        Assert.Equal(["gi", "hsr"], map.Select(property => property.Key).Order(StringComparer.Ordinal));
+        Assert.Equal(FormatTimestamp(Now.AddMinutes(-2)), map["hsr"]!.GetValue<string>());
+        Assert.Equal(FormatTimestamp(Now.AddMinutes(-1)), map["gi"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Game_deletion_keeps_current_credential_and_unrelated_game_role_intent()
+    {
+        using var root = new TemporaryRoot();
+        var store = CreateStore(root.Path);
+        using var credential = Credential(1);
+        using var hsrRole = RolePendingFor(credential, HoyoLabGameBundleRules.GameId, 1);
+        using var genshinRole = RolePendingFor(credential, HoyoLabGameBundleRules.GenshinGameId, 2);
+        using var deletion = new HoyoLabPendingDeletion(
+            credential.SyncId,
+            credential.Token,
+            HoyoLabSyncStateStore.GenshinScope,
+            "delete-gi",
+            Now);
+        Assert.True(store.TrySetCurrentCredential(credential));
+        Assert.True(store.TryEnqueuePendingRoleDeletion(hsrRole));
+        Assert.True(store.TryEnqueuePendingRoleDeletion(genshinRole));
+
+        Assert.True(store.TryQueueGameDeletion(deletion));
+
+        using var loaded = Assert.IsType<HoyoLabSyncState>(store.TryLoad());
+        Assert.Equal(credential.SyncId, loaded.CurrentCredential!.SyncId);
+        Assert.Null(loaded.WorkerRevision);
+        Assert.Equal(HoyoLabSyncStateStore.GenshinScope, Assert.Single(loaded.PendingDeletions).Scope);
+        var remaining = Assert.Single(loaded.PendingRoleDeletions);
+        Assert.Equal(HoyoLabGameBundleRules.GameId, remaining.GameId);
+        Assert.Equal(hsrRole.OperationId, remaining.OperationId);
     }
 
     [Fact]
@@ -1120,7 +1231,7 @@ public sealed class HoyoLabSyncStateStoreTests
         {
             case "v1-with-role-field": json["schemaVersion"] = 1; break;
             case "v2-missing-role-field": json.Remove("pendingRoleDeletions"); break;
-            case "future-schema": json["schemaVersion"] = 3; break;
+            case "future-schema": json["schemaVersion"] = 4; break;
             case "unknown-root": json["payload"] = "forbidden"; break;
             case "unknown-role-field": item["payload"] = "forbidden"; break;
             case "unknown-binding-field": item["binding"]!["game"] = "hsr"; break;
@@ -1681,6 +1792,22 @@ public sealed class HoyoLabSyncStateStoreTests
         finally { CryptographicOperations.ZeroMemory(bytes); }
     }
 
+    private static JsonObject SchemaOneJson(HoyoLabSyncState state)
+    {
+        var legacy = StateJson(state);
+        legacy["schemaVersion"] = 1;
+        legacy.Remove("pendingRoleDeletions");
+        foreach (var item in legacy["pendingDeletions"]!.AsArray())
+        {
+            var deletion = item!.AsObject();
+            deletion.Remove("removeLocalSlot");
+            deletion.Remove("requireRevisionMatch");
+            deletion.Remove("expectedRevision");
+            deletion.Remove("expectedRevisionsByGame");
+        }
+        return legacy;
+    }
+
     private static PublisherRoleBinding RoleBinding(int seed) => new(
         (700000000 + seed).ToString(CultureInfo.InvariantCulture), "prod_official_eur");
 
@@ -1692,6 +1819,23 @@ public sealed class HoyoLabSyncStateStoreTests
             operationId ?? "role-" + OperationId(seed), requestedAt ?? Now,
             Now.AddMinutes(-2), Now.AddMinutes(-1), Now);
     }
+
+    private static HoyoLabPendingRoleDeletion RolePendingFor(
+        HoyoLabSyncCredential credential,
+        string gameId,
+        int seed) => new(
+        credential.SyncId,
+        credential.Token,
+        credential.Key,
+        gameId == HoyoLabGameBundleRules.GenshinGameId
+            ? new((700000000 + seed).ToString(CultureInfo.InvariantCulture), "os_euro")
+            : RoleBinding(seed),
+        "role-" + gameId + "-" + OperationId(seed),
+        Now,
+        Now.AddMinutes(-2),
+        gameId == HoyoLabGameBundleRules.GameId ? Now.AddMinutes(-1) : null,
+        Now,
+        gameId);
 
     private static HoyoLabSyncStateStore CreateStore(
         string root,

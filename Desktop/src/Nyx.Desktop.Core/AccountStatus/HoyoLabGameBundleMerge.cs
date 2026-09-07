@@ -29,7 +29,8 @@ public static class HoyoLabGameBundleMerge
         DateTimeOffset utcNow)
     {
         if (!HoyoLabGameBundleRules.IsValid(local, utcNow)
-            || !HoyoLabGameBundleRules.IsValid(remote, utcNow))
+            || !HoyoLabGameBundleRules.IsValid(remote, utcNow)
+            || local!.GameId != remote!.GameId)
             return Conflict();
 
         local = HoyoLabGameBundleRules.Normalize(local!);
@@ -51,11 +52,6 @@ public static class HoyoLabGameBundleMerge
         {
             localRoles.TryGetValue(binding, out var localRole);
             remoteRoles.TryGetValue(binding, out var remoteRole);
-            if (localRole is not null
-                && remoteRole is not null
-                && localRole.Role != remoteRole.Role)
-                return Conflict();
-
             if (!TryMergeObservation(
                     localRole?.Observations.Resources,
                     localRole?.Resource,
@@ -136,7 +132,9 @@ public static class HoyoLabGameBundleMerge
             local.SchemaVersion,
             local.GameId,
             roles,
-            local.SelectedRole,
+            roles.Any(role => role.Role.Binding == local.SelectedRole)
+                ? local.SelectedRole
+                : roles.FirstOrDefault()?.Role.Binding,
             local.Consents,
             orderedCapabilityTombstones,
             orderedRoleTombstones));

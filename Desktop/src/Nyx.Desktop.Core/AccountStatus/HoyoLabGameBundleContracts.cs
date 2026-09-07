@@ -85,6 +85,7 @@ public static class HoyoLabGameBundleRules
     public const int MaximumAchievementIds = 10_000;
     public const long MaximumAchievementId = 9_007_199_254_740_991;
     public const string GameId = "hsr";
+    public const string GenshinGameId = "gi";
     public const string Resources = "resources";
     public const string Inventory = "inventory";
     public const string Builds = "builds";
@@ -110,7 +111,7 @@ public static class HoyoLabGameBundleRules
     {
         if (bundle is null
             || bundle.SchemaVersion != SchemaVersion
-            || bundle.GameId != GameId
+            || !IsSupportedGame(bundle.GameId)
             || bundle.Roles is null
             || bundle.Roles.Count > MaximumRoles
             || bundle.Consents is null
@@ -125,11 +126,13 @@ public static class HoyoLabGameBundleRules
             || bundle.Consents.Events
             || bundle.Consents.Currency)
             return false;
+        if (bundle.GameId == GenshinGameId && bundle.Consents.Achievements)
+            return false;
 
         var active = new HashSet<PublisherRoleBinding>();
         foreach (var role in bundle.Roles)
         {
-            if (!IsValidRole(role, bundle.Consents, utcNow)
+            if (!IsValidRole(bundle.GameId, role, bundle.Consents, utcNow)
                 || !active.Add(role.Role.Binding))
                 return false;
         }
@@ -148,8 +151,8 @@ public static class HoyoLabGameBundleRules
         {
             if (tombstone is null
                 || tombstone.Binding is null
-                || !PublisherAccountCatalog.IsValidRoleBinding(GameId, tombstone.Binding)
-                || !Capabilities.Contains(tombstone.Capability, StringComparer.Ordinal)
+                || !PublisherAccountCatalog.IsValidRoleBinding(bundle.GameId, tombstone.Binding)
+                || !IsValidTombstoneCapability(bundle.GameId, tombstone.Capability)
                 || !capabilityIdentities.Add((tombstone.Binding, tombstone.Capability))
                 || !IsValidTimestamp(tombstone.DeletedAt, utcNow)
                 || (previousCapability is not null
@@ -164,7 +167,7 @@ public static class HoyoLabGameBundleRules
         {
             if (tombstone is null
                 || tombstone.Binding is null
-                || !PublisherAccountCatalog.IsValidRoleBinding(GameId, tombstone.Binding)
+                || !PublisherAccountCatalog.IsValidRoleBinding(bundle.GameId, tombstone.Binding)
                 || active.Contains(tombstone.Binding)
                 || !roleTombstoneIdentities.Add(tombstone.Binding)
                 || !IsValidTimestamp(tombstone.DeletedAt, utcNow)
@@ -203,7 +206,22 @@ public static class HoyoLabGameBundleRules
         RoleTombstones = bundle.RoleTombstones.ToArray(),
     };
 
+    public static bool IsSupportedGame(string? gameId) => gameId is GameId or GenshinGameId;
+
+    public static IReadOnlyList<string> SupportedGames { get; } = Array.AsReadOnly<string>([GameId, GenshinGameId]);
+
+    public static bool SupportsLocalCapability(string gameId, string capability) =>
+        IsSupportedGame(gameId) && (capability == Resources || (gameId == GameId && capability == Achievements));
+
+    public static string ResourceName(string gameId) => gameId switch
+    {
+        GameId => "Trailblaze Power",
+        GenshinGameId => "Original Resin",
+        _ => string.Empty,
+    };
+
     private static bool IsValidRole(
+        string gameId,
         HoyoLabGameBundleRole? role,
         HoyoLabCapabilityConsentSet consents,
         DateTimeOffset utcNow)
@@ -211,7 +229,7 @@ public static class HoyoLabGameBundleRules
         if (role is null
             || role.Role is null
             || role.Observations is null
-            || !PublisherRoleRecordRules.IsValid(GameId, role.Role)
+            || !PublisherRoleRecordRules.IsValid(gameId, role.Role)
             || !IsValidTimestamp(role.Observations.Resources, utcNow)
             || !IsValidTimestamp(role.Observations.Achievements, utcNow)
             || role.Observations.Inventory is not null
@@ -224,8 +242,8 @@ public static class HoyoLabGameBundleRules
 
         if (role.Resource is { } resource
             && (!consents.Resources
-                || resource.GameId != GameId
-                || resource.ResourceName != "Trailblaze Power"
+                || resource.GameId != gameId
+                || resource.ResourceName != ResourceName(gameId)
                 || resource.Current is < 0 or > 10_000
                 || resource.Maximum is <= 0 or > 10_000
                 || resource.Current > resource.Maximum
@@ -239,7 +257,8 @@ public static class HoyoLabGameBundleRules
 
         if (role.CompletedHsrAchievementIds is { } ids)
         {
-            if (!consents.Achievements
+            if (gameId != GameId
+                || !consents.Achievements
                 || role.Observations.Achievements is null
                 || ids.Count > MaximumAchievementIds)
                 return false;
@@ -256,6 +275,11 @@ public static class HoyoLabGameBundleRules
         }
         return true;
     }
+
+    private static bool IsValidTombstoneCapability(string gameId, string capability) =>
+        gameId == GameId
+            ? Capabilities.Contains(capability, StringComparer.Ordinal)
+            : capability == Resources;
 
     private static bool IsValidTimestamp(DateTimeOffset? value, DateTimeOffset utcNow) =>
         value is null || IsValidTimestamp(value.Value, utcNow);

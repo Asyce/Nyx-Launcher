@@ -189,14 +189,74 @@ public sealed class HoyoLabGameBundleMergeTests
     }
 
     [Fact]
-    public void Same_binding_metadata_disagreement_is_a_conflict()
+    public void Same_binding_metadata_disagreement_keeps_local_label_and_merges_newer_observations()
     {
-        var localRole = Role(1, nickname: "Local");
-        var remoteRole = Role(1, nickname: "Remote");
+        var localRole = Role(1, resourcesAt: Older, current: 100, nickname: "Local");
+        var remoteRole = Role(1, resourcesAt: Newer, current: 200, nickname: "Remote");
+        var consents = Consents(resources: true);
 
-        AssertConflict(MergeValid(
-            Bundle([localRole], localRole.Role.Binding),
-            Bundle([remoteRole], remoteRole.Role.Binding)));
+        var result = MergeValid(
+            Bundle([localRole], localRole.Role.Binding, consents),
+            Bundle([remoteRole], remoteRole.Role.Binding, consents));
+
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Merged, result.Outcome);
+        var mergedRole = Assert.Single(Assert.IsType<HoyoLabGameBundle>(result.Bundle).Roles);
+        Assert.Equal("Local", mergedRole.Role.Nickname);
+        Assert.Equal(Newer, mergedRole.Observations.Resources);
+        Assert.Equal(200, mergedRole.Resource!.Current);
+    }
+
+    [Fact]
+    public void Remote_selected_role_deletion_selects_survivor_and_clearing_all_roles_clears_selection()
+    {
+        var selected = Role(1, resourcesAt: Older, current: 100);
+        var survivor = Role(2);
+        var consents = Consents(resources: true);
+        var local = Bundle([selected, survivor], selected.Role.Binding, consents);
+
+        var withSurvivor = MergeValid(
+            local,
+            Bundle(
+                [survivor],
+                survivor.Role.Binding,
+                consents,
+                roleTombstones: [new(selected.Role.Binding, Newer)]));
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Merged, withSurvivor.Outcome);
+        Assert.Equal(
+            survivor.Role.Binding,
+            Assert.Single(Assert.IsType<HoyoLabGameBundle>(withSurvivor.Bundle).Roles).Role.Binding);
+        Assert.Equal(survivor.Role.Binding, withSurvivor.Bundle.SelectedRole);
+
+        var withoutSurvivor = MergeValid(
+            Bundle([selected], selected.Role.Binding, consents),
+            Bundle(
+                [],
+                null,
+                consents,
+                roleTombstones: [new(selected.Role.Binding, Newer)]));
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Merged, withoutSurvivor.Outcome);
+        Assert.Empty(Assert.IsType<HoyoLabGameBundle>(withoutSurvivor.Bundle).Roles);
+        Assert.Null(withoutSurvivor.Bundle.SelectedRole);
+    }
+
+    [Fact]
+    public void Mixed_game_bundles_are_rejected_before_merge()
+    {
+        var hsrRole = Role(1);
+        var genshinBinding = new PublisherRoleBinding("123456789", "os_euro");
+        var genshinRole = new HoyoLabGameBundleRole(
+            new(
+                genshinBinding,
+                "Genshin",
+                PublisherRoleRecordRules.CanonicalRegionLabel(genshinBinding.Server)),
+            new(null, null, null, null, null, null, null, null),
+            null,
+            null);
+
+        AssertConflict(HoyoLabGameBundleMerge.Merge(
+            Bundle([hsrRole], hsrRole.Role.Binding),
+            Bundle([genshinRole], genshinBinding, gameId: HoyoLabGameBundleRules.GenshinGameId),
+            Now));
     }
 
     [Fact]
@@ -340,9 +400,10 @@ public sealed class HoyoLabGameBundleMergeTests
         PublisherRoleBinding? selected,
         HoyoLabCapabilityConsentSet? consents = null,
         IReadOnlyList<HoyoLabCapabilityTombstone>? capabilityTombstones = null,
-        IReadOnlyList<HoyoLabRoleTombstone>? roleTombstones = null) => new(
+        IReadOnlyList<HoyoLabRoleTombstone>? roleTombstones = null,
+        string gameId = HoyoLabGameBundleRules.GameId) => new(
             HoyoLabGameBundleRules.SchemaVersion,
-            HoyoLabGameBundleRules.GameId,
+            gameId,
             roles,
             selected,
             consents ?? Consents(),

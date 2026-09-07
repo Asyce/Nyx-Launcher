@@ -196,59 +196,101 @@ public sealed class HoyoLabAccountSlotServiceTests
     }
 
     [Fact]
-    public void Hsr_bundle_public_surface_is_slot_revalidated_and_supports_only_proven_consents()
+    public void Game_bundle_public_surface_is_slot_revalidated_and_supports_only_proven_consents()
     {
-        var snapshot = Slice(
+        var hsrSnapshot = Slice(
             "public async Task<HoyoLabGameBundle?> GetHsrGameBundleSnapshotAsync",
+            "public async Task<HoyoLabGameBundle?> GetGenshinGameBundleSnapshotAsync");
+        Assert.Contains(
+            "await GetGameBundleSnapshotAsync(HoyoLabGameBundleRules.GameId",
+            hsrSnapshot,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("GenshinGameId", hsrSnapshot, StringComparison.Ordinal);
+
+        var genshinSnapshot = Slice(
+            "public async Task<HoyoLabGameBundle?> GetGenshinGameBundleSnapshotAsync",
+            "public async Task<HoyoLabGameBundle?> GetGameBundleSnapshotAsync");
+        Assert.Contains(
+            "await GetGameBundleSnapshotAsync(HoyoLabGameBundleRules.GenshinGameId",
+            genshinSnapshot,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("HoyoLabGameBundleRules.GameId", genshinSnapshot, StringComparison.Ordinal);
+
+        var snapshot = Slice(
+            "public async Task<HoyoLabGameBundle?> GetGameBundleSnapshotAsync",
             "public async Task<bool> SetHsrCapabilityConsentAsync");
         AssertOrdered(
             snapshot,
             "CreateOperation(\"HoYoLAB\"",
             "gate.WaitAsync",
             "ProfileAccessAllowedAfterGate",
-            "TryMigrateHsrBundleFromV1(operation)",
+            "TryMigrateGameBundleFromV1(gameId, operation)",
             "CanPublish(\"HoYoLAB\", operation)",
-            "hoyoGameBundle.TryLoad()",
+            "var snapshot = GameBundle(gameId).TryLoad()",
             "snapshot is not null && CanPublish(\"HoYoLAB\", operation)");
 
         var setter = Slice(
-            "public async Task<bool> SetHsrCapabilityConsentAsync",
+            "private async Task<bool> SetGameBundleCapabilityConsentAsync",
             "public HoyoLabAccountIdentity? GetHoyoLabIdentity");
+        Assert.Contains(
+            "HoyoLabGameBundleRules.SupportsLocalCapability(gameId, capability)",
+            setter,
+            StringComparison.Ordinal);
         Assert.Contains("HoyoLabGameBundleRules.Resources", setter, StringComparison.Ordinal);
-        Assert.Contains("HoyoLabGameBundleRules.Achievements", setter, StringComparison.Ordinal);
         Assert.DoesNotContain("HoyoLabGameBundleRules.Inventory", setter, StringComparison.Ordinal);
         AssertOrdered(
             setter,
             "gate.WaitAsync",
             "ProfileAccessAllowedAfterGate",
-            "TryMigrateHsrBundleFromV1(operation)",
+            "TryMigrateGameBundleFromV1(gameId, operation)",
             "CanPublish(\"HoYoLAB\", operation)",
-            "hoyoGameBundle.TrySetCapabilityConsent(",
-            "resourceBinding = hoyoGameBundle.TryLoad()?.SelectedRole",
+            "var bundle = GameBundle(gameId)",
+            "var saved = bundle.TrySetCapabilityConsent(",
+            "resourceBinding = bundle.TryLoad()?.SelectedRole",
             "TryLoadResourceSnapshot(",
-            "TryMirrorHsrResource(resourceBinding, resource, operation)",
+            "TryMirrorGameResource(gameId, resourceBinding, resource, operation)",
             "return CanPublish(\"HoYoLAB\", operation)");
         Assert.Contains(
             "enabled && capability == HoyoLabGameBundleRules.Resources",
             setter,
             StringComparison.Ordinal);
+
+        var hsrConsent = Slice(
+            "public async Task<bool> SetHsrCapabilityConsentAsync",
+            "public async Task<bool> SetGenshinCapabilityConsentAsync");
+        Assert.Contains("HoyoLabGameBundleRules.GameId", hsrConsent, StringComparison.Ordinal);
+        Assert.DoesNotContain("GenshinGameId", hsrConsent, StringComparison.Ordinal);
+
+        var genshinConsent = Slice(
+            "public async Task<bool> SetGenshinCapabilityConsentAsync",
+            "private async Task<bool> SetGameBundleCapabilityConsentAsync");
+        Assert.Contains("HoyoLabGameBundleRules.GenshinGameId", genshinConsent, StringComparison.Ordinal);
+        Assert.DoesNotContain("HoyoLabGameBundleRules.GameId", genshinConsent, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void V1_remains_authoritative_while_hsr_bundle_mirrors_are_best_effort()
+    public void V1_remains_authoritative_while_game_bundle_mirrors_are_best_effort()
     {
         var helpers = Slice(
-            "private bool TryMigrateHsrBundleFromV1",
+            "private bool TryMigrateGameBundleFromV1",
             "private PublisherResourceSnapshot? TryLoadResourceSnapshot");
         AssertOrdered(
             helpers,
-            "roleBindings.TryLoadRecord(HoyoLabGameBundleRules.GameId)",
-            "resourceSnapshots.TryLoad(HoyoLabGameBundleRules.GameId, role.Binding)",
+            "roleBindings.TryLoadRecord(gameId)",
+            "resourceSnapshots.TryLoad(gameId, role.Binding)",
             "CanPublish(\"HoYoLAB\", operation)",
-            "hoyoGameBundle.TryMigrateFromV1(");
-        Assert.Contains("var saved = hoyoGameBundle.TrySelectRole(", helpers, StringComparison.Ordinal);
-        Assert.Contains("var saved = hoyoGameBundle.TryRecordResource", helpers, StringComparison.Ordinal);
+            "GameBundle(gameId).TryMigrateFromV1(");
+        Assert.Contains("var saved = GameBundle(gameId).TrySelectRole(", helpers, StringComparison.Ordinal);
+        Assert.Contains("var saved = GameBundle(gameId).TryRecordResource", helpers, StringComparison.Ordinal);
         Assert.Contains("var saved = hoyoGameBundle.TryRecordCompletedAchievements", helpers, StringComparison.Ordinal);
+
+        var stores = Slice(
+            "private HoyoLabGameBundleStore GameBundle",
+            "private bool CanDeleteAllHoyoProtectedState");
+        Assert.Contains(
+            "gameId == HoyoLabGameBundleRules.GameId ? hoyoGameBundle : genshinGameBundle",
+            stores,
+            StringComparison.Ordinal);
 
         var refresh = Slice(
             "private async Task<PublisherResourceSnapshot?> RefreshResourceCoreAsync",
@@ -259,7 +301,7 @@ public sealed class HoyoLabAccountSlotServiceTests
             "activeBinding = selectedSingleRole[0].Binding",
             "SaveRoleRecord(",
             "resourceSnapshots.Save(snapshot with { IsStale = false }, activeBinding)",
-            "TryMirrorHsrResource(activeBinding, snapshot, operation)",
+            "TryMirrorGameResource(entry.GameId, activeBinding, snapshot, operation)",
             "return CanPublish(entry.Provider, operation) ? snapshot : null");
 
         var export = Slice(
@@ -274,58 +316,63 @@ public sealed class HoyoLabAccountSlotServiceTests
     }
 
     [Fact]
-    public void Hsr_resource_mirror_matches_the_persisted_snapshot_second_precision()
+    public void Game_resource_mirror_matches_the_persisted_snapshot_second_precision()
     {
         var resource = Slice(
-            "private bool TryMirrorHsrResource",
+            "private bool TryMirrorGameResource",
             "private bool TryMirrorHsrAchievements");
 
         Assert.Contains(
             "ObservedAt = DateTimeOffset.FromUnixTimeSeconds(resource.ObservedAt.ToUnixTimeSeconds())",
             resource,
             StringComparison.Ordinal);
+        Assert.Contains("GameBundle(gameId).TryRecordResource", resource, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Legacy_compatibility_never_reads_writes_or_migrates_the_v2_bundle()
+    public void Legacy_compatibility_never_reads_writes_or_migrates_any_v2_game_bundle()
     {
         var availability = Slice(
-            "private bool CanUseHsrGameBundle",
+            "private bool CanUseGameBundle",
             "private bool CanDeleteAllHoyoProtectedState");
         Assert.Contains("hoyoSlotManagerAvailable", availability, StringComparison.Ordinal);
         Assert.Contains("LegacyCompatibility: false", availability, StringComparison.Ordinal);
         Assert.Contains("CanMutateHoyoProtectedState(operation)", availability, StringComparison.Ordinal);
 
         var snapshot = Slice(
-            "public async Task<HoyoLabGameBundle?> GetHsrGameBundleSnapshotAsync",
+            "public async Task<HoyoLabGameBundle?> GetGameBundleSnapshotAsync",
             "public async Task<bool> SetHsrCapabilityConsentAsync");
         AssertOrdered(
             snapshot,
             "ProfileAccessAllowedAfterGate",
-            "CanUseHsrGameBundle(operation)",
-            "TryMigrateHsrBundleFromV1(operation)",
-            "hoyoGameBundle.TryLoad()");
+            "CanUseGameBundle(gameId, operation)",
+            "TryMigrateGameBundleFromV1(gameId, operation)",
+            "GameBundle(gameId).TryLoad()");
 
         var setter = Slice(
-            "public async Task<bool> SetHsrCapabilityConsentAsync",
+            "private async Task<bool> SetGameBundleCapabilityConsentAsync",
             "public HoyoLabAccountIdentity? GetHoyoLabIdentity");
         AssertOrdered(
             setter,
             "ProfileAccessAllowedAfterGate",
-            "CanUseHsrGameBundle(operation)",
-            "TryMigrateHsrBundleFromV1(operation)",
-            "hoyoGameBundle.TrySetCapabilityConsent(");
+            "CanUseGameBundle(gameId, operation)",
+            "TryMigrateGameBundleFromV1(gameId, operation)",
+            "var saved = bundle.TrySetCapabilityConsent(");
 
         var helpers = Slice(
-            "private bool TryMigrateHsrBundleFromV1",
+            "private bool TryMigrateGameBundleFromV1",
             "private PublisherResourceSnapshot? TryLoadResourceSnapshot");
-        Assert.Equal(4, helpers.Split(
-            "CanUseHsrGameBundle(operation)",
+        Assert.Equal(3, helpers.Split(
+            "CanUseGameBundle(gameId, operation)",
             StringSplitOptions.None).Length - 1);
+        Assert.Contains(
+            "CanUseGameBundle(HoyoLabGameBundleRules.GameId, operation)",
+            helpers,
+            StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Exact_hsr_role_cleanup_tombstones_v2_before_v1_and_rechecks_the_slot()
+    public void Exact_game_role_cleanup_tombstones_v2_before_v1_and_rechecks_the_slot()
     {
         var cleanup = Slice(
             "private bool TryDeleteProtectedGameState(",
@@ -334,21 +381,22 @@ public sealed class HoyoLabAccountSlotServiceTests
             cleanup,
             "operation?.HoyoContext is { LegacyCompatibility: false }",
             "lock (sync)",
-            "CanUseHsrGameBundle(operation)",
-            "hoyoGameBundle.TryDeleteRole(binding, operation.Cancellation.Token)",
-            "CanUseHsrGameBundle(operation)",
+            "CanUseGameBundle(gameId, operation)",
+            "GameBundle(gameId).TryDeleteRole(binding, operation.Cancellation.Token)",
+            "CanUseGameBundle(gameId, operation)",
             "PublisherProtectedStateDeletionPolicy.TryDeleteGameState(");
+        Assert.Contains("HoyoLabGameBundleRules.IsSupportedGame(gameId)", cleanup, StringComparison.Ordinal);
         Assert.Contains("catch (OperationCanceledException)", cleanup, StringComparison.Ordinal);
         Assert.Contains("QuarantineProvider(provider, operation)", cleanup, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Best_effort_hsr_mirrors_contain_store_cancellation_after_v1_success()
+    public void Best_effort_game_mirrors_contain_store_cancellation_after_v1_success()
     {
         foreach (var helper in new[]
                  {
-                     Slice("private bool TryMirrorHsrRole", "private bool TryMirrorHsrResource"),
-                     Slice("private bool TryMirrorHsrResource", "private bool TryMirrorHsrAchievements"),
+                     Slice("private bool TryMirrorGameRole", "private bool TryMirrorGameResource"),
+                     Slice("private bool TryMirrorGameResource", "private bool TryMirrorHsrAchievements"),
                      Slice("private bool TryMirrorHsrAchievements", "private PublisherResourceSnapshot? TryLoadResourceSnapshot"),
                  })
         {
@@ -360,28 +408,28 @@ public sealed class HoyoLabAccountSlotServiceTests
     }
 
     [Fact]
-    public void V2_mutations_hold_the_generation_lock_through_store_write_and_final_recheck()
+    public void Game_bundle_mutations_hold_the_generation_lock_through_store_write_and_final_recheck()
     {
         var setter = Slice(
-            "public async Task<bool> SetHsrCapabilityConsentAsync",
+            "private async Task<bool> SetGameBundleCapabilityConsentAsync",
             "public HoyoLabAccountIdentity? GetHoyoLabIdentity");
         AssertLockedMutation(
             setter,
-            "hoyoGameBundle.TrySetCapabilityConsent",
+            "bundle.TrySetCapabilityConsent",
             "if (!saved || !CanPublish(\"HoYoLAB\", operation)) return false");
 
         var migration = Slice(
-            "private bool TryMigrateHsrBundleFromV1",
-            "private bool TryMirrorHsrRole");
-        AssertLockedMutation(migration, "hoyoGameBundle.TryMigrateFromV1");
+            "private bool TryMigrateGameBundleFromV1",
+            "private bool TryMirrorGameRole");
+        AssertLockedMutation(migration, "GameBundle(gameId).TryMigrateFromV1");
 
-        var role = Slice("private bool TryMirrorHsrRole", "private bool TryMirrorHsrResource");
-        AssertLockedMutation(role, "hoyoGameBundle.TrySelectRole");
+        var role = Slice("private bool TryMirrorGameRole", "private bool TryMirrorGameResource");
+        AssertLockedMutation(role, "GameBundle(gameId).TrySelectRole");
 
         var resource = Slice(
-            "private bool TryMirrorHsrResource",
+            "private bool TryMirrorGameResource",
             "private bool TryMirrorHsrAchievements");
-        AssertLockedMutation(resource, "hoyoGameBundle.TryRecordResource");
+        AssertLockedMutation(resource, "GameBundle(gameId).TryRecordResource");
 
         var achievements = Slice(
             "private bool TryMirrorHsrAchievements",

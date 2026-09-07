@@ -8,7 +8,7 @@ using Nyx.Desktop.Core.AccountStatus;
 namespace Nyx.Desktop.Infrastructure.AccountStatus;
 
 /// <summary>
-/// Stores one bounded HSR data bundle below a HoYoLAB slot's protected root.
+/// Stores one bounded game data bundle below a HoYoLAB slot's protected root.
 /// Publisher credentials and raw responses never enter this store.
 /// </summary>
 public sealed class HoyoLabGameBundleStore
@@ -19,6 +19,7 @@ public sealed class HoyoLabGameBundleStore
         encoderShouldEmitUTF8Identifier: false,
         throwOnInvalidBytes: true);
     private readonly string protectedSlotRoot;
+    private readonly string gameId;
     private readonly string root;
     private readonly string path;
     private readonly IPublisherRoleBindingProtector protector;
@@ -34,7 +35,18 @@ public sealed class HoyoLabGameBundleStore
             protectedSlotRoot,
             new WindowsCurrentUserRoleBindingProtector(),
             new SystemPublisherRoleBindingFileBoundary(),
-            TimeProvider.System)
+            TimeProvider.System,
+            HoyoLabGameBundleRules.GameId)
+    {
+    }
+
+    public HoyoLabGameBundleStore(string protectedSlotRoot, string gameId)
+        : this(
+            protectedSlotRoot,
+            new WindowsCurrentUserRoleBindingProtector(),
+            new SystemPublisherRoleBindingFileBoundary(),
+            TimeProvider.System,
+            gameId)
     {
     }
 
@@ -42,17 +54,21 @@ public sealed class HoyoLabGameBundleStore
         string protectedSlotRoot,
         IPublisherRoleBindingProtector protector,
         IPublisherRoleBindingFileBoundary files,
-        TimeProvider clock)
+        TimeProvider clock,
+        string gameId = HoyoLabGameBundleRules.GameId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(protectedSlotRoot);
+        if (!HoyoLabGameBundleRules.IsSupportedGame(gameId))
+            throw new ArgumentOutOfRangeException(nameof(gameId));
         this.protectedSlotRoot = Path.GetFullPath(protectedSlotRoot);
+        this.gameId = gameId;
         this.protector = protector ?? throw new ArgumentNullException(nameof(protector));
         this.files = files ?? throw new ArgumentNullException(nameof(files));
         this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
         root = Path.GetFullPath(Path.Combine(
             this.protectedSlotRoot,
             ".protected-hoyolab-game-bundles"));
-        path = Path.Combine(root, "hsr-v2.bin");
+        path = Path.Combine(root, gameId + "-v2.bin");
         if (!IsContained(root) || !IsContained(path))
             throw new ArgumentException("Protected game bundle escaped its configured root.", nameof(protectedSlotRoot));
         mutationMutexName = "Local\\Pengo.Nyx.Desktop.HoyoLabGameBundle."
@@ -96,7 +112,7 @@ public sealed class HoyoLabGameBundleStore
         CancellationToken cancellationToken = default)
     {
         if (role is null
-            || !PublisherRoleRecordRules.IsValid(HoyoLabGameBundleRules.GameId, role))
+            || !PublisherRoleRecordRules.IsValid(gameId, role))
             return false;
         return TryMutate(bundle => SelectRole(bundle, role), cancellationToken);
     }
@@ -106,8 +122,7 @@ public sealed class HoyoLabGameBundleStore
         bool enabled,
         CancellationToken cancellationToken = default)
     {
-        if (capability is not (HoyoLabGameBundleRules.Resources
-            or HoyoLabGameBundleRules.Achievements))
+        if (!HoyoLabGameBundleRules.SupportsLocalCapability(gameId, capability))
             return false;
         return TryMutate(
             bundle => SetCapabilityConsent(bundle, capability, enabled),
@@ -132,6 +147,7 @@ public sealed class HoyoLabGameBundleStore
     {
         if (binding is null
             || completedIds is null
+            || gameId != HoyoLabGameBundleRules.GameId
             || completedIds.Count > HoyoLabGameBundleRules.MaximumAchievementIds
             || completedIds.Any(static id => id <= 0 || id > HoyoLabGameBundleRules.MaximumAchievementId)
             || !IsExactUtcSecond(observedAt))
@@ -147,7 +163,7 @@ public sealed class HoyoLabGameBundleStore
         CancellationToken cancellationToken = default)
     {
         if (binding is null
-            || !PublisherAccountCatalog.IsValidRoleBinding(HoyoLabGameBundleRules.GameId, binding))
+            || !PublisherAccountCatalog.IsValidRoleBinding(gameId, binding))
             return false;
         return TryMutate(bundle => DeleteRole(bundle, binding), cancellationToken);
     }
@@ -161,7 +177,7 @@ public sealed class HoyoLabGameBundleStore
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(role);
-        if (!PublisherRoleRecordRules.IsValid(HoyoLabGameBundleRules.GameId, role)
+        if (!PublisherRoleRecordRules.IsValid(gameId, role)
             || (resource is null) != (resourceBinding is null)
             || (resourceBinding is not null && resourceBinding != role.Binding))
             return false;
@@ -169,7 +185,7 @@ public sealed class HoyoLabGameBundleStore
         var observedAt = resource?.ObservedAt;
         var migrated = new HoyoLabGameBundle(
             HoyoLabGameBundleRules.SchemaVersion,
-            HoyoLabGameBundleRules.GameId,
+            gameId,
             [
                 new(
                     role,
@@ -190,7 +206,7 @@ public sealed class HoyoLabGameBundleStore
                 Resources: true,
                 Inventory: false,
                 Builds: false,
-                Achievements: true,
+                Achievements: gameId == HoyoLabGameBundleRules.GameId,
                 Exploration: false,
                 Endgame: false,
                 Events: false,
@@ -255,11 +271,7 @@ public sealed class HoyoLabGameBundleStore
         var protectedCapabilities = new HashSet<(PublisherRoleBinding, string)>();
         if (exactTombstone is not null)
         {
-            foreach (var capability in new[]
-                     {
-                         HoyoLabGameBundleRules.Resources,
-                         HoyoLabGameBundleRules.Achievements,
-                     })
+            foreach (var capability in SupportedCapabilities())
             {
                 UpsertCapabilityTombstone(
                     capabilityTombstones,
@@ -414,23 +426,15 @@ public sealed class HoyoLabGameBundleStore
         if (!bundle.Roles.Any(role => role.Role.Binding == binding)) return null;
         var now = UtcNowSecond();
         var deletedRole = bundle.Roles.Single(role => role.Role.Binding == binding);
+        var capabilityDeletions = SupportedCapabilities()
+            .Select(capability => (
+                capability,
+                DeletedAt: StrictDeletionTimestamp(now, ObservationFor(deletedRole, capability))))
+            .ToArray();
         var roleDeletedAt = StrictDeletionTimestamp(
             now,
-            new[]
-            {
-                deletedRole.Observations.Resources,
-                deletedRole.Observations.Achievements,
-            }.Max());
-        var capabilityDeletions = new[]
-        {
-            (HoyoLabGameBundleRules.Resources, StrictDeletionTimestamp(
-                now,
-                deletedRole.Observations.Resources)),
-            (HoyoLabGameBundleRules.Achievements, StrictDeletionTimestamp(
-                now,
-                deletedRole.Observations.Achievements)),
-        };
-        if (roleDeletedAt is null || capabilityDeletions.Any(item => item.Item2 is null))
+            capabilityDeletions.Select(item => ObservationFor(deletedRole, item.capability)).Max());
+        if (roleDeletedAt is null || capabilityDeletions.Any(item => item.DeletedAt is null))
             return null;
         var roles = bundle.Roles.Where(role => role.Role.Binding != binding).ToArray();
         var roleTombstones = bundle.RoleTombstones.ToList();
@@ -511,6 +515,11 @@ public sealed class HoyoLabGameBundleStore
 
     private static HoyoLabCapabilityObservations EmptyObservations() => new(
         null, null, null, null, null, null, null, null);
+
+    private IReadOnlyList<string> SupportedCapabilities() =>
+        gameId == HoyoLabGameBundleRules.GameId
+            ? [HoyoLabGameBundleRules.Resources, HoyoLabGameBundleRules.Achievements]
+            : [HoyoLabGameBundleRules.Resources];
 
     private static int FindRole(HoyoLabGameBundle bundle, PublisherRoleBinding binding) =>
         bundle.Roles.ToList().FindIndex(role => role.Role.Binding == binding);
@@ -657,7 +666,7 @@ public sealed class HoyoLabGameBundleStore
     {
         ArgumentNullException.ThrowIfNull(bundle);
         var now = clock.GetUtcNow().ToUniversalTime();
-        if (!HoyoLabGameBundleRules.IsValid(bundle, now)) return false;
+        if (bundle.GameId != gameId || !HoyoLabGameBundleRules.IsValid(bundle, now)) return false;
         var normalized = HoyoLabGameBundleRules.Normalize(bundle);
         if (!HoyoLabGameBundleRules.IsValid(normalized, now)) return false;
 
@@ -737,6 +746,7 @@ public sealed class HoyoLabGameBundleStore
         {
             plaintext = protector.Unprotect(ciphertext);
             return TryParseBundle(plaintext, clock.GetUtcNow().ToUniversalTime(), out var bundle)
+                && bundle?.GameId == gameId
                 ? bundle
                 : null;
         }
@@ -768,7 +778,7 @@ public sealed class HoyoLabGameBundleStore
             plaintext = protector.Unprotect(ciphertext);
             if (!plaintext.AsSpan().SequenceEqual(expectedPlaintext)
                 || !TryParseBundle(plaintext, now, out var parsed)
-                || parsed is null)
+                || parsed?.GameId != gameId)
                 return false;
             semantic = SerializeBundle(parsed);
             return semantic.AsSpan().SequenceEqual(expectedPlaintext)
@@ -960,7 +970,8 @@ public sealed class HoyoLabGameBundleStore
                 || !root.GetProperty("schemaVersion").TryGetInt32(out var schemaVersion)
                 || root.GetProperty("gameId").ValueKind != JsonValueKind.String
                 || root.GetProperty("gameId").GetString() is not { } gameId
-                || !TryParseRoles(root.GetProperty("roles"), out var roles)
+                || !HoyoLabGameBundleRules.IsSupportedGame(gameId)
+                || !TryParseRoles(root.GetProperty("roles"), gameId, out var roles)
                 || !TryParseNullableBinding(root.GetProperty("selectedRole"), out var selected)
                 || !TryParseConsents(root.GetProperty("consents"), out var consents)
                 || !TryParseCapabilityTombstones(
@@ -989,7 +1000,10 @@ public sealed class HoyoLabGameBundleStore
         }
     }
 
-    private static bool TryParseRoles(JsonElement element, out IReadOnlyList<HoyoLabGameBundleRole> roles)
+    private static bool TryParseRoles(
+        JsonElement element,
+        string gameId,
+        out IReadOnlyList<HoyoLabGameBundleRole> roles)
     {
         roles = Array.Empty<HoyoLabGameBundleRole>();
         if (element.ValueKind != JsonValueKind.Array
@@ -1011,7 +1025,7 @@ public sealed class HoyoLabGameBundleStore
                 || item.GetProperty("region").ValueKind != JsonValueKind.String
                 || item.GetProperty("region").GetString() is not { } region
                 || !TryParseObservations(item.GetProperty("observations"), out var observations)
-                || !TryParseResource(item.GetProperty("resource"), out var resource)
+                || !TryParseResource(item.GetProperty("resource"), gameId, out var resource)
                 || !TryParseAchievementIds(
                     item.GetProperty("completedAchievementIds"),
                     out var achievementIds))
@@ -1067,7 +1081,10 @@ public sealed class HoyoLabGameBundleStore
         return true;
     }
 
-    private static bool TryParseResource(JsonElement element, out PublisherResourceSnapshot? resource)
+    private static bool TryParseResource(
+        JsonElement element,
+        string gameId,
+        out PublisherResourceSnapshot? resource)
     {
         resource = null;
         if (element.ValueKind == JsonValueKind.Null) return true;
@@ -1088,7 +1105,7 @@ public sealed class HoyoLabGameBundleStore
             || !TryParseNullableInt32(element.GetProperty("reserve"), out var reserve))
             return false;
         resource = new(
-            HoyoLabGameBundleRules.GameId,
+            gameId,
             name,
             current,
             maximum,

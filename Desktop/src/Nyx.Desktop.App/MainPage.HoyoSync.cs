@@ -12,11 +12,14 @@ public sealed partial class MainPage
 {
     private async void HoyoLabSyncButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!PublisherAccountService.HoyoLabManualSyncAvailable || publisherAccountActionInFlight
-            || GameSelector?.SelectedItem is not GameLauncherItem { Id: "hsr" }) return;
+        if (publisherAccountActionInFlight
+            || GameSelector?.SelectedItem is not GameLauncherItem selected
+            || selected.IsCustom
+            || !PublisherAccountService.IsHoyoLabManualSyncAvailable(selected.Id)) return;
+        var fixedGame = selected.Id;
         try
         {
-            await ShowHoyoLabSyncAsync();
+            await ShowHoyoLabSyncAsync(fixedGame);
         }
         catch (OperationCanceledException) { }
         catch (Exception)
@@ -25,8 +28,13 @@ public sealed partial class MainPage
         }
     }
 
-    private async Task ShowHoyoLabSyncAsync()
+    private async Task ShowHoyoLabSyncAsync(string gameId)
     {
+        var gameName = gameId == HoyoLabGameBundleRules.GenshinGameId ? "Genshin" : "Star Rail";
+        var otherGameName = gameId == HoyoLabGameBundleRules.GenshinGameId ? "Star Rail" : "Genshin";
+        var sharedData = gameId == HoyoLabGameBundleRules.GameId
+            ? "Only remembered resources and completed achievements are shared."
+            : "Only remembered Resin is shared.";
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
             pageLease?.CancellationToken ?? CancellationToken.None);
         var token = cancellation.Token;
@@ -35,7 +43,7 @@ public sealed partial class MainPage
         var contextInvalidated = false;
         var syncSlot = publisherAccounts.HoyoLabAccounts.ActiveSlotId;
         var displayedSlot = syncSlot;
-        var displayedConsent = HasPublisherConsent("hsr");
+        var displayedConsent = HasPublisherConsent(gameId);
         var consentWhenOpened = displayedConsent;
         HoyoLabSyncSummary summary = new(false, false, 0, null);
         HoyoLabGameBundle? bundle = null;
@@ -50,7 +58,7 @@ public sealed partial class MainPage
             Foreground = (Brush)Application.Current.Resources["MoonBrush"],
         };
         var status = Note("Reading saved sync status…");
-        AutomationProperties.SetName(status, "Star Rail sync status");
+        AutomationProperties.SetName(status, $"{gameName} sync status");
         AutomationProperties.SetLiveSetting(status, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
         var message = Note(string.Empty);
         AutomationProperties.SetLiveSetting(message, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
@@ -74,13 +82,13 @@ public sealed partial class MainPage
         };
         var optIn = new CheckBox
         {
-            Content = Note("I want to save an encrypted Star Rail copy on Pengo. Sync only when I ask."),
+            Content = Note($"I want to save an encrypted {gameName} copy on Pengo. Sync only when I ask."),
         };
         var generate = CreateHoyoLabManagerButton("Generate code", "Generate a private HoYo recovery code");
-        var connect = CreateHoyoLabManagerButton("Enable & sync", "Enable encrypted manual Star Rail sync");
-        var syncNow = CreateHoyoLabManagerButton("Sync now", "Sync Star Rail now");
+        var connect = CreateHoyoLabManagerButton("Enable & sync", $"Enable encrypted manual {gameName} sync");
+        var syncNow = CreateHoyoLabManagerButton("Sync now", $"Sync {gameName} now");
         var rotate = CreateHoyoLabManagerButton("Change code…", "Review changing the HoYo recovery code");
-        var stop = CreateHoyoLabManagerButton("Stop syncing here", "Forget only this PC's sync key; keep local and cloud data");
+        var stop = CreateHoyoLabManagerButton("Stop syncing here", "Stop syncing both games on this PC; keep local and cloud data");
         var retry = CreateHoyoLabManagerButton("Retry deletion", "Retry already requested HoYo deletions");
         var website = CreateHoyoLabManagerButton("Open My HoYo", "Open My HoYo on Pengo; no recovery code is sent in the link");
         var scope = new ComboBox
@@ -89,16 +97,16 @@ public sealed partial class MainPage
             HorizontalAlignment = HorizontalAlignment.Stretch,
             ItemsSource = new[]
             {
-                "One Star Rail role",
-                "Star Rail cloud copy",
+                $"One {gameName} role",
+                $"{gameName} cloud copy",
                 "All HoYo data & this PC",
                 "This PC only",
             },
             SelectedIndex = 0,
         };
         AutomationProperties.SetName(scope, "HoYo data removal scope");
-        var roles = new ComboBox { Header = "Star Rail role", HorizontalAlignment = HorizontalAlignment.Stretch };
-        AutomationProperties.SetName(roles, "Exact Star Rail role to remove");
+        var roles = new ComboBox { Header = $"{gameName} role", HorizontalAlignment = HorizontalAlignment.Stretch };
+        AutomationProperties.SetName(roles, $"Exact {gameName} role to remove");
         var remove = CreateHoyoLabManagerButton("Review removal…", "Review exactly which saved HoYo data will be removed");
         var confirmation = Note(string.Empty);
         var confirm = CreateHoyoLabManagerButton("Confirm", "Confirm the described action");
@@ -112,7 +120,7 @@ public sealed partial class MainPage
 
         var content = new StackPanel { Spacing = 10 };
         content.Children.Add(status);
-        content.Children.Add(Note("Only remembered resources and completed achievements are shared. Other games and pull history are unchanged."));
+        content.Children.Add(Note($"{sharedData} {otherGameName} and pull history are unchanged. Genshin achievement exports are separate and unchanged."));
         content.Children.Add(recoveryCode);
         content.Children.Add(Note("Keep the code somewhere safe. Losing it and every remembered device makes the cloud copy unrecoverable. Nyx cannot show the code again after this window closes."));
         content.Children.Add(optIn);
@@ -135,7 +143,7 @@ public sealed partial class MainPage
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
-            Title = "Star Rail · Sync & My HoYo",
+            Title = $"{gameName} · Sync & My HoYo",
             Content = new ScrollViewer
             {
                 Content = content,
@@ -205,12 +213,12 @@ public sealed partial class MainPage
         async Task RefreshAsync()
         {
             var slot = publisherAccounts.HoyoLabAccounts.ActiveSlotId;
-            var enabledConsent = HasPublisherConsent("hsr");
-            var nextSummary = await publisherAccounts.GetHsrSyncSummaryAsync(token);
+            var enabledConsent = HasPublisherConsent(gameId);
+            var nextSummary = await publisherAccounts.GetHoyoSyncSummaryAsync(gameId, token);
             var nextBundle = !contextInvalidated && enabledConsent
-                ? await publisherAccounts.GetHsrGameBundleSnapshotAsync(token) : null;
+                ? await publisherAccounts.GetGameBundleSnapshotAsync(gameId, token) : null;
             if (!open || token.IsCancellationRequested) return;
-            if (slot != publisherAccounts.HoyoLabAccounts.ActiveSlotId || enabledConsent != HasPublisherConsent("hsr"))
+            if (slot != publisherAccounts.HoyoLabAccounts.ActiveSlotId || enabledConsent != HasPublisherConsent(gameId))
             {
                 summary = nextSummary;
                 InvalidateContext();
@@ -225,7 +233,7 @@ public sealed partial class MainPage
             bundle = contextInvalidated ? null : nextBundle;
             status.Text = contextInvalidated ? "The account changed. Reopen this window before a new account action."
                 : !summary.Available ? "Saved sync status is unavailable. Nothing will be uploaded."
-                : summary.Enabled ? $"Manual sync enabled · Last saved: {summary.LastSyncedAt?.ToLocalTime().ToString("g") ?? "not yet"}"
+                : summary.Enabled ? $"Manual sync enabled · Last saved for this account: {summary.LastSyncedAt?.ToLocalTime().ToString("g") ?? "not yet"}"
                 : "Manual sync is off on this PC.";
             if (summary.PendingDeletions > 0)
                 status.Text += $"\n{summary.PendingDeletions} deletion request(s) still need confirmation. Use Retry deletion; Nyx also retries at startup.";
@@ -237,7 +245,7 @@ public sealed partial class MainPage
             {
                 var item = new ComboBoxItem
                 {
-                    Content = $"{role.Role.Nickname ?? "Star Rail"} · {role.Role.ReadableRegion} · {role.Role.Binding.RoleId}",
+                    Content = $"{role.Role.Nickname ?? gameName} · {role.Role.ReadableRegion} · {role.Role.Binding.RoleId}",
                     Tag = role.Role.Binding,
                 };
                 roles.Items.Add(item);
@@ -251,7 +259,7 @@ public sealed partial class MainPage
         {
             if (busy || !open || publisherAccountActionInFlight) return;
             if (accountAction && (contextInvalidated || syncSlot != publisherAccounts.HoyoLabAccounts.ActiveSlotId
-                    || !HasPublisherConsent("hsr")))
+                    || !HasPublisherConsent(gameId)))
             {
                 InvalidateContext();
                 return;
@@ -266,13 +274,13 @@ public sealed partial class MainPage
                 var result = await action(token);
                 if (!open || token.IsCancellationRequested) return;
                 if (result.RecoveryCode is not null && syncSlot == publisherAccounts.HoyoLabAccounts.ActiveSlotId
-                    && HasPublisherConsent("hsr")) recoveryCode.Text = result.RecoveryCode;
-                message.Text = HoyoSyncResultText(result.Status);
+                    && HasPublisherConsent(gameId)) recoveryCode.Text = result.RecoveryCode;
+                message.Text = HoyoSyncResultText(result.Status, gameId);
                 await RefreshAsync();
                 if (open && result.RecoveryCode is not null && recoveryCode.Text.Length > 0)
                     message.Text = summary.PendingDeletions > 0
-                        ? "The new code is active. Keep it safe. Old-cloud deletion is still pending, so the old code may still work. Use Retry deletion; review My HoYo with the old code if a newer copy prevents removal."
-                        : "The new code is active and the old cloud copy was removed. Keep the new code safe.";
+                        ? "The new code is active. Keep it safe. Deletion of the old Star Rail and Genshin cloud copies is still pending, so the old code may still work. Use Retry deletion; review My HoYo with the old code if a newer copy prevents removal."
+                        : "The new code is active and both Star Rail and Genshin cloud copies were transferred; the old code was retired. Keep the new code safe.";
             }
             catch (OperationCanceledException) { }
             catch (Exception)
@@ -327,20 +335,20 @@ public sealed partial class MainPage
         connect.Click += async (_, _) =>
         {
             var enteredCode = recoveryCode.Text.Trim();
-            await RunAsync(ct => publisherAccounts.ConnectHsrSyncAsync(syncSlot!, enteredCode, ct));
+            await RunAsync(ct => publisherAccounts.ConnectHoyoSyncAsync(gameId, syncSlot!, enteredCode, ct));
         };
-        syncNow.Click += async (_, _) => await RunAsync(ct => publisherAccounts.SyncHsrNowAsync(syncSlot!, ct));
+        syncNow.Click += async (_, _) => await RunAsync(ct => publisherAccounts.SyncHoyoNowAsync(gameId, syncSlot!, ct));
         stop.Click += (_, _) => Review(
-            "Stop syncing on this PC and forget its sync key? Local account data and the cloud copy stay. Keep your recovery code to reconnect.",
+            "Stop syncing both games on this PC and forget this PC's sync key? Local snapshots, cloud copies, and pull history stay. Keep your recovery code to reconnect.",
             async ct =>
             {
-                var result = await publisherAccounts.StopHsrSyncAsync(syncSlot!, ct);
+                var result = await publisherAccounts.StopHoyoSyncAsync(gameId, syncSlot!, ct);
                 if (result.Status == HoyoLabManualSyncStatus.Completed) recoveryCode.Text = string.Empty;
                 return result;
             });
         rotate.Click += (_, _) => Review(
-            "Create a new recovery code and retire the old copy if it has not changed? Keep the new code for your other devices. A newer saved copy stops old-code removal; pull history is unchanged.",
-            ct => publisherAccounts.RotateHsrSyncCodeAsync(syncSlot!, ct));
+            $"Create a new recovery code and transfer both Star Rail and Genshin before retiring the old code? Keep the new code for your other devices. A newer saved copy stops old-code removal; ordinary {gameName} sync does not alter {otherGameName} or pull history.",
+            ct => publisherAccounts.RotateHoyoSyncCodeAsync(gameId, syncSlot!, ct));
         retry.Click += async (_, _) => await RunAsync(publisherAccounts.RetryHoyoLabSyncDeletionsAsync, accountAction: false);
         website.Click += async (_, _) => await OpenFixedDestinationAsync(new Uri("https://pengo.gg/nyx/my-hoyo"), "My HoYo");
         scope.SelectionChanged += (_, _) => { ClearConfirmation(); Render(); };
@@ -352,12 +360,12 @@ public sealed partial class MainPage
             switch (scope.SelectedIndex)
             {
                 case 0 when roles.SelectedItem is ComboBoxItem { Tag: PublisherRoleBinding binding } item:
-                    Review($"Remove saved data for {item.Content}, here and in the cloud? Other roles and pull history stay.",
-                        ct => publisherAccounts.DeleteHsrSyncedRoleAsync(syncSlot!, binding, ct));
+                    Review($"Remove saved {gameName} data for {item.Content}, here and in the cloud? Other {gameName} roles, {otherGameName} data, and pull history stay.",
+                        ct => publisherAccounts.DeleteHoyoSyncedRoleAsync(gameId, syncSlot!, binding, ct));
                     break;
                 case 1:
-                    Review("Delete this account's Star Rail cloud copy and stop syncing it here? Local snapshots and pull history stay.",
-                        ct => publisherAccounts.DeleteHsrCloudCopyAsync(syncSlot!, ct));
+                    Review($"Delete this account's {gameName} cloud copy? Local snapshots, the {otherGameName} cloud copy and connection, and pull history stay. Syncing {gameName} again can recreate this cloud copy.",
+                        ct => publisherAccounts.DeleteHoyoCloudCopyAsync(gameId, syncSlot!, ct));
                     break;
                 case 2:
                     Review("Remove this HoYoLAB account from this PC and delete all its HoYo cloud data? Pull history stays. Offline deletion remains pending until confirmed.",
@@ -382,7 +390,7 @@ public sealed partial class MainPage
             // Capture the change before queueing UI work; A -> B -> A must not
             // restore an old confirmation or secret while the queue is busy.
             var accountChanged = syncSlot != publisherAccounts.HoyoLabAccounts.ActiveSlotId
-                || consentWhenOpened != HasPublisherConsent("hsr");
+                || consentWhenOpened != HasPublisherConsent(gameId);
             if (!accountChanged) return;
             DispatcherQueue.TryEnqueue(() =>
             {
@@ -425,11 +433,13 @@ public sealed partial class MainPage
         }
     }
 
-    private static string HoyoSyncResultText(HoyoLabManualSyncStatus status) => status switch
+    private static string HoyoSyncResultText(HoyoLabManualSyncStatus status, string gameId) => status switch
     {
         HoyoLabManualSyncStatus.Completed => "Finished. Check the saved status above.",
         HoyoLabManualSyncStatus.NotEnabled => "Choose a connected HoYoLAB account and enable manual sync first.",
-        HoyoLabManualSyncStatus.NoLocalData => "No remembered Star Rail data is available. Choose a region and enable the data you want to remember in Accounts.",
+        HoyoLabManualSyncStatus.NoLocalData => gameId == HoyoLabGameBundleRules.GenshinGameId
+            ? "No remembered Resin is available. Choose a region and enable the data you want to remember in Accounts."
+            : "No remembered Star Rail resources or completed achievements are available. Choose a region and enable the data you want to remember in Accounts.",
         HoyoLabManualSyncStatus.InvalidRecoveryCode => "That recovery code is not valid. Check it and try again.",
         HoyoLabManualSyncStatus.Conflict => "The saved copies disagree, or newer data appeared during deletion. Nothing was forced over it. Review the other device or My HoYo before retrying.",
         HoyoLabManualSyncStatus.DeletionPending => "A deletion is still pending. Use Retry deletion before reconnecting this copy.",

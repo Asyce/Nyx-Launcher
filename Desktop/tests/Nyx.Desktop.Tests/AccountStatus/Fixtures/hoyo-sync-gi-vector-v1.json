@@ -1,0 +1,14 @@
+{
+  "format": "nyx-hoyolab-sync-v1",
+  "displayCode": "NYX-HOYO-AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH",
+  "canonicalCode": "NYXHOYOAAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH",
+  "syncId": "a295b9a2d46ecbdb935fa7961cea87951060e1c973d9289f",
+  "token": "520ebcb203323a013f383f2992b37119ae7b864a1abb91a638315f39d63bb79e",
+  "salt": "nyx-hoyolab-sync-key:v1:a295b9a2d46ecbdb935fa7961cea87951060e1c973d9289f",
+  "keyHex": "eac31765764996c9cf93064eeac4d78caae1becae321dff64a3f304ac33fb230",
+  "aad": "nyx-hoyolab-sync-v1|hoyolab|gi|a295b9a2d46ecbdb935fa7961cea87951060e1c973d9289f",
+  "iv": "AAECAwQFBgcICQoL",
+  "plaintext": "{\"schemaVersion\":2,\"gameId\":\"gi\",\"roles\":[{\"binding\":{\"roleId\":\"123456789\",\"server\":\"os_euro\"},\"nickname\":\"Test Traveler\",\"region\":\"Europe\",\"observations\":{\"resources\":\"2026-08-30T00:00:00Z\",\"inventory\":null,\"builds\":null,\"achievements\":null,\"exploration\":null,\"endgame\":null,\"events\":null,\"currency\":null},\"resource\":{\"name\":\"Original Resin\",\"current\":120,\"maximum\":200,\"observedAt\":\"2026-08-30T00:00:00Z\",\"recoverySeconds\":38400,\"reserve\":null},\"completedAchievementIds\":null}],\"selectedRole\":{\"roleId\":\"123456789\",\"server\":\"os_euro\"},\"consents\":{\"resources\":true,\"inventory\":false,\"builds\":false,\"achievements\":false,\"exploration\":false,\"endgame\":false,\"events\":false,\"currency\":false},\"capabilityTombstones\":[],\"roleTombstones\":[]}",
+  "tagHex": "fa5a4f3f8bacc66bbaa9c37c82ebb750",
+  "ciphertext": "FqIMPqw/OKA4OGLA3kyVV6oO7sv06FGD0EFY3Sent9TdN/7IUtSirHB7RliD6vVL52ZXLKdcDdh5JzJSydL+jb9zYGUrphvGiENUqhgltY6UHHeEO3LDlgRrKn8oqFBr6Jyag1Xa12m+uCqhfMDrPXQ1KbaFvZ+CzTzXUkg+aaTDQI+wZoOa8UzzddWQlGHfNe07QofFO5qo93uZi91SwutjfWNxecPLiOvxRfu6opEfeZt9gFraYwDtEL5yhYS8WdmgIPzAIFmS6oGYCrh+86QKnANyfCd2w83eJORehLFCFftJV3t+v3qUJVMeL3BrfJmgjx2GUF4Nusf9GPfducj7acuOy3myHktV/c/D89HM7sgbaa/6QoAfhxLUu2WJpfy4PRsGdcTkMKrlFrY+5Uk4TT+ySxY9IJHnUooFEJED5JcB3usQtbjq2jbFJ4XyPwkBiixdsQ1yf9tZyte1tqKAaUPB3B+xWXJPbv0JPW+OYyhByUdMkvcYrGLoJZ3Ygov8uytWXRzkT7RcCGn4+eTWhIHkT6rrFU0AAPtpqcGB6xdA7bZTPi5YPflxBrwwMYUNXK6kRZeJYgDKnXUhP1FDK/PXKuqiXKobGG1oqsNSS3A0WQhYPdU5xpyoFbb4MvpeNR4BQ2N6a++9xE63koDABR11UH2gVHf4izvJrpnZXg8LS6IC9NFx5lyw+0FOfk9ifyiPI38GBhOQgmrQDIsCMxH2DcG6EtxEGNQVN1iUJiCry4J5Ri/9BZc+pCtvF+wFt/QDg0nOG3IWW6TtPpUWWMUWH6uysgw7H4A+Bmnn78m12NFPErCkZOVreLR3AaNCX+GSBrIRvIHe9MEs60kxvJBI8jqlEhA/8VZVeewdpFzPI0dmsRLeOm/jpeDWGomxQ443CmijVIiIoBODrU0sB20WYR9ps4Dz8LeAuEwCl206tdDdYzL3IYRMAmCTbJT4Zx8EXTHF6I3r8MLC+lpPP4usxmu6qcN8guu3UA=="
+}

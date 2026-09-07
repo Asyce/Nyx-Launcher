@@ -21,7 +21,6 @@ internal static class HoyoLabSyncCrypto
     private const string SyncIdPrefix = "nyx-hoyolab-sync-id:v1:";
     private const string TokenPrefix = "nyx-hoyolab-sync-token:v1:";
     private const string KeySaltPrefix = "nyx-hoyolab-sync-key:v1:";
-    private const string AadPrefix = Format + "|" + Kind + "|" + Game + "|";
     private const string KdfName = "PBKDF2";
     private const string KdfHash = "SHA-256";
     private const int KdfIterations = 150_000;
@@ -262,7 +261,7 @@ internal static class HoyoLabSyncCrypto
             plaintext = HoyoLabGameBundleStore.SerializeBundle(HoyoLabGameBundleRules.Normalize(bundle));
             if (plaintext.Length is <= 0 or > MaximumPlaintextBytes) return false;
             ciphertext = new byte[plaintext.Length + TagBytes];
-            aad = StrictUtf8.GetBytes(AadPrefix + secrets.SyncId);
+            aad = StrictUtf8.GetBytes(Format + "|" + Kind + "|" + bundle.GameId + "|" + secrets.SyncId);
             using (var aes = new AesGcm(secrets.Key, TagBytes))
             {
                 aes.Encrypt(
@@ -300,10 +299,12 @@ internal static class HoyoLabSyncCrypto
         Envelope? envelope,
         DateTimeOffset utcNow,
         out HoyoLabGameBundle? bundle,
-        Action<ReadOnlyMemory<byte>>? clearedPlaintextObserver = null)
+        Action<ReadOnlyMemory<byte>>? clearedPlaintextObserver = null,
+        string gameId = Game)
     {
         bundle = null;
-        if (secrets is null || secrets.IsDisposed || !TryDecodeEnvelope(envelope, out var iv, out var ciphertext))
+        if (!HoyoLabGameBundleRules.IsSupportedGame(gameId)
+            || secrets is null || secrets.IsDisposed || !TryDecodeEnvelope(envelope, out var iv, out var ciphertext))
             return false;
         byte[]? plaintext = null;
         byte[]? aad = null;
@@ -311,7 +312,7 @@ internal static class HoyoLabSyncCrypto
         {
             var plaintextLength = ciphertext.Length - TagBytes;
             plaintext = new byte[plaintextLength];
-            aad = StrictUtf8.GetBytes(AadPrefix + secrets.SyncId);
+            aad = StrictUtf8.GetBytes(Format + "|" + Kind + "|" + gameId + "|" + secrets.SyncId);
             using (var aes = new AesGcm(secrets.Key, TagBytes))
             {
                 aes.Decrypt(
@@ -321,11 +322,15 @@ internal static class HoyoLabSyncCrypto
                     plaintext,
                     aad);
             }
-            return plaintext.Length is > 0 and <= MaximumPlaintextBytes
+            if (plaintext.Length is > 0 and <= MaximumPlaintextBytes
                 && HoyoLabGameBundleStore.TryParseBundle(
                     plaintext,
                     utcNow.ToUniversalTime(),
-                    out bundle);
+                    out bundle)
+                && bundle?.GameId == gameId)
+                return true;
+            bundle = null;
+            return false;
         }
         catch (Exception exception) when (exception is CryptographicException
             or ArgumentException

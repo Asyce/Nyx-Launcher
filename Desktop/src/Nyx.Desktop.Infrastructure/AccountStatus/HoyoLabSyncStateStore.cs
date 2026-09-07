@@ -12,9 +12,10 @@ namespace Nyx.Desktop.Infrastructure.AccountStatus;
 /// </summary>
 public sealed class HoyoLabSyncStateStore
 {
-    public const int SchemaVersion = 2;
+    public const int SchemaVersion = 3;
     public const int MaximumPendingDeletions = 8;
     public const string HsrScope = "hsr";
+    public const string GenshinScope = "gi";
     public const string AllHoyoScope = "all-hoyolab";
 
     internal const int MaximumPlaintextBytes = 16 * 1024;
@@ -219,7 +220,8 @@ public sealed class HoyoLabSyncStateStore
                     null,
                     current.PendingDeletions,
                     current.PendingRoleDeletions.Where(item => item.SyncId != scopeDeletion.SyncId
-                        || !item.Token.Span.SequenceEqual(scopeDeletion.Token.Span)));
+                        || !item.Token.Span.SequenceEqual(scopeDeletion.Token.Span)
+                        || (scopeDeletion.Scope != AllHoyoScope && item.GameId != scopeDeletion.Scope)));
                 var enqueued = Enqueue(detached, scopeDeletion);
                 return ReferenceEquals(enqueued, detached) ? detached.Normalize() : enqueued;
             },
@@ -241,6 +243,22 @@ public sealed class HoyoLabSyncStateStore
         CancellationToken cancellationToken = default) => TryMutate(
             current => Enqueue(current, deletion),
             cancellationToken);
+
+    public bool TryQueueGameDeletion(HoyoLabPendingDeletion deletion,
+        CancellationToken cancellationToken = default) => TryMutate(current =>
+        {
+            if (!IsValidPendingDeletion(deletion, UtcNow(), enforceClock: true)
+                || !HoyoLabGameBundleRules.IsSupportedGame(deletion.Scope)
+                || current.CurrentCredential is not { } credential
+                || deletion.SyncId != credential.SyncId
+                || !deletion.Token.Span.SequenceEqual(credential.Token.Span))
+                return null;
+            using var prepared = current.CloneWith(credential, null, current.PendingDeletions,
+                current.PendingRoleDeletions.Where(item => item.SyncId != deletion.SyncId
+                    || item.GameId != deletion.Scope));
+            var enqueued = Enqueue(prepared, deletion);
+            return ReferenceEquals(enqueued, prepared) ? prepared.Normalize() : enqueued;
+        }, cancellationToken);
 
     public bool TryCompletePendingDeletion(
         string operationId,
@@ -638,6 +656,7 @@ public sealed class HoyoLabSyncStateStore
                     writer.WriteBoolean("removeLocalSlot", deletion.RemoveLocalSlot);
                     writer.WriteBoolean("requireRevisionMatch", deletion.RequireRevisionMatch);
                     WriteNullableTimestamp(writer, "expectedRevision", deletion.ExpectedRevision);
+                    WriteGameRevisions(writer, "expectedRevisionsByGame", deletion.ExpectedRevisionsByGame);
                     writer.WriteString("operationId", deletion.OperationId);
                     WriteTimestamp(writer, "requestedAt", deletion.RequestedAt);
                     writer.WriteEndObject();
@@ -647,6 +666,7 @@ public sealed class HoyoLabSyncStateStore
                 foreach (var deletion in state.PendingRoleDeletions)
                 {
                     writer.WriteStartObject();
+                    writer.WriteString("gameId", deletion.GameId);
                     writer.WriteString("syncId", deletion.SyncId);
                     writer.WriteBase64String("token", deletion.Token.Span);
                     writer.WriteBase64String("key", deletion.Key.Span);
@@ -703,7 +723,7 @@ public sealed class HoyoLabSyncStateStore
                 || !version.TryGetInt32(out var schemaVersion)
                 || (schemaVersion == 1
                     ? !HasExactProperties(root, "schemaVersion", "currentCredential", "workerRevision", "pendingDeletions")
-                    : schemaVersion != SchemaVersion
+                    : schemaVersion is not (2 or SchemaVersion)
                         || !HasExactProperties(root, "schemaVersion", "currentCredential", "workerRevision", "pendingDeletions", "pendingRoleDeletions"))
                 || !TryParseCredential(root.GetProperty("currentCredential"), out credential))
                 return false;
@@ -714,8 +734,8 @@ public sealed class HoyoLabSyncStateStore
             }
             if (!TryParseNullableTimestamp(root.GetProperty("workerRevision"), out workerRevision)
                 || !TryParsePendingDeletions(root.GetProperty("pendingDeletions"), schemaVersion, out pending, parsedSecretObserver)
-                || (schemaVersion == SchemaVersion
-                    && !TryParsePendingRoleDeletions(root.GetProperty("pendingRoleDeletions"), out pendingRoles, parsedSecretObserver)))
+                || (schemaVersion >= 2
+                    && !TryParsePendingRoleDeletions(root.GetProperty("pendingRoleDeletions"), schemaVersion, out pendingRoles, parsedSecretObserver)))
                 return false;
 
             using var candidate = new HoyoLabSyncState(credential, workerRevision, pending, pendingRoles);
@@ -788,7 +808,9 @@ public sealed class HoyoLabSyncStateStore
             {
                 if ((schemaVersion == 1
                         ? !HasExactProperties(item, "syncId", "token", "scope", "operationId", "requestedAt")
-                        : !HasExactProperties(item, "syncId", "token", "scope", "removeLocalSlot", "requireRevisionMatch", "expectedRevision", "operationId", "requestedAt"))
+                        : schemaVersion == 2
+                            ? !HasExactProperties(item, "syncId", "token", "scope", "removeLocalSlot", "requireRevisionMatch", "expectedRevision", "operationId", "requestedAt")
+                            : !HasExactProperties(item, "syncId", "token", "scope", "removeLocalSlot", "requireRevisionMatch", "expectedRevision", "expectedRevisionsByGame", "operationId", "requestedAt"))
                     || item.GetProperty("syncId").ValueKind != JsonValueKind.String
                     || item.GetProperty("syncId").GetString() is not { } syncId
                     || !IsLowerHex(syncId, SyncIdCharacters)
@@ -799,23 +821,27 @@ public sealed class HoyoLabSyncStateStore
                     || !TryNormalizeOperationId(operationId, out operationId)
                     || !TryParseTimestamp(item.GetProperty("requestedAt"), out var requestedAt))
                     return false;
-                if (schemaVersion == SchemaVersion
+                if (schemaVersion >= 2
                     && item.GetProperty("removeLocalSlot").ValueKind is not (JsonValueKind.True or JsonValueKind.False))
                     return false;
-                var removeLocalSlot = schemaVersion == SchemaVersion && item.GetProperty("removeLocalSlot").GetBoolean();
+                var removeLocalSlot = schemaVersion >= 2 && item.GetProperty("removeLocalSlot").GetBoolean();
                 DateTimeOffset? expectedRevision = null;
-                if (schemaVersion == SchemaVersion
+                if (schemaVersion >= 2
                     && (item.GetProperty("requireRevisionMatch").ValueKind is not (JsonValueKind.True or JsonValueKind.False)
                         || !TryParseNullableTimestamp(item.GetProperty("expectedRevision"), out expectedRevision)))
                     return false;
-                var requireRevisionMatch = schemaVersion == SchemaVersion && item.GetProperty("requireRevisionMatch").GetBoolean();
+                var requireRevisionMatch = schemaVersion >= 2 && item.GetProperty("requireRevisionMatch").GetBoolean();
+                HoyoLabGameRevisions? expectedRevisions = null;
+                if (schemaVersion == SchemaVersion
+                    && !TryParseGameRevisions(item.GetProperty("expectedRevisionsByGame"), out expectedRevisions))
+                    return false;
                 byte[]? token = null;
                 try
                 {
                     if (!TryDecodeBase64(item.GetProperty("token"), TokenBytes, out token))
                         return false;
                     var deletion = new HoyoLabPendingDeletion(syncId, token, scope, operationId, requestedAt,
-                        removeLocalSlot, requireRevisionMatch, expectedRevision);
+                        removeLocalSlot, requireRevisionMatch, expectedRevision, expectedRevisions);
                     parsed.Add(deletion);
                     parsedSecretObserver?.Invoke(deletion.Token);
                 }
@@ -841,6 +867,7 @@ public sealed class HoyoLabSyncStateStore
 
     private static bool TryParsePendingRoleDeletions(
         JsonElement element,
+        int schemaVersion,
         out IReadOnlyList<HoyoLabPendingRoleDeletion> deletions,
         Action<ReadOnlyMemory<byte>>? parsedSecretObserver)
     {
@@ -853,8 +880,11 @@ public sealed class HoyoLabSyncStateStore
         {
             foreach (var item in element.EnumerateArray())
             {
-                if (!HasExactProperties(item, "syncId", "token", "key", "binding", "operationId",
-                        "requestedAt", "knownResourcesAt", "knownAchievementsAt", "deletedAt")
+                if ((schemaVersion == 2
+                        ? !HasExactProperties(item, "syncId", "token", "key", "binding", "operationId",
+                            "requestedAt", "knownResourcesAt", "knownAchievementsAt", "deletedAt")
+                        : !HasExactProperties(item, "gameId", "syncId", "token", "key", "binding", "operationId",
+                            "requestedAt", "knownResourcesAt", "knownAchievementsAt", "deletedAt"))
                     || item.GetProperty("syncId").ValueKind != JsonValueKind.String
                     || item.GetProperty("syncId").GetString() is not { } syncId
                     || !IsLowerHex(syncId, SyncIdCharacters)
@@ -865,6 +895,15 @@ public sealed class HoyoLabSyncStateStore
                     || !TryParseNullableTimestamp(item.GetProperty("knownAchievementsAt"), out var knownAchievementsAt)
                     || !TryParseTimestamp(item.GetProperty("deletedAt"), out var deletedAt))
                     return false;
+                var gameId = HsrScope;
+                if (schemaVersion == SchemaVersion)
+                {
+                    if (item.GetProperty("gameId").ValueKind != JsonValueKind.String
+                        || item.GetProperty("gameId").GetString() is not { } parsedGame
+                        || !HoyoLabGameBundleRules.IsSupportedGame(parsedGame))
+                        return false;
+                    gameId = parsedGame;
+                }
                 var binding = item.GetProperty("binding");
                 if (!HasExactProperties(binding, "roleId", "server")
                     || binding.GetProperty("roleId").ValueKind != JsonValueKind.String
@@ -880,7 +919,7 @@ public sealed class HoyoLabSyncStateStore
                         || !TryDecodeBase64(item.GetProperty("key"), KeyBytes, out key))
                         return false;
                     var deletion = new HoyoLabPendingRoleDeletion(syncId, token, key, exactBinding,
-                        operationId, requestedAt, knownResourcesAt, knownAchievementsAt, deletedAt);
+                        operationId, requestedAt, knownResourcesAt, knownAchievementsAt, deletedAt, gameId);
                     parsed.Add(deletion);
                     parsedSecretObserver?.Invoke(deletion.Token);
                     parsedSecretObserver?.Invoke(deletion.Key);
@@ -964,12 +1003,16 @@ public sealed class HoyoLabSyncStateStore
                 && !deletion.IsDisposed
                 && IsLowerHex(deletion.SyncId, SyncIdCharacters)
                 && deletion.Token.Length == TokenBytes
-                && deletion.Scope is HsrScope or AllHoyoScope
+                && deletion.Scope is HsrScope or GenshinScope or AllHoyoScope
                 && (!deletion.RemoveLocalSlot || deletion.Scope == AllHoyoScope)
                 && (deletion.RequireRevisionMatch
                     ? deletion.Scope == AllHoyoScope && !deletion.RemoveLocalSlot
                         && IsValidWorkerRevision(deletion.ExpectedRevision, enforceClock ? utcNow : DateTimeOffset.MaxValue)
-                    : deletion.ExpectedRevision is null)
+                        && (deletion.ExpectedRevisionsByGame is null
+                            || deletion.ExpectedRevision is null
+                                && IsValidWorkerRevision(deletion.ExpectedRevisionsByGame.Hsr, enforceClock ? utcNow : DateTimeOffset.MaxValue)
+                                && IsValidWorkerRevision(deletion.ExpectedRevisionsByGame.Genshin, enforceClock ? utcNow : DateTimeOffset.MaxValue))
+                    : deletion.ExpectedRevision is null && deletion.ExpectedRevisionsByGame is null)
                 && TryNormalizeOperationId(deletion.OperationId, out _)
                 && IsValidTimestamp(deletion.RequestedAt, enforceClock ? utcNow : DateTimeOffset.MaxValue);
         }
@@ -991,7 +1034,9 @@ public sealed class HoyoLabSyncStateStore
                 && IsLowerHex(deletion.SyncId, SyncIdCharacters)
                 && deletion.Token.Length == TokenBytes
                 && deletion.Key.Length == KeyBytes
-                && PublisherAccountCatalog.IsValidRoleBinding(HoyoLabGameBundleRules.GameId, deletion.Binding)
+                && HoyoLabGameBundleRules.IsSupportedGame(deletion.GameId)
+                && PublisherAccountCatalog.IsValidRoleBinding(deletion.GameId, deletion.Binding)
+                && (deletion.GameId == HsrScope || deletion.KnownAchievementsAt is null)
                 && TryNormalizeOperationId(deletion.OperationId, out _)
                 && IsValidTimestamp(deletion.RequestedAt, utcNow)
                 && IsValidObservation(deletion.KnownResourcesAt, utcNow)
@@ -1042,6 +1087,7 @@ public sealed class HoyoLabSyncStateStore
                 && left.RemoveLocalSlot == right.RemoveLocalSlot
                 && left.RequireRevisionMatch == right.RequireRevisionMatch
                 && left.ExpectedRevision == right.ExpectedRevision
+                && left.ExpectedRevisionsByGame == right.ExpectedRevisionsByGame
                 && left.OperationId == right.OperationId
                 && left.RequestedAt == right.RequestedAt
                 && left.Token.Span.SequenceEqual(right.Token.Span);
@@ -1057,6 +1103,7 @@ public sealed class HoyoLabSyncStateStore
         try
         {
             return left.SyncId == right.SyncId
+                && left.GameId == right.GameId
                 && left.Binding == right.Binding
                 && left.OperationId == right.OperationId
                 && left.RequestedAt == right.RequestedAt
@@ -1124,6 +1171,27 @@ public sealed class HoyoLabSyncStateStore
         if (!TryParseTimestamp(element, out var parsed)) return false;
         value = parsed;
         return true;
+    }
+
+    private static bool TryParseGameRevisions(JsonElement element, out HoyoLabGameRevisions? revisions)
+    {
+        revisions = null;
+        if (element.ValueKind == JsonValueKind.Null) return true;
+        if (!HasExactProperties(element, "hsr", "gi")
+            || !TryParseNullableTimestamp(element.GetProperty("hsr"), out var hsr)
+            || !TryParseNullableTimestamp(element.GetProperty("gi"), out var gi))
+            return false;
+        revisions = new(hsr, gi);
+        return true;
+    }
+
+    internal static void WriteGameRevisions(Utf8JsonWriter writer, string name, HoyoLabGameRevisions? revisions)
+    {
+        if (revisions is null) { writer.WriteNull(name); return; }
+        writer.WriteStartObject(name);
+        WriteNullableTimestamp(writer, "hsr", revisions.Hsr);
+        WriteNullableTimestamp(writer, "gi", revisions.Genshin);
+        writer.WriteEndObject();
     }
 
     private static bool TryParseTimestamp(
@@ -1322,14 +1390,16 @@ public sealed class HoyoLabPendingDeletion : IDisposable
         DateTimeOffset requestedAt,
         bool removeLocalSlot = false,
         bool requireRevisionMatch = false,
-        DateTimeOffset? expectedRevision = null)
+        DateTimeOffset? expectedRevision = null,
+        HoyoLabGameRevisions? expectedRevisionsByGame = null)
     {
         if (!IsLowerHex(syncId)
             || token.Length != 32
-            || scope is not (HoyoLabSyncStateStore.HsrScope or HoyoLabSyncStateStore.AllHoyoScope)
+            || scope is not (HoyoLabSyncStateStore.HsrScope or HoyoLabSyncStateStore.GenshinScope or HoyoLabSyncStateStore.AllHoyoScope)
             || removeLocalSlot && scope != HoyoLabSyncStateStore.AllHoyoScope
             || requireRevisionMatch && (scope != HoyoLabSyncStateStore.AllHoyoScope || removeLocalSlot)
-            || !requireRevisionMatch && expectedRevision is not null
+            || !requireRevisionMatch && (expectedRevision is not null || expectedRevisionsByGame is not null)
+            || expectedRevision is not null && expectedRevisionsByGame is not null
             || string.IsNullOrEmpty(operationId)
             || operationId.Length > 128
             || operationId.Any(static character => character < (char)0x21 || character > (char)0x7e)
@@ -1353,6 +1423,7 @@ public sealed class HoyoLabPendingDeletion : IDisposable
         RemoveLocalSlot = removeLocalSlot;
         RequireRevisionMatch = requireRevisionMatch;
         ExpectedRevision = expectedRevision;
+        ExpectedRevisionsByGame = expectedRevisionsByGame;
     }
 
     public string SyncId { get; }
@@ -1363,10 +1434,11 @@ public sealed class HoyoLabPendingDeletion : IDisposable
     public bool RemoveLocalSlot { get; }
     public bool RequireRevisionMatch { get; }
     public DateTimeOffset? ExpectedRevision { get; }
+    public HoyoLabGameRevisions? ExpectedRevisionsByGame { get; }
     public bool IsDisposed => Volatile.Read(ref disposed) != 0;
 
     public HoyoLabPendingDeletion Clone() => new(SyncId, Token, Scope, OperationId, RequestedAt,
-        RemoveLocalSlot, RequireRevisionMatch, ExpectedRevision);
+        RemoveLocalSlot, RequireRevisionMatch, ExpectedRevision, ExpectedRevisionsByGame);
 
     public void Dispose()
     {
@@ -1395,15 +1467,19 @@ public sealed class HoyoLabPendingRoleDeletion : IDisposable
         DateTimeOffset requestedAt,
         DateTimeOffset? knownResourcesAt,
         DateTimeOffset? knownAchievementsAt,
-        DateTimeOffset deletedAt)
+        DateTimeOffset deletedAt,
+        string gameId = HoyoLabGameBundleRules.GameId)
     {
         if (binding is null
             || binding.RoleId is null || binding.Server is null
-            || !PublisherAccountCatalog.IsValidRoleBinding(HoyoLabGameBundleRules.GameId, binding)
+            || !HoyoLabGameBundleRules.IsSupportedGame(gameId)
+            || !PublisherAccountCatalog.IsValidRoleBinding(gameId, binding)
+            || gameId != HoyoLabGameBundleRules.GameId && knownAchievementsAt is not null
             || !HoyoLabSyncStateStore.TryNormalizeOperationId(operationId, out _))
             throw new ArgumentException("HoYo pending role deletion is invalid.");
         credential = new(syncId, token, key);
         Binding = binding;
+        GameId = gameId;
         OperationId = operationId;
         RequestedAt = requestedAt;
         KnownResourcesAt = knownResourcesAt;
@@ -1415,6 +1491,7 @@ public sealed class HoyoLabPendingRoleDeletion : IDisposable
     public ReadOnlyMemory<byte> Token => credential.Token;
     public ReadOnlyMemory<byte> Key => credential.Key;
     public PublisherRoleBinding Binding { get; }
+    public string GameId { get; }
     public string OperationId { get; }
     public DateTimeOffset RequestedAt { get; }
     public DateTimeOffset? KnownResourcesAt { get; }
@@ -1423,12 +1500,14 @@ public sealed class HoyoLabPendingRoleDeletion : IDisposable
     public bool IsDisposed => credential.IsDisposed;
 
     public HoyoLabPendingRoleDeletion Clone() => new(SyncId, Token, Key, Binding, OperationId,
-        RequestedAt, KnownResourcesAt, KnownAchievementsAt, DeletedAt);
+        RequestedAt, KnownResourcesAt, KnownAchievementsAt, DeletedAt, GameId);
 
     public void Dispose() => credential.Dispose();
 
     public override string ToString() => nameof(HoyoLabPendingRoleDeletion);
 }
+
+public sealed record HoyoLabGameRevisions(DateTimeOffset? Hsr, DateTimeOffset? Genshin);
 
 public sealed class HoyoLabSyncState : IDisposable
 {

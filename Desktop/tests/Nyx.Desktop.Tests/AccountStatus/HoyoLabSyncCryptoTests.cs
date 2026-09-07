@@ -9,8 +9,10 @@ namespace Nyx.Desktop.Tests.AccountStatus;
 public sealed class HoyoLabSyncCryptoTests
 {
     private const string FixtureSha256 = "ce6f3690401d1b54f6fb6cbac76ee67004cc03fd89404149ca1d261865699a0f";
+    private const string GenshinFixtureSha256 = "5d412f6ebf9f1635f282c7ca1dcbf0f2e14f0c28257b52b47e676b13cc669947";
     private static readonly DateTimeOffset Now = new(2026, 8, 30, 12, 0, 0, TimeSpan.Zero);
     private static readonly Vector Fixture = LoadVector();
+    private static readonly Vector GenshinFixture = LoadVector("hoyo-sync-gi-vector-v1.json");
 
     [Fact]
     public void Public_fixture_is_frozen_and_contains_only_fake_identifiers()
@@ -132,6 +134,59 @@ public sealed class HoyoLabSyncCryptoTests
             {
                 CryptographicOperations.ZeroMemory(json);
             }
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(iv);
+        }
+    }
+
+    [Fact]
+    public void Fixed_iv_genshin_fixture_matches_and_default_hsr_binding_is_rejected()
+    {
+        var bytes = File.ReadAllBytes(FixturePathFor("hoyo-sync-gi-vector-v1.json"));
+        byte[]? digest = null;
+        try
+        {
+            digest = SHA256.HashData(bytes);
+            Assert.Equal(GenshinFixtureSha256, Convert.ToHexStringLower(digest));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(bytes);
+            if (digest is not null) CryptographicOperations.ZeroMemory(digest);
+        }
+
+        Assert.True(HoyoLabSyncCrypto.TryDerive(GenshinFixture.DisplayCode, out var derived));
+        using var secrets = Assert.IsType<HoyoLabSyncCrypto.DerivedSecrets>(derived);
+        var bundle = ParseBundle(GenshinFixture);
+        var iv = Convert.FromBase64String(GenshinFixture.Iv);
+        try
+        {
+            Assert.True(HoyoLabSyncCrypto.TryEncryptBundle(
+                secrets,
+                bundle,
+                Now,
+                iv,
+                out var encrypted));
+            var envelope = Assert.IsType<HoyoLabSyncCrypto.Envelope>(encrypted);
+            Assert.Equal(GenshinFixture.Ciphertext, envelope.Ciphertext);
+            Assert.True(HoyoLabSyncCrypto.TryDecryptBundle(
+                secrets,
+                envelope,
+                Now,
+                out var decrypted,
+                gameId: HoyoLabGameBundleRules.GenshinGameId));
+            Assert.Equal(
+                HoyoLabGameBundleRules.GenshinGameId,
+                Assert.IsType<HoyoLabGameBundle>(decrypted).GameId);
+            Assert.False(HoyoLabSyncCrypto.TryDecryptBundle(
+                secrets,
+                envelope,
+                Now,
+                out _,
+                gameId: HoyoLabGameBundleRules.GameId));
+            Assert.False(HoyoLabSyncCrypto.TryDecryptBundle(secrets, envelope, Now, out _));
         }
         finally
         {
@@ -407,8 +462,11 @@ public sealed class HoyoLabSyncCryptoTests
     }
 
     private static HoyoLabGameBundle VectorBundle()
+        => ParseBundle(Fixture);
+
+    private static HoyoLabGameBundle ParseBundle(Vector vector)
     {
-        var plaintext = Encoding.UTF8.GetBytes(Fixture.Plaintext);
+        var plaintext = Encoding.UTF8.GetBytes(vector.Plaintext);
         try
         {
             Assert.True(HoyoLabGameBundleStore.TryParseBundle(plaintext, Now, out var bundle));
@@ -421,8 +479,11 @@ public sealed class HoyoLabSyncCryptoTests
     }
 
     private static Vector LoadVector()
+        => LoadVector("hoyo-sync-vector-v1.json");
+
+    private static Vector LoadVector(string fileName)
     {
-        using var document = JsonDocument.Parse(File.ReadAllBytes(FixturePath));
+        using var document = JsonDocument.Parse(File.ReadAllBytes(FixturePathFor(fileName)));
         var root = document.RootElement;
         return new(
             root.GetProperty("format").GetString()!,
@@ -443,6 +504,11 @@ public sealed class HoyoLabSyncCryptoTests
         AppContext.BaseDirectory,
         "Fixtures",
         "hoyo-sync-vector-v1.json");
+
+    private static string FixturePathFor(string fileName) => Path.Combine(
+        AppContext.BaseDirectory,
+        "Fixtures",
+        fileName);
 
     private sealed record Vector(
         string Format,

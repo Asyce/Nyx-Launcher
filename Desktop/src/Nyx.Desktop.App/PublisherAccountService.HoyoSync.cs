@@ -9,17 +9,23 @@ public sealed partial class PublisherAccountService
     // and My HoYo route have passed live verification.
     public static bool HoyoLabManualSyncAvailable => true;
 
-    public async Task<HoyoLabSyncSummary> GetHsrSyncSummaryAsync(
+    public static bool GenshinManualSyncAvailable => false;
+
+    public static bool IsHoyoLabManualSyncAvailable(string gameId) =>
+        HoyoLabManualSyncAvailable && (gameId == "hsr" || gameId == "gi" && GenshinManualSyncAvailable);
+
+    public async Task<HoyoLabSyncSummary> GetHoyoSyncSummaryAsync(
+        string gameId,
         CancellationToken cancellationToken = default)
     {
-        if (!HoyoLabManualSyncAvailable || !ownsHoyoProfile || disposed) return new(false, false, 0, null);
+        if (!IsHoyoLabManualSyncAvailable(gameId) || !ownsHoyoProfile || disposed) return new(false, false, 0, null);
         using var operation = CreateOperation("HoYoLAB", cancellationToken);
         await hoyoGate.WaitAsync(operation.Cancellation.Token);
         try
         {
             var context = operation.HoyoContext;
             using var coordinator = context is { LegacyCompatibility: false, SlotId: not null }
-                && OwnsProfile("HoYoLAB") && CanUseHsrGameBundle(operation) && CanPublish("HoYoLAB", operation)
+                && OwnsProfile("HoYoLAB") && CanUseGameBundle(gameId, operation) && CanPublish("HoYoLAB", operation)
                 ? CreateHoyoSyncCoordinator(operation)
                 : new HoyoLabSyncCoordinator(
                     root, null, null, publish => TryPublishHoyoSyncCleanup(operation, publish));
@@ -31,38 +37,40 @@ public sealed partial class PublisherAccountService
         }
     }
 
-    public Task<HoyoLabManualSyncResult> ConnectHsrSyncAsync(
+    public Task<HoyoLabManualSyncResult> ConnectHoyoSyncAsync(
+        string gameId,
         string slotId,
         string recoveryCode,
         CancellationToken cancellationToken = default) =>
-        RunHsrSyncAsync(slotId, (coordinator, token) => coordinator.ConnectAsync(recoveryCode, token), cancellationToken);
+        RunHoyoSyncAsync(gameId, slotId, (coordinator, token) => coordinator.ConnectAsync(recoveryCode, token, gameId), cancellationToken);
 
-    public Task<HoyoLabManualSyncResult> SyncHsrNowAsync(string slotId, CancellationToken cancellationToken = default) =>
-        RunHsrSyncAsync(slotId, (coordinator, token) => coordinator.SyncNowAsync(token), cancellationToken);
+    public Task<HoyoLabManualSyncResult> SyncHoyoNowAsync(string gameId, string slotId, CancellationToken cancellationToken = default) =>
+        RunHoyoSyncAsync(gameId, slotId, (coordinator, token) => coordinator.SyncNowAsync(token, gameId), cancellationToken);
 
-    public Task<HoyoLabManualSyncResult> StopHsrSyncAsync(string slotId, CancellationToken cancellationToken = default) =>
-        RunHsrSyncAsync(slotId, (coordinator, token) => Task.FromResult(coordinator.Detach(cancellationToken: token)), cancellationToken);
+    public Task<HoyoLabManualSyncResult> StopHoyoSyncAsync(string gameId, string slotId, CancellationToken cancellationToken = default) =>
+        RunHoyoSyncAsync(gameId, slotId, (coordinator, token) => Task.FromResult(coordinator.Detach(cancellationToken: token)), cancellationToken);
 
-    public Task<HoyoLabManualSyncResult> RotateHsrSyncCodeAsync(string slotId, CancellationToken cancellationToken = default) =>
-        RunHsrSyncAsync(slotId, (coordinator, token) => coordinator.RotateAsync(token), cancellationToken);
+    public Task<HoyoLabManualSyncResult> RotateHoyoSyncCodeAsync(string gameId, string slotId, CancellationToken cancellationToken = default) =>
+        RunHoyoSyncAsync(gameId, slotId, (coordinator, token) => coordinator.RotateAsync(token), cancellationToken);
 
-    public Task<HoyoLabManualSyncResult> DeleteHsrCloudCopyAsync(string slotId, CancellationToken cancellationToken = default) =>
-        RunHsrSyncAsync(slotId, async (coordinator, token) =>
+    public Task<HoyoLabManualSyncResult> DeleteHoyoCloudCopyAsync(string gameId, string slotId, CancellationToken cancellationToken = default) =>
+        RunHoyoSyncAsync(gameId, slotId, async (coordinator, token) =>
         {
-            var detached = coordinator.Detach(HoyoLabSyncStateStore.HsrScope, token);
+            var detached = coordinator.Detach(gameId, token);
             return detached.Status == HoyoLabManualSyncStatus.Completed
                 ? await coordinator.RetryDeletionsAsync(token, TryRemoveHoyoSlotLocally)
                 : detached;
         }, cancellationToken);
 
-    public Task<HoyoLabManualSyncResult> DeleteHsrSyncedRoleAsync(
+    public Task<HoyoLabManualSyncResult> DeleteHoyoSyncedRoleAsync(
+        string gameId,
         string slotId,
         PublisherRoleBinding binding,
         CancellationToken cancellationToken = default) =>
-        RunHsrSyncAsync(slotId, async (coordinator, token) =>
+        RunHoyoSyncAsync(gameId, slotId, async (coordinator, token) =>
         {
-            var queued = coordinator.QueueRoleDeletion(binding, token);
-            RefreshHsrAfterSyncDeletion();
+            var queued = coordinator.QueueRoleDeletion(binding, token, gameId);
+            RefreshHoyoAfterSyncDeletion();
             return queued.Status == HoyoLabManualSyncStatus.Completed
                 ? await coordinator.RetryDeletionsAsync(token, TryRemoveHoyoSlotLocally)
                 : queued;
@@ -106,7 +114,7 @@ public sealed partial class PublisherAccountService
                     }
                 });
                 var result = await coordinator.RetryDeletionsAsync(cancellation.Token, TryRemoveHoyoSlotLocally);
-                RefreshHsrAfterSyncDeletion();
+                RefreshHoyoAfterSyncDeletion();
                 Updated?.Invoke(this, EventArgs.Empty);
                 return result;
             }
@@ -121,13 +129,14 @@ public sealed partial class PublisherAccountService
         }
     }
 
-    private async Task<HoyoLabManualSyncResult> RunHsrSyncAsync(
+    private async Task<HoyoLabManualSyncResult> RunHoyoSyncAsync(
+        string gameId,
         string expectedSlotId,
         Func<HoyoLabSyncCoordinator, CancellationToken, Task<HoyoLabManualSyncResult>> action,
         CancellationToken cancellationToken,
         bool rotateSession = false)
     {
-        if (!HoyoLabManualSyncAvailable || !HoyoLabAccountSlotRules.IsValidSlotId(expectedSlotId)
+        if (!IsHoyoLabManualSyncAvailable(gameId) || !HoyoLabAccountSlotRules.IsValidSlotId(expectedSlotId)
             || !consent.IsEnabled("HoYoLAB")
             || !HasUsableHoyoAccount() || !OwnsProfile("HoYoLAB") || disposed)
             return new(HoyoLabManualSyncStatus.NotEnabled);
@@ -152,10 +161,10 @@ public sealed partial class PublisherAccountService
                 await hoyoGate.WaitAsync(operation.Cancellation.Token);
                 enteredGate = true;
                 if (!ProfileAccessAllowedAfterGate("HoYoLAB", consentRequired: true, operation)
-                    || !CanUseHsrGameBundle(operation)
+                    || !CanUseGameBundle(gameId, operation)
                     || operation.HoyoContext?.SlotId != expectedSlotId)
                     return new(HoyoLabManualSyncStatus.NotEnabled);
-                _ = TryMigrateHsrBundleFromV1(operation);
+                _ = TryMigrateGameBundleFromV1(gameId, operation);
                 using var coordinator = CreateHoyoSyncCoordinator(operation);
                 var result = await action(coordinator, operation.Cancellation.Token);
                 lock (sync)
@@ -249,7 +258,10 @@ public sealed partial class PublisherAccountService
                 || !TryDeleteExactDirectory(legacyProfile)
                 || !new PublisherResourceSnapshotStore(root).DeleteProvider("HoYoLAB")
                 || !new PublisherRoleBindingStore(root).DeleteProvider("HoYoLAB")
-                || !new HoyoLabGameBundleStore(root).TryDelete()))
+                || !new HoyoLabGameBundleStore(root).TryDelete()
+                || !new HoyoLabGameBundleStore(
+                    root,
+                    HoyoLabGameBundleRules.GenshinGameId).TryDelete()))
             return false;
         if (!hoyoSlots.TryGetSlotContainerPath(target, out var containerPath)
             || !TryDeleteManagedDirectory(containerPath))
@@ -260,15 +272,18 @@ public sealed partial class PublisherAccountService
         return true;
     }
 
-    private void RefreshHsrAfterSyncDeletion()
+    private void RefreshHoyoAfterSyncDeletion()
     {
         lock (sync)
         {
-            if (roleBindings.TryLoad(HoyoLabGameBundleRules.GameId) is not null) return;
-            resources.Remove(HoyoLabGameBundleRules.GameId);
-            resourceStates.Remove(HoyoLabGameBundleRules.GameId);
-            resourceDiagnostics.Remove(HoyoLabGameBundleRules.GameId);
-            checkIns.Remove(HoyoLabGameBundleRules.GameId);
+            foreach (var gameId in HoyoLabGameBundleRules.SupportedGames)
+            {
+                if (roleBindings.TryLoad(gameId) is not null) continue;
+                resources.Remove(gameId);
+                resourceStates.Remove(gameId);
+                resourceDiagnostics.Remove(gameId);
+                checkIns.Remove(gameId);
+            }
         }
     }
 }
