@@ -1132,6 +1132,7 @@ public sealed class HoyoLiveSessionUiTests
             "private async Task ShowHoyoLabAccountManagerAsync",
             "private void AutomaticDailyCheckInToggle_Click");
         var controls = Slice(manager, "if (gameId is \"hsr\" or \"gi\")", "var actionButtons");
+        var content = Slice(manager, "var content = new StackPanel", "content.Children.Add(slots)");
         var apply = Slice(manager, "void ApplyCapabilityConsent", "void FailClosedCapabilityConsent");
         var reload = Slice(manager, "async Task ReloadCapabilityConsentAsync", "async Task RunManagerActionAsync");
         var setter = Slice(
@@ -1148,6 +1149,8 @@ public sealed class HoyoLiveSessionUiTests
             "These switches apply to the active HoYoLAB account, not the highlighted account. Turning one off removes only Nyx's extra remembered copy; the existing energy display and earlier achievement exports stay unchanged.",
             controls,
             StringComparison.Ordinal);
+        Assert.Contains("TextWrapping = TextWrapping.Wrap", controls, StringComparison.Ordinal);
+        Assert.DoesNotContain("Width =", content, StringComparison.Ordinal);
         Assert.Contains(
             "$\"Remember {gameName} {resourceName} for the active HoYoLAB account\"",
             controls,

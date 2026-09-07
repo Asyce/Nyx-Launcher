@@ -1630,7 +1630,6 @@ public sealed partial class MainPage : Page
         var content = new StackPanel
         {
             Spacing = 8,
-            Width = Math.Clamp(ActualWidth - 96, 300, 680),
         };
         content.Children.Add(slots);
         content.Children.Add(labelBox);
