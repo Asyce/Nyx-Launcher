@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Nyx.Desktop.Core.AccountStatus;
 
 namespace Nyx.Desktop.Tests.AccountStatus;
@@ -100,6 +101,70 @@ public sealed class HoyoLabGameBundleMergeTests
                 gameId: HoyoLabGameBundleRules.GenshinGameId));
         Assert.Equal(HoyoLabGameBundleMergeOutcome.Idempotent, olderTombstone.Outcome);
         Assert.Contains(olderTombstone.Bundle!.Roles, role => role.Role.Binding == binding);
+    }
+
+    [Fact]
+    public void Genshin_exploration_merge_is_semantic_and_newer_than_role_or_capability_deletes()
+    {
+        var binding = new PublisherRoleBinding("123456789", "os_euro");
+        var snapshot = Exploration();
+        var semanticallyEqual = Exploration(
+            HoyoLabGenshinExplorationSnapshotTests.DataJson.Replace(
+                "\"percentage\":1234", "\"percentage\":1234.0", StringComparison.Ordinal));
+        var localRole = GenshinExplorationRole(binding, Older, snapshot);
+        var remoteRole = GenshinExplorationRole(binding, Newer, semanticallyEqual);
+        var consents = Consents(exploration: true);
+
+        var result = MergeValid(
+            Bundle([localRole], binding, consents, gameId: HoyoLabGameBundleRules.GenshinGameId),
+            Bundle([remoteRole], binding, consents, gameId: HoyoLabGameBundleRules.GenshinGameId));
+
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Merged, result.Outcome);
+        var mergedRole = Assert.Single(Assert.IsType<HoyoLabGameBundle>(result.Bundle).Roles);
+        Assert.Equal(Newer, mergedRole.Observations.Exploration);
+        Assert.True(HoyoLabGenshinExplorationRules.ValuesEqual(semanticallyEqual, mergedRole.GenshinExploration));
+
+        AssertConflict(MergeValid(
+            Bundle([localRole], binding, consents, gameId: HoyoLabGameBundleRules.GenshinGameId),
+            Bundle(
+                [GenshinExplorationRole(
+                    binding,
+                    Older,
+                    Exploration(HoyoLabGenshinExplorationSnapshotTests.DataJson.Replace(
+                        "\"percentage\":1234", "\"percentage\":1235", StringComparison.Ordinal)))],
+                binding,
+                consents,
+                gameId: HoyoLabGameBundleRules.GenshinGameId)));
+
+        var cleared = MergeValid(
+            Bundle([localRole], binding, consents, gameId: HoyoLabGameBundleRules.GenshinGameId),
+            Bundle(
+                [GenshinExplorationRole(binding)],
+                binding,
+                consents,
+                capabilityTombstones:
+                [
+                    new(binding, HoyoLabGameBundleRules.Exploration, Newer),
+                ],
+                gameId: HoyoLabGameBundleRules.GenshinGameId));
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Merged, cleared.Outcome);
+        var clearedBundle = Assert.IsType<HoyoLabGameBundle>(cleared.Bundle);
+        var clearedRole = Assert.Single(clearedBundle.Roles);
+        Assert.Null(clearedRole.Observations.Exploration);
+        Assert.Null(clearedRole.GenshinExploration);
+        Assert.Equal(Newer, Assert.Single(clearedBundle.CapabilityTombstones).DeletedAt);
+
+        var olderRoleDelete = MergeValid(
+            Bundle([remoteRole], binding, consents, gameId: HoyoLabGameBundleRules.GenshinGameId),
+            Bundle(
+                [],
+                null,
+                consents,
+                roleTombstones: [new(binding, Older)],
+                gameId: HoyoLabGameBundleRules.GenshinGameId));
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Idempotent, olderRoleDelete.Outcome);
+        Assert.Contains(olderRoleDelete.Bundle!.Roles, role => role.Role.Binding == binding);
+        Assert.Empty(olderRoleDelete.Bundle.RoleTombstones);
     }
 
     [Fact]
@@ -555,6 +620,21 @@ public sealed class HoyoLabGameBundleMergeTests
         null,
         builds);
 
+    private static HoyoLabGameBundleRole GenshinExplorationRole(
+        PublisherRoleBinding binding,
+        DateTimeOffset? explorationAt = null,
+        HoyoLabGenshinExplorationSnapshot? exploration = null) => new(
+        new(
+            binding,
+            "Genshin",
+            PublisherRoleRecordRules.CanonicalRegionLabel(binding.Server)),
+        new(null, null, null, null, explorationAt, null, null, null),
+        null,
+        null,
+        null,
+        null,
+        exploration);
+
     private static HoyoLabGameBundleRole HsrRole(
         PublisherRoleBinding binding,
         DateTimeOffset? buildsAt = null,
@@ -576,15 +656,23 @@ public sealed class HoyoLabGameBundleMergeTests
     private static HoyoLabCapabilityConsentSet Consents(
         bool resources = false,
         bool achievements = false,
-        bool builds = false) => new(
+        bool builds = false,
+        bool exploration = false) => new(
             resources,
             Inventory: false,
             Builds: builds,
             achievements,
-            Exploration: false,
+            Exploration: exploration,
             Endgame: false,
             Events: false,
             Currency: false);
+
+    private static HoyoLabGenshinExplorationSnapshot Exploration(
+        string json = HoyoLabGenshinExplorationSnapshotTests.DataJson)
+    {
+        using var document = JsonDocument.Parse(json);
+        return new(document.RootElement.Clone());
+    }
 
     private const string HsrBuildCharactersJson = """
         [{"id":1001,"name":"Synthetic Trailblazer","level":80,"rarity":5,"element":"Quantum","path":3,"rank":1,"enhancedId":1001001,"avatarType":"Girl","lightCone":null,"eidolons":[],"relics":[],"ornaments":[],"properties":[],"traces":[],"specialTraces":[],"memosprite":null}]

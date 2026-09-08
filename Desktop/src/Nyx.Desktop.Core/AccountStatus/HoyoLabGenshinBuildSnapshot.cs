@@ -1,5 +1,5 @@
-using System.Text;
 using System.Text.Json;
+using static Nyx.Desktop.Core.AccountStatus.HoyoLabSnapshotJson;
 
 namespace Nyx.Desktop.Core.AccountStatus;
 
@@ -93,13 +93,8 @@ public static class HoyoLabGenshinBuildRules
     private static bool StatFields(JsonElement item, params string[] expected) =>
         Fields(item, expected)
         || (item.ValueKind == JsonValueKind.Object
-            && item.TryGetProperty("name", out var name)
-            && name.ValueKind == JsonValueKind.String
-            && name.GetString() is { Length: > 0 and <= 128 } text
-            && text == text.Trim()
-            && text.EnumerateRunes().All(static character => Rune.GetUnicodeCategory(character) is not
-                (System.Globalization.UnicodeCategory.Control or System.Globalization.UnicodeCategory.Format
-                or System.Globalization.UnicodeCategory.LineSeparator or System.Globalization.UnicodeCategory.ParagraphSeparator))
+            && item.TryGetProperty("name", out _)
+            && Text(item, "name", 1, 128)
             && Fields(item, [.. expected, "name"]));
 
     private static bool StatValues(JsonElement item) =>
@@ -109,30 +104,13 @@ public static class HoyoLabGenshinBuildRules
         && Number(item.GetProperty("final"))
         && Boolean(item, "percent");
 
-    private static bool Integer(JsonElement item, string name, int minimum = 0, int maximum = int.MaxValue) =>
-        item.GetProperty(name).ValueKind == JsonValueKind.Number
-        && item.GetProperty(name).TryGetDouble(out var value)
-        && value >= minimum && value <= maximum && value == Math.Truncate(value);
-
     private static bool NullableInteger(JsonElement item, string name) =>
         item.GetProperty(name).ValueKind == JsonValueKind.Null || Integer(item, name);
-
-    private static bool Boolean(JsonElement item, string name) =>
-        item.GetProperty(name).ValueKind is JsonValueKind.True or JsonValueKind.False;
 
     private static bool NullableNumber(JsonElement item) => item.ValueKind == JsonValueKind.Null || Number(item);
 
     private static bool Number(JsonElement item) =>
         item.ValueKind == JsonValueKind.Number && item.TryGetDouble(out var value) && double.IsFinite(value);
-
-    private static bool Fields(JsonElement item, params string[] expected)
-    {
-        if (item.ValueKind != JsonValueKind.Object) return false;
-        var remaining = new HashSet<string>(expected, StringComparer.Ordinal);
-        foreach (var property in item.EnumerateObject())
-            if (!remaining.Remove(property.Name)) return false;
-        return remaining.Count == 0;
-    }
 
     private static bool Array(
         JsonElement items,

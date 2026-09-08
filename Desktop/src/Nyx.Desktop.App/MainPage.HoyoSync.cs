@@ -39,6 +39,10 @@ public sealed partial class MainPage
             : PublisherAccountService.GenshinBuildsAvailable
                 ? "Only remembered Resin, characters and equipped builds are shared. Full-bag inventory is not included."
                 : "Only remembered Resin is shared.";
+        if (gameId == HoyoLabGameBundleRules.GenshinGameId && PublisherAccountService.GenshinExplorationAvailable)
+            sharedData = "Remembered Resin and exploration are shared."
+                + (PublisherAccountService.GenshinBuildsAvailable ? " Remembered characters and equipped builds are also included." : string.Empty)
+                + " Full-bag inventory, housing and endgame records are not included.";
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
             pageLease?.CancellationToken ?? CancellationToken.None);
         var token = cancellation.Token;

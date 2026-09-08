@@ -1,5 +1,5 @@
-using System.Text;
 using System.Text.Json;
+using static Nyx.Desktop.Core.AccountStatus.HoyoLabSnapshotJson;
 
 namespace Nyx.Desktop.Core.AccountStatus;
 
@@ -106,33 +106,8 @@ public static class HoyoLabHsrBuildRules
         && Array(item.GetProperty("properties"), 128, Property, "id")
         && Array(item.GetProperty("traces"), 128, Trace, "id");
 
-    private static bool Integer(JsonElement item, string name, int minimum = 0, int maximum = int.MaxValue) =>
-        item.GetProperty(name).ValueKind == JsonValueKind.Number
-        && item.GetProperty(name).TryGetDouble(out var value)
-        && value >= minimum && value <= maximum && value == Math.Truncate(value);
-
-    private static bool Boolean(JsonElement item, string name) =>
-        item.GetProperty(name).ValueKind is JsonValueKind.True or JsonValueKind.False;
-
     private static bool NullableText(JsonElement item, string name, int maximum) =>
         item.GetProperty(name).ValueKind == JsonValueKind.Null || Text(item, name, 1, maximum);
-
-    private static bool Text(JsonElement item, string name, int minimum, int maximum) =>
-        item.GetProperty(name).ValueKind == JsonValueKind.String
-        && item.GetProperty(name).GetString() is { } text && text.Length >= minimum && text.Length <= maximum
-        && text == text.Trim()
-        && text.EnumerateRunes().All(static character => Rune.GetUnicodeCategory(character) is not
-            (System.Globalization.UnicodeCategory.Control or System.Globalization.UnicodeCategory.Format
-            or System.Globalization.UnicodeCategory.LineSeparator or System.Globalization.UnicodeCategory.ParagraphSeparator));
-
-    private static bool Fields(JsonElement item, params string[] expected)
-    {
-        if (item.ValueKind != JsonValueKind.Object) return false;
-        var remaining = new HashSet<string>(expected, StringComparer.Ordinal);
-        foreach (var property in item.EnumerateObject())
-            if (!remaining.Remove(property.Name)) return false;
-        return remaining.Count == 0;
-    }
 
     private static bool Array(JsonElement items, int maximum, Func<JsonElement, bool> validate, params string[] identities)
     {

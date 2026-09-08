@@ -252,6 +252,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
     {
         if (!HoyoLabGameBundleRules.SupportsLocalCapability(gameId, capability)
             || enabled && gameId == "gi" && capability == HoyoLabGameBundleRules.Builds && !GenshinBuildsAvailable
+            || enabled && gameId == "gi" && capability == HoyoLabGameBundleRules.Exploration && !GenshinExplorationAvailable
             || enabled && gameId == "hsr" && capability == HoyoLabGameBundleRules.Builds && !HsrBuildsAvailable
             || !consent.IsEnabled("HoYoLAB")
             || !HasUsableHoyoAccount()
@@ -3271,7 +3272,8 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
                 resource is null ? null : role.Binding,
                 operation.Cancellation.Token,
                 rememberGenshinBuilds: GenshinBuildsAvailable,
-                rememberHsrBuilds: HsrBuildsAvailable);
+                rememberHsrBuilds: HsrBuildsAvailable,
+                rememberGenshinExploration: GenshinExplorationAvailable);
             return saved && CanPublish("HoYoLAB", operation);
         }
     }

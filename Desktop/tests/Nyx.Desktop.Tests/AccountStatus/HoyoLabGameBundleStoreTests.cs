@@ -254,6 +254,169 @@ public sealed class HoyoLabGameBundleStoreTests
     }
 
     [Fact]
+    public void Genshin_exploration_round_trips_empty_data_and_rejects_source_or_cross_game_fields()
+    {
+        using var root = new TemporaryRoot();
+        var role = RoleRecord(RoleId(1), "os_euro", "Genshin test");
+        var empty = Exploration(EmptyExplorationJson);
+        var bundle = Bundle(
+            [RoleData(1, "os_euro", exploration: empty, explorationAt: FirstObservation)],
+            role.Binding,
+            Consents(exploration: true),
+            gameId: HoyoLabGameBundleRules.GenshinGameId);
+        var store = Store(root.Path, gameId: HoyoLabGameBundleRules.GenshinGameId);
+
+        Assert.True(HoyoLabGenshinExplorationRules.IsValid(empty));
+        HoyoLabGameBundle normalized;
+        using (var document = JsonDocument.Parse(EmptyExplorationJson))
+        {
+            var borrowed = new HoyoLabGenshinExplorationSnapshot(document.RootElement);
+            normalized = HoyoLabGameBundleRules.Normalize(bundle with
+            {
+                Roles = [RoleData(1, "os_euro", exploration: borrowed, explorationAt: FirstObservation)],
+            });
+        }
+        Assert.True(HoyoLabGameBundleRules.IsValid(normalized, Now));
+        Assert.True(store.TrySave(normalized));
+        var loaded = Assert.IsType<HoyoLabGameBundle>(store.TryLoad());
+        var loadedRole = Assert.Single(loaded.Roles);
+        Assert.Equal(FirstObservation, loadedRole.Observations.Exploration);
+        Assert.True(HoyoLabGenshinExplorationRules.ValuesEqual(empty, loadedRole.GenshinExploration));
+        Assert.Equal(15, loadedRole.GenshinExploration!.Data.GetProperty("counts").EnumerateObject().Count());
+        Assert.Empty(loadedRole.GenshinExploration.Data.GetProperty("worlds").EnumerateArray());
+        Assert.Empty(loadedRole.GenshinExploration.Data.GetProperty("displayGroups").EnumerateArray());
+
+        var valid = HoyoLabGameBundleStore.SerializeBundle(loaded);
+        try
+        {
+            Assert.Contains("genshinExploration", Encoding.UTF8.GetString(valid), StringComparison.Ordinal);
+            Assert.True(HoyoLabGameBundleStore.TryParseBundle(valid, Now, out var parsed));
+            Assert.True(HoyoLabGenshinExplorationRules.ValuesEqual(
+                loadedRole.GenshinExploration,
+                parsed!.Roles[0].GenshinExploration));
+
+            var unknown = Mutate(valid, "\"counts\":", "\"sourceOnly\":0,\"counts\":");
+            Assert.False(Parse(unknown));
+
+            var duplicate = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(valid).Replace(
+                "\"genshinExploration\":{",
+                "\"genshinExploration\":{},\"genshinExploration\":{",
+                StringComparison.Ordinal));
+            try { Assert.False(Parse(duplicate)); }
+            finally { CryptographicOperations.ZeroMemory(duplicate); }
+
+            var legacy = HoyoLabGameBundleStore.SerializeBundle(Bundle(
+                [RoleData(1, "os_euro")],
+                role.Binding,
+                gameId: HoyoLabGameBundleRules.GenshinGameId));
+            try
+            {
+                Assert.DoesNotContain("genshinExploration", Encoding.UTF8.GetString(legacy), StringComparison.Ordinal);
+                Assert.True(HoyoLabGameBundleStore.TryParseBundle(legacy, Now, out var legacyParsed));
+                Assert.Equal(legacy, HoyoLabGameBundleStore.SerializeBundle(legacyParsed!));
+            }
+            finally { CryptographicOperations.ZeroMemory(legacy); }
+
+            var hsrWithGenshinPayload = HoyoLabGameBundleStore.SerializeBundle(new HoyoLabGameBundle(
+                HoyoLabGameBundleRules.SchemaVersion,
+                HoyoLabGameBundleRules.GameId,
+                [RoleData(1, exploration: empty, explorationAt: FirstObservation)],
+                RoleRecord(RoleId(1)).Binding,
+                Consents(),
+                [],
+                []));
+            try { Assert.False(Parse(hsrWithGenshinPayload)); }
+            finally { CryptographicOperations.ZeroMemory(hsrWithGenshinPayload); }
+        }
+        finally { CryptographicOperations.ZeroMemory(valid); }
+    }
+
+    [Fact]
+    public void Genshin_exploration_requires_consent_is_semantically_idempotent_and_clears_with_a_tombstone()
+    {
+        using var root = new TemporaryRoot();
+        var role = new PublisherRoleRecord(new(RoleId(1), "os_euro"), "Genshin test", "Europe");
+        var snapshot = Exploration();
+        var store = Store(root.Path, gameId: HoyoLabGameBundleRules.GenshinGameId);
+        Assert.True(store.TrySave(Bundle(
+            [RoleData(1, "os_euro")],
+            role.Binding,
+            gameId: HoyoLabGameBundleRules.GenshinGameId)));
+
+        Assert.False(store.TryRecordGenshinExploration(role.Binding, snapshot, FirstObservation));
+        Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Exploration, true));
+        Assert.True(store.TryRecordGenshinExploration(role.Binding, snapshot, FirstObservation));
+        Assert.True(store.TryRecordGenshinExploration(
+            role.Binding,
+            Exploration(HoyoLabGenshinExplorationSnapshotTests.DataJson.Replace(
+                "\"percentage\":1234", "\"percentage\":1234.0", StringComparison.Ordinal)),
+            FirstObservation));
+        Assert.False(store.TryRecordGenshinExploration(
+            role.Binding,
+            Exploration(HoyoLabGenshinExplorationSnapshotTests.DataJson.Replace(
+                "\"percentage\":1234", "\"percentage\":1235", StringComparison.Ordinal)),
+            FirstObservation));
+        Assert.False(store.TryRecordGenshinExploration(role.Binding, snapshot, FirstObservation.AddSeconds(-1)));
+        Assert.True(store.TryRecordGenshinExploration(role.Binding, snapshot, SecondObservation));
+
+        Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Exploration, false));
+        var cleared = Assert.IsType<HoyoLabGameBundle>(store.TryLoad());
+        Assert.False(cleared.Consents.Exploration);
+        Assert.Null(cleared.Roles[0].GenshinExploration);
+        Assert.Null(cleared.Roles[0].Observations.Exploration);
+        var tombstone = Assert.Single(cleared.CapabilityTombstones);
+        Assert.Equal(HoyoLabGameBundleRules.Exploration, tombstone.Capability);
+        Assert.True(tombstone.DeletedAt > SecondObservation);
+        Assert.False(store.TryRecordGenshinExploration(role.Binding, snapshot, Now));
+
+        using var hsrRoot = new TemporaryRoot();
+        var hsrStore = Store(hsrRoot.Path);
+        var hsrRole = RoleRecord(RoleId(1));
+        Assert.True(hsrStore.TrySave(Bundle([RoleData(1)], hsrRole.Binding)));
+        Assert.False(hsrStore.TryRecordGenshinExploration(hsrRole.Binding, snapshot, FirstObservation));
+    }
+
+    [Fact]
+    public void Genshin_exploration_migration_is_opt_in_and_combines_with_builds()
+    {
+        using var migrationRoot = new TemporaryRoot();
+        var role = new PublisherRoleRecord(new(RoleId(1), "os_euro"), "Genshin test", "Europe");
+        var migration = Store(migrationRoot.Path, gameId: HoyoLabGameBundleRules.GenshinGameId);
+        Assert.True(migration.TryMigrateFromV1(role));
+        Assert.False(Assert.IsType<HoyoLabGameBundle>(migration.TryLoad()).Consents.Exploration);
+
+        using var optedInRoot = new TemporaryRoot();
+        var optedIn = Store(optedInRoot.Path, gameId: HoyoLabGameBundleRules.GenshinGameId);
+        Assert.True(optedIn.TryMigrateFromV1(role, rememberGenshinExploration: true));
+        var migrated = Assert.IsType<HoyoLabGameBundle>(optedIn.TryLoad());
+        Assert.True(migrated.Consents.Exploration);
+        Assert.Null(migrated.Roles[0].GenshinExploration);
+
+        using var combinedRoot = new TemporaryRoot();
+        var snapshot = Exploration();
+        var builds = HoyoLabGenshinBuildSnapshotTests.Snapshot();
+        var combined = Bundle(
+            [RoleData(
+                1,
+                "os_euro",
+                builds,
+                FirstObservation,
+                exploration: snapshot,
+                explorationAt: SecondObservation)],
+            role.Binding,
+            Consents(builds: true, exploration: true),
+            gameId: HoyoLabGameBundleRules.GenshinGameId);
+        var store = Store(combinedRoot.Path, gameId: HoyoLabGameBundleRules.GenshinGameId);
+        Assert.True(store.TrySave(combined));
+        var loaded = Assert.IsType<HoyoLabGameBundle>(store.TryLoad());
+        var loadedRole = Assert.Single(loaded.Roles);
+        Assert.True(HoyoLabGenshinBuildRules.ValuesEqual(builds, loadedRole.GenshinBuilds));
+        Assert.True(HoyoLabGenshinExplorationRules.ValuesEqual(snapshot, loadedRole.GenshinExploration));
+        Assert.Equal(FirstObservation, loadedRole.Observations.Builds);
+        Assert.Equal(SecondObservation, loadedRole.Observations.Exploration);
+    }
+
+    [Fact]
     public void Hsr_builds_round_trip_preserve_legacy_bytes_and_reject_cross_game_fields()
     {
         using var root = new TemporaryRoot();
@@ -1290,6 +1453,35 @@ public sealed class HoyoLabGameBundleStoreTests
     }
 
     [Fact]
+    public void Genshin_role_reselection_rebuilds_the_exploration_capability_barrier()
+    {
+        using var root = new TemporaryRoot();
+        var target = new PublisherRoleRecord(new(RoleId(1), "os_euro"), "Genshin test", "Europe");
+        var store = Store(root.Path, gameId: HoyoLabGameBundleRules.GenshinGameId);
+        Assert.True(store.TrySave(Bundle(
+            [],
+            null,
+            Consents(exploration: true),
+            roleTombstones: [new(target.Binding, FirstObservation)],
+            gameId: HoyoLabGameBundleRules.GenshinGameId)));
+
+        Assert.True(store.TrySelectRole(target));
+        var selected = Assert.IsType<HoyoLabGameBundle>(store.TryLoad());
+        Assert.Equal(target.Binding, selected.SelectedRole);
+        Assert.Equal(3, selected.CapabilityTombstones.Count(item => item.Binding == target.Binding));
+        Assert.Contains(selected.CapabilityTombstones, item =>
+            item.Binding == target.Binding
+            && item.Capability == HoyoLabGameBundleRules.Exploration
+            && item.DeletedAt == FirstObservation);
+        Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Exploration, true));
+        var snapshot = Exploration();
+        Assert.False(store.TryRecordGenshinExploration(target.Binding, snapshot, FirstObservation));
+        Assert.True(store.TryRecordGenshinExploration(target.Binding, snapshot, SecondObservation));
+        Assert.DoesNotContain(store.TryLoad()!.CapabilityTombstones, item =>
+            item.Binding == target.Binding && item.Capability == HoyoLabGameBundleRules.Exploration);
+    }
+
+    [Fact]
     public void Tombstone_history_prunes_oldest_entries_and_keeps_the_new_delete()
     {
         using var root = new TemporaryRoot();
@@ -1375,13 +1567,16 @@ public sealed class HoyoLabGameBundleStoreTests
         string server = "prod_official_eur",
         HoyoLabGenshinBuildSnapshot? builds = null,
         DateTimeOffset? buildsAt = null,
-        HoyoLabHsrBuildSnapshot? hsrBuilds = null) => new(
+        HoyoLabHsrBuildSnapshot? hsrBuilds = null,
+        HoyoLabGenshinExplorationSnapshot? exploration = null,
+        DateTimeOffset? explorationAt = null) => new(
             RoleRecord(RoleId(index), server, $"Test {index}"),
-            Observations(builds: buildsAt),
+            Observations(builds: buildsAt, exploration: explorationAt),
             null,
             null,
             builds,
-            hsrBuilds);
+            hsrBuilds,
+            exploration);
 
     private static PublisherRoleRecord RoleRecord(
         string roleId,
@@ -1408,12 +1603,13 @@ public sealed class HoyoLabGameBundleStoreTests
         DateTimeOffset? resources = null,
         DateTimeOffset? inventory = null,
         DateTimeOffset? achievements = null,
-        DateTimeOffset? builds = null) => new(
+        DateTimeOffset? builds = null,
+        DateTimeOffset? exploration = null) => new(
             resources,
             inventory,
             builds,
             achievements,
-            null,
+            exploration,
             null,
             null,
             null);
@@ -1421,15 +1617,27 @@ public sealed class HoyoLabGameBundleStoreTests
     private static HoyoLabCapabilityConsentSet Consents(
         bool resources = false,
         bool achievements = false,
-        bool builds = false) => new(
+        bool builds = false,
+        bool exploration = false) => new(
             resources,
             Inventory: false,
             Builds: builds,
             achievements,
-            Exploration: false,
+            Exploration: exploration,
             Endgame: false,
             Events: false,
             Currency: false);
+
+    private static HoyoLabGenshinExplorationSnapshot Exploration(
+        string json = HoyoLabGenshinExplorationSnapshotTests.DataJson)
+    {
+        using var document = JsonDocument.Parse(json);
+        return new(document.RootElement.Clone());
+    }
+
+    private const string EmptyExplorationJson = """
+        {"counts":{"anemoculi":0,"geoculi":0,"electroculi":0,"dendroculi":0,"hydroculi":0,"pyroculi":0,"lunoculi":0,"cryoculi":0,"commonChests":0,"exquisiteChests":0,"preciousChests":0,"luxuriousChests":0,"remarkableChests":0,"waypoints":0,"domains":0},"worlds":[],"displayGroups":[]}
+        """;
 
     private const string HsrBuildCharactersJson = """
         [{"id":1001,"name":"Synthetic Trailblazer","level":80,"rarity":5,"element":"Quantum","path":3,"rank":1,"enhancedId":1001001,"avatarType":"Girl","lightCone":null,"eidolons":[],"relics":[],"ornaments":[],"properties":[],"traces":[],"specialTraces":[],"memosprite":null}]

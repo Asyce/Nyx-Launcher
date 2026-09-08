@@ -970,6 +970,109 @@ public sealed class HoyoLabSyncStateStoreTests
     }
 
     [Fact]
+    public void Genshin_role_exploration_cutoff_round_trips_only_when_present_and_is_part_of_equality()
+    {
+        using var root = new TemporaryRoot();
+        var protector = new TrackingProtector();
+        var store = CreateStore(root.Path, protector);
+        using var credential = Credential(1);
+        var binding = new PublisherRoleBinding("700000001", "os_euro");
+        using var deletion = new HoyoLabPendingRoleDeletion(
+            credential.SyncId,
+            credential.Token,
+            credential.Key,
+            binding,
+            "gi-exploration-cutoff",
+            Now,
+            null,
+            null,
+            Now,
+            HoyoLabGameBundleRules.GenshinGameId,
+            knownExplorationAt: Now.AddMinutes(-1));
+
+        using var clone = deletion.Clone();
+        Assert.Equal(deletion.KnownExplorationAt, clone.KnownExplorationAt);
+        Assert.Equal(deletion.Binding, clone.Binding);
+        Assert.True(store.TryEnqueuePendingRoleDeletion(deletion));
+        using var loaded = Assert.IsType<HoyoLabSyncState>(store.TryLoad());
+        var saved = Assert.Single(loaded.PendingRoleDeletions);
+        Assert.Equal(Now.AddMinutes(-1), saved.KnownExplorationAt);
+        var json = StateJson(loaded);
+        var item = json["pendingRoleDeletions"]![0]!.AsObject();
+        Assert.Equal(FormatTimestamp(Now.AddMinutes(-1)), item["knownExplorationAt"]!.GetValue<string>());
+
+        var bytes = HoyoLabSyncStateStore.SerializeState(loaded);
+        try
+        {
+            Assert.True(HoyoLabSyncStateStore.TryParseState(bytes, Now, out var parsed));
+            using var parsedState = Assert.IsType<HoyoLabSyncState>(parsed);
+            Assert.Equal(Now.AddMinutes(-1), Assert.Single(parsedState.PendingRoleDeletions).KnownExplorationAt);
+        }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
+
+        var encrypted = File.ReadAllBytes(store.StatePath);
+        Assert.Equal(-1, encrypted.AsSpan().IndexOf(Encoding.UTF8.GetBytes("knownExplorationAt")));
+        Assert.Contains(protector.ProtectedPlaintextSnapshots, plaintext =>
+            Encoding.UTF8.GetString(plaintext).Contains("knownExplorationAt", StringComparison.Ordinal));
+
+        var absent = json.DeepClone().AsObject();
+        absent["pendingRoleDeletions"]![0]!.AsObject().Remove("knownExplorationAt");
+        var absentBytes = Encoding.UTF8.GetBytes(absent.ToJsonString());
+        try
+        {
+            Assert.True(HoyoLabSyncStateStore.TryParseState(absentBytes, Now, out var parsed));
+            using var parsedState = Assert.IsType<HoyoLabSyncState>(parsed);
+            var parsedDeletion = Assert.Single(parsedState.PendingRoleDeletions);
+            Assert.Null(parsedDeletion.KnownExplorationAt);
+            var rewritten = HoyoLabSyncStateStore.SerializeState(parsedState);
+            try { Assert.Equal(absentBytes, rewritten); }
+            finally { CryptographicOperations.ZeroMemory(rewritten); }
+        }
+        finally { CryptographicOperations.ZeroMemory(absentBytes); }
+
+        var nullField = json.DeepClone().AsObject();
+        nullField["pendingRoleDeletions"]![0]!["knownExplorationAt"] = null;
+        var nullBytes = Encoding.UTF8.GetBytes(nullField.ToJsonString());
+        try { Assert.False(HoyoLabSyncStateStore.TryParseState(nullBytes, Now, out _)); }
+        finally { CryptographicOperations.ZeroMemory(nullBytes); }
+
+        var schemaTwo = json.DeepClone().AsObject();
+        schemaTwo["schemaVersion"] = 2;
+        schemaTwo["pendingRoleDeletions"]![0]!.AsObject().Remove("gameId");
+        var schemaTwoBytes = Encoding.UTF8.GetBytes(schemaTwo.ToJsonString());
+        try { Assert.False(HoyoLabSyncStateStore.TryParseState(schemaTwoBytes, Now, out _)); }
+        finally { CryptographicOperations.ZeroMemory(schemaTwoBytes); }
+
+        using var changed = new HoyoLabPendingRoleDeletion(
+            credential.SyncId,
+            credential.Token,
+            credential.Key,
+            binding,
+            deletion.OperationId,
+            deletion.RequestedAt,
+            deletion.KnownResourcesAt,
+            deletion.KnownAchievementsAt,
+            deletion.DeletedAt,
+            deletion.GameId,
+            knownExplorationAt: Now.AddMinutes(-2));
+        Assert.False(store.TryEnqueuePendingRoleDeletion(changed));
+
+        using var hsrCredential = Credential(2);
+        Assert.Throws<ArgumentException>(() => new HoyoLabPendingRoleDeletion(
+            hsrCredential.SyncId,
+            hsrCredential.Token,
+            hsrCredential.Key,
+            RoleBinding(2),
+            "hsr-exploration-cutoff",
+            Now,
+            null,
+            null,
+            Now,
+            HoyoLabGameBundleRules.GameId,
+            knownExplorationAt: Now.AddMinutes(-1)));
+    }
+
+    [Fact]
     public void Hsr_role_build_cutoff_round_trips_and_is_part_of_equality()
     {
         using var root = new TemporaryRoot();
