@@ -103,13 +103,15 @@ public sealed class HoyoLabGameBundleStore
         PublisherResourceSnapshot? resource = null,
         PublisherRoleBinding? resourceBinding = null,
         CancellationToken cancellationToken = default,
-        bool rememberGenshinBuilds = false) => SerializeMutation(
+        bool rememberGenshinBuilds = false,
+        bool rememberHsrBuilds = false) => SerializeMutation(
         () => TryMigrateFromV1Core(
             role,
             resource,
             resourceBinding,
             cancellationToken,
-            rememberGenshinBuilds),
+            rememberGenshinBuilds,
+            rememberHsrBuilds),
         false,
         cancellationToken);
 
@@ -181,6 +183,23 @@ public sealed class HoyoLabGameBundleStore
             cancellationToken);
     }
 
+    public bool TryRecordHsrBuilds(
+        PublisherRoleBinding binding,
+        HoyoLabHsrBuildSnapshot builds,
+        DateTimeOffset observedAt,
+        CancellationToken cancellationToken = default)
+    {
+        if (binding is null
+            || builds is null
+            || gameId != HoyoLabGameBundleRules.GameId
+            || !HoyoLabHsrBuildRules.IsValid(builds)
+            || !IsExactUtcSecond(observedAt))
+            return false;
+        return TryMutate(
+            bundle => RecordHsrBuilds(bundle, binding, builds, observedAt),
+            cancellationToken);
+    }
+
     public bool TryDeleteRole(
         PublisherRoleBinding binding,
         CancellationToken cancellationToken = default)
@@ -198,7 +217,8 @@ public sealed class HoyoLabGameBundleStore
         PublisherResourceSnapshot? resource,
         PublisherRoleBinding? resourceBinding,
         CancellationToken cancellationToken,
-        bool rememberGenshinBuilds)
+        bool rememberGenshinBuilds,
+        bool rememberHsrBuilds)
     {
         ArgumentNullException.ThrowIfNull(role);
         if (!PublisherRoleRecordRules.IsValid(gameId, role)
@@ -229,7 +249,8 @@ public sealed class HoyoLabGameBundleStore
             new(
                 Resources: true,
                 Inventory: false,
-                Builds: gameId == HoyoLabGameBundleRules.GenshinGameId && rememberGenshinBuilds,
+                Builds: gameId == HoyoLabGameBundleRules.GenshinGameId && rememberGenshinBuilds
+                    || gameId == HoyoLabGameBundleRules.GameId && rememberHsrBuilds,
                 Achievements: gameId == HoyoLabGameBundleRules.GameId,
                 Exploration: false,
                 Endgame: false,
@@ -482,6 +503,45 @@ public sealed class HoyoLabGameBundleStore
         };
     }
 
+    private static HoyoLabGameBundle? RecordHsrBuilds(
+        HoyoLabGameBundle bundle,
+        PublisherRoleBinding binding,
+        HoyoLabHsrBuildSnapshot builds,
+        DateTimeOffset observedAt)
+    {
+        if (!bundle.Consents.Builds) return null;
+        var index = FindRole(bundle, binding);
+        if (index < 0) return null;
+        var role = bundle.Roles[index];
+        var existingAt = role.Observations.Builds;
+        if (existingAt > observedAt) return null;
+        if (existingAt == observedAt)
+            return HoyoLabHsrBuildRules.ValuesEqual(role.HsrBuilds, builds)
+                ? bundle
+                : null;
+        if (!CanReplaceTombstone(
+                bundle.CapabilityTombstones,
+                binding,
+                HoyoLabGameBundleRules.Builds,
+                observedAt))
+            return null;
+        var roles = bundle.Roles.ToArray();
+        roles[index] = role with
+        {
+            Observations = role.Observations with { Builds = observedAt },
+            HsrBuilds = HoyoLabHsrBuildRules.Normalize(builds),
+        };
+        return bundle with
+        {
+            Roles = roles,
+            CapabilityTombstones = RemoveOlderCapabilityTombstone(
+                bundle.CapabilityTombstones,
+                binding,
+                HoyoLabGameBundleRules.Builds,
+                observedAt),
+        };
+    }
+
     private HoyoLabGameBundle? DeleteRole(
         HoyoLabGameBundle bundle,
         PublisherRoleBinding binding)
@@ -581,7 +641,7 @@ public sealed class HoyoLabGameBundleStore
 
     private IReadOnlyList<string> SupportedCapabilities() =>
         gameId == HoyoLabGameBundleRules.GameId
-            ? [HoyoLabGameBundleRules.Resources, HoyoLabGameBundleRules.Achievements]
+            ? [HoyoLabGameBundleRules.Resources, HoyoLabGameBundleRules.Builds, HoyoLabGameBundleRules.Achievements]
             : [HoyoLabGameBundleRules.Resources, HoyoLabGameBundleRules.Builds];
 
     private static int FindRole(HoyoLabGameBundle bundle, PublisherRoleBinding binding) =>
@@ -611,6 +671,7 @@ public sealed class HoyoLabGameBundleStore
             {
                 Observations = role.Observations with { Builds = null },
                 GenshinBuilds = null,
+                HsrBuilds = null,
             },
             HoyoLabGameBundleRules.Achievements => role with
             {
@@ -996,6 +1057,11 @@ public sealed class HoyoLabGameBundleStore
                     writer.WritePropertyName("genshinBuilds");
                     builds.Characters.WriteTo(writer);
                 }
+                if (role.HsrBuilds is { } hsrBuilds)
+                {
+                    writer.WritePropertyName("hsrBuilds");
+                    hsrBuilds.Characters.WriteTo(writer);
+                }
                 writer.WriteEndObject();
             }
             writer.WriteEndArray();
@@ -1098,24 +1164,44 @@ public sealed class HoyoLabGameBundleStore
         {
             if (item.ValueKind != JsonValueKind.Object) return false;
             var hasGenshinBuilds = item.TryGetProperty("genshinBuilds", out var genshinBuildsElement);
+            var hasHsrBuilds = item.TryGetProperty("hsrBuilds", out var hsrBuildsElement);
+            var hasExactProperties = !hasGenshinBuilds && !hasHsrBuilds
+                ? HasExactProperties(
+                    item,
+                    "binding",
+                    "nickname",
+                    "region",
+                    "observations",
+                    "resource",
+                    "completedAchievementIds")
+                : gameId == HoyoLabGameBundleRules.GenshinGameId
+                    && hasGenshinBuilds
+                    && !hasHsrBuilds
+                    ? HasExactProperties(
+                        item,
+                        "binding",
+                        "nickname",
+                        "region",
+                        "observations",
+                        "resource",
+                        "completedAchievementIds",
+                        "genshinBuilds")
+                    : gameId == HoyoLabGameBundleRules.GameId
+                        && hasHsrBuilds
+                        && !hasGenshinBuilds
+                        ? HasExactProperties(
+                            item,
+                            "binding",
+                            "nickname",
+                            "region",
+                            "observations",
+                            "resource",
+                            "completedAchievementIds",
+                            "hsrBuilds")
+                        : false;
             HoyoLabGenshinBuildSnapshot? genshinBuilds = null;
-            if ((!hasGenshinBuilds && !HasExactProperties(
-                    item,
-                    "binding",
-                    "nickname",
-                    "region",
-                    "observations",
-                    "resource",
-                    "completedAchievementIds"))
-                || (hasGenshinBuilds && !HasExactProperties(
-                    item,
-                    "binding",
-                    "nickname",
-                    "region",
-                    "observations",
-                    "resource",
-                    "completedAchievementIds",
-                    "genshinBuilds"))
+            HoyoLabHsrBuildSnapshot? hsrBuilds = null;
+            if (!hasExactProperties
                 || !TryParseBinding(item.GetProperty("binding"), out var binding)
                 || !TryParseNullableString(item.GetProperty("nickname"), out var nickname)
                 || item.GetProperty("region").ValueKind != JsonValueKind.String
@@ -1124,16 +1210,19 @@ public sealed class HoyoLabGameBundleStore
                 || !TryParseResource(item.GetProperty("resource"), gameId, out var resource)
                 || !TryParseAchievementIds(
                     item.GetProperty("completedAchievementIds"),
-                    out var achievementIds)
-                || hasGenshinBuilds
-                    && !TryParseGenshinBuilds(genshinBuildsElement, gameId, out genshinBuilds))
+                     out var achievementIds)
+                 || hasGenshinBuilds
+                     && !TryParseGenshinBuilds(genshinBuildsElement, gameId, out genshinBuilds)
+                 || hasHsrBuilds
+                     && !TryParseHsrBuilds(hsrBuildsElement, gameId, out hsrBuilds))
                 return false;
             parsed.Add(new(
                 new(binding!, nickname, region),
                 observations!,
                 resource,
                 achievementIds,
-                genshinBuilds));
+                genshinBuilds,
+                hsrBuilds));
         }
         roles = parsed.AsReadOnly();
         return true;
@@ -1243,6 +1332,21 @@ public sealed class HoyoLabGameBundleStore
             return false;
         var candidate = new HoyoLabGenshinBuildSnapshot(element.Clone());
         if (!HoyoLabGenshinBuildRules.IsValid(candidate)) return false;
+        builds = candidate;
+        return true;
+    }
+
+    private static bool TryParseHsrBuilds(
+        JsonElement element,
+        string gameId,
+        out HoyoLabHsrBuildSnapshot? builds)
+    {
+        builds = null;
+        if (gameId != HoyoLabGameBundleRules.GameId
+            || element.ValueKind != JsonValueKind.Array)
+            return false;
+        var candidate = new HoyoLabHsrBuildSnapshot(element.Clone());
+        if (!HoyoLabHsrBuildRules.IsValid(candidate)) return false;
         builds = candidate;
         return true;
     }

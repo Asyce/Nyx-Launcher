@@ -23,7 +23,7 @@ public static class HoyoLabGenshinBuildRules
         {
             return Array(snapshot.Characters, MaximumCharacters, Character, "id");
         }
-        catch (ObjectDisposedException)
+        catch (InvalidOperationException)
         {
             return false;
         }

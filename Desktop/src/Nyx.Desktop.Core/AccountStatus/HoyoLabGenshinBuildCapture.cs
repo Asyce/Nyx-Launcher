@@ -206,7 +206,7 @@ public static class HoyoLabGenshinBuildCapture
             const info = propertyMap?.[String(id)];
             return plain(info) && info.property_type === id && typeof info.name === 'string'
               && info.name.length > 0 && info.name.length <= 128 && info.name === info.name.trim()
-              && !/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(info.name) ? { name: info.name } : {};
+              && !/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u.test(info.name) ? { name: info.name } : {};
           }
           function stat(raw, propertyMap) {
             if (!plain(raw)) failure('needs-review');

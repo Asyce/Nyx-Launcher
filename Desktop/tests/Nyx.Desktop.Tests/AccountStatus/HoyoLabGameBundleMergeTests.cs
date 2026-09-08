@@ -103,6 +103,57 @@ public sealed class HoyoLabGameBundleMergeTests
     }
 
     [Fact]
+    public void Hsr_builds_merge_latest_values_semantically_reject_equal_conflicts_and_apply_newer_tombstones()
+    {
+        var binding = Binding(123456789);
+        var snapshot = HsrSnapshot();
+        var semanticallyEqual = HsrSnapshot(
+            HsrBuildCharactersJson.Replace(
+                "\"level\":80",
+                "\"level\":8.0e1",
+                StringComparison.Ordinal));
+        var localRole = HsrRole(binding, Older, snapshot);
+        var remoteRole = HsrRole(binding, Newer, semanticallyEqual);
+        var consents = Consents(builds: true);
+
+        var result = MergeValid(
+            Bundle([localRole], binding, consents),
+            Bundle([remoteRole], binding, consents));
+
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Merged, result.Outcome);
+        var mergedRole = Assert.Single(Assert.IsType<HoyoLabGameBundle>(result.Bundle).Roles);
+        Assert.Equal(Newer, mergedRole.Observations.Builds);
+        Assert.True(HoyoLabHsrBuildRules.ValuesEqual(semanticallyEqual, mergedRole.HsrBuilds));
+
+        AssertConflict(MergeValid(
+            Bundle([localRole], binding, consents),
+            Bundle(
+                [HsrRole(
+                    binding,
+                    Older,
+                    HsrSnapshot(81))],
+                binding,
+                consents)));
+
+        var cleared = MergeValid(
+            Bundle([localRole], binding, consents),
+            Bundle(
+                [HsrRole(binding)],
+                binding,
+                consents,
+                capabilityTombstones:
+                [
+                    new(binding, HoyoLabGameBundleRules.Builds, Newer),
+                ]));
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Merged, cleared.Outcome);
+        var clearedBundle = Assert.IsType<HoyoLabGameBundle>(cleared.Bundle);
+        var clearedRole = Assert.Single(clearedBundle.Roles);
+        Assert.Null(clearedRole.Observations.Builds);
+        Assert.Null(clearedRole.HsrBuilds);
+        Assert.Equal(Newer, Assert.Single(clearedBundle.CapabilityTombstones).DeletedAt);
+    }
+
+    [Fact]
     public void Equal_observations_are_idempotent_only_when_values_match()
     {
         var localRole = Role(
@@ -504,6 +555,20 @@ public sealed class HoyoLabGameBundleMergeTests
         null,
         builds);
 
+    private static HoyoLabGameBundleRole HsrRole(
+        PublisherRoleBinding binding,
+        DateTimeOffset? buildsAt = null,
+        HoyoLabHsrBuildSnapshot? builds = null) => new(
+        new(
+            binding,
+            "Honkai: Star Rail",
+            PublisherRoleRecordRules.CanonicalRegionLabel(binding.Server)),
+        new(null, null, buildsAt, null, null, null, null, null),
+        null,
+        null,
+        null,
+        builds);
+
     private static PublisherRoleBinding Binding(
         int index,
         string server = "prod_official_eur") => new(index.ToString("D20"), server);
@@ -520,4 +585,20 @@ public sealed class HoyoLabGameBundleMergeTests
             Endgame: false,
             Events: false,
             Currency: false);
+
+    private const string HsrBuildCharactersJson = """
+        [{"id":1001,"name":"Synthetic Trailblazer","level":80,"rarity":5,"element":"Quantum","path":3,"rank":1,"enhancedId":1001001,"avatarType":"Girl","lightCone":null,"eidolons":[],"relics":[],"ornaments":[],"properties":[],"traces":[],"specialTraces":[],"memosprite":null}]
+        """;
+
+    private static HoyoLabHsrBuildSnapshot HsrSnapshot(int level = 80) => HsrSnapshot(
+        HsrBuildCharactersJson.Replace(
+            "\"level\":80",
+            $"\"level\":{level}",
+            StringComparison.Ordinal));
+
+    private static HoyoLabHsrBuildSnapshot HsrSnapshot(string json)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        return new(document.RootElement.Clone());
+    }
 }

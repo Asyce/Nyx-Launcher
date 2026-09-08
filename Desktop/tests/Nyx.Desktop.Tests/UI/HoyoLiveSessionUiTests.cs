@@ -1132,7 +1132,7 @@ public sealed class HoyoLiveSessionUiTests
             "private async Task ShowHoyoLabAccountManagerAsync",
             "private void AutomaticDailyCheckInToggle_Click");
         var controls = Slice(manager, "if (gameId is \"hsr\" or \"gi\")", "var actionButtons");
-        var buildsAt = controls.IndexOf("if (gameId == \"gi\" && PublisherAccountService.GenshinBuildsAvailable)", StringComparison.Ordinal);
+        var buildsAt = controls.IndexOf("if ((gameId == \"gi\" && PublisherAccountService.GenshinBuildsAvailable)", StringComparison.Ordinal);
         Assert.True(buildsAt > 0);
         var existingControls = controls[..buildsAt];
         var buildControls = controls[buildsAt..];
@@ -1146,6 +1146,19 @@ public sealed class HoyoLiveSessionUiTests
 
         Assert.Equal(2, Regex.Matches(existingControls, "new ToggleSwitch").Count);
         Assert.Single(Regex.Matches(buildControls, "new ToggleSwitch"));
+        Assert.Contains("(gameId == \"hsr\" && PublisherAccountService.HsrBuildsAvailable)", buildControls, StringComparison.Ordinal);
+        Assert.Contains("GenshinBuildsAvailable => false", File.ReadAllText(Path.Combine(
+            WorkspaceRoot,
+            "Desktop",
+            "src",
+            "Nyx.Desktop.App",
+            "PublisherAccountService.GenshinBuilds.cs")), StringComparison.Ordinal);
+        Assert.Contains("HsrBuildsAvailable => false", File.ReadAllText(Path.Combine(
+            WorkspaceRoot,
+            "Desktop",
+            "src",
+            "Nyx.Desktop.App",
+            "PublisherAccountService.HsrBuilds.cs")), StringComparison.Ordinal);
         Assert.Contains("var gameName = gameId == \"hsr\" ? \"Star Rail\" : \"Genshin\";", controls, StringComparison.Ordinal);
         Assert.Contains("var resourceName = gameId == \"hsr\" ? \"resources\" : \"Resin\";", controls, StringComparison.Ordinal);
         Assert.Contains("Header = $\"Remember {gameName} {resourceName}\"", controls, StringComparison.Ordinal);
@@ -1166,7 +1179,9 @@ public sealed class HoyoLiveSessionUiTests
             StringComparison.Ordinal);
         Assert.Equal(2, Regex.Matches(existingControls, "AutomationProperties.SetHelpText\\(").Count);
         Assert.Single(Regex.Matches(buildControls, "AutomationProperties.SetHelpText\\("));
-        Assert.Contains("Remember Genshin characters & equipped builds", buildControls, StringComparison.Ordinal);
+        Assert.Contains("Header = $\"Remember {gameName} characters & equipped builds\"", buildControls, StringComparison.Ordinal);
+        Assert.Contains("Remember {gameName} characters and equipped builds for the active HoYoLAB account", buildControls, StringComparison.Ordinal);
+        Assert.Contains("Includes levels, traces, eidolons, memosprites and equipped gear from HoYoLAB.", buildControls, StringComparison.Ordinal);
         Assert.Contains("This is not a full-bag artifact export.", buildControls, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.SetLiveSetting(managerStatus", manager, StringComparison.Ordinal);
         Assert.Contains("IsEnabled = false", controls, StringComparison.Ordinal);

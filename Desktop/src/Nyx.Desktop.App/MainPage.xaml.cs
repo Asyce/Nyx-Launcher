@@ -1600,18 +1600,21 @@ public sealed partial class MainPage : Page
             capabilityPanel.Children.Add(rememberResources);
             if (rememberAchievements is not null)
                 capabilityPanel.Children.Add(rememberAchievements);
-            if (gameId == "gi" && PublisherAccountService.GenshinBuildsAvailable)
+            if ((gameId == "gi" && PublisherAccountService.GenshinBuildsAvailable)
+                || (gameId == "hsr" && PublisherAccountService.HsrBuildsAvailable))
             {
                 rememberBuilds = new ToggleSwitch
                 {
-                    Header = "Remember Genshin characters & equipped builds",
+                    Header = $"Remember {gameName} characters & equipped builds",
                     IsEnabled = false,
                     OnContent = "Remember",
                     OffContent = "Do not remember",
                 };
-                AutomationProperties.SetName(rememberBuilds, "Remember Genshin characters and equipped builds for the active HoYoLAB account");
-                AutomationProperties.SetHelpText(rememberBuilds, "Includes levels, talents, constellations and equipped gear from HoYoLAB. This is not a full-bag artifact export.");
-                refreshBuilds = CreateHoyoLabManagerButton("Refresh characters & builds", "Refresh Genshin characters and equipped builds for the active HoYoLAB account");
+                AutomationProperties.SetName(rememberBuilds, $"Remember {gameName} characters and equipped builds for the active HoYoLAB account");
+                AutomationProperties.SetHelpText(rememberBuilds, gameId == "gi"
+                    ? "Includes levels, talents, constellations and equipped gear from HoYoLAB. This is not a full-bag artifact export."
+                    : "Includes levels, traces, eidolons, memosprites and equipped gear from HoYoLAB. This is not a full-bag relic export.");
+                refreshBuilds = CreateHoyoLabManagerButton("Refresh characters & builds", $"Refresh {gameName} characters and equipped builds for the active HoYoLAB account");
                 capabilityPanel.Children.Add(rememberBuilds);
                 capabilityPanel.Children.Add(refreshBuilds);
             }
@@ -2118,6 +2121,22 @@ public sealed partial class MainPage : Page
                 await RunManagerActionAsync(async cancellationToken =>
                 {
                     managerStatus.Text = "Refreshing characters and equipped builds from HoYoLAB…";
+                    if (gameId == "hsr")
+                    {
+                        var hsrResult = await publisherAccounts.RefreshHsrBuildsAsync(activeSlotId, binding, cancellationToken);
+                        managerStatus.Text = hsrResult.Status switch
+                        {
+                            HoyoLabHsrBuildReadStatus.Completed => $"Remembered {hsrResult.Snapshot!.Characters.GetArrayLength()} characters and their equipped builds. Use Sync & My HoYo to share the copy.",
+                            HoyoLabHsrBuildReadStatus.LoginRequired => "Sign in to HoYoLAB, then refresh again. The previous copy is unchanged.",
+                            HoyoLabHsrBuildReadStatus.NotEnabled => "Select an active Star Rail region and turn on Remember characters & equipped builds first.",
+                            HoyoLabHsrBuildReadStatus.Canceled => "Refresh canceled. No partial build copy was saved.",
+                            HoyoLabHsrBuildReadStatus.TimedOut => "Refresh timed out. Try again; the previous copy is unchanged.",
+                            HoyoLabHsrBuildReadStatus.TooLarge => "This build copy exceeds Nyx's supported size. The previous copy is unchanged.",
+                            HoyoLabHsrBuildReadStatus.LocalStorageUnavailable => "Nyx could not save the build copy. The previous copy is unchanged.",
+                            _ => "Nyx could not complete this refresh. Check the selected HoYoLAB region and try again; the previous copy is unchanged.",
+                        };
+                        return;
+                    }
                     var result = await publisherAccounts.RefreshGenshinBuildsAsync(activeSlotId, binding, cancellationToken);
                     managerStatus.Text = result.Status switch
                     {

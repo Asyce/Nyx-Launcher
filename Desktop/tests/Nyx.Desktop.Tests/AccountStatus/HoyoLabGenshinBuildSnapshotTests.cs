@@ -104,6 +104,45 @@ public sealed class HoyoLabGenshinBuildSnapshotTests
         Assert.False(HoyoLabGenshinBuildRules.IsValid(Snapshot(json)));
     }
 
+    [Theory]
+    [InlineData("label")]
+    [InlineData("element")]
+    public void Raw_unpaired_utf16_escapes_are_rejected_without_throwing(string mutation)
+    {
+        var json = mutation == "label"
+            ? NamedCharactersJson().Replace(
+                "\"name\":\"Weapon ATK\"",
+                "\"name\":\"Weapon\\uD800ATK\"",
+                StringComparison.Ordinal)
+            : CharactersJson.Replace(
+                "\"element\":\"Ice\"",
+                "\"element\":\"Ice\\uD800\"",
+                StringComparison.Ordinal);
+
+        Assert.Contains("\\uD800", json, StringComparison.OrdinalIgnoreCase);
+        Assert.False(HoyoLabGenshinBuildRules.IsValid(Snapshot(json)));
+    }
+
+    [Fact]
+    public void Optional_official_names_accept_valid_supplementary_and_replacement_characters()
+    {
+        var supplementary = NamedCharactersJson().Replace(
+            "\"name\":\"Weapon ATK\"",
+            "\"name\":\"Weapon\\uD83D\\uDE00ATK\"",
+            StringComparison.Ordinal);
+        var replacement = NamedCharactersJson().Replace(
+            "\"name\":\"Weapon ATK\"",
+            "\"name\":\"Weapon\\uFFFDATK\"",
+            StringComparison.Ordinal);
+
+        Assert.True(HoyoLabGenshinBuildRules.IsValid(Snapshot(supplementary)));
+        Assert.True(HoyoLabGenshinBuildRules.IsValid(Snapshot(replacement)));
+        Assert.Equal("Weapon😀ATK", Snapshot(supplementary).Characters[0]
+            .GetProperty("weapon").GetProperty("main").GetProperty("name").GetString());
+        Assert.Equal("Weapon�ATK", Snapshot(replacement).Characters[0]
+            .GetProperty("weapon").GetProperty("main").GetProperty("name").GetString());
+    }
+
     [Fact]
     public void Known_empty_roster_is_different_from_absent_observation()
     {

@@ -306,6 +306,21 @@ test('invalid property-map labels are omitted while every numeric stat remains u
   assert.equal(first.properties.find(row => row.id === 20).final, 0);
 });
 
+test('embedded capture omits an unpaired stat label but preserves paired and replacement characters', async () => {
+  const propertyMap = officialPropertyMap();
+  propertyMap['4'].name = '\uD800';
+  propertyMap['5'].name = 'Weapon Bonus \uD83D\uDE00';
+  propertyMap['2001'].name = '\uFFFD Artifact';
+  const scenario = createScenario({ propertyMap });
+  const result = await resultOf(scenario);
+  const first = JSON.parse(JSON.stringify(result.characters[0]));
+
+  assert.equal(result.status, 'done');
+  assert.equal(Object.hasOwn(first.weapon.main, 'name'), false);
+  assert.equal(first.weapon.sub.name, 'Weapon Bonus 😀');
+  assert.equal(first.artifacts[0].main.name, '� Artifact');
+});
+
 test('capture has no implicit permission enable and only calls the reviewed read endpoints', async () => {
   assert.doesNotMatch(script, /permission|enable/i);
   const scenario = createScenario();

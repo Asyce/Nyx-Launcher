@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Nyx.Desktop.Core.AccountStatus;
 using Nyx.Desktop.Infrastructure.AccountStatus;
 
@@ -141,7 +142,7 @@ public sealed class HoyoLabGameBundleStoreTests
         var giRole = new PublisherRoleRecord(new(RoleId(2), "os_euro"), "Genshin test", "Europe");
         var hsrBundle = Bundle([RoleData(1)], hsrRole.Binding);
         Assert.True(hsr.TrySave(hsrBundle));
-        Assert.False(hsr.TrySetCapabilityConsent(HoyoLabGameBundleRules.Builds, true));
+        Assert.True(hsr.TrySetCapabilityConsent(HoyoLabGameBundleRules.Builds, true));
         var hsrBytes = File.ReadAllBytes(BundlePath(root.Path));
 
         Assert.True(gi.TryMigrateFromV1(
@@ -250,6 +251,128 @@ public sealed class HoyoLabGameBundleStoreTests
         var wrongGame = HoyoLabGameBundleStore.SerializeBundle(buildBundle with { GameId = HoyoLabGameBundleRules.GameId });
         Assert.False(HoyoLabGameBundleStore.TryParseBundle(wrongGame, Now, out _));
         Assert.False(Store(root.Path).TryRecordGenshinBuilds(role.Binding, snapshot, FirstObservation));
+    }
+
+    [Fact]
+    public void Hsr_builds_round_trip_preserve_legacy_bytes_and_reject_cross_game_fields()
+    {
+        using var root = new TemporaryRoot();
+        var role = RoleRecord(RoleId(1));
+        var snapshot = HsrSnapshot();
+        var buildBundle = Bundle(
+            [RoleData(1, hsrBuilds: snapshot, buildsAt: FirstObservation)],
+            role.Binding,
+            Consents(builds: true));
+        var store = Store(root.Path);
+
+        var completeSnapshot = HsrSnapshot(HoyoLabHsrBuildSnapshotTests.CharactersJson);
+        var completeBytes = HoyoLabGameBundleStore.SerializeBundle(buildBundle with
+        {
+            Roles = [RoleData(1, hsrBuilds: completeSnapshot, buildsAt: FirstObservation)],
+        });
+        try
+        {
+            Assert.True(HoyoLabHsrBuildRules.IsValid(completeSnapshot));
+            Assert.True(HoyoLabGameBundleStore.TryParseBundle(completeBytes, Now, out _));
+        }
+        finally { CryptographicOperations.ZeroMemory(completeBytes); }
+
+        Assert.True(store.TrySave(buildBundle));
+        var loaded = Assert.IsType<HoyoLabGameBundle>(store.TryLoad());
+        Assert.Equal(FirstObservation, loaded.Roles[0].Observations.Builds);
+        Assert.True(HoyoLabHsrBuildRules.ValuesEqual(snapshot, loaded.Roles[0].HsrBuilds));
+
+        var legacy = HoyoLabGameBundleStore.SerializeBundle(Bundle([RoleData(1)], role.Binding));
+        Assert.DoesNotContain("hsrBuilds", Encoding.UTF8.GetString(legacy), StringComparison.Ordinal);
+        Assert.True(HoyoLabGameBundleStore.TryParseBundle(legacy, Now, out var parsed));
+        Assert.Equal(legacy, HoyoLabGameBundleStore.SerializeBundle(parsed!));
+        Assert.False(Parse(Mutate(
+            legacy,
+            "\"completedAchievementIds\":null",
+            "\"completedAchievementIds\":null,\"hsrBuilds\":null")));
+        Assert.False(Parse(Mutate(
+            legacy,
+            "\"completedAchievementIds\":null",
+            "\"completedAchievementIds\":null,\"hsrBuilds\":0")));
+        Assert.False(Parse(Mutate(
+            legacy,
+            "\"completedAchievementIds\":null",
+            "\"completedAchievementIds\":null,\"genshinBuilds\":[]")));
+        Assert.False(Parse(Mutate(
+            Mutate(
+                legacy,
+                "\"completedAchievementIds\":null",
+                "\"completedAchievementIds\":null,\"hsrBuilds\":[]"),
+            "\"hsrBuilds\":[]",
+            "\"hsrBuilds\":[],\"genshinBuilds\":[]")));
+
+        Assert.False(HoyoLabGameBundleStore.TryParseBundle(
+            HoyoLabGameBundleStore.SerializeBundle(buildBundle with
+            {
+                GameId = HoyoLabGameBundleRules.GenshinGameId,
+            }),
+            Now,
+            out _));
+        Assert.False(Store(root.Path, gameId: HoyoLabGameBundleRules.GenshinGameId)
+            .TryRecordHsrBuilds(role.Binding, snapshot, FirstObservation));
+    }
+
+    [Fact]
+    public void Hsr_builds_are_semantically_idempotent_preserved_by_resource_updates_and_cleared_by_consent()
+    {
+        using var root = new TemporaryRoot();
+        var role = RoleRecord(RoleId(1));
+        var snapshot = HsrSnapshot();
+        var store = Store(root.Path);
+        Assert.True(store.TrySave(Bundle(
+            [RoleData(1)],
+            role.Binding,
+            Consents(resources: true, builds: true))));
+
+        Assert.True(store.TryRecordHsrBuilds(role.Binding, snapshot, FirstObservation));
+        Assert.True(store.TryRecordHsrBuilds(
+            role.Binding,
+            HsrSnapshot(HsrBuildCharactersJson.Replace(
+                "\"level\":80",
+                "\"level\":8.0e1",
+                StringComparison.Ordinal)),
+            FirstObservation));
+        Assert.False(store.TryRecordHsrBuilds(
+            role.Binding,
+            HsrSnapshot(81),
+            FirstObservation));
+        Assert.True(store.TryRecordResource(role.Binding, Resource(SecondObservation)));
+
+        var beforeConsent = Assert.IsType<HoyoLabGameBundle>(store.TryLoad());
+        Assert.True(HoyoLabHsrBuildRules.ValuesEqual(snapshot, beforeConsent.Roles[0].HsrBuilds));
+        Assert.Equal(FirstObservation, beforeConsent.Roles[0].Observations.Builds);
+        Assert.Equal(SecondObservation, beforeConsent.Roles[0].Observations.Resources);
+
+        Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Builds, false));
+        var cleared = Assert.IsType<HoyoLabGameBundle>(store.TryLoad());
+        Assert.False(cleared.Consents.Builds);
+        Assert.Null(cleared.Roles[0].HsrBuilds);
+        Assert.Null(cleared.Roles[0].Observations.Builds);
+        Assert.Equal(SecondObservation, cleared.Roles[0].Observations.Resources);
+        var tombstone = Assert.Single(cleared.CapabilityTombstones);
+        Assert.Equal(HoyoLabGameBundleRules.Builds, tombstone.Capability);
+        Assert.True(tombstone.DeletedAt > FirstObservation);
+    }
+
+    [Fact]
+    public void Hsr_v1_migration_can_remember_builds_only_when_explicitly_requested()
+    {
+        using var root = new TemporaryRoot();
+        var role = RoleRecord(RoleId(1));
+        var store = Store(root.Path);
+
+        Assert.True(store.TryMigrateFromV1(role, rememberHsrBuilds: true));
+        var loaded = Assert.IsType<HoyoLabGameBundle>(store.TryLoad());
+        Assert.True(loaded.Consents.Builds);
+        Assert.Null(loaded.Roles[0].HsrBuilds);
+
+        Assert.False(store.TryMigrateFromV1(role, rememberHsrBuilds: false));
+        Assert.True(Assert.IsType<HoyoLabGameBundle>(store.TryLoad()).Consents.Builds);
     }
 
     [Fact]
@@ -407,7 +530,6 @@ public sealed class HoyoLabGameBundleStoreTests
         var incomplete = new[]
         {
             bundle.Consents with { Inventory = true },
-            bundle.Consents with { Builds = true },
             bundle.Consents with { Exploration = true },
             bundle.Consents with { Endgame = true },
             bundle.Consents with { Events = true },
@@ -711,6 +833,7 @@ public sealed class HoyoLabGameBundleStoreTests
     [Theory]
     [InlineData("consent")]
     [InlineData("resource")]
+    [InlineData("hsr-builds")]
     [InlineData("delete")]
     public async Task Cancellation_while_named_mutex_is_contended_never_reads_or_writes_canonical_state(
         string mutationKind)
@@ -721,7 +844,7 @@ public sealed class HoyoLabGameBundleStoreTests
         Assert.True(store.TrySave(Bundle(
             [role],
             role.Role.Binding,
-            Consents(resources: true))));
+            Consents(resources: true, builds: mutationKind == "hsr-builds"))));
         var before = File.ReadAllBytes(BundlePath(root.Path));
         using var release = new ManualResetEventSlim();
         var held = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -755,6 +878,11 @@ public sealed class HoyoLabGameBundleStoreTests
                 "resource" => store.TryRecordResource(
                     role.Role.Binding,
                     Resource(SecondObservation),
+                    cancellation.Token),
+                "hsr-builds" => store.TryRecordHsrBuilds(
+                    role.Role.Binding,
+                    HsrSnapshot(),
+                    SecondObservation,
                     cancellation.Token),
                 "delete" => store.TryDeleteRole(role.Role.Binding, cancellation.Token),
                 _ => throw new InvalidOperationException(),
@@ -1000,7 +1128,7 @@ public sealed class HoyoLabGameBundleStoreTests
         var afterSelectedDelete = store.TryLoad()!;
         Assert.Equal(second.Role.Binding, afterSelectedDelete.SelectedRole);
         Assert.Contains(afterSelectedDelete.RoleTombstones, item => item.Binding == first.Role.Binding);
-        Assert.Equal(2, afterSelectedDelete.CapabilityTombstones.Count(item =>
+        Assert.Equal(3, afterSelectedDelete.CapabilityTombstones.Count(item =>
             item.Binding == first.Role.Binding));
 
         Assert.True(store.TryDeleteRole(third.Role.Binding));
@@ -1010,7 +1138,7 @@ public sealed class HoyoLabGameBundleStoreTests
         Assert.Empty(empty.Roles);
         Assert.Null(empty.SelectedRole);
         Assert.Contains(empty.RoleTombstones, item => item.Binding == second.Role.Binding);
-        Assert.Equal(2, empty.CapabilityTombstones.Count(item =>
+        Assert.Equal(3, empty.CapabilityTombstones.Count(item =>
             item.Binding == second.Role.Binding));
         Assert.False(store.TryDeleteRole(second.Role.Binding));
 
@@ -1146,7 +1274,7 @@ public sealed class HoyoLabGameBundleStoreTests
         var selected = store.TryLoad()!;
         Assert.Equal(HoyoLabGameBundleRules.MaximumCapabilityTombstones,
             selected.CapabilityTombstones.Count);
-        Assert.Equal(2, selected.CapabilityTombstones.Count(item =>
+        Assert.Equal(3, selected.CapabilityTombstones.Count(item =>
             item.Binding == target.Binding && item.DeletedAt == FirstObservation));
         Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Resources, true));
         Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Achievements, true));
@@ -1189,7 +1317,7 @@ public sealed class HoyoLabGameBundleStoreTests
         Assert.Equal(HoyoLabGameBundleRules.MaximumRoleTombstones, loaded.RoleTombstones.Count);
         Assert.Equal(HoyoLabGameBundleRules.MaximumCapabilityTombstones, loaded.CapabilityTombstones.Count);
         Assert.Contains(loaded.RoleTombstones, item => item.Binding == active.Role.Binding);
-        Assert.Equal(2, loaded.CapabilityTombstones.Count(item => item.Binding == active.Role.Binding));
+        Assert.Equal(3, loaded.CapabilityTombstones.Count(item => item.Binding == active.Role.Binding));
         Assert.DoesNotContain(loaded.RoleTombstones, item => item.Binding == roleTombstones[0].Binding);
         Assert.DoesNotContain(loaded.CapabilityTombstones, item => item.Binding == roleTombstones[0].Binding);
     }
@@ -1246,12 +1374,14 @@ public sealed class HoyoLabGameBundleStoreTests
         int index,
         string server = "prod_official_eur",
         HoyoLabGenshinBuildSnapshot? builds = null,
-        DateTimeOffset? buildsAt = null) => new(
+        DateTimeOffset? buildsAt = null,
+        HoyoLabHsrBuildSnapshot? hsrBuilds = null) => new(
             RoleRecord(RoleId(index), server, $"Test {index}"),
             Observations(builds: buildsAt),
             null,
             null,
-            builds);
+            builds,
+            hsrBuilds);
 
     private static PublisherRoleRecord RoleRecord(
         string roleId,
@@ -1300,6 +1430,22 @@ public sealed class HoyoLabGameBundleStoreTests
             Endgame: false,
             Events: false,
             Currency: false);
+
+    private const string HsrBuildCharactersJson = """
+        [{"id":1001,"name":"Synthetic Trailblazer","level":80,"rarity":5,"element":"Quantum","path":3,"rank":1,"enhancedId":1001001,"avatarType":"Girl","lightCone":null,"eidolons":[],"relics":[],"ornaments":[],"properties":[],"traces":[],"specialTraces":[],"memosprite":null}]
+        """;
+
+    private static HoyoLabHsrBuildSnapshot HsrSnapshot(int level = 80) => HsrSnapshot(
+        HsrBuildCharactersJson.Replace(
+            "\"level\":80",
+            $"\"level\":{level}",
+            StringComparison.Ordinal));
+
+    private static HoyoLabHsrBuildSnapshot HsrSnapshot(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return new(document.RootElement.Clone());
+    }
 
     private static HoyoLabGameBundleStore Store(
         string root,

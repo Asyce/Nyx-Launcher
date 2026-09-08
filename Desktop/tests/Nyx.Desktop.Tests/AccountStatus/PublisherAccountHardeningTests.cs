@@ -5616,6 +5616,44 @@ public sealed class PublisherAccountHardeningTests
         Assert.Contains("await AbortResourceFetchAsync(controllerKey)", cleanup, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Star_rail_build_refresh_checks_slot_role_generation_and_consent_before_capture_and_before_save()
+    {
+        var service = ReadAppFile("PublisherAccountService.HsrBuilds.cs");
+        var before = service[..service.IndexOf("await window.ReadHsrBuildsAsync", StringComparison.Ordinal)];
+        var publish = Slice(service, "lock (sync)", "Updated?.Invoke");
+
+        Assert.Contains("HsrBuildsAvailable => false", service, StringComparison.Ordinal);
+        Assert.Contains("!HsrBuildsAvailable", before, StringComparison.Ordinal);
+        Assert.Contains("!CanUseGameBundle(\"hsr\", operation)", before, StringComparison.Ordinal);
+        Assert.Contains("operation.HoyoContext?.SlotId != expectedSlotId", before, StringComparison.Ordinal);
+        Assert.Contains("before?.Consents.Builds != true", before, StringComparison.Ordinal);
+        Assert.Contains("before.SelectedRole != expectedBinding", before, StringComparison.Ordinal);
+        Assert.Contains("TryLoadRoleRecord(\"hsr\", operation)?.Binding != expectedBinding", before, StringComparison.Ordinal);
+        Assert.Contains("!CanPublish(\"HoYoLAB\", operation)", publish, StringComparison.Ordinal);
+        Assert.Contains("operation.HoyoContext?.SlotId != expectedSlotId", publish, StringComparison.Ordinal);
+        Assert.Contains("current?.Consents.Builds != true", publish, StringComparison.Ordinal);
+        Assert.Contains("current.SelectedRole != expectedBinding", publish, StringComparison.Ordinal);
+        Assert.Contains("TryLoadRoleRecord(\"hsr\", operation)?.Binding != expectedBinding", publish, StringComparison.Ordinal);
+        Assert.Contains("TryRecordHsrBuilds(expectedBinding, result.Snapshot, observedAt, token)", publish, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryRecordHsrBuilds", before, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryDelete", service, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Star_rail_build_browser_capture_is_bounded_cancelable_and_always_releases_its_script()
+    {
+        var browser = ReadAppFile("PublisherSessionWindow.HsrBuilds.cs");
+        Assert.Contains("purpose != PublisherSessionPurpose.Resource || authorizedGameId != \"hsr\"", browser, StringComparison.Ordinal);
+        Assert.Contains("IsValidRoleBinding(\"hsr\", expectedBinding)", browser, StringComparison.Ordinal);
+        Assert.Contains("CreateLinkedTokenSource(cancellationToken, lifetime.Token)", browser, StringComparison.Ordinal);
+        Assert.Contains("HoyoLabHsrBuildCapture.TimeoutSeconds + 2", browser, StringComparison.Ordinal);
+        Assert.Contains("WaitAsync(TimeSpan.FromSeconds(2), linked.Token)", browser, StringComparison.Ordinal);
+        Assert.Contains("ParseResult(result, expectedBinding)", browser, StringComparison.Ordinal);
+        var cleanup = browser[browser.LastIndexOf("finally", StringComparison.Ordinal)..];
+        Assert.Contains("await AbortResourceFetchAsync(controllerKey)", cleanup, StringComparison.Ordinal);
+    }
+
     private static PublisherResourceReadResult DailyRoleRead(
         string gameId,
         PublisherResourceReadOutcome outcome,

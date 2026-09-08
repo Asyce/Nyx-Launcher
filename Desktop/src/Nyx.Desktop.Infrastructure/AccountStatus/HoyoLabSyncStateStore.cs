@@ -918,7 +918,7 @@ public sealed class HoyoLabSyncStateStore
                         return false;
                     gameId = parsedGame;
                 }
-                if (hasKnownBuildsAt && gameId != GenshinScope) return false;
+                if (hasKnownBuildsAt && gameId is not (HsrScope or GenshinScope)) return false;
                 var binding = item.GetProperty("binding");
                 if (!HasExactProperties(binding, "roleId", "server")
                     || binding.GetProperty("roleId").ValueKind != JsonValueKind.String
@@ -1052,9 +1052,7 @@ public sealed class HoyoLabSyncStateStore
                 && deletion.Key.Length == KeyBytes
                 && HoyoLabGameBundleRules.IsSupportedGame(deletion.GameId)
                 && PublisherAccountCatalog.IsValidRoleBinding(deletion.GameId, deletion.Binding)
-                && (deletion.GameId == HsrScope
-                    ? deletion.KnownBuildsAt is null
-                    : deletion.KnownAchievementsAt is null)
+                && (deletion.GameId != GenshinScope || deletion.KnownAchievementsAt is null)
                 && TryNormalizeOperationId(deletion.OperationId, out _)
                 && IsValidTimestamp(deletion.RequestedAt, utcNow)
                 && IsValidObservation(deletion.KnownResourcesAt, utcNow)
@@ -1497,7 +1495,6 @@ public sealed class HoyoLabPendingRoleDeletion : IDisposable
             || !HoyoLabGameBundleRules.IsSupportedGame(gameId)
             || !PublisherAccountCatalog.IsValidRoleBinding(gameId, binding)
             || gameId != HoyoLabGameBundleRules.GameId && knownAchievementsAt is not null
-            || gameId != HoyoLabGameBundleRules.GenshinGameId && knownBuildsAt is not null
             || !HoyoLabSyncStateStore.TryNormalizeOperationId(operationId, out _))
             throw new ArgumentException("HoYo pending role deletion is invalid.");
         credential = new(syncId, token, key);

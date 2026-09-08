@@ -1732,6 +1732,46 @@ public sealed class HoyoLabSyncCoordinatorTests
     }
 
     [Fact]
+    public async Task Hsr_build_cutoff_survives_restart_and_blocks_remote_role_replay()
+    {
+        using var harness = new Harness(HsrBundleWithBuilds(Older));
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            harness.Coordinator.QueueRoleDeletion(FixtureBinding).Status);
+        using (var pending = LoadState(harness.ManagedSlotRoot))
+            Assert.Equal(Older, Assert.Single(pending.PendingRoleDeletions).KnownBuildsAt);
+
+        harness.Cloud.SeedBundle(
+            Fixture.SyncId,
+            DisplayCode,
+            HsrBundleWithBuilds(Newer, HsrBuildCharactersJson.Replace(
+                "\"level\":80",
+                "\"level\":81",
+                StringComparison.Ordinal)),
+            Newer);
+        harness.Cloud.ClearRequests();
+        harness.Coordinator.Dispose();
+        using var restart = CreateCoordinator(
+            harness.PublisherRoot,
+            harness.SlotId,
+            harness.ProtectedRoot,
+            harness.Authority,
+            harness.Cloud,
+            harness.Files,
+            harness.Protector);
+
+        var result = await restart.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Conflict, result.Status);
+        Assert.Equal(["pull"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var after = LoadState(harness.ManagedSlotRoot);
+        Assert.Equal(Older, Assert.Single(after.PendingRoleDeletions).KnownBuildsAt);
+    }
+
+    [Fact]
     public async Task Role_delete_cas_conflict_retries_once_without_rebasing_the_tombstone()
     {
         using var harness = new Harness(TwoRoleBundle(selected: SurvivorBinding));
@@ -1980,6 +2020,9 @@ public sealed class HoyoLabSyncCoordinatorTests
             Assert.True(HoyoLabGenshinBuildRules.ValuesEqual(
                 expectedRole.GenshinBuilds,
                 actualRole.GenshinBuilds));
+            Assert.True(HoyoLabHsrBuildRules.ValuesEqual(
+                expectedRole.HsrBuilds,
+                actualRole.HsrBuilds));
         }
 
         Assert.Equal(
@@ -2090,6 +2133,38 @@ public sealed class HoyoLabSyncCoordinatorTests
         new(false, false, true, false, false, false, false, false),
         [],
         []);
+
+    private static HoyoLabGameBundle HsrBundleWithBuilds(
+        DateTimeOffset observedAt,
+        string charactersJson = HsrBuildCharactersJson) => new(
+        HoyoLabGameBundleRules.SchemaVersion,
+        HoyoLabGameBundleRules.GameId,
+        [
+            new(
+                new(
+                    FixtureBinding,
+                    "Test Trailblazer",
+                    PublisherRoleRecordRules.CanonicalRegionLabel(FixtureBinding.Server)),
+                new(null, null, observedAt, null, null, null, null, null),
+                null,
+                null,
+                null,
+                HsrSnapshot(charactersJson)),
+        ],
+        FixtureBinding,
+        new(false, false, true, false, false, false, false, false),
+        [],
+        []);
+
+    private static HoyoLabHsrBuildSnapshot HsrSnapshot(string charactersJson)
+    {
+        using var document = JsonDocument.Parse(charactersJson);
+        return new(document.RootElement.Clone());
+    }
+
+    private const string HsrBuildCharactersJson = """
+        [{"id":1001,"name":"Synthetic Trailblazer","level":80,"rarity":5,"element":"Quantum","path":3,"rank":1,"enhancedId":1001001,"avatarType":"Girl","lightCone":null,"eidolons":[],"relics":[],"ornaments":[],"properties":[],"traces":[],"specialTraces":[],"memosprite":null}]
+        """;
 
     private static HoyoLabGameBundle TwoRoleBundle(PublisherRoleBinding selected)
     {

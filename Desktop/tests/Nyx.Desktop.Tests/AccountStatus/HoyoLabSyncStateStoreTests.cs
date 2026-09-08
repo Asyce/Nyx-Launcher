@@ -969,6 +969,59 @@ public sealed class HoyoLabSyncStateStoreTests
         Assert.False(store.TryEnqueuePendingRoleDeletion(changed));
     }
 
+    [Fact]
+    public void Hsr_role_build_cutoff_round_trips_and_is_part_of_equality()
+    {
+        using var root = new TemporaryRoot();
+        var store = CreateStore(root.Path);
+        using var credential = Credential(1);
+        var binding = RoleBinding(1);
+        using var deletion = new HoyoLabPendingRoleDeletion(
+            credential.SyncId,
+            credential.Token,
+            credential.Key,
+            binding,
+            "hsr-build-cutoff",
+            Now,
+            Now.AddMinutes(-3),
+            Now.AddMinutes(-2),
+            Now,
+            HoyoLabGameBundleRules.GameId,
+            knownBuildsAt: Now.AddMinutes(-1));
+
+        Assert.True(store.TryEnqueuePendingRoleDeletion(deletion));
+        using var loaded = Assert.IsType<HoyoLabSyncState>(store.TryLoad());
+        var saved = Assert.Single(loaded.PendingRoleDeletions);
+        Assert.Equal(Now.AddMinutes(-1), saved.KnownBuildsAt);
+        var json = StateJson(loaded);
+        Assert.Equal(FormatTimestamp(Now.AddMinutes(-1)),
+            json["pendingRoleDeletions"]![0]!["knownBuildsAt"]!.GetValue<string>());
+
+        var bytes = HoyoLabSyncStateStore.SerializeState(loaded);
+        try
+        {
+            Assert.True(HoyoLabSyncStateStore.TryParseState(bytes, Now, out var parsed));
+            using var parsedState = Assert.IsType<HoyoLabSyncState>(parsed);
+            var parsedDeletion = Assert.Single(parsedState.PendingRoleDeletions);
+            Assert.Equal(Now.AddMinutes(-1), parsedDeletion.KnownBuildsAt);
+        }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
+
+        using var changed = new HoyoLabPendingRoleDeletion(
+            credential.SyncId,
+            credential.Token,
+            credential.Key,
+            binding,
+            deletion.OperationId,
+            deletion.RequestedAt,
+            deletion.KnownResourcesAt,
+            deletion.KnownAchievementsAt,
+            deletion.DeletedAt,
+            deletion.GameId,
+            knownBuildsAt: Now.AddMinutes(-2));
+        Assert.False(store.TryEnqueuePendingRoleDeletion(changed));
+    }
+
     [Theory]
     [InlineData("syncId")]
     [InlineData("token")]
