@@ -5585,7 +5585,7 @@ public sealed class PublisherAccountHardeningTests
         var before = service[..service.IndexOf("await window.ReadGenshinBuildsAsync", StringComparison.Ordinal)];
         var publish = Slice(service, "lock (sync)", "Updated?.Invoke");
 
-        Assert.Contains("GenshinBuildsAvailable => false", service, StringComparison.Ordinal);
+        Assert.Contains("GenshinBuildsAvailable => true", service, StringComparison.Ordinal);
         Assert.Contains("!GenshinBuildsAvailable", before, StringComparison.Ordinal);
         Assert.Contains("!CanUseGameBundle(\"gi\", operation)", before, StringComparison.Ordinal);
         Assert.Contains("operation.HoyoContext?.SlotId != expectedSlotId", before, StringComparison.Ordinal);
@@ -5623,7 +5623,7 @@ public sealed class PublisherAccountHardeningTests
         var before = service[..service.IndexOf("await window.ReadHsrBuildsAsync", StringComparison.Ordinal)];
         var publish = Slice(service, "lock (sync)", "Updated?.Invoke");
 
-        Assert.Contains("HsrBuildsAvailable => false", service, StringComparison.Ordinal);
+        Assert.Contains("HsrBuildsAvailable => true", service, StringComparison.Ordinal);
         Assert.Contains("!HsrBuildsAvailable", before, StringComparison.Ordinal);
         Assert.Contains("!CanUseGameBundle(\"hsr\", operation)", before, StringComparison.Ordinal);
         Assert.Contains("operation.HoyoContext?.SlotId != expectedSlotId", before, StringComparison.Ordinal);

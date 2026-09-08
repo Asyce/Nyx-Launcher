@@ -1175,8 +1175,8 @@ public sealed class HoyoLiveSessionUiTests
             eventControls,
             StringComparison.Ordinal);
         Assert.Contains("Refresh event calendar", eventControls, StringComparison.Ordinal);
-        Assert.Contains("GenshinEventsAvailable => false", ReadAppFile("PublisherAccountService.GenshinEvents.cs"), StringComparison.Ordinal);
-        Assert.Contains("HsrEventsAvailable => false", ReadAppFile("PublisherAccountService.HsrEvents.cs"), StringComparison.Ordinal);
+        Assert.Contains("GenshinEventsAvailable => true", ReadAppFile("PublisherAccountService.GenshinEvents.cs"), StringComparison.Ordinal);
+        Assert.Contains("HsrEventsAvailable => true", ReadAppFile("PublisherAccountService.HsrEvents.cs"), StringComparison.Ordinal);
         Assert.Contains(
             "enabled && gameId == \"hsr\" && capability == HoyoLabGameBundleRules.Events && !HsrEventsAvailable",
             service,
@@ -1192,15 +1192,15 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("HoyoLabGenshinEventsReadStatus.Completed", eventRefresh, StringComparison.Ordinal);
         Assert.Contains("Remember Genshin exploration", explorationControls, StringComparison.Ordinal);
         Assert.Contains("Refresh exploration", explorationControls, StringComparison.Ordinal);
-        Assert.Contains("GenshinExplorationAvailable => false", ReadAppFile("PublisherAccountService.GenshinExploration.cs"), StringComparison.Ordinal);
+        Assert.Contains("GenshinExplorationAvailable => true", ReadAppFile("PublisherAccountService.GenshinExploration.cs"), StringComparison.Ordinal);
         Assert.Contains("(gameId == \"hsr\" && PublisherAccountService.HsrBuildsAvailable)", buildControls, StringComparison.Ordinal);
-        Assert.Contains("GenshinBuildsAvailable => false", File.ReadAllText(Path.Combine(
+        Assert.Contains("GenshinBuildsAvailable => true", File.ReadAllText(Path.Combine(
             WorkspaceRoot,
             "Desktop",
             "src",
             "Nyx.Desktop.App",
             "PublisherAccountService.GenshinBuilds.cs")), StringComparison.Ordinal);
-        Assert.Contains("HsrBuildsAvailable => false", File.ReadAllText(Path.Combine(
+        Assert.Contains("HsrBuildsAvailable => true", File.ReadAllText(Path.Combine(
             WorkspaceRoot,
             "Desktop",
             "src",

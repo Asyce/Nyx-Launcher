@@ -4,9 +4,8 @@ namespace Nyx_Desktop_App;
 
 public sealed partial class PublisherAccountService
 {
-    // Receiver first: enabling this before the expanded My HoYo receiver is
-    // deployed would make existing shared copies unreadable on the live site.
-    public static bool GenshinExplorationAvailable => false;
+    // Receiver support is deployed; saved per-account Remember choices still apply.
+    public static bool GenshinExplorationAvailable => true;
 
     public async Task<HoyoLabGenshinExplorationReadResult> RefreshGenshinExplorationAsync(
         string expectedSlotId,
