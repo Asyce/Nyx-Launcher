@@ -5,6 +5,8 @@ namespace Nyx_Desktop_App;
 
 public sealed partial class PublisherAccountService
 {
+    private readonly Dictionary<string, (long Generation, HoyoLabManualSyncStatus Status)> automaticSyncResults = new(StringComparer.Ordinal);
+
     // Receiver-first gate. Flip only after the authorized production receiver
     // and My HoYo route have passed live verification.
     public static bool HoyoLabManualSyncAvailable => true;
@@ -29,7 +31,7 @@ public sealed partial class PublisherAccountService
                 ? CreateHoyoSyncCoordinator(operation)
                 : new HoyoLabSyncCoordinator(
                     root, null, null, publish => TryPublishHoyoSyncCleanup(operation, publish));
-            return coordinator.GetSummary();
+            return coordinator.GetSummary(gameId);
         }
         finally
         {
@@ -47,11 +49,63 @@ public sealed partial class PublisherAccountService
     public Task<HoyoLabManualSyncResult> SyncHoyoNowAsync(string gameId, string slotId, CancellationToken cancellationToken = default) =>
         RunHoyoSyncAsync(gameId, slotId, (coordinator, token) => coordinator.SyncNowAsync(token, gameId), cancellationToken);
 
+    public Task<HoyoLabManualSyncResult> SetHoyoAutomaticSyncAsync(
+        string gameId, string slotId, bool enabled, CancellationToken cancellationToken = default) =>
+        RunHoyoSyncAsync(gameId, slotId,
+            (coordinator, token) => Task.FromResult(coordinator.SetAutomaticSync(enabled, token, gameId)),
+            cancellationToken, rotateSession: !enabled);
+
+    internal HoyoLabManualSyncStatus? GetHoyoAutomaticSyncStatus(string gameId)
+    {
+        lock (sync)
+            return !disposed && automaticSyncResults.TryGetValue(gameId, out var result)
+                && hoyoGeneration.IsCurrent(result.Generation) ? result.Status : null;
+    }
+
+    private async Task SyncHoyoAfterCaptureAsync(string gameId, PublisherOperation capturedOperation, bool fullRefresh)
+    {
+        string slotId;
+        long generation;
+        lock (sync)
+        {
+            if (!CanUseGameBundle(gameId, capturedOperation) || !CanPublish("HoYoLAB", capturedOperation)
+                || capturedOperation.HoyoContext is not { LegacyCompatibility: false, SlotId: not null } context)
+                return;
+            slotId = context.SlotId;
+            generation = capturedOperation.Generation;
+        }
+        HoyoLabManualSyncStatus status;
+        try
+        {
+            // Queue only the game, slot and generation, never a snapshot or key.
+            // The existing gate owns a fresh operation linked to the provider session.
+            var result = await RunHoyoSyncAsync(gameId, slotId,
+                (coordinator, token) => coordinator.SyncAutomaticallyAsync(fullRefresh, token, gameId),
+                CancellationToken.None, expectedGeneration: generation);
+            status = result.Status;
+        }
+        catch (OperationCanceledException) { return; }
+        catch (Exception)
+        {
+            // A background failure must not turn a saved capture/export into a failure.
+            status = HoyoLabManualSyncStatus.LocalStorageUnavailable;
+        }
+        lock (sync)
+        {
+            if (disposed || !hoyoGeneration.IsCurrent(generation) || activeHoyoSlot?.Id != slotId) return;
+            // A later disabled refresh must not hide why automatic sync paused.
+            if (status is HoyoLabManualSyncStatus.NotEnabled or HoyoLabManualSyncStatus.Deferred
+                or HoyoLabManualSyncStatus.Canceled) return;
+            automaticSyncResults[gameId] = (generation, status);
+        }
+        Updated?.Invoke(this, EventArgs.Empty);
+    }
+
     public Task<HoyoLabManualSyncResult> StopHoyoSyncAsync(string gameId, string slotId, CancellationToken cancellationToken = default) =>
-        RunHoyoSyncAsync(gameId, slotId, (coordinator, token) => Task.FromResult(coordinator.Detach(cancellationToken: token)), cancellationToken);
+        RunHoyoSyncAsync(gameId, slotId, (coordinator, token) => Task.FromResult(coordinator.Detach(cancellationToken: token)), cancellationToken, rotateSession: true);
 
     public Task<HoyoLabManualSyncResult> RotateHoyoSyncCodeAsync(string gameId, string slotId, CancellationToken cancellationToken = default) =>
-        RunHoyoSyncAsync(gameId, slotId, (coordinator, token) => coordinator.RotateAsync(token), cancellationToken);
+        RunHoyoSyncAsync(gameId, slotId, (coordinator, token) => coordinator.RotateAsync(token), cancellationToken, rotateSession: true);
 
     public Task<HoyoLabManualSyncResult> DeleteHoyoCloudCopyAsync(string gameId, string slotId, CancellationToken cancellationToken = default) =>
         RunHoyoSyncAsync(gameId, slotId, async (coordinator, token) =>
@@ -60,7 +114,7 @@ public sealed partial class PublisherAccountService
             return detached.Status == HoyoLabManualSyncStatus.Completed
                 ? await coordinator.RetryDeletionsAsync(token, TryRemoveHoyoSlotLocally)
                 : detached;
-        }, cancellationToken);
+        }, cancellationToken, rotateSession: true);
 
     public Task<HoyoLabManualSyncResult> DeleteHoyoSyncedRoleAsync(
         string gameId,
@@ -134,7 +188,8 @@ public sealed partial class PublisherAccountService
         string expectedSlotId,
         Func<HoyoLabSyncCoordinator, CancellationToken, Task<HoyoLabManualSyncResult>> action,
         CancellationToken cancellationToken,
-        bool rotateSession = false)
+        bool rotateSession = false,
+        long? expectedGeneration = null)
     {
         if (!IsHoyoLabManualSyncAvailable(gameId) || !HoyoLabAccountSlotRules.IsValidSlotId(expectedSlotId)
             || !consent.IsEnabled("HoYoLAB")
@@ -162,6 +217,7 @@ public sealed partial class PublisherAccountService
                 enteredGate = true;
                 if (!ProfileAccessAllowedAfterGate("HoYoLAB", consentRequired: true, operation)
                     || !CanUseGameBundle(gameId, operation)
+                    || expectedGeneration is { } generation && operation.Generation != generation
                     || operation.HoyoContext?.SlotId != expectedSlotId)
                     return new(HoyoLabManualSyncStatus.NotEnabled);
                 _ = TryMigrateGameBundleFromV1(gameId, operation);
@@ -170,6 +226,7 @@ public sealed partial class PublisherAccountService
                 lock (sync)
                 {
                     if (!CanPublish("HoYoLAB", operation)) return new(HoyoLabManualSyncStatus.Canceled);
+                    if (expectedGeneration is null) automaticSyncResults.Remove(gameId);
                 }
                 Updated?.Invoke(this, EventArgs.Empty);
                 return result;

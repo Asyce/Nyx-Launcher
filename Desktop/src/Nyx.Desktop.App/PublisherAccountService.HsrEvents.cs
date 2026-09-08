@@ -68,6 +68,7 @@ public sealed partial class PublisherAccountService
                 if (!CanPublish("HoYoLAB", operation))
                     return new(HoyoLabHsrEventsReadStatus.Canceled);
             }
+            _ = SyncHoyoAfterCaptureAsync("hsr", operation, fullRefresh: true);
             Updated?.Invoke(this, EventArgs.Empty);
             return result;
         }

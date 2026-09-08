@@ -262,11 +262,15 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
             return false;
 
         ThrowIfDisposed();
-        using var operation = CreateOperation("HoYoLAB", cancellationToken);
+        var rotated = enabled ? default : BeginRotatedOperation("HoYoLAB", cancellationToken);
+        using var operation = rotated.Operation ?? CreateOperation("HoYoLAB", cancellationToken);
         var gate = GateFor("HoYoLAB");
-        await gate.WaitAsync(operation.Cancellation.Token);
+        var enteredGate = false;
         try
         {
+            if (rotated.PreviousSession is not null) await rotated.PreviousSession.CancelAsync();
+            await gate.WaitAsync(operation.Cancellation.Token);
+            enteredGate = true;
             if (!ProfileAccessAllowedAfterGate("HoYoLAB", consentRequired: true, operation))
                 return false;
             if (!CanUseGameBundle(gameId, operation)) return false;
@@ -290,11 +294,13 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
                     resourceBinding,
                     operation) is { } resource)
                 _ = TryMirrorGameResource(gameId, resourceBinding, resource, operation);
+            if (!enabled) _ = SyncHoyoAfterCaptureAsync(gameId, operation, fullRefresh: true);
             return CanPublish("HoYoLAB", operation);
         }
         finally
         {
-            gate.Release();
+            if (enteredGate) gate.Release();
+            rotated.PreviousSession?.Dispose();
         }
     }
 
@@ -720,7 +726,8 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
                     operation.HoyoContext,
                     operation.Cancellation.Token),
                 cancellationToken);
-            _ = TryMirrorHsrAchievements(result.Role, result.AchievementIds, operation);
+            if (TryMirrorHsrAchievements(result.Role, result.AchievementIds, operation))
+                _ = SyncHoyoAfterCaptureAsync(gameId, operation, fullRefresh: true);
             TrySetConnection(provider, PublisherConnectionState.Connected, operation);
             return artifact;
         }
@@ -1245,8 +1252,9 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
                     if (!CanPublish(entry.Provider, operation)
                         || !resourceSnapshots.Save(snapshot with { IsStale = false }, activeBinding))
                         return null;
-                    if (HoyoLabGameBundleRules.IsSupportedGame(entry.GameId))
-                        _ = TryMirrorGameResource(entry.GameId, activeBinding, snapshot, operation);
+                    if (HoyoLabGameBundleRules.IsSupportedGame(entry.GameId)
+                        && TryMirrorGameResource(entry.GameId, activeBinding, snapshot, operation))
+                        _ = SyncHoyoAfterCaptureAsync(entry.GameId, operation, fullRefresh: false);
                 }
                 SetResourceStateIfCurrent(
                     entry.GameId,

@@ -658,7 +658,7 @@ public sealed class HoyoLabSyncStateStoreTests
     [Theory]
     [InlineData("hsr")]
     [InlineData("all-hoyolab")]
-    public void Schema_one_loads_without_role_intents_and_next_write_promotes_exact_schema_three(string scope)
+    public void Schema_one_loads_without_role_intents_and_next_write_promotes_exact_schema_four(string scope)
     {
         using var root = new TemporaryRoot();
         var store = CreateStore(root.Path);
@@ -690,13 +690,14 @@ public sealed class HoyoLabSyncStateStoreTests
             Assert.False(json["pendingDeletions"]![0]!["requireRevisionMatch"]!.GetValue<bool>());
             Assert.Null(json["pendingDeletions"]![0]!["expectedRevision"]);
             Assert.Null(json["pendingDeletions"]![0]!["expectedRevisionsByGame"]);
-            Assert.Equal(5, json.Count);
+            Assert.Equal(6, json.Count);
+            AssertDefaultAutomaticSync(json);
         }
         finally { CryptographicOperations.ZeroMemory(written); }
     }
 
     [Fact]
-    public void Schema_two_loads_and_rewrites_to_schema_three_without_dropping_intents()
+    public void Schema_two_loads_and_rewrites_to_schema_four_without_dropping_intents()
     {
         using var root = new TemporaryRoot();
         var store = CreateStore(root.Path);
@@ -711,7 +712,7 @@ public sealed class HoyoLabSyncStateStoreTests
             expectedRevision: Now.AddMinutes(-1));
         using var role = RolePending(1);
         using var source = new HoyoLabSyncState(credential, Now, [pending], [role]);
-        var legacy = StateJson(source);
+        var legacy = LegacyStateJson(source);
         legacy["schemaVersion"] = 2;
         legacy["pendingDeletions"]![0]!.AsObject().Remove("expectedRevisionsByGame");
         legacy["pendingRoleDeletions"]![0]!.AsObject().Remove("gameId");
@@ -752,8 +753,303 @@ public sealed class HoyoLabSyncStateStoreTests
             Assert.Null(json["pendingDeletions"]![0]!["expectedRevisionsByGame"]);
             Assert.Equal(HoyoLabGameBundleRules.GameId,
                 json["pendingRoleDeletions"]![0]!["gameId"]!.GetValue<string>());
+            Assert.Equal(6, json.Count);
+            AssertDefaultAutomaticSync(json);
         }
         finally { CryptographicOperations.ZeroMemory(written); }
+    }
+
+    [Fact]
+    public void Schema_three_migrates_game_intents_and_revision_map_without_writing_and_defaults_automatic_off()
+    {
+        using var root = new TemporaryRoot();
+        var store = CreateStore(root.Path);
+        using var credential = Credential(1);
+        using var revisions = new HoyoLabPendingDeletion(
+            credential.SyncId,
+            credential.Token,
+            HoyoLabSyncStateStore.AllHoyoScope,
+            "schema-three-revisions",
+            Now,
+            requireRevisionMatch: true,
+            expectedRevisionsByGame: new(Now.AddMinutes(-2), Now.AddMinutes(-1)));
+        using var hsrRole = RolePendingFor(credential, HoyoLabGameBundleRules.GameId, 1);
+        using var genshinRole = RolePendingFor(credential, HoyoLabGameBundleRules.GenshinGameId, 2);
+        using var source = new HoyoLabSyncState(credential, Now, [revisions], [genshinRole, hsrRole]);
+        Assert.True(store.TrySetCurrentCredential(credential));
+        var legacy = LegacyStateJson(source);
+        legacy["schemaVersion"] = 3;
+        WriteProtectedFixture(store.StatePath, Encoding.UTF8.GetBytes(legacy.ToJsonString()));
+        var before = File.ReadAllBytes(store.StatePath);
+
+        using (var loaded = Assert.IsType<HoyoLabSyncState>(store.TryLoad()))
+        {
+            Assert.Equal(new HoyoLabGameRevisions(Now.AddMinutes(-2), Now.AddMinutes(-1)),
+                Assert.Single(loaded.PendingDeletions).ExpectedRevisionsByGame);
+            Assert.Equal([genshinRole.OperationId, hsrRole.OperationId],
+                loaded.PendingRoleDeletions.Select(item => item.OperationId));
+            Assert.Equal([genshinRole.GameId, hsrRole.GameId],
+                loaded.PendingRoleDeletions.Select(item => item.GameId));
+            Assert.Equal(new HoyoLabAutomaticSyncSettings(), loaded.AutomaticSync);
+        }
+        Assert.Equal(before, File.ReadAllBytes(store.StatePath));
+
+        Assert.True(store.TrySetWorkerRevision(Now.AddMilliseconds(1)));
+        var written = File.ReadAllBytes(store.StatePath)
+            .Select(value => (byte)(value ^ TrackingProtector.Mask)).ToArray();
+        try
+        {
+            var json = JsonNode.Parse(written)!.AsObject();
+            Assert.Equal(HoyoLabSyncStateStore.SchemaVersion, json["schemaVersion"]!.GetValue<int>());
+            Assert.Equal(6, json.Count);
+            AssertDefaultAutomaticSync(json);
+            Assert.Equal(new[] { "hsr", "gi" },
+                json["pendingDeletions"]![0]!["expectedRevisionsByGame"]!.AsObject()
+                    .Select(property => property.Key).ToArray());
+        }
+        finally { CryptographicOperations.ZeroMemory(written); }
+    }
+
+    [Fact]
+    public void Automatic_sync_settings_are_independent_across_reload_and_opt_out()
+    {
+        using var root = new TemporaryRoot();
+        var clock = new MutableTimeProvider(Now);
+        var store = CreateStore(root.Path, clock: clock);
+        using var credential = Credential(1);
+        Assert.True(store.TrySetCurrentCredential(credential));
+        using (var initial = Assert.IsType<HoyoLabSyncState>(store.TryLoad()))
+            Assert.Equal(new HoyoLabAutomaticSyncSettings(), initial.AutomaticSync);
+
+        Assert.True(store.TrySetAutomaticSync(HoyoLabSyncStateStore.HsrScope, true));
+        Assert.True(store.TrySetAutomaticSync(HoyoLabSyncStateStore.GenshinScope, true));
+        clock.UtcNow = Now.AddMinutes(1);
+        Assert.True(store.TryRecordSuccessfulSync(HoyoLabSyncStateStore.HsrScope, credential, Now.AddMinutes(1)));
+        clock.UtcNow = Now.AddMinutes(2);
+        Assert.True(store.TryRecordSuccessfulSync(HoyoLabSyncStateStore.GenshinScope, credential, Now.AddMinutes(2)));
+
+        using (var loaded = Assert.IsType<HoyoLabSyncState>(CreateStore(root.Path, clock: clock).TryLoad()))
+        {
+            Assert.True(loaded.AutomaticSync.HsrEnabled);
+            Assert.True(loaded.AutomaticSync.GenshinEnabled);
+            Assert.Equal(Now.AddMinutes(1), loaded.AutomaticSync.HsrLastSyncedAt);
+            Assert.Equal(Now.AddMinutes(2), loaded.AutomaticSync.GenshinLastSyncedAt);
+        }
+
+        Assert.True(store.TrySetAutomaticSync(HoyoLabSyncStateStore.HsrScope, false));
+        using (var optedOut = Assert.IsType<HoyoLabSyncState>(store.TryLoad()))
+        {
+            Assert.False(optedOut.AutomaticSync.HsrEnabled);
+            Assert.Null(optedOut.AutomaticSync.HsrLastSyncedAt);
+            Assert.True(optedOut.AutomaticSync.GenshinEnabled);
+            Assert.Equal(Now.AddMinutes(2), optedOut.AutomaticSync.GenshinLastSyncedAt);
+        }
+        Assert.True(store.TrySetAutomaticSync(HoyoLabSyncStateStore.HsrScope, true));
+        using var reenabled = Assert.IsType<HoyoLabSyncState>(store.TryLoad());
+        Assert.True(reenabled.AutomaticSync.HsrEnabled);
+        Assert.Null(reenabled.AutomaticSync.HsrLastSyncedAt);
+
+        using var gameDeletion = PendingForCredential(credential, HoyoLabSyncStateStore.HsrScope, Now.AddMinutes(2));
+        Assert.True(store.TryQueueGameDeletion(gameDeletion));
+        using var queued = Assert.IsType<HoyoLabSyncState>(store.TryLoad());
+        Assert.False(queued.AutomaticSync.HsrEnabled);
+        Assert.Null(queued.AutomaticSync.HsrLastSyncedAt);
+        Assert.True(queued.AutomaticSync.GenshinEnabled);
+        Assert.Equal(Now.AddMinutes(2), queued.AutomaticSync.GenshinLastSyncedAt);
+    }
+
+    [Fact]
+    public void Automatic_sync_defaults_off_and_enable_requires_credential_without_pending_work()
+    {
+        using var root = new TemporaryRoot();
+        var store = CreateStore(root.Path);
+        Assert.Null(store.TryLoad());
+        Assert.False(store.TrySetAutomaticSync(HoyoLabSyncStateStore.HsrScope, true));
+        Assert.False(store.TrySetAutomaticSync(HoyoLabSyncStateStore.HsrScope, false));
+
+        using var credential = Credential(1);
+        Assert.True(store.TrySetCurrentCredential(credential));
+        using (var loaded = Assert.IsType<HoyoLabSyncState>(store.TryLoad()))
+            Assert.Equal(new HoyoLabAutomaticSyncSettings(), loaded.AutomaticSync);
+        Assert.False(store.TrySetAutomaticSync("zzz", true));
+        Assert.False(store.TrySetAutomaticSync("zzz", false));
+
+        using var pending = PendingForCredential(credential, HoyoLabSyncStateStore.AllHoyoScope, Now);
+        Assert.True(store.TryEnqueuePendingDeletion(pending));
+        Assert.False(store.TrySetAutomaticSync(HoyoLabSyncStateStore.HsrScope, true));
+        Assert.False(store.TrySetAutomaticSync(HoyoLabSyncStateStore.GenshinScope, true));
+    }
+
+    [Fact]
+    public void Stale_credential_cannot_change_current_automatic_preferences()
+    {
+        using var root = new TemporaryRoot();
+        var store = CreateStore(root.Path);
+        using var stale = Credential(1);
+        using var current = Credential(2);
+        Assert.True(store.TrySetCurrentCredential(current));
+        Assert.False(store.TrySetAutomaticSync("hsr", true, expectedCredential: stale));
+        Assert.True(store.TrySetAutomaticSync("hsr", true, expectedCredential: current));
+        var before = File.ReadAllBytes(store.StatePath);
+        Assert.False(store.TrySetAutomaticSync("hsr", false, expectedCredential: stale));
+        Assert.Equal(before, File.ReadAllBytes(store.StatePath));
+    }
+
+    [Fact]
+    public void Stale_save_cannot_reenable_automatic_sync()
+    {
+        using var root = new TemporaryRoot();
+        var store = CreateStore(root.Path);
+        using var credential = Credential(1);
+        Assert.True(store.TrySetCurrentCredential(credential));
+        Assert.True(store.TrySetAutomaticSync(HoyoLabSyncStateStore.HsrScope, true));
+        using var stale = Assert.IsType<HoyoLabSyncState>(store.TryLoad());
+        Assert.True(store.TrySetAutomaticSync(HoyoLabSyncStateStore.HsrScope, false));
+        var before = File.ReadAllBytes(store.StatePath);
+        Assert.False(store.TrySave(stale));
+        Assert.Equal(before, File.ReadAllBytes(store.StatePath));
+        using var loaded = Assert.IsType<HoyoLabSyncState>(store.TryLoad());
+        Assert.Equal(new HoyoLabAutomaticSyncSettings(), loaded.AutomaticSync);
+    }
+
+    [Fact]
+    public void Credential_replacement_and_clear_reset_automatic_preferences()
+    {
+        using var root = new TemporaryRoot();
+        var store = CreateStore(root.Path);
+        using var first = Credential(1);
+        using var second = Credential(2);
+        Assert.True(store.TrySetCurrentCredential(first));
+        Assert.True(store.TrySetAutomaticSync(HoyoLabSyncStateStore.HsrScope, true));
+        Assert.True(store.TrySetAutomaticSync(HoyoLabSyncStateStore.GenshinScope, true));
+        Assert.True(store.TryRecordSuccessfulSync(HoyoLabSyncStateStore.HsrScope, first, Now));
+
+        Assert.True(store.TrySetCurrentCredential(second));
+        using (var replaced = Assert.IsType<HoyoLabSyncState>(store.TryLoad()))
+        {
+            Assert.Equal(second.SyncId, replaced.CurrentCredential!.SyncId);
+            Assert.Equal(new HoyoLabAutomaticSyncSettings(), replaced.AutomaticSync);
+        }
+
+        Assert.True(store.TrySetAutomaticSync(HoyoLabSyncStateStore.HsrScope, true));
+        Assert.True(store.TryRecordSuccessfulSync(HoyoLabSyncStateStore.HsrScope, second, Now));
+        Assert.True(store.TryClearCurrentCredential());
+        using var cleared = Assert.IsType<HoyoLabSyncState>(store.TryLoad());
+        Assert.Null(cleared.CurrentCredential);
+        Assert.Equal(new HoyoLabAutomaticSyncSettings(), cleared.AutomaticSync);
+    }
+
+    [Fact]
+    public void Deliberate_credential_rotation_preserves_automatic_preferences()
+    {
+        using var root = new TemporaryRoot();
+        var store = CreateStore(root.Path);
+        using var previous = Credential(1);
+        using var replacement = Credential(2);
+        Assert.True(store.TrySetCurrentCredential(previous));
+        Assert.True(store.TrySetAutomaticSync(HoyoLabSyncStateStore.HsrScope, true));
+        Assert.True(store.TrySetAutomaticSync(HoyoLabSyncStateStore.GenshinScope, true));
+        Assert.True(store.TryRecordSuccessfulSync(HoyoLabSyncStateStore.HsrScope, previous, Now));
+        using var oldAccount = PendingForCredential(
+            previous, HoyoLabSyncStateStore.AllHoyoScope, Now, requireRevisionMatch: true);
+        using var prepared = PendingForCredential(replacement, HoyoLabSyncStateStore.AllHoyoScope, Now);
+        Assert.True(store.TryEnqueuePendingDeletion(prepared));
+
+        Assert.True(store.TryRotateCurrentCredential(previous, replacement, Now, oldAccount, prepared));
+        using var loaded = Assert.IsType<HoyoLabSyncState>(CreateStore(root.Path).TryLoad());
+        Assert.Equal(replacement.SyncId, loaded.CurrentCredential!.SyncId);
+        Assert.True(loaded.AutomaticSync.HsrEnabled);
+        Assert.True(loaded.AutomaticSync.GenshinEnabled);
+        Assert.Equal(Now, loaded.AutomaticSync.HsrLastSyncedAt);
+        Assert.Null(loaded.AutomaticSync.GenshinLastSyncedAt);
+    }
+
+    [Fact]
+    public void Matching_credential_success_updates_only_selected_game_and_wrong_credential_does_not_mutate()
+    {
+        using var root = new TemporaryRoot();
+        var clock = new MutableTimeProvider(Now);
+        var store = CreateStore(root.Path, clock: clock);
+        using var credential = Credential(1);
+        using var wrong = Credential(2);
+        Assert.True(store.TrySetCurrentCredential(credential));
+        Assert.True(store.TrySetAutomaticSync(HoyoLabSyncStateStore.HsrScope, true));
+        Assert.True(store.TrySetAutomaticSync(HoyoLabSyncStateStore.GenshinScope, true));
+        Assert.True(store.TryRecordSuccessfulSync(HoyoLabSyncStateStore.GenshinScope, credential, Now));
+        clock.UtcNow = Now.AddMinutes(1);
+        Assert.True(store.TryRecordSuccessfulSync(HoyoLabSyncStateStore.HsrScope, credential, Now.AddMinutes(1)));
+        using (var loaded = Assert.IsType<HoyoLabSyncState>(store.TryLoad()))
+        {
+            Assert.Equal(Now.AddMinutes(1), loaded.AutomaticSync.HsrLastSyncedAt);
+            Assert.Equal(Now, loaded.AutomaticSync.GenshinLastSyncedAt);
+        }
+
+        var before = File.ReadAllBytes(store.StatePath);
+        Assert.False(store.TryRecordSuccessfulSync(HoyoLabSyncStateStore.HsrScope, wrong, Now.AddMinutes(2)));
+        Assert.Equal(before, File.ReadAllBytes(store.StatePath));
+    }
+
+    [Fact]
+    public void Successful_sync_timestamp_is_millisecond_aligned_when_clock_has_submillisecond_ticks()
+    {
+        using var root = new TemporaryRoot();
+        var store = CreateStore(root.Path, clock: new FixedTimeProvider(Now.AddTicks(1234)));
+        using var credential = Credential(1);
+        Assert.True(store.TrySetCurrentCredential(credential));
+        Assert.True(store.TrySetAutomaticSync(HoyoLabSyncStateStore.HsrScope, true));
+        Assert.True(store.TryRecordSuccessfulSync(HoyoLabSyncStateStore.HsrScope, credential, Now));
+        using var loaded = Assert.IsType<HoyoLabSyncState>(store.TryLoad());
+        Assert.Equal(Now, loaded.AutomaticSync.HsrLastSyncedAt);
+    }
+
+    [Theory]
+    [InlineData("automatic-null")]
+    [InlineData("enabled-type")]
+    [InlineData("enabled-null")]
+    [InlineData("timestamp-type")]
+    [InlineData("unknown")]
+    [InlineData("missing")]
+    [InlineData("duplicate")]
+    [InlineData("future")]
+    [InlineData("non-utc")]
+    [InlineData("enabled-without-credential")]
+    public void Automatic_sync_json_is_strictly_validated_and_zeroes_parsed_secrets(string failure)
+    {
+        using var credential = Credential(1);
+        using var pending = PendingForCredential(credential, HoyoLabSyncStateStore.HsrScope, Now.AddMinutes(-1));
+        using var source = new HoyoLabSyncState(
+            credential,
+            Now,
+            [pending],
+            automaticSync: new(true, true, Now.AddMinutes(-2), Now.AddMinutes(-1)));
+        var json = StateJson(source);
+        var settings = json["automaticSync"]!.AsObject();
+        switch (failure)
+        {
+            case "automatic-null": json["automaticSync"] = null; break;
+            case "enabled-type": settings["hsrEnabled"] = "true"; break;
+            case "enabled-null": settings["hsrEnabled"] = null; break;
+            case "timestamp-type": settings["hsrLastSyncedAt"] = 1; break;
+            case "unknown": settings["unexpected"] = false; break;
+            case "missing": settings.Remove("genshinEnabled"); break;
+            case "future": settings["hsrLastSyncedAt"] = FormatTimestamp(Now.AddMinutes(6)); break;
+            case "non-utc": settings["hsrLastSyncedAt"] = "2026-08-31T13:00:00.000+01:00"; break;
+            case "enabled-without-credential": json["currentCredential"] = null; break;
+        }
+        var serialized = json.ToJsonString();
+        if (failure == "duplicate")
+            serialized = serialized.Replace("\"hsrEnabled\":true,\"genshinEnabled\"",
+                "\"hsrEnabled\":true,\"hsrEnabled\":true,\"genshinEnabled\"", StringComparison.Ordinal);
+        var bytes = Encoding.UTF8.GetBytes(serialized);
+        var captured = new List<ReadOnlyMemory<byte>>();
+        try
+        {
+            Assert.False(HoyoLabSyncStateStore.TryParseState(bytes, Now, out var parsed, captured.Add));
+            Assert.Null(parsed);
+            Assert.NotEmpty(captured);
+            Assert.All(captured, memory => Assert.All(memory.ToArray(), value => Assert.Equal(0, value)));
+        }
+        finally { CryptographicOperations.ZeroMemory(bytes); }
     }
 
     [Fact]
@@ -920,7 +1216,7 @@ public sealed class HoyoLabSyncStateStoreTests
         }
         finally { CryptographicOperations.ZeroMemory(nullBytes); }
 
-        var schemaTwo = json.DeepClone().AsObject();
+        var schemaTwo = LegacyStateJson(loaded);
         schemaTwo["schemaVersion"] = 2;
         schemaTwo["pendingRoleDeletions"]![0]!.AsObject().Remove("gameId");
         var schemaTwoBytes = Encoding.UTF8.GetBytes(schemaTwo.ToJsonString());
@@ -1036,7 +1332,7 @@ public sealed class HoyoLabSyncStateStoreTests
         try { Assert.False(HoyoLabSyncStateStore.TryParseState(nullBytes, Now, out _)); }
         finally { CryptographicOperations.ZeroMemory(nullBytes); }
 
-        var schemaTwo = json.DeepClone().AsObject();
+        var schemaTwo = LegacyStateJson(loaded);
         schemaTwo["schemaVersion"] = 2;
         schemaTwo["pendingRoleDeletions"]![0]!.AsObject().Remove("gameId");
         var schemaTwoBytes = Encoding.UTF8.GetBytes(schemaTwo.ToJsonString());
@@ -1139,7 +1435,7 @@ public sealed class HoyoLabSyncStateStoreTests
         try { Assert.False(HoyoLabSyncStateStore.TryParseState(nullBytes, Now, out _)); }
         finally { CryptographicOperations.ZeroMemory(nullBytes); }
 
-        var schemaTwo = json.DeepClone().AsObject();
+        var schemaTwo = LegacyStateJson(loaded);
         schemaTwo["schemaVersion"] = 2;
         schemaTwo["pendingRoleDeletions"]![0]!.AsObject().Remove("gameId");
         var schemaTwoBytes = Encoding.UTF8.GetBytes(schemaTwo.ToJsonString());
@@ -1585,14 +1881,14 @@ public sealed class HoyoLabSyncStateStoreTests
         Assert.True(store.TryEnqueuePendingRoleDeletion(first));
         Assert.True(store.TryEnqueuePendingRoleDeletion(second));
         Assert.True(store.TrySave(source));
-        var json = StateJson(source);
+        var json = failure == "v1-with-role-field" ? LegacyStateJson(source) : StateJson(source);
         var roles = json["pendingRoleDeletions"]!.AsArray();
         var item = roles[1]!.AsObject();
         switch (failure)
         {
             case "v1-with-role-field": json["schemaVersion"] = 1; break;
             case "v2-missing-role-field": json.Remove("pendingRoleDeletions"); break;
-            case "future-schema": json["schemaVersion"] = 4; break;
+            case "future-schema": json["schemaVersion"] = HoyoLabSyncStateStore.SchemaVersion + 1; break;
             case "unknown-root": json["payload"] = "forbidden"; break;
             case "unknown-role-field": item["payload"] = "forbidden"; break;
             case "unknown-binding-field": item["binding"]!["game"] = "hsr"; break;
@@ -1942,7 +2238,7 @@ public sealed class HoyoLabSyncStateStoreTests
             case "number": record["removeLocalSlot"] = 1; break;
             case "null": record["removeLocalSlot"] = null; break;
             case "hsr-true": record["scope"] = "hsr"; record["removeLocalSlot"] = true; break;
-            case "v1-field": json["schemaVersion"] = 1; json.Remove("pendingRoleDeletions"); break;
+            case "v1-field": json["schemaVersion"] = 1; json.Remove("automaticSync"); json.Remove("pendingRoleDeletions"); break;
         }
         var serialized = json.ToJsonString();
         if (failure == "duplicate") serialized = serialized.Replace("\"removeLocalSlot\":false",
@@ -2153,9 +2449,26 @@ public sealed class HoyoLabSyncStateStoreTests
         finally { CryptographicOperations.ZeroMemory(bytes); }
     }
 
-    private static JsonObject SchemaOneJson(HoyoLabSyncState state)
+    private static JsonObject LegacyStateJson(HoyoLabSyncState state)
     {
         var legacy = StateJson(state);
+        legacy.Remove("automaticSync");
+        return legacy;
+    }
+
+    private static void AssertDefaultAutomaticSync(JsonObject json)
+    {
+        var automatic = Assert.IsType<JsonObject>(json["automaticSync"]);
+        Assert.Equal(4, automatic.Count);
+        Assert.False(automatic["hsrEnabled"]!.GetValue<bool>());
+        Assert.False(automatic["genshinEnabled"]!.GetValue<bool>());
+        Assert.Null(automatic["hsrLastSyncedAt"]);
+        Assert.Null(automatic["genshinLastSyncedAt"]);
+    }
+
+    private static JsonObject SchemaOneJson(HoyoLabSyncState state)
+    {
+        var legacy = LegacyStateJson(state);
         legacy["schemaVersion"] = 1;
         legacy.Remove("pendingRoleDeletions");
         foreach (var item in legacy["pendingDeletions"]!.AsArray())
@@ -2292,6 +2605,13 @@ public sealed class HoyoLabSyncStateStoreTests
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => utcNow;
+    }
+
+    private sealed class MutableTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public DateTimeOffset UtcNow { get; set; } = utcNow;
+
+        public override DateTimeOffset GetUtcNow() => UtcNow;
     }
 
     private sealed class TrackingProtector : IPublisherRoleBindingProtector

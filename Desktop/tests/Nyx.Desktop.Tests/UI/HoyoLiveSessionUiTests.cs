@@ -1370,6 +1370,185 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("await AbortResourceFetchAsync(controllerKey)", window, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("GenshinBuilds", "gi", "genshinGameBundle", "TryRecordGenshinBuilds", "HoyoLabGenshinBuildReadStatus")]
+    [InlineData("GenshinExploration", "gi", "genshinGameBundle", "TryRecordGenshinExploration", "HoyoLabGenshinExplorationReadStatus")]
+    [InlineData("GenshinEvents", "gi", "genshinGameBundle", "TryRecordGenshinEvents", "HoyoLabGenshinEventsReadStatus")]
+    [InlineData("HsrBuilds", "hsr", "hoyoGameBundle", "TryRecordHsrBuilds", "HoyoLabHsrBuildReadStatus")]
+    [InlineData("HsrEvents", "hsr", "hoyoGameBundle", "TryRecordHsrEvents", "HoyoLabHsrEventsReadStatus")]
+    public void Hoyo_capability_capture_queues_full_automatic_sync_only_after_successful_record(
+        string partial,
+        string gameId,
+        string bundle,
+        string recordMethod,
+        string resultStatus)
+    {
+        var service = ReadAppFile($"PublisherAccountService.{partial}.cs")
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var queue = $"_ = SyncHoyoAfterCaptureAsync(\"{gameId}\", operation, fullRefresh: true);";
+
+        Assert.Single(Regex.Matches(service, Regex.Escape(queue)));
+        AssertOrdered(
+            service,
+            $"if (!{bundle}.{recordMethod}(",
+            $"return new({resultStatus}.LocalStorageUnavailable);",
+            queue,
+            "Updated?.Invoke(this, EventArgs.Empty);",
+            "return result;");
+        Assert.DoesNotContain("await SyncHoyoAfterCaptureAsync", service, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Hoyo_shared_resource_and_hsr_achievement_mirrors_queue_the_right_refresh_kind_only_after_mirror()
+    {
+        var service = ReadAppFile("PublisherAccountService.cs")
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var resource = Slice(service, "if (activeBinding is not null)", "if (resourceRead.Outcome is");
+        AssertOrdered(
+            resource,
+            "if (!CanPublish(entry.Provider, operation)",
+            "|| !resourceSnapshots.Save(snapshot with { IsStale = false }, activeBinding)",
+            "if (HoyoLabGameBundleRules.IsSupportedGame(entry.GameId)",
+            "&& TryMirrorGameResource(entry.GameId, activeBinding, snapshot, operation)",
+            "_ = SyncHoyoAfterCaptureAsync(entry.GameId, operation, fullRefresh: false);");
+        Assert.Single(
+            Regex.Matches(
+                resource,
+                Regex.Escape("_ = SyncHoyoAfterCaptureAsync(entry.GameId, operation, fullRefresh: false);")));
+
+        var achievements = Slice(
+            service,
+            "var artifact = await achievementWriter.WriteAsync(",
+            "catch (PublisherSessionTeardownException exception)");
+        AssertOrdered(
+            achievements,
+            "var artifact = await achievementWriter.WriteAsync(",
+            "if (TryMirrorHsrAchievements(result.Role, result.AchievementIds, operation))",
+            "_ = SyncHoyoAfterCaptureAsync(gameId, operation, fullRefresh: true);",
+            "TrySetConnection(provider, PublisherConnectionState.Connected, operation)",
+            "return artifact;");
+    }
+
+    [Fact]
+    public void Hoyo_post_capture_sync_uses_fresh_provider_operation_and_preserves_pause_status()
+    {
+        var service = ReadAppFile("PublisherAccountService.HoyoSync.cs")
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var helper = Slice(
+            service,
+            "private async Task SyncHoyoAfterCaptureAsync",
+            "public Task<HoyoLabManualSyncResult> StopHoyoSyncAsync");
+        var helperCode = Regex.Replace(helper, @"(?m)^\s*//.*(?:\n|$)", string.Empty);
+
+        AssertOrdered(
+            helper,
+            "lock (sync)",
+            "if (!CanUseGameBundle(gameId, capturedOperation)",
+            "slotId = context.SlotId;",
+            "generation = capturedOperation.Generation;",
+            "var result = await RunHoyoSyncAsync(gameId, slotId,",
+            "coordinator.SyncAutomaticallyAsync(fullRefresh, token, gameId)",
+            "CancellationToken.None, expectedGeneration: generation);");
+        Assert.DoesNotContain("snapshot", helperCode, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("key", helperCode, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("recoveryCode", helper, StringComparison.Ordinal);
+        Assert.Contains("catch (OperationCanceledException) { return; }", helper, StringComparison.Ordinal);
+        Assert.Contains("catch (Exception)", helper, StringComparison.Ordinal);
+        Assert.Contains("status = HoyoLabManualSyncStatus.LocalStorageUnavailable;", helper, StringComparison.Ordinal);
+        AssertOrdered(
+            helper,
+            "if (status is HoyoLabManualSyncStatus.NotEnabled or HoyoLabManualSyncStatus.Deferred",
+            "return;",
+            "automaticSyncResults[gameId] = (generation, status);");
+
+        var run = Slice(
+            service,
+            "private async Task<HoyoLabManualSyncResult> RunHoyoSyncAsync",
+            "private HoyoLabSyncCoordinator CreateHoyoSyncCoordinator");
+        AssertOrdered(
+            run,
+            "if (rotateSession)",
+            "BeginRotatedOperation(\"HoYoLAB\", cancellationToken)",
+            "else",
+            "operation = CreateOperation(\"HoYoLAB\", cancellationToken)",
+            "using (operation)",
+            "if (previousSession is not null) await previousSession.CancelAsync();",
+            "await hoyoGate.WaitAsync(operation.Cancellation.Token);",
+            "ProfileAccessAllowedAfterGate(\"HoYoLAB\", consentRequired: true, operation)",
+            "expectedGeneration is { } generation && operation.Generation != generation",
+            "operation.HoyoContext?.SlotId != expectedSlotId",
+            "using var coordinator = CreateHoyoSyncCoordinator(operation);",
+            "var result = await action(coordinator, operation.Cancellation.Token);",
+            "if (!CanPublish(\"HoYoLAB\", operation)) return new(HoyoLabManualSyncStatus.Canceled);");
+        Assert.Contains("if (expectedGeneration is null) automaticSyncResults.Remove(gameId);", run, StringComparison.Ordinal);
+
+        var core = ReadAppFile("PublisherAccountService.cs")
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var operationFactory = Slice(core, "private PublisherOperation CreateOperation", "private (\n");
+        AssertOrdered(
+            operationFactory,
+            "\"HoYoLAB\" => hoyoSession.Token",
+            "generation = GenerationFor(provider).Current",
+            "CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, shutdown.Token, providerToken)",
+            "provider == \"HoYoLAB\" ? CaptureHoyoContext() : null");
+    }
+
+    [Fact]
+    public void Hoyo_automatic_switch_is_click_per_game_and_rotating_opt_out_cancels_before_gate()
+    {
+        var page = ReadAppFile("MainPage.HoyoSync.cs")
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var service = ReadAppFile("PublisherAccountService.HoyoSync.cs")
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var core = ReadAppFile("PublisherAccountService.cs")
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        var automaticHandler = Slice(page, "automatic.Click +=", "stop.Click +=");
+        Assert.Contains("var enabled = automatic.IsChecked == true;", automaticHandler, StringComparison.Ordinal);
+        Assert.Contains("SetHoyoAutomaticSyncAsync(gameId, syncSlot!, enabled, ct)", automaticHandler, StringComparison.Ordinal);
+        Assert.Empty(Regex.Matches(page, @"automatic\.(?:Checked|Unchecked)\s*\+="));
+        Assert.Contains("GetHoyoSyncSummaryAsync(gameId, token)", page, StringComparison.Ordinal);
+        var render = Slice(page, "void Render()", "async Task RefreshAsync()");
+        Assert.Contains("automatic.IsChecked = !contextInvalidated && summary.AutomaticEnabled;", render, StringComparison.Ordinal);
+        Assert.Contains("automatic.Visibility = automaticHelp.Visibility = summary.Enabled ? Visibility.Visible : Visibility.Collapsed;", render, StringComparison.Ordinal);
+
+        var summary = Slice(
+            service,
+            "public async Task<HoyoLabSyncSummary> GetHoyoSyncSummaryAsync",
+            "public Task<HoyoLabManualSyncResult> ConnectHoyoSyncAsync");
+        Assert.Contains("return coordinator.GetSummary(gameId);", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("return coordinator.GetSummary();", summary, StringComparison.Ordinal);
+
+        var automatic = Slice(
+            service,
+            "public Task<HoyoLabManualSyncResult> SetHoyoAutomaticSyncAsync",
+            "internal HoyoLabManualSyncStatus? GetHoyoAutomaticSyncStatus");
+        Assert.Contains("rotateSession: !enabled", automatic, StringComparison.Ordinal);
+
+        foreach (var (start, end) in new[]
+        {
+            ("public Task<HoyoLabManualSyncResult> StopHoyoSyncAsync", "public Task<HoyoLabManualSyncResult> RotateHoyoSyncCodeAsync"),
+            ("public Task<HoyoLabManualSyncResult> RotateHoyoSyncCodeAsync", "public Task<HoyoLabManualSyncResult> DeleteHoyoCloudCopyAsync"),
+            ("public Task<HoyoLabManualSyncResult> DeleteHoyoCloudCopyAsync", "public Task<HoyoLabManualSyncResult> DeleteHoyoSyncedRoleAsync"),
+            ("public Task<HoyoLabManualSyncResult> DeleteHoyoSyncedRoleAsync", "public async Task<HoyoLabManualSyncResult> RemoveHoyoLabAccountEverywhereAsync"),
+        })
+            Assert.Contains("rotateSession: true", Slice(service, start, end), StringComparison.Ordinal);
+
+        var capability = Slice(
+            core,
+            "private async Task<bool> SetGameBundleCapabilityConsentAsync",
+            "public HoyoLabAccountIdentity? GetHoyoLabIdentity");
+        AssertOrdered(
+            capability,
+            "var rotated = enabled ? default : BeginRotatedOperation(\"HoYoLAB\", cancellationToken);",
+            "using var operation = rotated.Operation ?? CreateOperation(\"HoYoLAB\", cancellationToken);",
+            "if (rotated.PreviousSession is not null) await rotated.PreviousSession.CancelAsync();",
+            "await gate.WaitAsync(operation.Cancellation.Token);",
+            "if (!enabled) _ = SyncHoyoAfterCaptureAsync(gameId, operation, fullRefresh: true);",
+            "return CanPublish(\"HoYoLAB\", operation);");
+        Assert.DoesNotContain("if (enabled) _ = SyncHoyoAfterCaptureAsync", capability, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Password_setting_is_limited_to_endfield_and_clears_only_skport_passwords()
     {
@@ -1445,7 +1624,7 @@ public sealed class HoyoLiveSessionUiTests
         AssertOrdered(service, "private async Task<HoyoLabManualSyncResult> RunHoyoSyncAsync",
             "hoyoGate.WaitAsync", "ProfileAccessAllowedAfterGate", "operation.HoyoContext?.SlotId != expectedSlotId",
             "await action", "CanPublish(\"HoYoLAB\", operation)");
-        Assert.Contains("Review($\"Delete this account's {gameName} cloud copy?", page, StringComparison.Ordinal);
+        Assert.Contains("Review($\"Delete this account's {gameName} cloud copy and turn off its automatic sync here?", page, StringComparison.Ordinal);
         Assert.DoesNotContain("cloud copy and stop syncing it here?", page, StringComparison.Ordinal);
     }
 
@@ -1467,8 +1646,10 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("accountAction && (contextInvalidated", page, StringComparison.Ordinal);
         Assert.Contains("RetryHoyoLabSyncDeletionsAsync, accountAction: false", page, StringComparison.Ordinal);
         AssertOrdered(page, "void OnAccountsUpdated", "var accountChanged = syncSlot !=",
-            "consentWhenOpened != HasPublisherConsent", "if (!accountChanged) return",
-            "DispatcherQueue.TryEnqueue", "InvalidateContext()");
+            "consentWhenOpened != HasPublisherConsent", "DispatcherQueue.TryEnqueue",
+            "if (accountChanged) InvalidateContext()");
+        Assert.Contains("else if (!busy)", page, StringComparison.Ordinal);
+        Assert.Contains("await RefreshAsync()", page, StringComparison.Ordinal);
         AssertOrdered(page, "dialog.Closed +=", "open = false", "cancellation.Cancel()",
             "copiedTimer.Stop()", "copiedTip.IsOpen = false", "recoveryCode.Text = string.Empty",
             "roles.Items.Clear()", "bundle = null", "ClearConfirmation()");

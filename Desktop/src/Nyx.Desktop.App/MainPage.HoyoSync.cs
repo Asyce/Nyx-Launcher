@@ -97,8 +97,14 @@ public sealed partial class MainPage
         };
         var optIn = new CheckBox
         {
-            Content = Note($"I want to save an encrypted {gameName} copy on Pengo. Sync only when I ask."),
+            Content = Note($"I want to save an encrypted {gameName} copy on Pengo. Automatic sync starts off."),
         };
+        var automatic = new CheckBox
+        {
+            Content = Note($"Automatically sync {gameName} on this PC"),
+        };
+        AutomationProperties.SetName(automatic, $"Automatically sync remembered {gameName} data on this PC");
+        var automaticHelp = Note("Sync after successful refreshes while Nyx is open. Resource-only sync is limited to once an hour; full data refreshes and Sync now are immediate. Other devices have their own switch.");
         var generate = CreateHoyoLabManagerButton("Generate code", "Generate a private HoYo recovery code");
         var connect = CreateHoyoLabManagerButton("Enable & sync", $"Enable encrypted manual {gameName} sync");
         var syncNow = CreateHoyoLabManagerButton("Sync now", $"Sync {gameName} now");
@@ -143,6 +149,8 @@ public sealed partial class MainPage
         setup.Children.Add(generate);
         setup.Children.Add(connect);
         content.Children.Add(setup);
+        content.Children.Add(automatic);
+        content.Children.Add(automaticHelp);
         var syncActions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         syncActions.Children.Add(syncNow);
         syncActions.Children.Add(rotate);
@@ -189,7 +197,7 @@ public sealed partial class MainPage
             contextInvalidated = true;
             displayedSlot = null;
             displayedConsent = false;
-            summary = summary with { Enabled = false, LastSyncedAt = null };
+            summary = summary with { Enabled = false, LastSyncedAt = null, AutomaticEnabled = false };
             recoveryCode.Text = string.Empty;
             optIn.IsChecked = false;
             bundle = null;
@@ -210,6 +218,10 @@ public sealed partial class MainPage
             recoveryCode.IsReadOnly = !generate.IsEnabled;
             connect.IsEnabled = generate.IsEnabled && optIn.IsChecked == true && !string.IsNullOrWhiteSpace(recoveryCode.Text);
             syncNow.IsEnabled = local && bundle is not null && summary.Enabled;
+            automatic.IsEnabled = local && summary.Enabled
+                && (summary.AutomaticEnabled || bundle is not null && summary.PendingDeletions == 0);
+            automatic.IsChecked = !contextInvalidated && summary.AutomaticEnabled;
+            automatic.Visibility = automaticHelp.Visibility = summary.Enabled ? Visibility.Visible : Visibility.Collapsed;
             rotate.IsEnabled = syncNow.IsEnabled && summary.PendingDeletions == 0;
             stop.IsEnabled = local && summary.Enabled;
             scope.IsEnabled = ready;
@@ -244,12 +256,15 @@ public sealed partial class MainPage
                 displayedSlot = slot;
                 displayedConsent = enabledConsent;
             }
-            summary = contextInvalidated ? nextSummary with { Enabled = false, LastSyncedAt = null } : nextSummary;
+            summary = contextInvalidated ? nextSummary with { Enabled = false, LastSyncedAt = null, AutomaticEnabled = false } : nextSummary;
             bundle = contextInvalidated ? null : nextBundle;
             status.Text = contextInvalidated ? "The account changed. Reopen this window before a new account action."
                 : !summary.Available ? "Saved sync status is unavailable. Nothing will be uploaded."
-                : summary.Enabled ? $"Manual sync enabled · Last saved for this account: {summary.LastSyncedAt?.ToLocalTime().ToString("g") ?? "not yet"}"
-                : "Manual sync is off on this PC.";
+                : summary.Enabled ? $"{(summary.AutomaticEnabled ? "Automatic sync on" : "Manual sync only")} · Last saved for this account: {summary.LastSyncedAt?.ToLocalTime().ToString("g") ?? "not yet"}"
+                : "Sync is off on this PC.";
+            if (!contextInvalidated && publisherAccounts.GetHoyoAutomaticSyncStatus(gameId) is { } automaticStatus
+                && automaticStatus != HoyoLabManualSyncStatus.Completed)
+                status.Text += "\nAutomatic sync: " + HoyoSyncResultText(automaticStatus, gameId);
             if (summary.PendingDeletions > 0)
                 status.Text += $"\n{summary.PendingDeletions} deletion request(s) still need confirmation. Use Retry deletion; Nyx also retries at startup.";
             if (displayedSlot is null || !displayedConsent)
@@ -353,6 +368,11 @@ public sealed partial class MainPage
             await RunAsync(ct => publisherAccounts.ConnectHoyoSyncAsync(gameId, syncSlot!, enteredCode, ct));
         };
         syncNow.Click += async (_, _) => await RunAsync(ct => publisherAccounts.SyncHoyoNowAsync(gameId, syncSlot!, ct));
+        automatic.Click += async (_, _) =>
+        {
+            var enabled = automatic.IsChecked == true;
+            await RunAsync(ct => publisherAccounts.SetHoyoAutomaticSyncAsync(gameId, syncSlot!, enabled, ct));
+        };
         stop.Click += (_, _) => Review(
             "Stop syncing both games on this PC and forget this PC's sync key? Local snapshots, cloud copies, and pull history stay. Keep your recovery code to reconnect.",
             async ct =>
@@ -379,7 +399,7 @@ public sealed partial class MainPage
                         ct => publisherAccounts.DeleteHoyoSyncedRoleAsync(gameId, syncSlot!, binding, ct));
                     break;
                 case 1:
-                    Review($"Delete this account's {gameName} cloud copy? Local snapshots, the {otherGameName} cloud copy and connection, and pull history stay. Syncing {gameName} again can recreate this cloud copy.",
+                    Review($"Delete this account's {gameName} cloud copy and turn off its automatic sync here? Local snapshots, the {otherGameName} cloud copy and connection, and pull history stay. Choosing Sync now for {gameName} can recreate this cloud copy.",
                         ct => publisherAccounts.DeleteHoyoCloudCopyAsync(gameId, syncSlot!, ct));
                     break;
                 case 2:
@@ -406,11 +426,19 @@ public sealed partial class MainPage
             // restore an old confirmation or secret while the queue is busy.
             var accountChanged = syncSlot != publisherAccounts.HoyoLabAccounts.ActiveSlotId
                 || consentWhenOpened != HasPublisherConsent(gameId);
-            if (!accountChanged) return;
-            DispatcherQueue.TryEnqueue(() =>
+            DispatcherQueue.TryEnqueue(async () =>
             {
                 if (!open || contextInvalidated) return;
-                InvalidateContext();
+                if (accountChanged) InvalidateContext();
+                else if (!busy)
+                {
+                    try { await RefreshAsync(); }
+                    catch (OperationCanceledException) { }
+                    catch (Exception)
+                    {
+                        if (open) message.Text = "Could not refresh sync status. Reopen this window to check it.";
+                    }
+                }
             });
         }
         publisherAccounts.Updated += OnAccountsUpdated;
@@ -451,6 +479,8 @@ public sealed partial class MainPage
     private static string HoyoSyncResultText(HoyoLabManualSyncStatus status, string gameId) => status switch
     {
         HoyoLabManualSyncStatus.Completed => "Finished. Check the saved status above.",
+        HoyoLabManualSyncStatus.Deferred => "No resource-only sync is due yet. Sync now is always available.",
+        HoyoLabManualSyncStatus.AutomaticSyncPaused => "Paused because data was deleted in the cloud. Local snapshots are unchanged. Review My HoYo before choosing Sync now to merge or restore data, then turn automatic sync back on if wanted.",
         HoyoLabManualSyncStatus.NotEnabled => "Choose a connected HoYoLAB account and enable manual sync first.",
         HoyoLabManualSyncStatus.NoLocalData => gameId == HoyoLabGameBundleRules.GenshinGameId
             ? "No remembered Resin is available. Choose a region and enable the data you want to remember in Accounts."

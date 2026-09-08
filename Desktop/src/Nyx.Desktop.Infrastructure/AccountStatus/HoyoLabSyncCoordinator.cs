@@ -19,6 +19,8 @@ public enum HoyoLabManualSyncStatus
     RateLimited,
     TooLarge,
     Canceled,
+    Deferred,
+    AutomaticSyncPaused,
 }
 
 public sealed record HoyoLabManualSyncResult(
@@ -34,13 +36,14 @@ public sealed record HoyoLabSyncSummary(
     bool Available,
     bool Enabled,
     int PendingDeletions,
-    DateTimeOffset? LastSyncedAt)
+    DateTimeOffset? LastSyncedAt,
+    bool AutomaticEnabled = false)
 {
     public override string ToString() => nameof(HoyoLabSyncSummary);
 }
 
 /// <summary>
-/// Manual HoYo sync and previously authorized deletion only. The publisher service
+/// Consent-bound HoYo sync and previously authorized deletion. The publisher service
 /// holds its existing operation gate and supplies its atomic generation check.
 /// </summary>
 public sealed class HoyoLabSyncCoordinator : IDisposable
@@ -116,11 +119,13 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
 
     public static string GenerateRecoveryCode() => HoyoLabSyncCrypto.GenerateRecoveryCode();
 
-    public HoyoLabSyncSummary GetSummary()
+    public HoyoLabSyncSummary GetSummary(string gameId = HoyoLabGameBundleRules.GameId)
     {
+        if (!bundles.ContainsKey(gameId) && slotId is not null) return new(false, false, 0, null);
         if (!TryListStores(out var stores)) return new(false, false, 0, null);
         var pending = 0;
         var enabled = false;
+        var automaticEnabled = false;
         DateTimeOffset? revision = null;
         foreach (var entry in stores)
         {
@@ -133,9 +138,10 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
             pending += state.PendingDeletions.Count + state.PendingRoleDeletions.Count;
             if (entry.SlotId != slotId) continue;
             enabled = state.CurrentCredential is not null;
+            automaticEnabled = enabled && AutomaticEnabled(state.AutomaticSync, gameId);
             revision = state.WorkerRevision;
         }
-        return new(true, enabled, pending, revision);
+        return new(true, enabled, pending, revision, automaticEnabled);
     }
 
     public async Task<HoyoLabManualSyncResult> ConnectAsync(
@@ -175,6 +181,55 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
         if (identityStatus != HoyoLabManualSyncStatus.Completed) return Result(identityStatus);
         using var secrets = SecretsFor(credential);
         return await SyncCoreAsync(secrets, cancellationToken, gameId).ConfigureAwait(false);
+    }
+
+    public HoyoLabManualSyncResult SetAutomaticSync(
+        bool enabled,
+        CancellationToken cancellationToken = default,
+        string gameId = HoyoLabGameBundleRules.GameId)
+    {
+        if (currentStore is null || !bundles.ContainsKey(gameId)) return Result(HoyoLabManualSyncStatus.NotEnabled);
+        using var state = currentStore.TryLoad();
+        if (state?.CurrentCredential is not { } credential) return Result(HoyoLabManualSyncStatus.NotEnabled);
+        if (enabled)
+        {
+            var identity = CheckIdentity(credential.SyncId, rejectOtherCurrent: true);
+            if (identity != HoyoLabManualSyncStatus.Completed) return Result(identity);
+        }
+        return Apply(() => currentStore.TrySetAutomaticSync(gameId, enabled, cancellationToken, credential), cancellationToken)
+            ? Result(HoyoLabManualSyncStatus.Completed) : WriteFailure(cancellationToken);
+    }
+
+    public async Task<HoyoLabManualSyncResult> SyncAutomaticallyAsync(
+        bool fullRefresh,
+        CancellationToken cancellationToken = default,
+        string gameId = HoyoLabGameBundleRules.GameId)
+    {
+        if (!bundles.ContainsKey(gameId)) return Result(HoyoLabManualSyncStatus.NotEnabled);
+        using var state = currentStore?.TryLoad();
+        if (state?.CurrentCredential is not { } credential || !AutomaticEnabled(state.AutomaticSync, gameId))
+            return Result(HoyoLabManualSyncStatus.NotEnabled);
+        var identity = CheckIdentity(credential.SyncId, rejectOtherCurrent: true);
+        if (identity != HoyoLabManualSyncStatus.Completed) return Result(identity);
+        var lastSyncedAt = gameId == HoyoLabGameBundleRules.GameId
+            ? state.AutomaticSync.HsrLastSyncedAt : state.AutomaticSync.GenshinLastSyncedAt;
+        if (!fullRefresh && lastSyncedAt is { } previous && UtcNow() - previous < TimeSpan.FromHours(1))
+            return Result(HoyoLabManualSyncStatus.Deferred);
+        using var secrets = SecretsFor(credential);
+        return await SyncCoreAsync(secrets, cancellationToken, gameId, automatic: true).ConfigureAwait(false);
+    }
+
+    private static bool AutomaticEnabled(HoyoLabAutomaticSyncSettings settings, string gameId) => gameId switch
+    {
+        HoyoLabGameBundleRules.GameId => settings.HsrEnabled,
+        HoyoLabGameBundleRules.GenshinGameId => settings.GenshinEnabled,
+        _ => false,
+    };
+
+    private bool CanContinueAutomatic(HoyoLabSyncCredential credential, string gameId)
+    {
+        using var state = currentStore?.TryLoad();
+        return state?.CurrentCredentialEquals(credential) == true && AutomaticEnabled(state.AutomaticSync, gameId);
     }
 
     public async Task<HoyoLabManualSyncResult> RotateAsync(
@@ -442,12 +497,19 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
     private async Task<HoyoLabManualSyncResult> SyncCoreAsync(
         HoyoLabSyncCrypto.DerivedSecrets secrets,
         CancellationToken cancellationToken,
-        string gameId)
+        string gameId,
+        bool automatic = false)
     {
+        using var credential = CredentialFor(secrets);
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            var merged = await ReadMergedAsync(secrets, cancellationToken, gameId).ConfigureAwait(false);
+            if (automatic && !CanContinueAutomatic(credential, gameId)) return Result(HoyoLabManualSyncStatus.NotEnabled);
+            var merged = await ReadMergedAsync(secrets, cancellationToken, gameId, automatic: automatic).ConfigureAwait(false);
+            if (merged.Status == HoyoLabManualSyncStatus.AutomaticSyncPaused)
+                return Apply(() => currentStore!.TrySetAutomaticSync(gameId, false, cancellationToken, credential), cancellationToken)
+                    ? Result(HoyoLabManualSyncStatus.AutomaticSyncPaused) : WriteFailure(cancellationToken);
             if (merged.Status != HoyoLabManualSyncStatus.Completed) return Result(merged.Status);
+            if (automatic && !CanContinueAutomatic(credential, gameId)) return Result(HoyoLabManualSyncStatus.NotEnabled);
             var updatedAt = merged.UpdatedAt;
             if (!merged.MatchesRemote)
             {
@@ -460,9 +522,10 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
                 if (!pushed.IsSuccess) return Result(Map(pushed.Failure));
                 updatedAt = pushed.UpdatedAt;
             }
+            if (automatic && !CanContinueAutomatic(credential, gameId)) return Result(HoyoLabManualSyncStatus.NotEnabled);
             if (!Apply(
                     () => bundles[gameId].TrySave(merged.Bundle!)
-                        && currentStore!.TrySetWorkerRevision(updatedAt, cancellationToken),
+                        && currentStore!.TryRecordSuccessfulSync(gameId, credential, updatedAt, cancellationToken),
                     cancellationToken))
                 return WriteFailure(cancellationToken);
             return new(HoyoLabManualSyncStatus.Completed, updatedAt);
@@ -474,7 +537,8 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
         HoyoLabSyncCrypto.DerivedSecrets secrets,
         CancellationToken cancellationToken,
         string gameId,
-        bool allowRemoteOnly = false)
+        bool allowRemoteOnly = false,
+        bool automatic = false)
     {
         var store = bundles[gameId];
         var local = store.TryLoad();
@@ -482,6 +546,10 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
         if (local is null && !allowRemoteOnly) return new(HoyoLabManualSyncStatus.NoLocalData);
         var remote = await ReadRemoteAsync(secrets, cancellationToken, gameId).ConfigureAwait(false);
         if (remote.Status != HoyoLabManualSyncStatus.Completed) return remote;
+        // A manual sync may deliberately restore local data. A background sync
+        // must first ask the user to review deletion on another device.
+        if (automatic && (remote.Bundle is null || local is not null && HasUnseenCloudDeletion(local, remote.Bundle)))
+            return new(HoyoLabManualSyncStatus.AutomaticSyncPaused);
         if (local is null) return remote;
         if (remote.Bundle is null) return new(HoyoLabManualSyncStatus.Completed, local);
         var merged = HoyoLabGameBundleMerge.Merge(local, remote.Bundle, UtcNow());
@@ -489,6 +557,12 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
             ? new(HoyoLabManualSyncStatus.Conflict)
             : new(HoyoLabManualSyncStatus.Completed, merged.Bundle, remote.UpdatedAt, merged.MatchesRemote);
     }
+
+    private static bool HasUnseenCloudDeletion(HoyoLabGameBundle local, HoyoLabGameBundle remote) =>
+        remote.RoleTombstones.Any(deleted => !local.RoleTombstones.Any(known =>
+            known.Binding == deleted.Binding && known.DeletedAt >= deleted.DeletedAt))
+        || remote.CapabilityTombstones.Any(deleted => !local.CapabilityTombstones.Any(known =>
+            known.Binding == deleted.Binding && known.Capability == deleted.Capability && known.DeletedAt >= deleted.DeletedAt));
 
     private async Task<ReadResult> ReadRemoteAsync(
         HoyoLabSyncCrypto.DerivedSecrets secrets,

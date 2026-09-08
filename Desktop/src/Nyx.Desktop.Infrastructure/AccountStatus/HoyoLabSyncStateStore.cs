@@ -12,7 +12,7 @@ namespace Nyx.Desktop.Infrastructure.AccountStatus;
 /// </summary>
 public sealed class HoyoLabSyncStateStore
 {
-    public const int SchemaVersion = 3;
+    public const int SchemaVersion = 4;
     public const int MaximumPendingDeletions = 8;
     public const string HsrScope = "hsr";
     public const string GenshinScope = "gi";
@@ -120,6 +120,7 @@ public sealed class HoyoLabSyncStateStore
                     using var current = ReadCurrentForMutation(out var existed);
                     // Missing state must not replay queued work from a pre-cleanup snapshot.
                     if (current is null
+                        || current.AutomaticSync != state.AutomaticSync
                         || current.PendingDeletions.Count != state.PendingDeletions.Count
                         || !current.PendingDeletions.All(existing =>
                             state.PendingDeletions.Any(candidate => PendingEquals(existing, candidate)))
@@ -196,7 +197,54 @@ public sealed class HoyoLabSyncStateStore
             current => current.CurrentCredentialEquals(credential)
                 && (credential is not null || current.WorkerRevision is null)
                 ? current
-                : current.CloneWith(credential, null, current.PendingDeletions),
+                : current.CloneWith(credential, null, current.PendingDeletions, automaticSync: new()),
+            cancellationToken);
+
+    public bool TrySetAutomaticSync(
+        string gameId,
+        bool enabled,
+        CancellationToken cancellationToken = default,
+        HoyoLabSyncCredential? expectedCredential = null) => TryMutate(
+            current => !HoyoLabGameBundleRules.IsSupportedGame(gameId)
+                || current.CurrentCredential is null
+                || expectedCredential is not null && !current.CurrentCredentialEquals(expectedCredential)
+                || enabled && (current.PendingDeletions.Count != 0 || current.PendingRoleDeletions.Count != 0)
+                ? null
+                : current.CloneWith(current.CurrentCredential, current.WorkerRevision, current.PendingDeletions,
+                    automaticSync: gameId == HsrScope
+                        ? current.AutomaticSync with
+                        {
+                            HsrEnabled = enabled,
+                            HsrLastSyncedAt = enabled ? current.AutomaticSync.HsrLastSyncedAt : null,
+                        }
+                        : current.AutomaticSync with
+                        {
+                            GenshinEnabled = enabled,
+                            GenshinLastSyncedAt = enabled ? current.AutomaticSync.GenshinLastSyncedAt : null,
+                        }),
+            cancellationToken);
+
+    public bool TryRecordSuccessfulSync(
+        string gameId,
+        HoyoLabSyncCredential expectedCredential,
+        DateTimeOffset? workerRevision,
+        CancellationToken cancellationToken = default) => TryMutate(
+            current => !HoyoLabGameBundleRules.IsSupportedGame(gameId)
+                || !current.CurrentCredentialEquals(expectedCredential)
+                || current.CurrentCredential is null
+                ? null
+                : current.CloneWith(current.CurrentCredential, workerRevision, current.PendingDeletions,
+                    automaticSync: gameId == HsrScope
+                        ? current.AutomaticSync with
+                        {
+                            HsrLastSyncedAt = current.AutomaticSync.HsrEnabled
+                                ? DateTimeOffset.FromUnixTimeMilliseconds(UtcNow().ToUnixTimeMilliseconds()) : null,
+                        }
+                        : current.AutomaticSync with
+                        {
+                            GenshinLastSyncedAt = current.AutomaticSync.GenshinEnabled
+                                ? DateTimeOffset.FromUnixTimeMilliseconds(UtcNow().ToUnixTimeMilliseconds()) : null,
+                        }),
             cancellationToken);
 
     public bool TryDetachCurrentCredential(
@@ -255,7 +303,10 @@ public sealed class HoyoLabSyncStateStore
                 return null;
             using var prepared = current.CloneWith(credential, null, current.PendingDeletions,
                 current.PendingRoleDeletions.Where(item => item.SyncId != deletion.SyncId
-                    || item.GameId != deletion.Scope));
+                    || item.GameId != deletion.Scope),
+                automaticSync: deletion.Scope == HsrScope
+                    ? current.AutomaticSync with { HsrEnabled = false, HsrLastSyncedAt = null }
+                    : current.AutomaticSync with { GenshinEnabled = false, GenshinLastSyncedAt = null });
             var enqueued = Enqueue(prepared, deletion);
             return ReferenceEquals(enqueued, prepared) ? prepared.Normalize() : enqueued;
         }, cancellationToken);
@@ -646,6 +697,12 @@ public sealed class HoyoLabSyncStateStore
                     writer.WriteEndObject();
                 }
                 WriteNullableTimestamp(writer, "workerRevision", state.WorkerRevision);
+                writer.WriteStartObject("automaticSync");
+                writer.WriteBoolean("hsrEnabled", state.AutomaticSync.HsrEnabled);
+                writer.WriteBoolean("genshinEnabled", state.AutomaticSync.GenshinEnabled);
+                WriteNullableTimestamp(writer, "hsrLastSyncedAt", state.AutomaticSync.HsrLastSyncedAt);
+                WriteNullableTimestamp(writer, "genshinLastSyncedAt", state.AutomaticSync.GenshinLastSyncedAt);
+                writer.WriteEndObject();
                 writer.WriteStartArray("pendingDeletions");
                 foreach (var deletion in state.PendingDeletions)
                 {
@@ -729,8 +786,10 @@ public sealed class HoyoLabSyncStateStore
                 || !version.TryGetInt32(out var schemaVersion)
                 || (schemaVersion == 1
                     ? !HasExactProperties(root, "schemaVersion", "currentCredential", "workerRevision", "pendingDeletions")
-                    : schemaVersion is not (2 or SchemaVersion)
-                        || !HasExactProperties(root, "schemaVersion", "currentCredential", "workerRevision", "pendingDeletions", "pendingRoleDeletions"))
+                    : schemaVersion is 2 or 3
+                        ? !HasExactProperties(root, "schemaVersion", "currentCredential", "workerRevision", "pendingDeletions", "pendingRoleDeletions")
+                        : schemaVersion != SchemaVersion
+                            || !HasExactProperties(root, "schemaVersion", "currentCredential", "workerRevision", "automaticSync", "pendingDeletions", "pendingRoleDeletions"))
                 || !TryParseCredential(root.GetProperty("currentCredential"), out credential))
                 return false;
             if (credential is not null)
@@ -744,7 +803,20 @@ public sealed class HoyoLabSyncStateStore
                     && !TryParsePendingRoleDeletions(root.GetProperty("pendingRoleDeletions"), schemaVersion, out pendingRoles, parsedSecretObserver)))
                 return false;
 
-            using var candidate = new HoyoLabSyncState(credential, workerRevision, pending, pendingRoles);
+            var automatic = new HoyoLabAutomaticSyncSettings();
+            if (schemaVersion == SchemaVersion)
+            {
+                var settings = root.GetProperty("automaticSync");
+                if (!HasExactProperties(settings, "hsrEnabled", "genshinEnabled", "hsrLastSyncedAt", "genshinLastSyncedAt")
+                    || settings.GetProperty("hsrEnabled").ValueKind is not (JsonValueKind.True or JsonValueKind.False)
+                    || settings.GetProperty("genshinEnabled").ValueKind is not (JsonValueKind.True or JsonValueKind.False)
+                    || !TryParseNullableTimestamp(settings.GetProperty("hsrLastSyncedAt"), out var hsrLastSyncedAt)
+                    || !TryParseNullableTimestamp(settings.GetProperty("genshinLastSyncedAt"), out var genshinLastSyncedAt))
+                    return false;
+                automatic = new(settings.GetProperty("hsrEnabled").GetBoolean(), settings.GetProperty("genshinEnabled").GetBoolean(),
+                    hsrLastSyncedAt, genshinLastSyncedAt);
+            }
+            using var candidate = new HoyoLabSyncState(credential, workerRevision, pending, pendingRoles, automatic);
             if (!IsValidState(candidate, utcNow)) return false;
             state = candidate.Normalize();
             return true;
@@ -838,7 +910,7 @@ public sealed class HoyoLabSyncStateStore
                     return false;
                 var requireRevisionMatch = schemaVersion >= 2 && item.GetProperty("requireRevisionMatch").GetBoolean();
                 HoyoLabGameRevisions? expectedRevisions = null;
-                if (schemaVersion == SchemaVersion
+                if (schemaVersion >= 3
                     && !TryParseGameRevisions(item.GetProperty("expectedRevisionsByGame"), out expectedRevisions))
                     return false;
                 byte[]? token = null;
@@ -895,7 +967,7 @@ public sealed class HoyoLabSyncStateStore
                     "syncId", "token", "key", "binding", "operationId", "requestedAt",
                     "knownResourcesAt", "knownAchievementsAt", "deletedAt",
                 };
-                if (schemaVersion == SchemaVersion)
+                if (schemaVersion >= 3)
                 {
                     fields.Add("gameId");
                     if (hasKnownBuildsAt) fields.Add("knownBuildsAt");
@@ -932,7 +1004,7 @@ public sealed class HoyoLabSyncStateStore
                     knownEventsAt = parsedEventsAt;
                 }
                 var gameId = HsrScope;
-                if (schemaVersion == SchemaVersion)
+                if (schemaVersion >= 3)
                 {
                     if (item.GetProperty("gameId").ValueKind != JsonValueKind.String
                         || item.GetProperty("gameId").GetString() is not { } parsedGame
@@ -988,7 +1060,12 @@ public sealed class HoyoLabSyncStateStore
             || state.PendingDeletions is null
             || state.PendingRoleDeletions is null
             || state.PendingDeletions.Count + state.PendingRoleDeletions.Count > MaximumPendingDeletions
-            || !IsValidWorkerRevision(state.WorkerRevision, utcNow))
+            || !IsValidWorkerRevision(state.WorkerRevision, utcNow)
+            || state.CurrentCredential is null && state.AutomaticSync != new HoyoLabAutomaticSyncSettings()
+            || !IsValidWorkerRevision(state.AutomaticSync.HsrLastSyncedAt, utcNow)
+            || !IsValidWorkerRevision(state.AutomaticSync.GenshinLastSyncedAt, utcNow)
+            || !state.AutomaticSync.HsrEnabled && state.AutomaticSync.HsrLastSyncedAt is not null
+            || !state.AutomaticSync.GenshinEnabled && state.AutomaticSync.GenshinLastSyncedAt is not null)
             return false;
 
         var ids = new HashSet<string>(StringComparer.Ordinal);
@@ -1572,13 +1649,20 @@ public sealed class HoyoLabPendingRoleDeletion : IDisposable
 
 public sealed record HoyoLabGameRevisions(DateTimeOffset? Hsr, DateTimeOffset? Genshin);
 
+public sealed record HoyoLabAutomaticSyncSettings(
+    bool HsrEnabled = false,
+    bool GenshinEnabled = false,
+    DateTimeOffset? HsrLastSyncedAt = null,
+    DateTimeOffset? GenshinLastSyncedAt = null);
+
 public sealed class HoyoLabSyncState : IDisposable
 {
     public HoyoLabSyncState(
         HoyoLabSyncCredential? currentCredential,
         DateTimeOffset? workerRevision,
         IReadOnlyList<HoyoLabPendingDeletion> pendingDeletions,
-        IReadOnlyList<HoyoLabPendingRoleDeletion>? pendingRoleDeletions = null)
+        IReadOnlyList<HoyoLabPendingRoleDeletion>? pendingRoleDeletions = null,
+        HoyoLabAutomaticSyncSettings? automaticSync = null)
     {
         ArgumentNullException.ThrowIfNull(pendingDeletions);
         HoyoLabSyncCredential? clonedCredential = null;
@@ -1604,6 +1688,7 @@ public sealed class HoyoLabSyncState : IDisposable
 
             CurrentCredential = clonedCredential;
             WorkerRevision = workerRevision;
+            AutomaticSync = automaticSync ?? new();
             PendingDeletions = clonedDeletions.ToArray();
             PendingRoleDeletions = clonedRoles.ToArray();
             clonedCredential = null;
@@ -1620,6 +1705,7 @@ public sealed class HoyoLabSyncState : IDisposable
 
     public HoyoLabSyncCredential? CurrentCredential { get; }
     public DateTimeOffset? WorkerRevision { get; }
+    public HoyoLabAutomaticSyncSettings AutomaticSync { get; }
     public IReadOnlyList<HoyoLabPendingDeletion> PendingDeletions { get; }
     public IReadOnlyList<HoyoLabPendingRoleDeletion> PendingRoleDeletions { get; }
 
@@ -1629,11 +1715,13 @@ public sealed class HoyoLabSyncState : IDisposable
         HoyoLabSyncCredential? credential,
         DateTimeOffset? workerRevision,
         IEnumerable<HoyoLabPendingDeletion> pending,
-        IEnumerable<HoyoLabPendingRoleDeletion>? pendingRoles = null) => new(
+        IEnumerable<HoyoLabPendingRoleDeletion>? pendingRoles = null,
+        HoyoLabAutomaticSyncSettings? automaticSync = null) => new(
             credential,
             workerRevision,
             pending.ToArray(),
-            (pendingRoles ?? PendingRoleDeletions).ToArray());
+            (pendingRoles ?? PendingRoleDeletions).ToArray(),
+            credential is null ? new() : automaticSync ?? AutomaticSync);
 
     internal HoyoLabSyncState Normalize() => CloneWith(
         CurrentCredential,

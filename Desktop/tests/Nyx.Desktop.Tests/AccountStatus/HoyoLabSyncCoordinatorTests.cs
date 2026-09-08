@@ -23,6 +23,245 @@ public sealed class HoyoLabSyncCoordinatorTests
     private const string FixtureNickname = "Test Trailblazer";
     private static readonly Vector Fixture = LoadVector();
 
+    [Theory]
+    [InlineData("gi")]
+    [InlineData("hsr")]
+    public async Task Automatic_sync_requires_separate_per_game_opt_in_and_reuses_encrypted_sync(string gameId)
+    {
+        var bundle = gameId == "gi" ? GenshinBundleWithResource(Older, 80) : BundleWithResource(Older, 80);
+        using var harness = new Harness(bundle);
+        Assert.Equal(HoyoLabManualSyncStatus.NotEnabled, harness.Coordinator.SetAutomaticSync(true, gameId: gameId).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.NotEnabled,
+            (await harness.Coordinator.SyncAutomaticallyAsync(true, gameId: gameId)).Status);
+        Assert.Empty(harness.Cloud.Requests);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(DisplayCode, gameId: gameId)).Status);
+        harness.Cloud.ClearRequests();
+        Assert.False(harness.Coordinator.GetSummary(gameId).AutomaticEnabled);
+        Assert.Equal(HoyoLabManualSyncStatus.NotEnabled,
+            (await harness.Coordinator.SyncAutomaticallyAsync(true, gameId: gameId)).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, harness.Coordinator.SetAutomaticSync(true, gameId: gameId).Status);
+        Assert.True(harness.Coordinator.GetSummary(gameId).AutomaticEnabled);
+        Assert.False(harness.Coordinator.GetSummary(gameId == "hsr" ? "gi" : "hsr").AutomaticEnabled);
+        Assert.Empty(harness.Cloud.Requests);
+
+        SaveBundle(harness.ProtectedRoot,
+            gameId == "gi" ? GenshinBundleWithResource(Newer, 90) : BundleWithResource(Newer, 90), gameId);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.SyncAutomaticallyAsync(true, gameId: gameId)).Status);
+        Assert.Equal(["pull", "push"], harness.Cloud.Requests.Select(item => item.Action));
+        Assert.All(harness.Cloud.Requests, request =>
+        {
+            Assert.Equal(gameId, request.GameId);
+            var body = Encoding.UTF8.GetString(request.Body);
+            Assert.DoesNotContain(DisplayCode, body);
+            Assert.DoesNotContain(bundle.SelectedRole!.RoleId, body);
+        });
+        using var secrets = Secrets(DisplayCode);
+        Assert.Equal(90, Assert.Single(harness.Cloud.GetBundle(Fixture.SyncId, secrets, gameId).Roles).Resource!.Current);
+    }
+
+    [Theory]
+    [InlineData("hsr")]
+    [InlineData("gi")]
+    public async Task Automatic_sync_propagates_local_opt_out_without_restoring_the_removed_capability(string gameId)
+    {
+        var bundle = gameId == "gi" ? GenshinBundleWithResource(Older, 80) : BundleWithResource(Older, 80);
+        using var harness = new Harness(bundle);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(DisplayCode, gameId: gameId)).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, harness.Coordinator.SetAutomaticSync(true, gameId: gameId).Status);
+        var store = new HoyoLabGameBundleStore(harness.ProtectedRoot, new CopyProtector(),
+            new SystemPublisherRoleBindingFileBoundary(), harness.Clock, gameId);
+        Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Resources, false));
+        harness.Cloud.ClearRequests();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.SyncAutomaticallyAsync(true, gameId: gameId)).Status);
+        Assert.Equal(["pull", "push"], harness.Cloud.Requests.Select(item => item.Action));
+        using var secrets = Secrets(DisplayCode);
+        var remote = harness.Cloud.GetBundle(Fixture.SyncId, secrets, gameId);
+        Assert.Null(Assert.Single(remote.Roles).Resource);
+        Assert.Equal(HoyoLabGameBundleRules.Resources, Assert.Single(remote.CapabilityTombstones).Capability);
+        Assert.False(LoadBundle(harness.ProtectedRoot, gameId).Consents.Resources);
+        Assert.True(harness.Coordinator.GetSummary(gameId).AutomaticEnabled);
+    }
+
+    [Fact]
+    public async Task Automatic_resource_interval_survives_restart_and_full_or_manual_refresh_is_immediate()
+    {
+        using var harness = new Harness(BundleWithResource(Older, 80));
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, harness.Coordinator.SetAutomaticSync(true).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.SyncAutomaticallyAsync(false)).Status);
+        using var cloud = new FakeCloud(harness.Clock);
+        harness.Cloud.CopyTo(cloud, Fixture.SyncId);
+        harness.Coordinator.Dispose();
+        using var restart = CreateCoordinator(harness.PublisherRoot, harness.SlotId, harness.ProtectedRoot,
+            harness.Authority, cloud, clock: harness.Clock);
+        Assert.True(restart.GetSummary().AutomaticEnabled);
+        harness.Clock.UtcNow = Now.AddHours(1).AddMilliseconds(-1);
+        Assert.Equal(HoyoLabManualSyncStatus.Deferred, (await restart.SyncAutomaticallyAsync(false)).Status);
+        Assert.Empty(cloud.Requests);
+        harness.Clock.UtcNow = Now.AddHours(1);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await restart.SyncAutomaticallyAsync(false)).Status);
+        Assert.Equal(["pull"], cloud.Requests.Select(item => item.Action));
+        cloud.ClearRequests();
+
+        SaveBundle(harness.ProtectedRoot, BundleWithResource(Newer, 90), "hsr");
+        Assert.Equal(HoyoLabManualSyncStatus.Deferred, (await restart.SyncAutomaticallyAsync(false)).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await restart.SyncAutomaticallyAsync(true)).Status);
+        Assert.Equal(["pull", "push"], cloud.Requests.Select(item => item.Action));
+        cloud.ClearRequests();
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await restart.SyncNowAsync()).Status);
+        Assert.Equal(["pull"], cloud.Requests.Select(item => item.Action));
+    }
+
+    [Fact]
+    public async Task Automatic_resource_rate_limit_is_independent_for_each_game()
+    {
+        using var harness = new Harness(BundleWithResource(Older, 80));
+        SaveBundle(harness.ProtectedRoot, GenshinBundleWithResource(Older, 60), "gi");
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.SyncNowAsync(gameId: "gi")).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, harness.Coordinator.SetAutomaticSync(true).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, harness.Coordinator.SetAutomaticSync(true, gameId: "gi").Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.SyncAutomaticallyAsync(false)).Status);
+        harness.Cloud.ClearRequests();
+        Assert.Equal(HoyoLabManualSyncStatus.Deferred, (await harness.Coordinator.SyncAutomaticallyAsync(false)).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.SyncAutomaticallyAsync(false, gameId: "gi")).Status);
+        Assert.Equal("gi", Assert.Single(harness.Cloud.Requests).GameId);
+    }
+
+    [Theory]
+    [InlineData("copy")]
+    [InlineData("account")]
+    [InlineData("role")]
+    [InlineData("capability")]
+    public async Task Automatic_sync_pauses_for_remote_deletion_without_recreating_or_erasing_local_data(string mode)
+    {
+        var local = BundleWithResource(Older, 80);
+        using var harness = new Harness(local);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, harness.Coordinator.SetAutomaticSync(true).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, harness.Coordinator.SetAutomaticSync(true, gameId: "gi").Status);
+        if (mode == "copy") harness.Cloud.Remove(Fixture.SyncId);
+        else if (mode == "account") harness.Cloud.RemoveAccount(Fixture.SyncId);
+        else
+        {
+            var remote = mode == "role"
+                ? HoyoLabSyncCoordinator.RemoveRoleAt(local, local.SelectedRole!, Newer)
+                : local with
+                {
+                    Roles = [local.Roles[0] with { Resource = null, Observations = local.Roles[0].Observations with { Resources = null } }],
+                    CapabilityTombstones = [new(local.SelectedRole!, HoyoLabGameBundleRules.Resources, Newer)],
+                };
+            harness.Cloud.SeedBundle(Fixture.SyncId, DisplayCode, remote, Now);
+            // A later automatic local observation must not silently undo the other device's deletion.
+            SaveBundle(harness.ProtectedRoot, BundleWithResource(Now, 90), "hsr");
+        }
+        harness.Cloud.ClearRequests();
+        var before = ReadTree(harness.ProtectedRoot);
+        Assert.Equal(HoyoLabManualSyncStatus.AutomaticSyncPaused,
+            (await harness.Coordinator.SyncAutomaticallyAsync(true)).Status);
+        Assert.Equal(["pull"], harness.Cloud.Requests.Select(item => item.Action));
+        AssertTreeEqual(before, ReadTree(harness.ProtectedRoot));
+        Assert.False(harness.Coordinator.GetSummary().AutomaticEnabled);
+        Assert.True(harness.Coordinator.GetSummary("gi").AutomaticEnabled);
+        harness.Cloud.ClearRequests();
+        Assert.Equal(HoyoLabManualSyncStatus.NotEnabled, (await harness.Coordinator.SyncAutomaticallyAsync(true)).Status);
+        Assert.Empty(harness.Cloud.Requests);
+        if (mode is "copy" or "account")
+        {
+            Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.SyncNowAsync()).Status);
+            Assert.Equal(["pull", "push"], harness.Cloud.Requests.Select(item => item.Action));
+            Assert.False(harness.Coordinator.GetSummary().AutomaticEnabled);
+        }
+    }
+
+    [Theory]
+    [InlineData("copy")]
+    [InlineData("role")]
+    public async Task Automatic_cas_retry_does_not_restore_a_copy_deleted_after_its_first_pull(string mode)
+    {
+        var original = BundleWithResource(Older, 80);
+        using var harness = new Harness(original);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, harness.Coordinator.SetAutomaticSync(true).Status);
+        SaveBundle(harness.ProtectedRoot, BundleWithResource(Newer, 90), "hsr");
+        harness.Cloud.ClearRequests();
+        harness.Cloud.OnRequest = request =>
+        {
+            if (request.Action != "push") return null;
+            if (mode == "copy") harness.Cloud.Remove(Fixture.SyncId);
+            else harness.Cloud.SeedBundle(Fixture.SyncId, DisplayCode,
+                HoyoLabSyncCoordinator.RemoveRoleAt(original, original.SelectedRole!, Now), Now);
+            return ConflictResponse();
+        };
+        Assert.Equal(HoyoLabManualSyncStatus.AutomaticSyncPaused,
+            (await harness.Coordinator.SyncAutomaticallyAsync(true)).Status);
+        Assert.Equal(["pull", "push", "pull"], harness.Cloud.Requests.Select(item => item.Action));
+        Assert.False(harness.Coordinator.GetSummary().AutomaticEnabled);
+        Assert.Equal(90, Assert.Single(LoadBundle(harness.ProtectedRoot).Roles).Resource!.Current);
+    }
+
+    [Theory]
+    [InlineData("opt-out", HoyoLabManualSyncStatus.NotEnabled)]
+    [InlineData("authority", HoyoLabManualSyncStatus.Canceled)]
+    [InlineData("cancel", HoyoLabManualSyncStatus.Canceled)]
+    [InlineData("offline", HoyoLabManualSyncStatus.NetworkUnavailable)]
+    [InlineData("malformed", HoyoLabManualSyncStatus.InvalidCloudData)]
+    public async Task Automatic_sync_preserves_local_data_and_stops_after_invalidated_or_failed_pull(
+        string mode, HoyoLabManualSyncStatus expected)
+    {
+        using var harness = new Harness(BundleWithResource(Older, 80));
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, harness.Coordinator.SetAutomaticSync(true).Status);
+        SaveBundle(harness.ProtectedRoot, BundleWithResource(Newer, 90), "hsr");
+        var before = ReadTree(harness.ProtectedRoot);
+        harness.Cloud.ClearRequests();
+        using var cancellation = new CancellationTokenSource();
+        harness.Cloud.OnRequest = _ =>
+        {
+            if (mode == "opt-out") Assert.Equal(HoyoLabManualSyncStatus.Completed, harness.Coordinator.SetAutomaticSync(false).Status);
+            if (mode == "authority") harness.Authority.Allowed = false;
+            if (mode == "cancel") cancellation.Cancel();
+            if (mode == "offline") throw new HttpRequestException("offline");
+            return mode == "malformed" ? JsonResponse(HttpStatusCode.OK, "{\"ok\":true}") : null;
+        };
+        Assert.Equal(expected, (await harness.Coordinator.SyncAutomaticallyAsync(true, cancellation.Token)).Status);
+        Assert.Equal(["pull"], harness.Cloud.Requests.Select(item => item.Action));
+        AssertTreeEqual(before, ReadTree(harness.ProtectedRoot));
+        using var state = LoadState(harness.ManagedSlotRoot);
+        Assert.Null(state.AutomaticSync.HsrLastSyncedAt);
+    }
+
+    [Fact]
+    public async Task Two_separate_device_roots_share_updates_but_not_automatic_consent_or_remote_role_resurrection()
+    {
+        using var cloud = new FakeCloud();
+        using var first = new Harness(BundleWithResource(Older, 80), cloud);
+        using var second = new Harness(BundleWithResource(Older, 80), cloud);
+        Assert.NotEqual(first.PublisherRoot, second.PublisherRoot);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await first.Coordinator.ConnectAsync(DisplayCode)).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await second.Coordinator.ConnectAsync(DisplayCode)).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, first.Coordinator.SetAutomaticSync(true).Status);
+        Assert.False(second.Coordinator.GetSummary().AutomaticEnabled);
+        SaveBundle(first.ProtectedRoot, BundleWithResource(Newer, 90), "hsr");
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await first.Coordinator.SyncAutomaticallyAsync(true)).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await second.Coordinator.SyncNowAsync()).Status);
+        Assert.Equal(90, Assert.Single(LoadBundle(second.ProtectedRoot).Roles).Resource!.Current);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, second.Coordinator.QueueRoleDeletion(FixtureBinding).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await second.Coordinator.RetryDeletionsAsync()).Status);
+        cloud.ClearRequests();
+        Assert.Equal(HoyoLabManualSyncStatus.AutomaticSyncPaused,
+            (await first.Coordinator.SyncAutomaticallyAsync(true)).Status);
+        Assert.Equal(["pull"], cloud.Requests.Select(item => item.Action));
+        using var secrets = Secrets(DisplayCode);
+        Assert.Empty(cloud.GetBundle(Fixture.SyncId, secrets).Roles);
+    }
+
     [Fact]
     public async Task Connect_uses_pull_then_push_persists_only_derived_state_and_restart_is_quiet()
     {
@@ -2445,7 +2684,8 @@ public sealed class HoyoLabSyncCoordinatorTests
         Authority authority,
         FakeCloud handler,
         IPublisherRoleBindingFileBoundary? files = null,
-        IPublisherRoleBindingProtector? protector = null) => new(
+        IPublisherRoleBindingProtector? protector = null,
+        TimeProvider? clock = null) => new(
         publisherRoot,
         slotId,
         protectedSlotRoot,
@@ -2453,7 +2693,7 @@ public sealed class HoyoLabSyncCoordinatorTests
         protector ?? new CopyProtector(),
         files ?? new SystemPublisherRoleBindingFileBoundary(),
         new HoyoLabSyncClient(handler, TimeSpan.FromSeconds(1)),
-        new FixedTimeProvider(Now));
+        clock ?? new FixedTimeProvider(Now));
 
     private static HoyoLabGameBundle LoadBundle(
         string protectedRoot,
@@ -2941,7 +3181,7 @@ public sealed class HoyoLabSyncCoordinatorTests
 
     private sealed class Harness : IDisposable
     {
-        internal Harness(HoyoLabGameBundle bundle)
+        internal Harness(HoyoLabGameBundle bundle, FakeCloud? cloud = null)
         {
             Root = new();
             PublisherRoot = Root.Path;
@@ -2967,7 +3207,7 @@ public sealed class HoyoLabSyncCoordinatorTests
                 bundle.GameId);
             Assert.True(bundles.TrySave(bundle));
             Authority = new Authority();
-            Cloud = new FakeCloud();
+            Cloud = cloud ?? new FakeCloud(Clock);
             Coordinator = CreateCoordinator(
                 PublisherRoot,
                 SlotId,
@@ -2975,7 +3215,8 @@ public sealed class HoyoLabSyncCoordinatorTests
                 Authority,
                 Cloud,
                 Files,
-                Protector);
+                Protector,
+                Clock);
         }
 
         internal TemporaryRoot Root { get; }
@@ -3026,8 +3267,9 @@ public sealed class HoyoLabSyncCoordinatorTests
         DateTimeOffset UpdatedAt,
         int Size);
 
-    private sealed class FakeCloud : HttpMessageHandler
+    private sealed class FakeCloud(TimeProvider? clock = null) : HttpMessageHandler
     {
+        private DateTimeOffset UtcNow => clock?.GetUtcNow() ?? Now;
         private readonly Dictionary<(string SyncId, string GameId), RemoteCopy> copies = [];
         private readonly HashSet<string> accounts = new(StringComparer.Ordinal);
 
@@ -3107,7 +3349,7 @@ public sealed class HoyoLabSyncCoordinatorTests
                 Assert.True(HoyoLabSyncCrypto.TryDecryptBundle(
                     secrets,
                     envelope,
-                    Now,
+                    UtcNow,
                     out var bundle,
                     gameId: gameId));
                 return Assert.IsType<HoyoLabGameBundle>(bundle);
@@ -3129,7 +3371,7 @@ public sealed class HoyoLabSyncCoordinatorTests
             Assert.True(HoyoLabSyncCrypto.TryEncryptBundle(
                 secrets,
                 bundle,
-                Now,
+                UtcNow,
                 FixedNonce((byte)(updatedAt.Minute + 1)),
                 out var envelope));
             SeedRaw(syncId, envelope!, updatedAt, gameId);
@@ -3191,7 +3433,7 @@ public sealed class HoyoLabSyncCoordinatorTests
                 request.Root.GetProperty("payload").GetProperty("ciphertext").GetString()!);
             try
             {
-                var updatedAt = Now;
+                var updatedAt = UtcNow;
                 copies[(request.SyncId, request.GameId)] = new(payload, updatedAt, ciphertext.Length);
                 accounts.Add(request.SyncId);
                 return JsonResponse(HttpStatusCode.OK, "{\"ok\":true,\"updatedAt\":\""
@@ -3373,7 +3615,8 @@ public sealed class HoyoLabSyncCoordinatorTests
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => utcNow;
+        internal DateTimeOffset UtcNow { get; set; } = utcNow;
+        public override DateTimeOffset GetUtcNow() => UtcNow;
     }
 
     private static HttpResponseMessage ConflictResponse(DateTimeOffset? serverUpdatedAt = null) => JsonResponse(

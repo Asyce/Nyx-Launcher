@@ -68,6 +68,7 @@ public sealed partial class PublisherAccountService
                 if (!CanPublish("HoYoLAB", operation))
                     return new(HoyoLabGenshinEventsReadStatus.Canceled);
             }
+            _ = SyncHoyoAfterCaptureAsync("gi", operation, fullRefresh: true);
             Updated?.Invoke(this, EventArgs.Empty);
             return result;
         }
