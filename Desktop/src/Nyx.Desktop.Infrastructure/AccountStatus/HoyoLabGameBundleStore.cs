@@ -106,7 +106,8 @@ public sealed class HoyoLabGameBundleStore
         bool rememberGenshinBuilds = false,
         bool rememberHsrBuilds = false,
         bool rememberGenshinExploration = false,
-        bool rememberGenshinEvents = false) => SerializeMutation(
+        bool rememberGenshinEvents = false,
+        bool rememberHsrEvents = false) => SerializeMutation(
         () => TryMigrateFromV1Core(
             role,
             resource,
@@ -115,7 +116,8 @@ public sealed class HoyoLabGameBundleStore
             rememberGenshinBuilds,
             rememberHsrBuilds,
             rememberGenshinExploration,
-            rememberGenshinEvents),
+            rememberGenshinEvents,
+            rememberHsrEvents),
         false,
         cancellationToken);
 
@@ -236,6 +238,22 @@ public sealed class HoyoLabGameBundleStore
             cancellationToken);
     }
 
+    public bool TryRecordHsrEvents(
+        PublisherRoleBinding binding,
+        HoyoLabHsrEventsSnapshot events,
+        DateTimeOffset observedAt,
+        CancellationToken cancellationToken = default)
+    {
+        if (binding is null
+            || gameId != HoyoLabGameBundleRules.GameId
+            || !HoyoLabHsrEventsRules.IsValid(events)
+            || !IsExactUtcSecond(observedAt))
+            return false;
+        return TryMutate(
+            bundle => RecordHsrEvents(bundle, binding, events, observedAt),
+            cancellationToken);
+    }
+
     public bool TryDeleteRole(
         PublisherRoleBinding binding,
         CancellationToken cancellationToken = default)
@@ -256,7 +274,8 @@ public sealed class HoyoLabGameBundleStore
         bool rememberGenshinBuilds,
         bool rememberHsrBuilds,
         bool rememberGenshinExploration,
-        bool rememberGenshinEvents)
+        bool rememberGenshinEvents,
+        bool rememberHsrEvents)
     {
         ArgumentNullException.ThrowIfNull(role);
         if (!PublisherRoleRecordRules.IsValid(gameId, role)
@@ -292,7 +311,8 @@ public sealed class HoyoLabGameBundleStore
                 Achievements: gameId == HoyoLabGameBundleRules.GameId,
                 Exploration: gameId == HoyoLabGameBundleRules.GenshinGameId && rememberGenshinExploration,
                 Endgame: false,
-                Events: gameId == HoyoLabGameBundleRules.GenshinGameId && rememberGenshinEvents,
+                Events: gameId == HoyoLabGameBundleRules.GenshinGameId && rememberGenshinEvents
+                    || gameId == HoyoLabGameBundleRules.GameId && rememberHsrEvents,
                 Currency: false),
             Array.Empty<HoyoLabCapabilityTombstone>(),
             Array.Empty<HoyoLabRoleTombstone>());
@@ -658,6 +678,45 @@ public sealed class HoyoLabGameBundleStore
         };
     }
 
+    private static HoyoLabGameBundle? RecordHsrEvents(
+        HoyoLabGameBundle bundle,
+        PublisherRoleBinding binding,
+        HoyoLabHsrEventsSnapshot events,
+        DateTimeOffset observedAt)
+    {
+        if (!bundle.Consents.Events) return null;
+        var index = FindRole(bundle, binding);
+        if (index < 0) return null;
+        var role = bundle.Roles[index];
+        var existingAt = role.Observations.Events;
+        if (existingAt > observedAt) return null;
+        if (existingAt == observedAt)
+            return HoyoLabHsrEventsRules.ValuesEqual(role.HsrEvents, events)
+                ? bundle
+                : null;
+        if (!CanReplaceTombstone(
+                bundle.CapabilityTombstones,
+                binding,
+                HoyoLabGameBundleRules.Events,
+                observedAt))
+            return null;
+        var roles = bundle.Roles.ToArray();
+        roles[index] = role with
+        {
+            Observations = role.Observations with { Events = observedAt },
+            HsrEvents = HoyoLabHsrEventsRules.Normalize(events),
+        };
+        return bundle with
+        {
+            Roles = roles,
+            CapabilityTombstones = RemoveOlderCapabilityTombstone(
+                bundle.CapabilityTombstones,
+                binding,
+                HoyoLabGameBundleRules.Events,
+                observedAt),
+        };
+    }
+
     private HoyoLabGameBundle? DeleteRole(
         HoyoLabGameBundle bundle,
         PublisherRoleBinding binding)
@@ -757,7 +816,8 @@ public sealed class HoyoLabGameBundleStore
 
     private IReadOnlyList<string> SupportedCapabilities() =>
         gameId == HoyoLabGameBundleRules.GameId
-            ? [HoyoLabGameBundleRules.Resources, HoyoLabGameBundleRules.Builds, HoyoLabGameBundleRules.Achievements]
+            ? [HoyoLabGameBundleRules.Resources, HoyoLabGameBundleRules.Builds,
+                HoyoLabGameBundleRules.Achievements, HoyoLabGameBundleRules.Events]
             : [HoyoLabGameBundleRules.Resources, HoyoLabGameBundleRules.Builds,
                 HoyoLabGameBundleRules.Exploration, HoyoLabGameBundleRules.Events];
 
@@ -801,6 +861,7 @@ public sealed class HoyoLabGameBundleStore
             {
                 Observations = role.Observations with { Events = null },
                 GenshinEvents = null,
+                HsrEvents = null,
             },
             HoyoLabGameBundleRules.Achievements => role with
             {
@@ -1203,6 +1264,11 @@ public sealed class HoyoLabGameBundleStore
                     writer.WritePropertyName("genshinEvents");
                     events.Data.WriteTo(writer);
                 }
+                if (role.HsrEvents is { } hsrEvents)
+                {
+                    writer.WritePropertyName("hsrEvents");
+                    hsrEvents.Data.WriteTo(writer);
+                }
                 writer.WriteEndObject();
             }
             writer.WriteEndArray();
@@ -1308,6 +1374,7 @@ public sealed class HoyoLabGameBundleStore
             var hasHsrBuilds = item.TryGetProperty("hsrBuilds", out var hsrBuildsElement);
             var hasExploration = item.TryGetProperty("genshinExploration", out var explorationElement);
             var hasEvents = item.TryGetProperty("genshinEvents", out var eventsElement);
+            var hasHsrEvents = item.TryGetProperty("hsrEvents", out var hsrEventsElement);
             var fields = new List<string>
             {
                 "binding", "nickname", "region", "observations", "resource", "completedAchievementIds",
@@ -1316,10 +1383,12 @@ public sealed class HoyoLabGameBundleStore
             if (hasHsrBuilds && gameId == HoyoLabGameBundleRules.GameId) fields.Add("hsrBuilds");
             if (hasExploration && gameId == HoyoLabGameBundleRules.GenshinGameId) fields.Add("genshinExploration");
             if (hasEvents && gameId == HoyoLabGameBundleRules.GenshinGameId) fields.Add("genshinEvents");
+            if (hasHsrEvents && gameId == HoyoLabGameBundleRules.GameId) fields.Add("hsrEvents");
             HoyoLabGenshinBuildSnapshot? genshinBuilds = null;
             HoyoLabHsrBuildSnapshot? hsrBuilds = null;
             HoyoLabGenshinExplorationSnapshot? exploration = null;
             HoyoLabGenshinEventsSnapshot? events = null;
+            HoyoLabHsrEventsSnapshot? hsrEvents = null;
             if (!HasExactProperties(item, fields.ToArray())
                 || !TryParseBinding(item.GetProperty("binding"), out var binding)
                 || !TryParseNullableString(item.GetProperty("nickname"), out var nickname)
@@ -1337,7 +1406,9 @@ public sealed class HoyoLabGameBundleStore
                  || hasExploration
                      && !TryParseGenshinExploration(explorationElement, gameId, out exploration)
                  || hasEvents
-                     && !TryParseGenshinEvents(eventsElement, gameId, out events))
+                     && !TryParseGenshinEvents(eventsElement, gameId, out events)
+                 || hasHsrEvents
+                     && !TryParseHsrEvents(hsrEventsElement, gameId, out hsrEvents))
                 return false;
             parsed.Add(new(
                 new(binding!, nickname, region),
@@ -1347,7 +1418,8 @@ public sealed class HoyoLabGameBundleStore
                 genshinBuilds,
                 hsrBuilds,
                 exploration,
-                events));
+                events,
+                hsrEvents));
         }
         roles = parsed.AsReadOnly();
         return true;
@@ -1499,6 +1571,19 @@ public sealed class HoyoLabGameBundleStore
         var candidate = new HoyoLabGenshinEventsSnapshot(element);
         if (!HoyoLabGenshinEventsRules.IsValid(candidate)) return false;
         events = HoyoLabGenshinEventsRules.Normalize(candidate);
+        return true;
+    }
+
+    private static bool TryParseHsrEvents(
+        JsonElement element,
+        string gameId,
+        out HoyoLabHsrEventsSnapshot? events)
+    {
+        events = null;
+        if (gameId != HoyoLabGameBundleRules.GameId) return false;
+        var candidate = new HoyoLabHsrEventsSnapshot(element);
+        if (!HoyoLabHsrEventsRules.IsValid(candidate)) return false;
+        events = HoyoLabHsrEventsRules.Normalize(candidate);
         return true;
     }
 

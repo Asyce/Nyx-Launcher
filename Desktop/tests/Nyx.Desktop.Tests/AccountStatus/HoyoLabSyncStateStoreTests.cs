@@ -1160,8 +1160,10 @@ public sealed class HoyoLabSyncStateStoreTests
             knownEventsAt: Now.AddMinutes(-2));
         Assert.False(store.TryEnqueuePendingRoleDeletion(changed));
 
+        using var hsrRoot = new TemporaryRoot();
+        var hsrStore = CreateStore(hsrRoot.Path);
         using var hsrCredential = Credential(2);
-        Assert.Throws<ArgumentException>(() => new HoyoLabPendingRoleDeletion(
+        using var hsrDeletion = new HoyoLabPendingRoleDeletion(
             hsrCredential.SyncId,
             hsrCredential.Token,
             hsrCredential.Key,
@@ -1172,7 +1174,12 @@ public sealed class HoyoLabSyncStateStoreTests
             null,
             Now,
             HoyoLabGameBundleRules.GameId,
-            knownEventsAt: Now.AddMinutes(-1)));
+            knownEventsAt: Now.AddMinutes(-1));
+        Assert.True(hsrStore.TryEnqueuePendingRoleDeletion(hsrDeletion));
+        using var hsrLoaded = Assert.IsType<HoyoLabSyncState>(hsrStore.TryLoad());
+        Assert.Equal(
+            Now.AddMinutes(-1),
+            Assert.Single(hsrLoaded.PendingRoleDeletions).KnownEventsAt);
     }
 
     [Fact]

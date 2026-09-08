@@ -232,6 +232,67 @@ public sealed class HoyoLabGameBundleMergeTests
     }
 
     [Fact]
+    public void Hsr_events_merge_is_semantic_and_newer_than_role_or_capability_deletes()
+    {
+        var binding = Binding(123456789);
+        var snapshot = HsrEvents();
+        var semanticallyEqual = HsrEvents(
+            HoyoLabHsrEventsSnapshotTests.DataJson.Replace(
+                "\"dropTypes\":[1.0,2]", "\"dropTypes\":[1,2]", StringComparison.Ordinal));
+        var localRole = HsrEventsRole(binding, Older, snapshot);
+        var remoteRole = HsrEventsRole(binding, Newer, semanticallyEqual);
+        var consents = Consents(events: true);
+
+        var result = MergeValid(
+            Bundle([localRole], binding, consents),
+            Bundle([remoteRole], binding, consents));
+
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Merged, result.Outcome);
+        var mergedRole = Assert.Single(Assert.IsType<HoyoLabGameBundle>(result.Bundle).Roles);
+        Assert.Equal(Newer, mergedRole.Observations.Events);
+        Assert.True(HoyoLabHsrEventsRules.ValuesEqual(semanticallyEqual, mergedRole.HsrEvents));
+
+        AssertConflict(MergeValid(
+            Bundle([localRole], binding, consents),
+            Bundle(
+                [HsrEventsRole(
+                    binding,
+                    Older,
+                    HsrEvents(HoyoLabHsrEventsSnapshotTests.DataJson.Replace(
+                        "\"version\":\"3.7\"", "\"version\":\"3.8\"", StringComparison.Ordinal)))],
+                binding,
+                consents)));
+
+        var cleared = MergeValid(
+            Bundle([localRole], binding, consents),
+            Bundle(
+                [HsrEventsRole(binding)],
+                binding,
+                consents,
+                capabilityTombstones:
+                [
+                    new(binding, HoyoLabGameBundleRules.Events, Newer),
+                ]));
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Merged, cleared.Outcome);
+        var clearedBundle = Assert.IsType<HoyoLabGameBundle>(cleared.Bundle);
+        var clearedRole = Assert.Single(clearedBundle.Roles);
+        Assert.Null(clearedRole.Observations.Events);
+        Assert.Null(clearedRole.HsrEvents);
+        Assert.Equal(Newer, Assert.Single(clearedBundle.CapabilityTombstones).DeletedAt);
+
+        var olderRoleDelete = MergeValid(
+            Bundle([remoteRole], binding, consents),
+            Bundle(
+                [],
+                null,
+                consents,
+                roleTombstones: [new(binding, Older)]));
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Idempotent, olderRoleDelete.Outcome);
+        Assert.Contains(olderRoleDelete.Bundle!.Roles, role => role.Role.Binding == binding);
+        Assert.Empty(olderRoleDelete.Bundle.RoleTombstones);
+    }
+
+    [Fact]
     public void Hsr_builds_merge_latest_values_semantically_reject_equal_conflicts_and_apply_newer_tombstones()
     {
         var binding = Binding(123456789);
@@ -715,6 +776,23 @@ public sealed class HoyoLabGameBundleMergeTests
         null,
         events);
 
+    private static HoyoLabGameBundleRole HsrEventsRole(
+        PublisherRoleBinding binding,
+        DateTimeOffset? eventsAt = null,
+        HoyoLabHsrEventsSnapshot? events = null) => new(
+        new(
+            binding,
+            "Honkai: Star Rail",
+            PublisherRoleRecordRules.CanonicalRegionLabel(binding.Server)),
+        new(null, null, null, null, null, null, eventsAt, null),
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        events);
+
     private static HoyoLabGameBundleRole HsrRole(
         PublisherRoleBinding binding,
         DateTimeOffset? buildsAt = null,
@@ -757,6 +835,13 @@ public sealed class HoyoLabGameBundleMergeTests
 
     private static HoyoLabGenshinEventsSnapshot Events(
         string json = HoyoLabGenshinEventsSnapshotTests.DataJson)
+    {
+        using var document = JsonDocument.Parse(json);
+        return new(document.RootElement.Clone());
+    }
+
+    private static HoyoLabHsrEventsSnapshot HsrEvents(
+        string json = HoyoLabHsrEventsSnapshotTests.DataJson)
     {
         using var document = JsonDocument.Parse(json);
         return new(document.RootElement.Clone());

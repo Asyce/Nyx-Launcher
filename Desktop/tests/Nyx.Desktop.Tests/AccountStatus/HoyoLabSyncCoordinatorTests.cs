@@ -2033,6 +2033,134 @@ public sealed class HoyoLabSyncCoordinatorTests
     }
 
     [Fact]
+    public async Task Hsr_events_cutoff_blocks_a_newer_local_refresh_before_network_retry()
+    {
+        using var harness = new Harness(HsrBundleWithEvents(Older));
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            harness.Coordinator.QueueRoleDeletion(FixtureBinding).Status);
+        using (var pending = LoadState(harness.ManagedSlotRoot))
+            Assert.Equal(Older, Assert.Single(pending.PendingRoleDeletions).KnownEventsAt);
+
+        SaveBundle(
+            harness.ProtectedRoot,
+            HsrBundleWithEvents(Newer),
+            HoyoLabGameBundleRules.GameId);
+        harness.Cloud.ClearRequests();
+
+        var result = await harness.Coordinator.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Conflict, result.Status);
+        Assert.Empty(harness.Cloud.Requests);
+        using var after = LoadState(harness.ManagedSlotRoot);
+        Assert.Equal(Older, Assert.Single(after.PendingRoleDeletions).KnownEventsAt);
+    }
+
+    [Fact]
+    public async Task Hsr_events_cutoff_blocks_a_newer_remote_refresh_and_survives_retry()
+    {
+        using var harness = new Harness(HsrBundleWithEvents(Older));
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            harness.Coordinator.QueueRoleDeletion(FixtureBinding).Status);
+        using (var pending = LoadState(harness.ManagedSlotRoot))
+            Assert.Equal(Older, Assert.Single(pending.PendingRoleDeletions).KnownEventsAt);
+
+        harness.Cloud.SeedBundle(
+            Fixture.SyncId,
+            DisplayCode,
+            HsrBundleWithEvents(Newer),
+            Newer);
+        harness.Cloud.ClearRequests();
+
+        var result = await harness.Coordinator.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Conflict, result.Status);
+        Assert.Equal(["pull"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var after = LoadState(harness.ManagedSlotRoot);
+        Assert.Equal(Older, Assert.Single(after.PendingRoleDeletions).KnownEventsAt);
+    }
+
+    [Fact]
+    public async Task Hsr_events_without_a_known_cutoff_still_blocks_a_newer_remote_refresh()
+    {
+        using var harness = new Harness(HsrBundleWithEvents(Older));
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+
+        using (var state = LoadState(harness.ManagedSlotRoot))
+        {
+            var credential = Assert.IsType<HoyoLabSyncCredential>(state.CurrentCredential);
+            using var deletion = new HoyoLabPendingRoleDeletion(
+                credential.SyncId,
+                credential.Token,
+                credential.Key,
+                FixtureBinding,
+                "hsr-events-no-cutoff",
+                Now,
+                null,
+                null,
+                Now,
+                HoyoLabGameBundleRules.GameId);
+            var stateStore = new HoyoLabSyncStateStore(
+                harness.ManagedSlotRoot,
+                harness.Protector,
+                harness.Files,
+                harness.Clock);
+            Assert.True(stateStore.TryEnqueuePendingRoleDeletion(deletion));
+        }
+        using (var state = LoadState(harness.ManagedSlotRoot))
+            Assert.Null(Assert.Single(state.PendingRoleDeletions).KnownEventsAt);
+
+        SaveBundle(
+            harness.ProtectedRoot,
+            HoyoLabSyncCoordinator.RemoveRoleAt(
+                HsrBundleWithEvents(Older),
+                FixtureBinding,
+                Now),
+            HoyoLabGameBundleRules.GameId);
+        harness.Cloud.SeedBundle(
+            Fixture.SyncId,
+            DisplayCode,
+            HsrBundleWithEvents(Newer),
+            Newer);
+        harness.Cloud.ClearRequests();
+
+        var result = await harness.Coordinator.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Conflict, result.Status);
+        Assert.Equal(["pull"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var after = LoadState(harness.ManagedSlotRoot);
+        Assert.Null(Assert.Single(after.PendingRoleDeletions).KnownEventsAt);
+    }
+
+    [Fact]
+    public async Task Hsr_events_round_trip_through_the_encrypted_wire()
+    {
+        using var harness = new Harness(HsrBundleWithEvents(Older));
+
+        var result = await harness.Coordinator.ConnectAsync(DisplayCode);
+
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, result.Status);
+        Assert.Equal(["pull", "push"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var secrets = Secrets(DisplayCode);
+        var pushed = harness.Cloud.GetBundle(Fixture.SyncId, secrets);
+        var pushedRole = Assert.Single(pushed.Roles);
+        Assert.True(pushed.Consents.Events);
+        Assert.Equal(Older, pushedRole.Observations.Events);
+        Assert.True(HoyoLabHsrEventsRules.ValuesEqual(
+            HsrEventsSnapshot(),
+            pushedRole.HsrEvents));
+    }
+
+    [Fact]
     public async Task Hsr_build_cutoff_survives_restart_and_blocks_remote_role_replay()
     {
         using var harness = new Harness(HsrBundleWithBuilds(Older));
@@ -2330,6 +2458,9 @@ public sealed class HoyoLabSyncCoordinatorTests
             Assert.True(HoyoLabGenshinEventsRules.ValuesEqual(
                 expectedRole.GenshinEvents,
                 actualRole.GenshinEvents));
+            Assert.True(HoyoLabHsrEventsRules.ValuesEqual(
+                expectedRole.HsrEvents,
+                actualRole.HsrEvents));
         }
 
         Assert.Equal(
@@ -2488,6 +2619,31 @@ public sealed class HoyoLabSyncCoordinatorTests
         [],
         []);
 
+    private static HoyoLabGameBundle HsrBundleWithEvents(
+        DateTimeOffset observedAt,
+        string dataJson = HoyoLabHsrEventsSnapshotTests.DataJson) => new(
+        HoyoLabGameBundleRules.SchemaVersion,
+        HoyoLabGameBundleRules.GameId,
+        [
+            new(
+                new(
+                    FixtureBinding,
+                    "Test Trailblazer",
+                    PublisherRoleRecordRules.CanonicalRegionLabel(FixtureBinding.Server)),
+                new(null, null, null, null, null, null, observedAt, null),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                HsrEventsSnapshot(dataJson)),
+        ],
+        FixtureBinding,
+        new(false, false, false, false, false, false, true, false),
+        [],
+        []);
+
     private static HoyoLabGameBundle GenshinBundleWithBuildsAndExploration(
         DateTimeOffset observedAt)
     {
@@ -2516,6 +2672,13 @@ public sealed class HoyoLabSyncCoordinatorTests
 
     private static HoyoLabGenshinEventsSnapshot EventsSnapshot(
         string dataJson = HoyoLabGenshinEventsSnapshotTests.DataJson)
+    {
+        using var document = JsonDocument.Parse(dataJson);
+        return new(document.RootElement.Clone());
+    }
+
+    private static HoyoLabHsrEventsSnapshot HsrEventsSnapshot(
+        string dataJson = HoyoLabHsrEventsSnapshotTests.DataJson)
     {
         using var document = JsonDocument.Parse(dataJson);
         return new(document.RootElement.Clone());

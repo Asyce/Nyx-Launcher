@@ -1127,6 +1127,7 @@ public sealed class HoyoLiveSessionUiTests
     public void Hoyo_account_manager_exposes_only_active_account_and_receiver_ready_capability_consents()
     {
         var page = ReadAppFile("MainPage.xaml.cs");
+        var service = ReadAppFile("PublisherAccountService.cs");
         var manager = Slice(
             page.Replace("\r\n", "\n", StringComparison.Ordinal),
             "private async Task ShowHoyoLabAccountManagerAsync",
@@ -1138,7 +1139,7 @@ public sealed class HoyoLiveSessionUiTests
         var explorationAt = controls.IndexOf("if (gameId == \"gi\" && PublisherAccountService.GenshinExplorationAvailable)", StringComparison.Ordinal);
         Assert.True(explorationAt > buildsAt);
         var buildControls = controls[buildsAt..explorationAt];
-        var eventsAt = controls.IndexOf("if (gameId == \"gi\" && PublisherAccountService.GenshinEventsAvailable)", StringComparison.Ordinal);
+        var eventsAt = controls.IndexOf("if ((gameId == \"gi\" && PublisherAccountService.GenshinEventsAvailable)", StringComparison.Ordinal);
         Assert.True(eventsAt > explorationAt);
         var explorationControls = controls[explorationAt..eventsAt];
         var eventControls = controls[eventsAt..];
@@ -1149,16 +1150,46 @@ public sealed class HoyoLiveSessionUiTests
             manager,
             "async Task SetCapabilityConsentAsync",
             "if (rememberResources is not null)");
+        var eventRefresh = Slice(
+            manager,
+            "if (refreshEvents is not null)",
+            "RenderManagerSlots(preserveSelection: null)");
 
         Assert.Equal(2, Regex.Matches(existingControls, "new ToggleSwitch").Count);
         Assert.Single(Regex.Matches(buildControls, "new ToggleSwitch"));
         Assert.Single(Regex.Matches(explorationControls, "new ToggleSwitch"));
         Assert.Single(Regex.Matches(eventControls, "new ToggleSwitch"));
-        Assert.Contains("Remember Genshin event calendar", eventControls, StringComparison.Ordinal);
+        Assert.Equal(5, Regex.Matches(controls, "new ToggleSwitch").Count);
+        Assert.Single(Regex.Matches(eventControls, "rememberEvents = new ToggleSwitch"));
+        Assert.Contains(
+            "if ((gameId == \"gi\" && PublisherAccountService.GenshinEventsAvailable)\n                || (gameId == \"hsr\" && PublisherAccountService.HsrEventsAvailable))",
+            eventControls,
+            StringComparison.Ordinal);
+        Assert.Contains("Header = $\"Remember {gameName} event calendar\"", eventControls, StringComparison.Ordinal);
+        Assert.Contains(
+            "AutomationProperties.SetName(rememberEvents, $\"Remember {gameName} event calendar for the active HoYoLAB account\")",
+            eventControls,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "refreshEvents = CreateHoyoLabManagerButton(\"Refresh event calendar\", $\"Refresh {gameName} events for the active HoYoLAB account\")",
+            eventControls,
+            StringComparison.Ordinal);
         Assert.Contains("Refresh event calendar", eventControls, StringComparison.Ordinal);
         Assert.Contains("GenshinEventsAvailable => false", ReadAppFile("PublisherAccountService.GenshinEvents.cs"), StringComparison.Ordinal);
+        Assert.Contains("HsrEventsAvailable => false", ReadAppFile("PublisherAccountService.HsrEvents.cs"), StringComparison.Ordinal);
+        Assert.Contains(
+            "enabled && gameId == \"hsr\" && capability == HoyoLabGameBundleRules.Events && !HsrEventsAvailable",
+            service,
+            StringComparison.Ordinal);
+        Assert.Contains("rememberGenshinEvents: GenshinEventsAvailable", service, StringComparison.Ordinal);
+        Assert.Contains("rememberHsrEvents: HsrEventsAvailable", service, StringComparison.Ordinal);
         Assert.Contains("SetCapabilityConsentAsync(rememberEvents, HoyoLabGameBundleRules.Events)", manager, StringComparison.Ordinal);
         Assert.Contains("refreshEvents.IsEnabled = enabled && hasActiveRole && gameBundle?.Consents.Events == true", manager, StringComparison.Ordinal);
+        Assert.Contains("if (gameId == \"hsr\")", eventRefresh, StringComparison.Ordinal);
+        Assert.Contains("publisherAccounts.RefreshHsrEventsAsync(activeSlotId, binding, cancellationToken)", eventRefresh, StringComparison.Ordinal);
+        Assert.Contains("HoyoLabHsrEventsReadStatus.Completed", eventRefresh, StringComparison.Ordinal);
+        Assert.Contains("publisherAccounts.RefreshGenshinEventsAsync(activeSlotId, binding, cancellationToken)", eventRefresh, StringComparison.Ordinal);
+        Assert.Contains("HoyoLabGenshinEventsReadStatus.Completed", eventRefresh, StringComparison.Ordinal);
         Assert.Contains("Remember Genshin exploration", explorationControls, StringComparison.Ordinal);
         Assert.Contains("Refresh exploration", explorationControls, StringComparison.Ordinal);
         Assert.Contains("GenshinExplorationAvailable => false", ReadAppFile("PublisherAccountService.GenshinExploration.cs"), StringComparison.Ordinal);
@@ -1302,27 +1333,38 @@ public sealed class HoyoLiveSessionUiTests
     }
 
     [Theory]
-    [InlineData("Exploration")]
-    [InlineData("Events")]
-    public void Genshin_refresh_keeps_slot_role_consent_and_generation_guards(string capability)
+    [InlineData("Exploration", "Genshin", "gi")]
+    [InlineData("Events", "Genshin", "gi")]
+    [InlineData("Events", "Hsr", "hsr")]
+    public void Hoyo_refresh_keeps_slot_role_consent_and_generation_guards(
+        string capability,
+        string gamePrefix,
+        string gameId)
     {
-        var service = ReadAppFile($"PublisherAccountService.Genshin{capability}.cs");
-        var window = ReadAppFile($"PublisherSessionWindow.Genshin{capability}.cs");
-        Assert.Contains($"if (!Genshin{capability}Available", service, StringComparison.Ordinal);
+        var service = ReadAppFile($"PublisherAccountService.{gamePrefix}{capability}.cs");
+        var window = ReadAppFile($"PublisherSessionWindow.{gamePrefix}{capability}.cs");
+        Assert.Contains($"if (!{gamePrefix}{capability}Available", service, StringComparison.Ordinal);
         Assert.Contains("await hoyoGate.WaitAsync(token)", service, StringComparison.Ordinal);
         Assert.Contains("ProfileAccessAllowedAfterGate", service, StringComparison.Ordinal);
         Assert.Equal(2, Regex.Matches(service, "operation.HoyoContext\\?\\.SlotId != expectedSlotId").Count);
         Assert.Contains($"before?.Consents.{capability} != true || before.SelectedRole != expectedBinding", service, StringComparison.Ordinal);
         Assert.Contains($"current?.Consents.{capability} != true || current.SelectedRole != expectedBinding", service, StringComparison.Ordinal);
-        Assert.Equal(2, Regex.Matches(service, "TryLoadRoleRecord\\(\"gi\", operation\\)\\?\\.Binding != expectedBinding").Count);
+        Assert.Contains($"CanUseGameBundle(\"{gameId}\", operation)", service, StringComparison.Ordinal);
+        Assert.Contains($"PublisherAccountCatalog.Get(\"{gameId}\").ResourceUri!", service, StringComparison.Ordinal);
+        Assert.Contains($"gameId: \"{gameId}\"", service, StringComparison.Ordinal);
+        var roleRecordGuard = $@"TryLoadRoleRecord\(""{gameId}"", operation\)\?\.Binding != expectedBinding";
+        Assert.Equal(2, Regex.Matches(service, roleRecordGuard).Count);
         AssertOrdered(service, "lock (sync)", "CanPublish(\"HoYoLAB\", operation)",
-            $"current?.Consents.{capability}", $"TryRecordGenshin{capability}", "Updated?.Invoke");
+            $"current?.Consents.{capability}", $"TryRecord{gamePrefix}{capability}", "Updated?.Invoke");
         Assert.Contains("finally", service, StringComparison.Ordinal);
         Assert.Contains("if (enteredGate) hoyoGate.Release()", service, StringComparison.Ordinal);
-        Assert.Contains("purpose != PublisherSessionPurpose.Resource || authorizedGameId != \"gi\"", window, StringComparison.Ordinal);
+        Assert.Contains("catch (OperationCanceledException)", service, StringComparison.Ordinal);
+        Assert.Contains($"var entry = PublisherAccountCatalog.Get(\"{gameId}\")", window, StringComparison.Ordinal);
+        Assert.Contains($"purpose != PublisherSessionPurpose.Resource || authorizedGameId != \"{gameId}\"", window, StringComparison.Ordinal);
         Assert.Contains("CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, lifetime.Token)", window, StringComparison.Ordinal);
-        Assert.Contains($"HoyoLabGenshin{capability}Capture.CreateScript(controllerKey, expectedBinding)", window, StringComparison.Ordinal);
-        Assert.Contains($"HoyoLabGenshin{capability}Capture.ParseResult(result, expectedBinding)", window, StringComparison.Ordinal);
+        Assert.Contains($"HoyoLab{gamePrefix}{capability}Capture.CreateScript(controllerKey, expectedBinding)", window, StringComparison.Ordinal);
+        Assert.Contains($"HoyoLab{gamePrefix}{capability}Capture.ParseResult(result, expectedBinding)", window, StringComparison.Ordinal);
+        Assert.Contains("catch (OperationCanceledException)", window, StringComparison.Ordinal);
         Assert.Contains("await AbortResourceFetchAsync(controllerKey)", window, StringComparison.Ordinal);
     }
 

@@ -1637,18 +1637,19 @@ public sealed partial class MainPage : Page
                 capabilityPanel.Children.Add(rememberExploration);
                 capabilityPanel.Children.Add(refreshExploration);
             }
-            if (gameId == "gi" && PublisherAccountService.GenshinEventsAvailable)
+            if ((gameId == "gi" && PublisherAccountService.GenshinEventsAvailable)
+                || (gameId == "hsr" && PublisherAccountService.HsrEventsAvailable))
             {
                 rememberEvents = new ToggleSwitch
                 {
-                    Header = "Remember Genshin event calendar",
+                    Header = $"Remember {gameName} event calendar",
                     IsEnabled = false,
                     OnContent = "Remember",
                     OffContent = "Do not remember",
                 };
-                AutomationProperties.SetName(rememberEvents, "Remember Genshin event calendar for the active HoYoLAB account");
+                AutomationProperties.SetName(rememberEvents, $"Remember {gameName} event calendar for the active HoYoLAB account");
                 AutomationProperties.SetHelpText(rememberEvents, "Includes event timing, advertised rewards and progress summaries from HoYoLAB. Full endgame battle records and wish banners are not included.");
-                refreshEvents = CreateHoyoLabManagerButton("Refresh event calendar", "Refresh Genshin events for the active HoYoLAB account");
+                refreshEvents = CreateHoyoLabManagerButton("Refresh event calendar", $"Refresh {gameName} events for the active HoYoLAB account");
                 capabilityPanel.Children.Add(rememberEvents);
                 capabilityPanel.Children.Add(refreshEvents);
             }
@@ -2244,6 +2245,22 @@ public sealed partial class MainPage : Page
                 await RunManagerActionAsync(async cancellationToken =>
                 {
                     managerStatus.Text = "Refreshing events from HoYoLAB…";
+                    if (gameId == "hsr")
+                    {
+                        var hsrResult = await publisherAccounts.RefreshHsrEventsAsync(activeSlotId, binding, cancellationToken);
+                        managerStatus.Text = hsrResult.Status switch
+                        {
+                            HoyoLabHsrEventsReadStatus.Completed => "Remembered Star Rail events. Use Sync & My HoYo to share the copy.",
+                            HoyoLabHsrEventsReadStatus.LoginRequired => "Sign in to HoYoLAB, then refresh again. The previous copy is unchanged.",
+                            HoyoLabHsrEventsReadStatus.NotEnabled => "Select an active Star Rail region and turn on Remember event calendar first.",
+                            HoyoLabHsrEventsReadStatus.Canceled => "Refresh canceled. No partial events copy was saved.",
+                            HoyoLabHsrEventsReadStatus.TimedOut => "Refresh timed out. Try again; the previous copy is unchanged.",
+                            HoyoLabHsrEventsReadStatus.TooLarge => "This events copy exceeds Nyx's supported size. The previous copy is unchanged.",
+                            HoyoLabHsrEventsReadStatus.LocalStorageUnavailable => "Nyx could not save the events copy. The previous copy is unchanged.",
+                            _ => "Nyx could not complete this refresh. Check the selected HoYoLAB region and try again; the previous copy is unchanged.",
+                        };
+                        return;
+                    }
                     var result = await publisherAccounts.RefreshGenshinEventsAsync(activeSlotId, binding, cancellationToken);
                     managerStatus.Text = result.Status switch
                     {

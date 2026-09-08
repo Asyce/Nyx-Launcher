@@ -942,7 +942,7 @@ public sealed class HoyoLabSyncStateStore
                 }
                 if (hasKnownBuildsAt && gameId is not (HsrScope or GenshinScope)) return false;
                 if (hasKnownExplorationAt && gameId != GenshinScope) return false;
-                if (hasKnownEventsAt && gameId != GenshinScope) return false;
+                if (hasKnownEventsAt && gameId is not (HsrScope or GenshinScope)) return false;
                 var binding = item.GetProperty("binding");
                 if (!HasExactProperties(binding, "roleId", "server")
                     || binding.GetProperty("roleId").ValueKind != JsonValueKind.String
@@ -1078,7 +1078,6 @@ public sealed class HoyoLabSyncStateStore
                 && PublisherAccountCatalog.IsValidRoleBinding(deletion.GameId, deletion.Binding)
                 && (deletion.GameId != GenshinScope || deletion.KnownAchievementsAt is null)
                 && (deletion.GameId == GenshinScope || deletion.KnownExplorationAt is null)
-                && (deletion.GameId == GenshinScope || deletion.KnownEventsAt is null)
                 && TryNormalizeOperationId(deletion.OperationId, out _)
                 && IsValidTimestamp(deletion.RequestedAt, utcNow)
                 && IsValidObservation(deletion.KnownResourcesAt, utcNow)
@@ -1530,7 +1529,8 @@ public sealed class HoyoLabPendingRoleDeletion : IDisposable
             || !PublisherAccountCatalog.IsValidRoleBinding(gameId, binding)
             || gameId != HoyoLabGameBundleRules.GameId && knownAchievementsAt is not null
             || gameId != HoyoLabGameBundleRules.GenshinGameId && knownExplorationAt is not null
-            || gameId != HoyoLabGameBundleRules.GenshinGameId && knownEventsAt is not null
+            || gameId is not (HoyoLabGameBundleRules.GameId or HoyoLabGameBundleRules.GenshinGameId)
+                && knownEventsAt is not null
             || !HoyoLabSyncStateStore.TryNormalizeOperationId(operationId, out _))
             throw new ArgumentException("HoYo pending role deletion is invalid.");
         credential = new(syncId, token, key);

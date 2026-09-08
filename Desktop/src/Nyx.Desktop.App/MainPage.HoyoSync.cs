@@ -46,6 +46,10 @@ public sealed partial class MainPage
                 + (PublisherAccountService.GenshinExplorationAvailable ? ", exploration" : string.Empty)
                 + (PublisherAccountService.GenshinEventsAvailable ? ", event-calendar summaries" : string.Empty)
                 + " are shared. Full-bag inventory, housing and full endgame battle records are not included.";
+        if (gameId == HoyoLabGameBundleRules.GameId && PublisherAccountService.HsrEventsAvailable)
+            sharedData = "Remembered resources and achievements"
+                + (PublisherAccountService.HsrBuildsAvailable ? ", characters and equipped builds" : string.Empty)
+                + ", event-calendar summaries are shared. Full-bag inventory and full endgame battle records are not included.";
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
             pageLease?.CancellationToken ?? CancellationToken.None);
         var token = cancellation.Token;
