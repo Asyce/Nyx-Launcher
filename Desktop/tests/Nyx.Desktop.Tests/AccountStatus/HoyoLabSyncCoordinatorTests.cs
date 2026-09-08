@@ -1853,6 +1853,127 @@ public sealed class HoyoLabSyncCoordinatorTests
     }
 
     [Fact]
+    public async Task Genshin_events_cutoff_blocks_a_newer_local_refresh_before_network_retry()
+    {
+        using var harness = new Harness(GenshinBundleWithEvents(Older));
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(
+                DisplayCode,
+                gameId: HoyoLabGameBundleRules.GenshinGameId)).Status);
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            harness.Coordinator.QueueRoleDeletion(
+                GenshinBinding,
+                gameId: HoyoLabGameBundleRules.GenshinGameId).Status);
+        using (var pending = LoadState(harness.ManagedSlotRoot))
+            Assert.Equal(Older, Assert.Single(pending.PendingRoleDeletions).KnownEventsAt);
+
+        SaveBundle(
+            harness.ProtectedRoot,
+            GenshinBundleWithEvents(Newer),
+            HoyoLabGameBundleRules.GenshinGameId);
+        harness.Cloud.ClearRequests();
+
+        var result = await harness.Coordinator.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Conflict, result.Status);
+        Assert.Empty(harness.Cloud.Requests);
+        using var after = LoadState(harness.ManagedSlotRoot);
+        Assert.Equal(Older, Assert.Single(after.PendingRoleDeletions).KnownEventsAt);
+    }
+
+    [Fact]
+    public async Task Genshin_events_cutoff_blocks_a_newer_remote_refresh_and_survives_retry()
+    {
+        using var harness = new Harness(GenshinBundleWithEvents(Older));
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(
+                DisplayCode,
+                gameId: HoyoLabGameBundleRules.GenshinGameId)).Status);
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            harness.Coordinator.QueueRoleDeletion(
+                GenshinBinding,
+                gameId: HoyoLabGameBundleRules.GenshinGameId).Status);
+        using (var pending = LoadState(harness.ManagedSlotRoot))
+            Assert.Equal(Older, Assert.Single(pending.PendingRoleDeletions).KnownEventsAt);
+
+        harness.Cloud.SeedBundle(
+            Fixture.SyncId,
+            DisplayCode,
+            GenshinBundleWithEvents(Newer),
+            Newer,
+            HoyoLabGameBundleRules.GenshinGameId);
+        harness.Cloud.ClearRequests();
+
+        var result = await harness.Coordinator.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Conflict, result.Status);
+        Assert.Equal(["pull"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var after = LoadState(harness.ManagedSlotRoot);
+        Assert.Equal(Older, Assert.Single(after.PendingRoleDeletions).KnownEventsAt);
+    }
+
+    [Fact]
+    public async Task Genshin_events_without_a_known_cutoff_still_blocks_a_newer_remote_refresh()
+    {
+        using var harness = new Harness(GenshinBundleWithEvents(Older));
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(
+                DisplayCode,
+                gameId: HoyoLabGameBundleRules.GenshinGameId)).Status);
+
+        using (var state = LoadState(harness.ManagedSlotRoot))
+        {
+            var credential = Assert.IsType<HoyoLabSyncCredential>(state.CurrentCredential);
+            using var deletion = new HoyoLabPendingRoleDeletion(
+                credential.SyncId,
+                credential.Token,
+                credential.Key,
+                GenshinBinding,
+                "gi-events-no-cutoff",
+                Now,
+                null,
+                null,
+                Now,
+                HoyoLabGameBundleRules.GenshinGameId);
+            var stateStore = new HoyoLabSyncStateStore(
+                harness.ManagedSlotRoot,
+                harness.Protector,
+                harness.Files,
+                harness.Clock);
+            Assert.True(stateStore.TryEnqueuePendingRoleDeletion(deletion));
+        }
+        using (var state = LoadState(harness.ManagedSlotRoot))
+            Assert.Null(Assert.Single(state.PendingRoleDeletions).KnownEventsAt);
+
+        SaveBundle(
+            harness.ProtectedRoot,
+            HoyoLabSyncCoordinator.RemoveRoleAt(
+                GenshinBundleWithEvents(Older),
+                GenshinBinding,
+                Now),
+            HoyoLabGameBundleRules.GenshinGameId);
+        harness.Cloud.SeedBundle(
+            Fixture.SyncId,
+            DisplayCode,
+            GenshinBundleWithEvents(Newer),
+            Newer,
+            HoyoLabGameBundleRules.GenshinGameId);
+        harness.Cloud.ClearRequests();
+
+        var result = await harness.Coordinator.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Conflict, result.Status);
+        Assert.Equal(["pull"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var after = LoadState(harness.ManagedSlotRoot);
+        Assert.Null(Assert.Single(after.PendingRoleDeletions).KnownEventsAt);
+    }
+
+    [Fact]
     public async Task Genshin_builds_and_exploration_round_trip_through_the_encrypted_wire_together()
     {
         using var harness = new Harness(GenshinBundleWithBuildsAndExploration(Older));
@@ -1885,6 +2006,30 @@ public sealed class HoyoLabSyncCoordinatorTests
         Assert.True(HoyoLabGenshinExplorationRules.ValuesEqual(
             ExplorationSnapshot(),
             pushedRole.GenshinExploration));
+    }
+
+    [Fact]
+    public async Task Genshin_events_round_trip_through_the_encrypted_wire()
+    {
+        using var harness = new Harness(GenshinBundleWithEvents(Older));
+
+        var result = await harness.Coordinator.ConnectAsync(
+            DisplayCode,
+            gameId: HoyoLabGameBundleRules.GenshinGameId);
+
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, result.Status);
+        Assert.Equal(["pull", "push"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var secrets = Secrets(DisplayCode);
+        var pushed = harness.Cloud.GetBundle(
+            Fixture.SyncId,
+            secrets,
+            HoyoLabGameBundleRules.GenshinGameId);
+        var pushedRole = Assert.Single(pushed.Roles);
+        Assert.True(pushed.Consents.Events);
+        Assert.Equal(Older, pushedRole.Observations.Events);
+        Assert.True(HoyoLabGenshinEventsRules.ValuesEqual(
+            EventsSnapshot(),
+            pushedRole.GenshinEvents));
     }
 
     [Fact]
@@ -2182,6 +2327,9 @@ public sealed class HoyoLabSyncCoordinatorTests
             Assert.True(HoyoLabGenshinExplorationRules.ValuesEqual(
                 expectedRole.GenshinExploration,
                 actualRole.GenshinExploration));
+            Assert.True(HoyoLabGenshinEventsRules.ValuesEqual(
+                expectedRole.GenshinEvents,
+                actualRole.GenshinEvents));
         }
 
         Assert.Equal(
@@ -2316,6 +2464,30 @@ public sealed class HoyoLabSyncCoordinatorTests
         [],
         []);
 
+    private static HoyoLabGameBundle GenshinBundleWithEvents(
+        DateTimeOffset observedAt,
+        string dataJson = HoyoLabGenshinEventsSnapshotTests.DataJson) => new(
+        HoyoLabGameBundleRules.SchemaVersion,
+        HoyoLabGameBundleRules.GenshinGameId,
+        [
+            new(
+                new(
+                    GenshinBinding,
+                    "Test Traveler",
+                    PublisherRoleRecordRules.CanonicalRegionLabel(GenshinBinding.Server)),
+                new(null, null, null, null, null, null, observedAt, null),
+                null,
+                null,
+                null,
+                null,
+                null,
+                EventsSnapshot(dataJson)),
+        ],
+        GenshinBinding,
+        new(false, false, false, false, false, false, true, false),
+        [],
+        []);
+
     private static HoyoLabGameBundle GenshinBundleWithBuildsAndExploration(
         DateTimeOffset observedAt)
     {
@@ -2337,6 +2509,13 @@ public sealed class HoyoLabSyncCoordinatorTests
 
     private static HoyoLabGenshinExplorationSnapshot ExplorationSnapshot(
         string dataJson = HoyoLabGenshinExplorationSnapshotTests.DataJson)
+    {
+        using var document = JsonDocument.Parse(dataJson);
+        return new(document.RootElement.Clone());
+    }
+
+    private static HoyoLabGenshinEventsSnapshot EventsSnapshot(
+        string dataJson = HoyoLabGenshinEventsSnapshotTests.DataJson)
     {
         using var document = JsonDocument.Parse(dataJson);
         return new(document.RootElement.Clone());

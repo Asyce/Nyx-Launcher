@@ -168,6 +168,70 @@ public sealed class HoyoLabGameBundleMergeTests
     }
 
     [Fact]
+    public void Genshin_events_merge_is_semantic_and_newer_than_role_or_capability_deletes()
+    {
+        var binding = new PublisherRoleBinding("123456789", "os_euro");
+        var snapshot = Events();
+        var semanticallyEqual = Events(
+            HoyoLabGenshinEventsSnapshotTests.DataJson.Replace(
+                "\"percentage\":1234.5", "\"percentage\":1234.50", StringComparison.Ordinal));
+        var localRole = GenshinEventsRole(binding, Older, snapshot);
+        var remoteRole = GenshinEventsRole(binding, Newer, semanticallyEqual);
+        var consents = Consents(events: true);
+
+        var result = MergeValid(
+            Bundle([localRole], binding, consents, gameId: HoyoLabGameBundleRules.GenshinGameId),
+            Bundle([remoteRole], binding, consents, gameId: HoyoLabGameBundleRules.GenshinGameId));
+
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Merged, result.Outcome);
+        var mergedRole = Assert.Single(Assert.IsType<HoyoLabGameBundle>(result.Bundle).Roles);
+        Assert.Equal(Newer, mergedRole.Observations.Events);
+        Assert.True(HoyoLabGenshinEventsRules.ValuesEqual(semanticallyEqual, mergedRole.GenshinEvents));
+
+        AssertConflict(MergeValid(
+            Bundle([localRole], binding, consents, gameId: HoyoLabGameBundleRules.GenshinGameId),
+            Bundle(
+                [GenshinEventsRole(
+                    binding,
+                    Older,
+                    Events(HoyoLabGenshinEventsSnapshotTests.DataJson.Replace(
+                        "\"percentage\":1234.5", "\"percentage\":1235.5", StringComparison.Ordinal)))],
+                binding,
+                consents,
+                gameId: HoyoLabGameBundleRules.GenshinGameId)));
+
+        var cleared = MergeValid(
+            Bundle([localRole], binding, consents, gameId: HoyoLabGameBundleRules.GenshinGameId),
+            Bundle(
+                [GenshinEventsRole(binding)],
+                binding,
+                consents,
+                capabilityTombstones:
+                [
+                    new(binding, HoyoLabGameBundleRules.Events, Newer),
+                ],
+                gameId: HoyoLabGameBundleRules.GenshinGameId));
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Merged, cleared.Outcome);
+        var clearedBundle = Assert.IsType<HoyoLabGameBundle>(cleared.Bundle);
+        var clearedRole = Assert.Single(clearedBundle.Roles);
+        Assert.Null(clearedRole.Observations.Events);
+        Assert.Null(clearedRole.GenshinEvents);
+        Assert.Equal(Newer, Assert.Single(clearedBundle.CapabilityTombstones).DeletedAt);
+
+        var olderRoleDelete = MergeValid(
+            Bundle([remoteRole], binding, consents, gameId: HoyoLabGameBundleRules.GenshinGameId),
+            Bundle(
+                [],
+                null,
+                consents,
+                roleTombstones: [new(binding, Older)],
+                gameId: HoyoLabGameBundleRules.GenshinGameId));
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Idempotent, olderRoleDelete.Outcome);
+        Assert.Contains(olderRoleDelete.Bundle!.Roles, role => role.Role.Binding == binding);
+        Assert.Empty(olderRoleDelete.Bundle.RoleTombstones);
+    }
+
+    [Fact]
     public void Hsr_builds_merge_latest_values_semantically_reject_equal_conflicts_and_apply_newer_tombstones()
     {
         var binding = Binding(123456789);
@@ -635,6 +699,22 @@ public sealed class HoyoLabGameBundleMergeTests
         null,
         exploration);
 
+    private static HoyoLabGameBundleRole GenshinEventsRole(
+        PublisherRoleBinding binding,
+        DateTimeOffset? eventsAt = null,
+        HoyoLabGenshinEventsSnapshot? events = null) => new(
+        new(
+            binding,
+            "Genshin",
+            PublisherRoleRecordRules.CanonicalRegionLabel(binding.Server)),
+        new(null, null, null, null, null, null, eventsAt, null),
+        null,
+        null,
+        null,
+        null,
+        null,
+        events);
+
     private static HoyoLabGameBundleRole HsrRole(
         PublisherRoleBinding binding,
         DateTimeOffset? buildsAt = null,
@@ -657,18 +737,26 @@ public sealed class HoyoLabGameBundleMergeTests
         bool resources = false,
         bool achievements = false,
         bool builds = false,
-        bool exploration = false) => new(
+        bool exploration = false,
+        bool events = false) => new(
             resources,
             Inventory: false,
             Builds: builds,
             achievements,
             Exploration: exploration,
             Endgame: false,
-            Events: false,
+            Events: events,
             Currency: false);
 
     private static HoyoLabGenshinExplorationSnapshot Exploration(
         string json = HoyoLabGenshinExplorationSnapshotTests.DataJson)
+    {
+        using var document = JsonDocument.Parse(json);
+        return new(document.RootElement.Clone());
+    }
+
+    private static HoyoLabGenshinEventsSnapshot Events(
+        string json = HoyoLabGenshinEventsSnapshotTests.DataJson)
     {
         using var document = JsonDocument.Parse(json);
         return new(document.RootElement.Clone());

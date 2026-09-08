@@ -594,7 +594,7 @@ public sealed class HoyoPullExportProviderTests
     [Fact]
     public async Task Provider_UnchangedStaleCacheTimesOutWithoutRequestOrOutput()
     {
-        using var fixture = new ObservationFixture("STALE_PRIVATE_TOKEN");
+        using var fixture = new ObservationFixture("STALE_PRIVATE_TOKEN", observationDuration: TimeSpan.FromMilliseconds(60));
         await using var session = await fixture.Provider.PrepareAsync("gi", default);
 
         var error = await Assert.ThrowsAsync<PullExportException>(async () =>
@@ -653,7 +653,7 @@ public sealed class HoyoPullExportProviderTests
     [Fact]
     public async Task Provider_UnrelatedInvalidMutationIsNotFreshAndMakesNoRequestOrOutput()
     {
-        using var fixture = new ObservationFixture("BASELINE_PRIVATE_TOKEN");
+        using var fixture = new ObservationFixture("BASELINE_PRIVATE_TOKEN", observationDuration: TimeSpan.FromMilliseconds(60));
         await using var session = await fixture.Provider.PrepareAsync("gi", default);
         File.AppendAllText(
             fixture.Cache,
@@ -804,7 +804,7 @@ public sealed class HoyoPullExportProviderTests
         private readonly HoyoPullGameConfiguration game = HoyoPullGameConfiguration.For("gi");
         private readonly HttpClient http;
 
-        public ObservationFixture(string token, string prefix = "")
+        public ObservationFixture(string token, string prefix = "", TimeSpan? observationDuration = null)
         {
             Downloads = temp.Combine("downloads");
             Cache = MakeProfileCache(
@@ -823,8 +823,10 @@ public sealed class HoyoPullExportProviderTests
                 Downloads,
                 new NoWaitPullRequestPacer(),
                 new PullExportSafetyLimits(
-                    TotalDuration: TimeSpan.FromSeconds(1),
-                    CacheObservationDuration: TimeSpan.FromMilliseconds(60),
+                    TotalDuration: TimeSpan.FromSeconds(10),
+                    // Successful filesystem observations must not race a 60 ms scheduler deadline.
+                    // Only the two deliberate timeout cases request that short budget.
+                    CacheObservationDuration: observationDuration ?? TimeSpan.FromSeconds(5),
                     CachePollInterval: TimeSpan.FromMilliseconds(5)));
         }
 

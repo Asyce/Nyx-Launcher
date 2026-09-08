@@ -1556,6 +1556,8 @@ public sealed partial class MainPage : Page
         Button? refreshBuilds = null;
         ToggleSwitch? rememberExploration = null;
         Button? refreshExploration = null;
+        ToggleSwitch? rememberEvents = null;
+        Button? refreshEvents = null;
         StackPanel? capabilityPanel = null;
         if (gameId is "hsr" or "gi")
         {
@@ -1634,6 +1636,21 @@ public sealed partial class MainPage : Page
                 refreshExploration = CreateHoyoLabManagerButton("Refresh exploration", "Refresh Genshin exploration for the active HoYoLAB account");
                 capabilityPanel.Children.Add(rememberExploration);
                 capabilityPanel.Children.Add(refreshExploration);
+            }
+            if (gameId == "gi" && PublisherAccountService.GenshinEventsAvailable)
+            {
+                rememberEvents = new ToggleSwitch
+                {
+                    Header = "Remember Genshin event calendar",
+                    IsEnabled = false,
+                    OnContent = "Remember",
+                    OffContent = "Do not remember",
+                };
+                AutomationProperties.SetName(rememberEvents, "Remember Genshin event calendar for the active HoYoLAB account");
+                AutomationProperties.SetHelpText(rememberEvents, "Includes event timing, advertised rewards and progress summaries from HoYoLAB. Full endgame battle records and wish banners are not included.");
+                refreshEvents = CreateHoyoLabManagerButton("Refresh event calendar", "Refresh Genshin events for the active HoYoLAB account");
+                capabilityPanel.Children.Add(rememberEvents);
+                capabilityPanel.Children.Add(refreshEvents);
             }
             capabilityPanel.Children.Add(capabilityHelp);
         }
@@ -1773,6 +1790,10 @@ public sealed partial class MainPage : Page
                 rememberExploration.IsEnabled = enabled && hasActiveRole;
             if (refreshExploration is not null)
                 refreshExploration.IsEnabled = enabled && hasActiveRole && gameBundle?.Consents.Exploration == true;
+            if (rememberEvents is not null)
+                rememberEvents.IsEnabled = enabled && hasActiveRole;
+            if (refreshEvents is not null)
+                refreshEvents.IsEnabled = enabled && hasActiveRole && gameBundle?.Consents.Events == true;
         }
 
         void ApplyCapabilityConsent(HoyoLabGameBundle? snapshot)
@@ -1795,6 +1816,8 @@ public sealed partial class MainPage : Page
                     rememberBuilds.IsOn = hasActiveRole && snapshot?.Consents.Builds == true;
                 if (rememberExploration is not null)
                     rememberExploration.IsOn = hasActiveRole && snapshot?.Consents.Exploration == true;
+                if (rememberEvents is not null)
+                    rememberEvents.IsOn = hasActiveRole && snapshot?.Consents.Events == true;
             }
             finally
             {
@@ -2201,6 +2224,36 @@ public sealed partial class MainPage : Page
                         HoyoLabGenshinExplorationReadStatus.TimedOut => "Refresh timed out. Try again; the previous copy is unchanged.",
                         HoyoLabGenshinExplorationReadStatus.TooLarge => "This exploration copy exceeds Nyx's supported size. The previous copy is unchanged.",
                         HoyoLabGenshinExplorationReadStatus.LocalStorageUnavailable => "Nyx could not save the exploration copy. The previous copy is unchanged.",
+                        _ => "Nyx could not complete this refresh. Check the selected HoYoLAB region and try again; the previous copy is unchanged.",
+                    };
+                }, selectedSlotId);
+            };
+        }
+        if (rememberEvents is not null)
+        {
+            rememberEvents.Toggled += (_, _) =>
+                _ = SetCapabilityConsentAsync(rememberEvents, HoyoLabGameBundleRules.Events);
+        }
+        if (refreshEvents is not null)
+        {
+            refreshEvents.Click += async (_, _) =>
+            {
+                var activeSlotId = publisherAccounts.HoyoLabAccounts.ActiveSlotId;
+                var binding = gameBundle?.SelectedRole;
+                if (activeSlotId is null || binding is null) return;
+                await RunManagerActionAsync(async cancellationToken =>
+                {
+                    managerStatus.Text = "Refreshing events from HoYoLAB…";
+                    var result = await publisherAccounts.RefreshGenshinEventsAsync(activeSlotId, binding, cancellationToken);
+                    managerStatus.Text = result.Status switch
+                    {
+                        HoyoLabGenshinEventsReadStatus.Completed => "Remembered Genshin events. Use Sync & My HoYo to share the copy.",
+                        HoyoLabGenshinEventsReadStatus.LoginRequired => "Sign in to HoYoLAB, then refresh again. The previous copy is unchanged.",
+                        HoyoLabGenshinEventsReadStatus.NotEnabled => "Select an active Genshin region and turn on Remember Genshin event calendar first.",
+                        HoyoLabGenshinEventsReadStatus.Canceled => "Refresh canceled. No partial events copy was saved.",
+                        HoyoLabGenshinEventsReadStatus.TimedOut => "Refresh timed out. Try again; the previous copy is unchanged.",
+                        HoyoLabGenshinEventsReadStatus.TooLarge => "This events copy exceeds Nyx's supported size. The previous copy is unchanged.",
+                        HoyoLabGenshinEventsReadStatus.LocalStorageUnavailable => "Nyx could not save the events copy. The previous copy is unchanged.",
                         _ => "Nyx could not complete this refresh. Check the selected HoYoLAB region and try again; the previous copy is unchanged.",
                     };
                 }, selectedSlotId);

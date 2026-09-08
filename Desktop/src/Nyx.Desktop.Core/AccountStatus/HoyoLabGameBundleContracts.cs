@@ -46,7 +46,8 @@ public sealed record HoyoLabGameBundleRole(
     IReadOnlyList<long>? CompletedHsrAchievementIds,
     HoyoLabGenshinBuildSnapshot? GenshinBuilds = null,
     HoyoLabHsrBuildSnapshot? HsrBuilds = null,
-    HoyoLabGenshinExplorationSnapshot? GenshinExploration = null)
+    HoyoLabGenshinExplorationSnapshot? GenshinExploration = null,
+    HoyoLabGenshinEventsSnapshot? GenshinEvents = null)
 {
     public override string ToString() => nameof(HoyoLabGameBundleRole);
 }
@@ -125,7 +126,7 @@ public static class HoyoLabGameBundleRules
             || bundle.Consents.Inventory
             || bundle.GameId != GenshinGameId && bundle.Consents.Exploration
             || bundle.Consents.Endgame
-            || bundle.Consents.Events
+            || bundle.GameId != GenshinGameId && bundle.Consents.Events
             || bundle.Consents.Currency)
             return false;
         if (bundle.GameId == GenshinGameId && bundle.Consents.Achievements)
@@ -202,6 +203,10 @@ public static class HoyoLabGameBundleRules
                 && (activeRole.GenshinExploration is not null
                     || activeRole.Observations.Exploration is not null))
                 return false;
+            if (tombstone.Capability == Events
+                && (activeRole.GenshinEvents is not null
+                    || activeRole.Observations.Events is not null))
+                return false;
         }
         return true;
     }
@@ -221,6 +226,9 @@ public static class HoyoLabGameBundleRules
             GenshinExploration = role.GenshinExploration is null
                 ? null
                 : HoyoLabGenshinExplorationRules.Normalize(role.GenshinExploration),
+            GenshinEvents = role.GenshinEvents is null
+                ? null
+                : HoyoLabGenshinEventsRules.Normalize(role.GenshinEvents),
         }).ToArray(),
         CapabilityTombstones = bundle.CapabilityTombstones.ToArray(),
         RoleTombstones = bundle.RoleTombstones.ToArray(),
@@ -234,7 +242,7 @@ public static class HoyoLabGameBundleRules
         IsSupportedGame(gameId)
         && (capability == Resources
             || capability == Builds
-            || (gameId == GenshinGameId && capability == Exploration)
+            || (gameId == GenshinGameId && capability is Exploration or Events)
             || (gameId == GameId && capability == Achievements));
 
     public static string ResourceName(string gameId) => gameId switch
@@ -258,9 +266,9 @@ public static class HoyoLabGameBundleRules
             || !IsValidTimestamp(role.Observations.Builds, utcNow)
             || !IsValidTimestamp(role.Observations.Achievements, utcNow)
             || !IsValidTimestamp(role.Observations.Exploration, utcNow)
+            || !IsValidTimestamp(role.Observations.Events, utcNow)
             || role.Observations.Inventory is not null
             || role.Observations.Endgame is not null
-            || role.Observations.Events is not null
             || role.Observations.Currency is not null)
             return false;
 
@@ -307,6 +315,18 @@ public static class HoyoLabGameBundleRules
             return false;
         }
 
+        if (role.Observations.Events is not null)
+        {
+            if (gameId != GenshinGameId
+                || !consents.Events
+                || !HoyoLabGenshinEventsRules.IsValid(role.GenshinEvents))
+                return false;
+        }
+        else if (role.GenshinEvents is not null)
+        {
+            return false;
+        }
+
         if (role.CompletedHsrAchievementIds is { } ids)
         {
             if (gameId != GameId
@@ -331,7 +351,7 @@ public static class HoyoLabGameBundleRules
     private static bool IsValidTombstoneCapability(string gameId, string capability) =>
         gameId == GameId
             ? Capabilities.Contains(capability, StringComparer.Ordinal)
-            : capability is Resources or Builds or Exploration;
+            : capability is Resources or Builds or Exploration or Events;
 
     private static bool IsValidTimestamp(DateTimeOffset? value, DateTimeOffset utcNow) =>
         value is null || IsValidTimestamp(value.Value, utcNow);

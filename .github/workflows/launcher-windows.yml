@@ -57,9 +57,9 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Check bounded HoYo build capture
+      - name: Check bounded HoYo account capture
         shell: pwsh
-        run: node --test Desktop/tests/scripts/genshin-build-capture.test.mjs Desktop/tests/scripts/hsr-build-capture.test.mjs Desktop/tests/scripts/genshin-exploration-capture.test.mjs
+        run: node --test Desktop/tests/scripts/genshin-build-capture.test.mjs Desktop/tests/scripts/hsr-build-capture.test.mjs Desktop/tests/scripts/genshin-exploration-capture.test.mjs Desktop/tests/scripts/genshin-events-capture.test.mjs
 
       - name: Run portable locked Rust tests
         shell: pwsh
