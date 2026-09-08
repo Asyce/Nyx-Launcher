@@ -388,6 +388,19 @@ test('happy path uses exact role GETs, the misspelled calendar endpoint, and a c
   }
 });
 
+test('an official blank optional reward type is absent in activities and challenges', async () => {
+  const data = calendarData();
+  data.act_list[0].reward_list[0].reward_type = '';
+  data.act_list[0].special_reward.reward_type = '';
+  data.challenge_list[0].reward_list[0].reward_type = '';
+  const result = await resultOf(createScenario({ calendarData: data }));
+  assert.equal(result.status, 'done');
+  assert.equal(result.events.activities[0].rewards[0].kind, null);
+  assert.equal(result.events.activities[0].specialReward.kind, null);
+  assert.equal(result.events.challenges[0].rewards[0].kind, null);
+  assert.equal(result.events.activities[0].rewards[0].name, data.act_list[0].reward_list[0].name);
+});
+
 for (const [name, mutate] of [
   ['unknown list field', data => { data.future_list = []; }],
   ['duplicate activity identity', data => { data.act_list.push(clone(data.act_list[0])); }],
@@ -420,7 +433,9 @@ for (const [name, mutate] of [
   ['special placeholder name', data => { data.act_list[0].special_reward.name = 'not empty'; }],
   ['special placeholder quantity', data => { data.act_list[0].special_reward.num = 1; }],
   ['empty regular reward name', data => { data.act_list[0].reward_list[0].name = ''; }],
-  ['empty regular reward type', data => { data.act_list[0].reward_list[0].reward_type = ''; }],
+  ['wrong regular reward type', data => { data.act_list[0].reward_list[0].reward_type = 0; }],
+  ['null regular reward type', data => { data.act_list[0].reward_list[0].reward_type = null; }],
+  ['whitespace regular reward type', data => { data.act_list[0].reward_list[0].reward_type = ' '; }],
   ['wrong challenge field', data => { data.challenge_list[0].extra_progress = '0'; }],
 ]) {
   test(`rejects malformed ${name} without partial event output`, async () => {

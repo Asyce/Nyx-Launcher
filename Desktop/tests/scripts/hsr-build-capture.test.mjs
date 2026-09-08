@@ -402,6 +402,23 @@ test('happy path verifies the selected role, exact GET sequence, and complete so
   assert.ok(scenario.requests.every(request => request.body === undefined));
 });
 
+test('the official zero-ID blank linked-avatar sentinel is absent without losing the trace', async () => {
+  const character = rawCharacter(101);
+  const stage = character.skills[0].skill_stages[0];
+  stage.linked_avatar = { avatar_id: '0', name: '' };
+  stage.linked_skill_id = '0';
+  const result = await resultOf(createScenario({ details: [character, rawCharacter(202)] }));
+  assert.equal(result.status, 'done');
+  assert.equal(result.characters[0].traces[0].stages[0].linkedAvatar, null);
+  assert.equal(result.characters[0].traces[0].stages[0].linkedSkillId, '0');
+  assert.equal(result.characters[0].traces[0].stages[0].level, stage.level);
+
+  for (const value of [{ avatar_id: '123', name: '' }, { avatar_id: 0, name: '' }, null]) {
+    stage.linked_avatar = value;
+    assertNoPartialSuccess(await resultOf(createScenario({ details: [character, rawCharacter(202)] })));
+  }
+});
+
 test('an explicitly empty Chronicle roster is a valid complete observation', async () => {
   const scenario = createScenario({ details: [], initialRosterIds: [], finalRosterIds: [] });
   const result = await resultOf(scenario);

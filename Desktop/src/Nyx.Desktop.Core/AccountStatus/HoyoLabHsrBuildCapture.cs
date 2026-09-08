@@ -228,7 +228,8 @@ public static class HoyoLabHsrBuildCapture
                   exclusiveName: Object.keys(stage.exclusive_skill).length === 0 ? null : text(stage.exclusive_skill.name, 0, 256),
                   linkedAvatars: stage.linked_avatar_list === undefined ? null
                     : unique(rows(stage.linked_avatar_list, 32).map(item => ({ id: text(item.avatar_id, 1), name: text(item.name, 1, 256) })), 'id'),
-                  linkedAvatar: stage.linked_avatar === undefined ? null
+                  linkedAvatar: stage.linked_avatar === undefined
+                    || (stage.linked_avatar?.avatar_id === '0' && stage.linked_avatar.name === '') ? null
                     : { id: text(stage.linked_avatar.avatar_id, 1), name: text(stage.linked_avatar.name, 1, 256) },
                   linkedSkillId: stage.linked_skill_id === undefined ? null : text(stage.linked_skill_id, 1),
                   elationPriority: stage.elation_skill_priority === undefined ? null : text(stage.elation_skill_priority) };

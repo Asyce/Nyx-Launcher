@@ -198,7 +198,7 @@ public static class HoyoLabHsrEventsCapture
             const name = text(raw.name, id === 0 ? 0 : 1, 256);
             if (id === 0 && (name !== '' || quantity !== 0)) failure('needs-review');
             return { id, name, quantity, rarity:text(raw.rarity, 1, 64),
-              kind:raw.reward_type === undefined ? null : text(raw.reward_type, 1, 64) };
+              kind:raw.reward_type === undefined || raw.reward_type === '' ? null : text(raw.reward_type, 1, 64) };
           }
           function activity(raw) {
             if (!plain(raw)) failure('needs-review');
