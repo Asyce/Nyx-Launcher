@@ -140,7 +140,10 @@ public static class HoyoLabGenshinBuildCapture
             try {
               const response = await fetch(url, {
                 method: body === undefined ? 'GET' : 'POST', credentials: 'include',
-                redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer',
+                redirect: 'error', cache: 'no-store',
+                ...(url === calculatorUrl
+                  ? { referrer: 'https://act.hoyolab.com/ys/event/calculator-sea/index.html', referrerPolicy: 'no-referrer-when-downgrade' }
+                  : { referrerPolicy: 'no-referrer' }),
                 headers: { 'x-rpc-language': 'en-us', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
                 ...(body === undefined ? {} : { body: JSON.stringify(body) }),
                 signal: requestController.signal,
@@ -289,7 +292,7 @@ public static class HoyoLabGenshinBuildCapture
               const promotions = new Map();
               let expectedTotal = null;
               for (let page = 1; page <= 8; page++) {
-                const data = await request(calculatorUrl, { uid: config.roleId, region: config.server, page, size: 200 });
+                const data = await request(calculatorUrl, { uid: config.roleId, region: config.server, page, size: 200, lang: 'en-us' });
                 const total = integer(data.total);
                 if (total > config.maximumCharacters) failure('too-large');
                 if (expectedTotal !== null && expectedTotal !== total) failure('needs-review');

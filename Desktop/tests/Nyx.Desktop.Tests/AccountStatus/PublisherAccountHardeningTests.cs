@@ -4844,7 +4844,7 @@ public sealed class PublisherAccountHardeningTests
             browser,
             "private static string BuildResourceFetchScript",
             "private static string BuildHsrAchievementExportScript");
-        var signer = Slice(script, "// HSR_DS_SIGNER_START", "// HSR_DS_SIGNER_END");
+        var signer = HoyoLabHsrRequestScript.Signer;
 
         Assert.Contains(
             "const HSR_DS_SALT = '6s25p5ox5y14umn1p61aqyyvbvvl3lrt';",
@@ -4887,7 +4887,9 @@ public sealed class PublisherAccountHardeningTests
             "await request(noteUrl, false, noteHeaders);",
             script,
             StringComparison.Ordinal);
-        Assert.Equal(2, CountOccurrences(script, "hsrNoteHeaders()"));
+        Assert.Contains("? HoyoLabHsrRequestScript.Signer", script, StringComparison.Ordinal);
+        Assert.Equal(1, CountOccurrences(script, "hsrNoteHeaders()"));
+        Assert.Equal(1, CountOccurrences(signer, "hsrNoteHeaders()"));
     }
 
     [Fact]
@@ -4899,7 +4901,7 @@ public sealed class PublisherAccountHardeningTests
             "private static string BuildResourceFetchScript",
             "private static string BuildHsrAchievementExportScript");
         var policy = Slice(script, "var hsrSignerScript", "return $$");
-        var signer = Slice(script, "// HSR_DS_SIGNER_START", "// HSR_DS_SIGNER_END");
+        var signer = HoyoLabHsrRequestScript.Signer;
         var discovery = Slice(script, "async function discover", "async function requestNote");
 
         Assert.Equal(2, CountOccurrences(policy, "gameId == \"hsr\""));

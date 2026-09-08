@@ -93,6 +93,7 @@ public static class HoyoLabHsrEventsCapture
         return $$"""
         (() => {
           const config = {{configuration}};
+          {{HoyoLabHsrRequestScript.Signer}}
           if (Object.hasOwn(window, config.key)) return 'busy';
           const controller = new AbortController();
           const state = { result: null, abort: () => controller.abort() };
@@ -133,7 +134,9 @@ public static class HoyoLabHsrEventsCapture
             let body = '';
             try {
               const response = await fetch(url, { method: 'GET', credentials: 'include', redirect: 'error',
-                cache: 'no-store', referrerPolicy: 'no-referrer', headers: { 'x-rpc-language': 'en-us' }, signal: requestController.signal });
+                cache: 'no-store', referrerPolicy: 'no-referrer',
+                headers: url.startsWith(recordBase) ? hsrNoteHeaders() : { 'x-rpc-language': 'en-us' },
+                signal: requestController.signal });
               current();
               if (response.status === 401) failure('login-required');
               if (response.status !== 200 || response.url !== url || response.redirected

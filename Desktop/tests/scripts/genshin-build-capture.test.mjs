@@ -167,6 +167,7 @@ function createScenario(overrides = {}) {
       redirect: options.redirect,
       cache: options.cache,
       referrerPolicy: options.referrerPolicy,
+      referrer: options.referrer,
       language: options.headers?.['x-rpc-language'],
       contentType: options.headers?.['Content-Type'],
     });
@@ -267,8 +268,8 @@ test('happy path uses the exact role, paginates calculator data, and preserves t
   assert.deepEqual(scenario.requests.map(({ url, method, body }) => ({ url, method, body })), [
     { url: roleUrl, method: 'GET', body: undefined },
     { url: characterListUrl, method: 'POST', body: { role_id: roleId, server } },
-    { url: calculatorUrl, method: 'POST', body: { uid: roleId, region: server, page: 1, size: 200 } },
-    { url: calculatorUrl, method: 'POST', body: { uid: roleId, region: server, page: 2, size: 200 } },
+    { url: calculatorUrl, method: 'POST', body: { uid: roleId, region: server, page: 1, size: 200, lang: 'en-us' } },
+    { url: calculatorUrl, method: 'POST', body: { uid: roleId, region: server, page: 2, size: 200, lang: 'en-us' } },
     { url: characterDetailUrl, method: 'POST', body: { role_id: roleId, server, character_ids: [101, 202] } },
     { url: characterListUrl, method: 'POST', body: { role_id: roleId, server } },
   ]);
@@ -276,6 +277,11 @@ test('happy path uses the exact role, paginates calculator data, and preserves t
   assert.equal(scenario.requests[0].redirect, 'error');
   assert.equal(scenario.requests[0].cache, 'no-store');
   assert.equal(scenario.requests[0].referrerPolicy, 'no-referrer');
+  for (const request of scenario.requests) {
+    assert.equal(request.referrerPolicy, request.url === calculatorUrl ? 'no-referrer-when-downgrade' : 'no-referrer');
+    assert.equal(request.referrer, request.url === calculatorUrl
+      ? 'https://act.hoyolab.com/ys/event/calculator-sea/index.html' : undefined);
+  }
   assert.ok(scenario.requests.every(request => request.language === 'en-us'));
   assert.equal(scenario.requests[0].contentType, undefined);
   assert.ok(scenario.requests.slice(1).every(request => request.contentType === 'application/json'));

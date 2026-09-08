@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+import { createHash, webcrypto } from 'node:crypto';
 
 const roleId = '123456789';
 const server = 'prod_official_eur';
@@ -33,7 +34,10 @@ function extractScript() {
   const body = source.slice(start + 1, end).split(/\r?\n/);
   const indent = Math.min(...body.filter(line => line.trim()).map(line => line.match(/^ */)[0].length));
   return body.map(line => line.slice(Math.min(indent, line.length))).join('\n')
-    .replaceAll('{{configuration}}', JSON.stringify(config));
+    .replaceAll('{{configuration}}', JSON.stringify(config))
+    .replaceAll('{{HoyoLabHsrRequestScript.Signer}}', fs.readFileSync(
+      new URL('../../src/Nyx.Desktop.Core/AccountStatus/HoyoLabHsrRequestScript.cs', import.meta.url), 'utf8')
+      .split('// HSR_DS_SIGNER_START')[1].split('// HSR_DS_SIGNER_END')[0]);
 }
 
 const script = extractScript();
@@ -269,12 +273,14 @@ function createScenario(overrides = {}) {
       cache: options.cache,
       referrerPolicy: options.referrerPolicy,
       language: options.headers?.['x-rpc-language'],
+      headers: options.headers,
     });
     return overrides.fetch
       ? overrides.fetch(url, options, defaultFetch)
       : defaultFetch(url, options);
   };
   const context = vm.createContext({
+    crypto: Object.hasOwn(overrides, 'crypto') ? overrides.crypto : webcrypto,
     AbortController,
     TextDecoder,
     TextEncoder,
@@ -309,6 +315,12 @@ async function resultOf(scenario, attempts = 300) {
   }
   throw new Error(`capture did not finish; requests=${scenario.requests.length}`);
 }
+
+test('a missing signer capability stops before any unsigned record request', async () => {
+  const scenario = createScenario({ crypto: {} });
+  assertNoPartialSuccess(await resultOf(scenario));
+  assert.deepEqual(scenario.requests.map(request => request.url), [roleUrl]);
+});
 
 function assertNoPartialSuccess(result, expectedStatus = 'needs-review') {
   assert.equal(result.status, expectedStatus);
@@ -375,6 +387,18 @@ test('happy path verifies the selected role, exact GET sequence, and complete so
   assert.ok(scenario.requests.every(request => request.cache === 'no-store'));
   assert.ok(scenario.requests.every(request => request.referrerPolicy === 'no-referrer'));
   assert.ok(scenario.requests.every(request => request.language === 'en-us'));
+  for (const request of scenario.requests) {
+    if (request.url === roleUrl) {
+      assert.equal(Object.keys(request.headers).join(','), 'x-rpc-language');
+      continue;
+    }
+    assert.equal(request.headers['x-rpc-client_type'], '5');
+    assert.equal(request.headers['x-rpc-app_version'], '1.5.0');
+    assert.match(request.headers.DS, /^[0-9]{10},[a-z]{6},[a-f0-9]{32}$/);
+    const [timestamp, random, digest] = request.headers.DS.split(',');
+    assert.equal(digest, createHash('md5')
+      .update('salt=6s25p5ox5y14umn1p61aqyyvbvvl3lrt&t=' + timestamp + '&r=' + random).digest('hex'));
+  }
   assert.ok(scenario.requests.every(request => request.body === undefined));
 });
 
