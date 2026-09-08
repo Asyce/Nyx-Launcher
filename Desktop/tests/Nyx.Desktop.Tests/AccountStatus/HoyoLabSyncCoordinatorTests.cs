@@ -88,7 +88,7 @@ public sealed class HoyoLabSyncCoordinatorTests
     }
 
     [Fact]
-    public async Task Newer_remote_observations_merge_and_publish_while_opted_out_capabilities_stay_empty()
+    public async Task Newer_remote_observations_save_without_reupload_while_opted_out_capabilities_stay_empty()
     {
         using var harness = new Harness(BundleWithResource(Now.AddHours(-2), 100));
         Assert.Equal(
@@ -102,7 +102,9 @@ public sealed class HoyoLabSyncCoordinatorTests
         var result = await harness.Coordinator.SyncNowAsync();
 
         Assert.Equal(HoyoLabManualSyncStatus.Completed, result.Status);
-        Assert.Equal(["pull", "push"], harness.Cloud.Requests.Select(static item => item.Action));
+        Assert.Equal(["pull"], harness.Cloud.Requests.Select(static item => item.Action));
+        Assert.Equal(Now.AddMinutes(-1), result.UpdatedAt);
+        Assert.Equal(result.UpdatedAt, harness.Coordinator.GetSummary().LastSyncedAt);
         var loaded = LoadBundle(harness.ProtectedRoot);
         var role = Assert.Single(loaded.Roles);
         Assert.Equal(200, role.Resource!.Current);
@@ -115,6 +117,98 @@ public sealed class HoyoLabSyncCoordinatorTests
         Assert.False(loaded.Consents.Endgame);
         Assert.False(loaded.Consents.Events);
         Assert.False(loaded.Consents.Currency);
+    }
+
+    [Theory]
+    [InlineData("gi-resources")]
+    [InlineData("hsr-resources-achievements")]
+    [InlineData("gi-builds-exploration")]
+    [InlineData("hsr-builds")]
+    [InlineData("gi-events")]
+    [InlineData("hsr-events")]
+    public async Task Unchanged_cloud_bundle_is_read_without_another_upload(string capability)
+    {
+        var bundle = capability switch
+        {
+            "gi-resources" => GenshinBundleWithResource(Older, 80),
+            "gi-builds-exploration" => GenshinBundleWithBuildsAndExploration(Older),
+            "hsr-builds" => HsrBundleWithBuilds(Older),
+            "gi-events" => GenshinBundleWithEvents(Older),
+            "hsr-events" => HsrBundleWithEvents(Older),
+            _ => VectorBundle(),
+        };
+        using var harness = new Harness(bundle);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(DisplayCode, gameId: bundle.GameId)).Status);
+        var revision = Now.AddMinutes(-1);
+        harness.Cloud.SetRevision(Fixture.SyncId, revision, bundle.GameId);
+        harness.Cloud.ClearRequests();
+
+        var result = await harness.Coordinator.SyncNowAsync(gameId: bundle.GameId);
+
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, result.Status);
+        Assert.Equal(["pull"], harness.Cloud.Requests.Select(static item => item.Action));
+        Assert.Equal(revision, result.UpdatedAt);
+        Assert.Equal(revision, harness.Coordinator.GetSummary().LastSyncedAt);
+        Assert.Equal(revision, harness.Cloud.GetRevision(Fixture.SyncId, bundle.GameId));
+    }
+
+    [Theory]
+    [InlineData("gi")]
+    [InlineData("hsr")]
+    public async Task Local_newer_bundle_still_uploads_even_when_merge_is_locally_idempotent(string gameId)
+    {
+        var bundle = gameId == "gi" ? GenshinBundleWithResource(Older, 80) : BundleWithResource(Older, 80);
+        using var harness = new Harness(bundle);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(DisplayCode, gameId: gameId)).Status);
+        SaveBundle(harness.ProtectedRoot,
+            gameId == "gi" ? GenshinBundleWithResource(Newer, 90) : BundleWithResource(Newer, 90), gameId);
+        harness.Cloud.ClearRequests();
+
+        var result = await harness.Coordinator.SyncNowAsync(gameId: gameId);
+
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, result.Status);
+        Assert.Equal(["pull", "push"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var secrets = Secrets(DisplayCode);
+        Assert.Equal(90, Assert.Single(harness.Cloud.GetBundle(Fixture.SyncId, secrets, gameId).Roles).Resource!.Current);
+    }
+
+    [Theory]
+    [InlineData("selection")]
+    [InlineData("consent")]
+    [InlineData("tombstone")]
+    public async Task Non_observation_changes_are_not_mistaken_for_an_unchanged_cloud_copy(string change)
+    {
+        var bundle = TwoRoleBundle(FixtureBinding);
+        using var harness = new Harness(bundle);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        var local = change switch
+        {
+            "selection" => bundle with { SelectedRole = SurvivorBinding },
+            "consent" => bundle with { Consents = bundle.Consents with { Builds = true } },
+            _ => bundle with
+            {
+                Roles = [bundle.Roles[0]],
+                RoleTombstones = [new(SurvivorBinding, Newer)],
+            },
+        };
+        SaveBundle(harness.ProtectedRoot, local, local.GameId);
+        harness.Cloud.ClearRequests();
+
+        var result = await harness.Coordinator.SyncNowAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, result.Status);
+        Assert.Equal(["pull", "push"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var secrets = Secrets(DisplayCode);
+        var remote = harness.Cloud.GetBundle(Fixture.SyncId, secrets);
+        Assert.Equal(local.SelectedRole, remote.SelectedRole);
+        Assert.Equal(local.Consents, remote.Consents);
+        Assert.Equal(local.RoleTombstones, remote.RoleTombstones);
+        harness.Cloud.ClearRequests();
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.SyncNowAsync()).Status);
+        Assert.Equal(["pull"], harness.Cloud.Requests.Select(static item => item.Action));
     }
 
     [Fact]
@@ -141,7 +235,7 @@ public sealed class HoyoLabSyncCoordinatorTests
     }
 
     [Fact]
-    public async Task First_cas_conflict_repulls_and_retries_once_with_the_new_revision()
+    public async Task First_cas_conflict_repulls_and_does_not_reupload_an_already_current_bundle()
     {
         using var harness = new Harness(BundleWithResource(Now.AddHours(-2), 100));
         Assert.Equal(
@@ -166,14 +260,13 @@ public sealed class HoyoLabSyncCoordinatorTests
 
         Assert.Equal(HoyoLabManualSyncStatus.Completed, result.Status);
         Assert.Equal(
-            ["pull", "push", "pull", "push"],
+            ["pull", "push", "pull"],
             harness.Cloud.Requests.Select(static item => item.Action));
-        var pushes = harness.Cloud.Requests.Where(static item => item.Action == "push").ToArray();
-        Assert.Equal(JsonValueKind.Null, pushes[0].Root.GetProperty("baseUpdatedAt").ValueKind);
-        Assert.Equal(
-            FormatTimestamp(remoteRevision),
-            pushes[1].Root.GetProperty("baseUpdatedAt").GetString());
-        Assert.All(pushes, static request => Assert.False(request.Root.TryGetProperty("force", out _)));
+        var push = Assert.Single(harness.Cloud.Requests, static item => item.Action == "push");
+        Assert.Equal(JsonValueKind.Null, push.Root.GetProperty("baseUpdatedAt").ValueKind);
+        Assert.False(push.Root.TryGetProperty("force", out _));
+        Assert.Equal(remoteRevision, result.UpdatedAt);
+        Assert.Equal(remoteRevision, harness.Cloud.GetRevision(Fixture.SyncId));
         var loaded = LoadBundle(harness.ProtectedRoot);
         Assert.Equal(200, Assert.Single(loaded.Roles).Resource!.Current);
     }

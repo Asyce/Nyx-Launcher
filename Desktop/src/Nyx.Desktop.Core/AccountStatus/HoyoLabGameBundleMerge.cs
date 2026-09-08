@@ -11,14 +11,19 @@ public sealed record HoyoLabGameBundleMergeResult
 {
     internal HoyoLabGameBundleMergeResult(
         HoyoLabGameBundleMergeOutcome outcome,
-        HoyoLabGameBundle? bundle)
+        HoyoLabGameBundle? bundle,
+        bool matchesRemote = false)
     {
         Outcome = outcome;
         Bundle = bundle;
+        MatchesRemote = matchesRemote;
     }
 
     public HoyoLabGameBundleMergeOutcome Outcome { get; }
     public HoyoLabGameBundle? Bundle { get; }
+
+    // Idempotent compares with local state; it does not mean the cloud is current.
+    public bool MatchesRemote { get; }
 }
 
 public static class HoyoLabGameBundleMerge
@@ -231,7 +236,8 @@ public static class HoyoLabGameBundleMerge
             BundleEquals(local, merged)
                 ? HoyoLabGameBundleMergeOutcome.Idempotent
                 : HoyoLabGameBundleMergeOutcome.Merged,
-            merged);
+            merged,
+            BundleEquals(remote, merged));
     }
 
     private static bool TryMergeObservation<T>(

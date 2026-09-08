@@ -448,19 +448,24 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
         {
             var merged = await ReadMergedAsync(secrets, cancellationToken, gameId).ConfigureAwait(false);
             if (merged.Status != HoyoLabManualSyncStatus.Completed) return Result(merged.Status);
-            if (!HoyoLabSyncCrypto.TryEncryptBundle(secrets, merged.Bundle, UtcNow(), out var envelope))
-                return Result(HoyoLabManualSyncStatus.InvalidCloudData);
-            var pushed = await RequestAsync(
-                () => client.PushAsync(secrets, envelope, merged.UpdatedAt, cancellationToken, gameId),
-                cancellationToken).ConfigureAwait(false);
-            if (pushed.IsConflict && attempt == 0) continue;
-            if (!pushed.IsSuccess) return Result(Map(pushed.Failure));
+            var updatedAt = merged.UpdatedAt;
+            if (!merged.MatchesRemote)
+            {
+                if (!HoyoLabSyncCrypto.TryEncryptBundle(secrets, merged.Bundle, UtcNow(), out var envelope))
+                    return Result(HoyoLabManualSyncStatus.InvalidCloudData);
+                var pushed = await RequestAsync(
+                    () => client.PushAsync(secrets, envelope, merged.UpdatedAt, cancellationToken, gameId),
+                    cancellationToken).ConfigureAwait(false);
+                if (pushed.IsConflict && attempt == 0) continue;
+                if (!pushed.IsSuccess) return Result(Map(pushed.Failure));
+                updatedAt = pushed.UpdatedAt;
+            }
             if (!Apply(
                     () => bundles[gameId].TrySave(merged.Bundle!)
-                        && currentStore!.TrySetWorkerRevision(pushed.UpdatedAt, cancellationToken),
+                        && currentStore!.TrySetWorkerRevision(updatedAt, cancellationToken),
                     cancellationToken))
                 return WriteFailure(cancellationToken);
-            return new(HoyoLabManualSyncStatus.Completed, pushed.UpdatedAt);
+            return new(HoyoLabManualSyncStatus.Completed, updatedAt);
         }
         return Result(HoyoLabManualSyncStatus.Conflict);
     }
@@ -482,7 +487,7 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
         var merged = HoyoLabGameBundleMerge.Merge(local, remote.Bundle, UtcNow());
         return merged.Outcome == HoyoLabGameBundleMergeOutcome.Conflict
             ? new(HoyoLabManualSyncStatus.Conflict)
-            : new(HoyoLabManualSyncStatus.Completed, merged.Bundle, remote.UpdatedAt);
+            : new(HoyoLabManualSyncStatus.Completed, merged.Bundle, remote.UpdatedAt, merged.MatchesRemote);
     }
 
     private async Task<ReadResult> ReadRemoteAsync(
@@ -811,7 +816,8 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
     private sealed record ReadResult(
         HoyoLabManualSyncStatus Status,
         HoyoLabGameBundle? Bundle = null,
-        DateTimeOffset? UpdatedAt = null)
+        DateTimeOffset? UpdatedAt = null,
+        bool MatchesRemote = false)
     {
         public override string ToString() => nameof(ReadResult);
     }

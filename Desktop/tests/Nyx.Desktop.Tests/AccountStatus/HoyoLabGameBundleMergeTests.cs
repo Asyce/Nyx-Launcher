@@ -21,6 +21,7 @@ public sealed class HoyoLabGameBundleMergeTests
             Bundle([remoteRole], remoteRole.Role.Binding, Consents(resources: true)));
 
         Assert.Equal(HoyoLabGameBundleMergeOutcome.Idempotent, result.Outcome);
+        Assert.False(result.MatchesRemote);
         var merged = Assert.IsType<HoyoLabGameBundle>(result.Bundle);
         Assert.Equal(Newer, merged.Roles[0].Observations.Resources);
         Assert.Equal(200, merged.Roles[0].Resource!.Current);
@@ -48,6 +49,7 @@ public sealed class HoyoLabGameBundleMergeTests
             Bundle([remoteRole], remoteRole.Role.Binding, consents));
 
         Assert.Equal(HoyoLabGameBundleMergeOutcome.Merged, result.Outcome);
+        Assert.True(result.MatchesRemote);
         var mergedRole = Assert.Single(Assert.IsType<HoyoLabGameBundle>(result.Bundle).Roles);
         Assert.Equal(Newer, mergedRole.Observations.Resources);
         Assert.Equal(200, mergedRole.Resource!.Current);
@@ -365,6 +367,7 @@ public sealed class HoyoLabGameBundleMergeTests
             local,
             Bundle([identicalRole], identicalRole.Role.Binding, consents));
         Assert.Equal(HoyoLabGameBundleMergeOutcome.Idempotent, identical.Outcome);
+        Assert.True(identical.MatchesRemote);
         Assert.NotNull(identical.Bundle);
 
         AssertConflict(MergeValid(
