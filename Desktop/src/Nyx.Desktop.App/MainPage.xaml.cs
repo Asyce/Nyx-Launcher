@@ -7012,11 +7012,11 @@ public sealed partial class MainPage : Page
                 : null;
             var upcoming = launcherGame.UpcomingForDisplayAt(now, 5);
             RenderBannerRows(selected.Id, current, now);
-            RenderUpcomingBannerGroups(selected.Id, current, upcoming, now);
+            RenderUpcomingBannerGroups(selected.Id, current, upcoming, now, launcherGame.Concurrent);
             BannerCycleHeading.Text = "BANNERS";
             BannerCycleTiming.Text = FormatBannerTimelineLabel(
                 current?.Phase,
-                FormatCurrentBannerTiming(current, now));
+                FormatCurrentBannerTiming(current, now), current?.BannerSystem);
             var timingVisibility = string.IsNullOrWhiteSpace(BannerCycleTiming.Text)
                 ? Visibility.Collapsed
                 : Visibility.Visible;
@@ -7045,9 +7045,11 @@ public sealed partial class MainPage : Page
         return string.Empty;
     }
 
-    private static string FormatBannerTimelineLabel(string? phase, string timing)
+    private static string FormatBannerTimelineLabel(string? phase, string timing, string? bannerSystem = null)
     {
-        var label = FormatBannerPhaseLabel(phase);
+        var label = bannerSystem is null
+            ? FormatBannerPhaseLabel(phase)
+            : $"{(bannerSystem == "re-factor" ? "RE-Factor" : "Chartered")} \u00B7 {phase}";
         if (string.IsNullOrEmpty(label)) return timing;
         return string.IsNullOrEmpty(timing) ? label : $"{label} \u00B7 {timing}";
     }
@@ -7068,22 +7070,40 @@ public sealed partial class MainPage : Page
         string gameId,
         LauncherBannersCurrentPhase? current,
         IReadOnlyList<LauncherBannersUpcomingPhase> upcoming,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        IReadOnlyList<LauncherBannersCurrentPhase> concurrent)
     {
         var projected = new List<UpcomingBannerGroupItem>();
-        if (gameId == "ae" && current is not null)
+        UpcomingBannerCharacterItem[] DisplayCharacters(IEnumerable<LauncherBannersCharacter> characters)
         {
-            var lossCharacters = OrderBannerCharacters(current.Characters)
-                .Where(static character => character.Limited == false)
-                .Select(CreateUpcomingBannerCharacter)
-                .ToArray();
+            var ordered = OrderBannerCharacters(characters).ToArray();
+            return ordered.Length <= MaximumDisplayedBannerCharactersPerPhase
+                ? ordered.Select(CreateUpcomingBannerCharacter).ToArray()
+                : [
+                    .. ordered.Take(MaximumDisplayedBannerCharactersPerPhase - 1).Select(CreateUpcomingBannerCharacter),
+                    UpcomingBannerCharacterItem.CreateOverflow(ordered.Skip(MaximumDisplayedBannerCharactersPerPhase - 1)
+                        .Select(CreateBannerPortrait).ToArray()),
+                ];
+        }
+        void AddLossCharacters(LauncherBannersCurrentPhase phase)
+        {
+            var lossCharacters = DisplayCharacters(phase.Characters.Where(static character => character.Limited == false));
             if (lossCharacters.Length > 0)
             {
                 projected.Add(new UpcomingBannerGroupItem(
-                    $"loss:{current.Start.ToUniversalTime():O}",
+                    $"loss:{phase.BannerSystem}:{phase.Start.ToUniversalTime():O}:{phase.End:O}",
                     "Available on loss",
                     lossCharacters));
             }
+        }
+        if (gameId == "ae" && current is not null) AddLossCharacters(current);
+        foreach (var phase in concurrent)
+        {
+            projected.Add(new UpcomingBannerGroupItem(
+                $"current:{phase.BannerSystem}:{phase.Start.ToUniversalTime():O}:{phase.End:O}",
+                FormatBannerTimelineLabel(phase.Phase, FormatCurrentBannerTiming(phase, now), phase.BannerSystem),
+                DisplayCharacters(phase.Characters.Where(character => character.Limited != false))));
+            AddLossCharacters(phase);
         }
 
         projected.AddRange(upcoming
@@ -7091,30 +7111,18 @@ public sealed partial class MainPage : Page
             .Take(5)
             .Select((phase, index) =>
             {
-                var orderedCharacters = OrderBannerCharacters(phase.Characters).ToArray();
-                var displayedCharacters = orderedCharacters.Length <= MaximumDisplayedBannerCharactersPerPhase
-                    ? orderedCharacters.Select(CreateUpcomingBannerCharacter).ToArray()
-                    :
-                    [
-                        .. orderedCharacters
-                            .Take(MaximumDisplayedBannerCharactersPerPhase - 1)
-                            .Select(CreateUpcomingBannerCharacter),
-                        UpcomingBannerCharacterItem.CreateOverflow(
-                            orderedCharacters
-                                .Skip(MaximumDisplayedBannerCharactersPerPhase - 1)
-                                .Select(CreateBannerPortrait)
-                                .ToArray()),
-                    ];
                 return new UpcomingBannerGroupItem(
-                    phase.Announced ? $"announced:{index}" : phase.Start!.Value.ToUniversalTime().ToString("O"),
+                    phase.Announced ? $"announced:{index}" : $"{phase.BannerSystem}:{phase.Start!.Value.ToUniversalTime():O}:{phase.End:O}",
                     phase.Announced
                         ? string.IsNullOrWhiteSpace(phase.Phase)
                             ? "Soon\u2122"
                             : FormatBannerPhaseLabel(phase.Phase)
                         : FormatBannerTimelineLabel(
                             phase.Phase,
-                            $"Starts in {BannerTimingFormatter.FormatRemaining(phase.Start!.Value - now)}"),
-                    displayedCharacters);
+                            phase.Start > now
+                                ? $"Starts in {BannerTimingFormatter.FormatRemaining(phase.Start!.Value - now)}"
+                                : $"Ends in {BannerTimingFormatter.FormatRemaining(phase.End!.Value - now)}", phase.BannerSystem),
+                    DisplayCharacters(phase.Characters));
             })
             .ToArray());
 

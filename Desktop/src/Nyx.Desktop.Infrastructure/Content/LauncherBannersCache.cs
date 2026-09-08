@@ -28,6 +28,7 @@ public sealed class LauncherBannersCache
     }
 
     public string LastKnownGoodManifestPath => Path.Combine(LastKnownGoodDirectory, "launcher-banners-v1.json");
+    public string LastKnownGoodV2ManifestPath => Path.Combine(LastKnownGoodDirectory, "launcher-banners-v2.json");
     public string LastKnownGoodCodesPath => Path.Combine(LastKnownGoodDirectory, "launcher-codes-v1.json");
     public string LastKnownGoodToolsPath => Path.Combine(LastKnownGoodDirectory, "launcher-tools-v1.json");
 
@@ -55,21 +56,30 @@ public sealed class LauncherBannersCache
         return result is not null && IsSafeContainedPath(root, result, mustExist: true) ? result : null;
     }
 
-    public LauncherBannersManifest? TryLoadLastKnownGood(DateTimeOffset observedAt, string? bundledAssetsDirectory = null)
+    public LauncherBannersManifest? TryLoadLastKnownGood(DateTimeOffset observedAt, string? bundledAssetsDirectory = null, bool preferV2 = false)
+    {
+        var legacy = TryLoadManifest(LastKnownGoodManifestPath, 1, observedAt, bundledAssetsDirectory);
+        var latest = preferV2 ? TryLoadManifest(LastKnownGoodV2ManifestPath, 2, observedAt, bundledAssetsDirectory) : null;
+        return latest is not null && (legacy is null || latest.GeneratedAt >= legacy.GeneratedAt) ? latest : legacy;
+    }
+
+    private LauncherBannersManifest? TryLoadManifest(string manifestPath, int schemaVersion, DateTimeOffset observedAt, string? bundledAssetsDirectory, bool requireAssets = true)
     {
         try
         {
-            if (!IsSafeOwnedCachePath(LastKnownGoodManifestPath, mustExist: true)) return null;
-            var payload = File.ReadAllBytes(LastKnownGoodManifestPath);
-            if (!IsSafeOwnedCachePath(LastKnownGoodManifestPath, mustExist: true)) return null;
+            if (!IsSafeOwnedCachePath(manifestPath, mustExist: true)) return null;
+            var payload = File.ReadAllBytes(manifestPath);
+            if (!IsSafeOwnedCachePath(manifestPath, mustExist: true)) return null;
             var manifest = LauncherBannersManifestParser.Parse(payload, fallback: true, observedAt);
+            if (manifest.SchemaVersion != schemaVersion) return null;
             if (!string.Equals(manifest.Revision, ComputeSemanticRevision(payload), StringComparison.Ordinal)) return null;
-            if (AllDisplayAssets(manifest).Any(asset =>
+            if (requireAssets && AllDisplayAssets(manifest).Any(asset =>
                 (bundledAssetsDirectory is null || TryResolveBundledAsset(asset, bundledAssetsDirectory) is null)
                 && TryResolveManagedAsset(asset) is null)) return null;
             return manifest;
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException or JsonException)
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidDataException or JsonException
+            or ArgumentException or InvalidOperationException or KeyNotFoundException)
         {
             return null;
         }
@@ -211,7 +221,7 @@ public sealed class LauncherBannersCache
             }
             await AtomicWriteOwnedAsync(revisionPath, payload, cancellationToken).ConfigureAwait(false);
             revisionWritten = true;
-            await AtomicWriteOwnedAsync(LastKnownGoodManifestPath, payload, cancellationToken).ConfigureAwait(false);
+            await AtomicWriteOwnedAsync(manifest.SchemaVersion == 2 ? LastKnownGoodV2ManifestPath : LastKnownGoodManifestPath, payload, cancellationToken).ConfigureAwait(false);
             committed = true;
             PruneManagedCache(activeManifest: manifest, now: DateTimeOffset.UtcNow);
         }
@@ -320,6 +330,12 @@ public sealed class LauncherBannersCache
             var liveHashes = AllDisplayAssets(activeManifest)
                 .Select(asset => asset.Sha256)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var sibling = TryLoadManifest(
+                activeManifest.SchemaVersion == 2 ? LastKnownGoodManifestPath : LastKnownGoodV2ManifestPath,
+                activeManifest.SchemaVersion == 2 ? 1 : 2,
+                now ?? DateTimeOffset.UtcNow,
+                bundledAssetsDirectory: null, requireAssets: false);
+            if (sibling is not null) liveHashes.UnionWith(AllDisplayAssets(sibling).Select(asset => asset.Sha256));
             foreach (var file in Directory.EnumerateFiles(ManagedAssetsDirectory, "*", SearchOption.TopDirectoryOnly))
             {
                 EnsureSafeOwnedPath(file, mustExist: true);
@@ -435,10 +451,13 @@ public sealed class LauncherBannersCache
         var games = root["games"]?.DeepClone()?.AsObject() ?? throw new InvalidDataException("Launcher manifest games are missing.");
         foreach (var game in games)
         {
-            if (game.Value is JsonObject gameObject
-                && gameObject["current"] is JsonObject current
-                && current["remaining"] is JsonObject remaining)
-                remaining.Remove("durationSeconds");
+            if (game.Value is not JsonObject gameObject) continue;
+            var phases = new List<JsonNode?> { gameObject["current"] };
+            if (root["schemaVersion"]?.GetValue<int>() == 2 && gameObject["concurrent"] is JsonArray concurrent)
+                phases.AddRange(concurrent);
+            foreach (var phase in phases)
+                if (phase is JsonObject current && current["remaining"] is JsonObject remaining)
+                    remaining.Remove("durationSeconds");
         }
         var semantic = new JsonObject
         {
@@ -527,9 +546,9 @@ public sealed class LauncherBannersCache
 
     private static IEnumerable<LauncherBannersAsset> AllDisplayAssets(LauncherBannersManifest manifest) =>
         manifest.Games.Values.SelectMany(game =>
-            (game.Current?.Variants ?? [])
-            .Concat((game.Current?.Characters ?? []).Select(character => character.Icon).OfType<LauncherBannersAsset>())
-            .Concat(game.Current?.Characters.SelectMany(character => character.Variants) ?? [])
+            game.CurrentPhases.SelectMany(phase => phase.Variants
+                .Concat(phase.Characters.Select(character => character.Icon).OfType<LauncherBannersAsset>())
+                .Concat(phase.Characters.SelectMany(character => character.Variants)))
             .Concat(game.Upcoming.SelectMany(phase => phase.Characters).Select(character => character.Icon).OfType<LauncherBannersAsset>())
             .Concat(game.Upcoming.SelectMany(phase => phase.Characters).SelectMany(character => character.Variants)));
 

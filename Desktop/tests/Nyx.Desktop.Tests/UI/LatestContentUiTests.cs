@@ -13,9 +13,9 @@ public sealed class BannerCycleUiTests
         Assert.Contains("launcherBanners.Current.Games.TryGetValue(selected.Id", render, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.SetName(\n                BannerCycleRegion", render, StringComparison.Ordinal);
         Assert.Contains("RenderBannerRows(selected.Id, current, now)", render, StringComparison.Ordinal);
-        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now)", render, StringComparison.Ordinal);
+        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now, launcherGame.Concurrent)", render, StringComparison.Ordinal);
         Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 5)", render, StringComparison.Ordinal);
-        Assert.DoesNotContain("phase.Start > now", render, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Where(phase => phase.Start > now)", render, StringComparison.Ordinal);
         Assert.Contains("FormatCurrentBannerTiming(current, now)", render, StringComparison.Ordinal);
         Assert.DoesNotContain("SetBannerCard", render, StringComparison.Ordinal);
         Assert.DoesNotContain("latestContent.Current", render, StringComparison.Ordinal);
@@ -144,8 +144,9 @@ public sealed class BannerCycleUiTests
         Assert.DoesNotContain("ItemWidth", xaml + code, StringComparison.Ordinal);
         Assert.Contains("private const int MaximumDisplayedCurrentBannerCharacters = 10", code, StringComparison.Ordinal);
         Assert.Contains("private const int MaximumDisplayedBannerCharactersPerPhase = 10", code, StringComparison.Ordinal);
-        Assert.Contains("OrderBannerCharacters(phase.Characters)", code, StringComparison.Ordinal);
-        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now)", code, StringComparison.Ordinal);
+        Assert.Contains("OrderBannerCharacters(characters)", code, StringComparison.Ordinal);
+        Assert.Contains("DisplayCharacters(phase.Characters)", code, StringComparison.Ordinal);
+        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now, launcherGame.Concurrent)", code, StringComparison.Ordinal);
         Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 5)", code, StringComparison.Ordinal);
         Assert.Contains("rows.Chunk(2)", code, StringComparison.Ordinal);
         Assert.Contains("CharacterRows = Characters.Chunk(2).ToArray()", code, StringComparison.Ordinal);
@@ -321,7 +322,7 @@ public sealed class BannerCycleUiTests
         Assert.Contains("x:Name=\"CurrentBannerSection\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"UpcomingBannerList\"", xaml, StringComparison.Ordinal);
         Assert.Contains("RenderBannerRows(selected.Id, current, now)", code, StringComparison.Ordinal);
-        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now)", code, StringComparison.Ordinal);
+        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now, launcherGame.Concurrent)", code, StringComparison.Ordinal);
         foreach (var symbol in new[]
                  {
                      "BannerCollection",
@@ -347,6 +348,10 @@ public sealed class BannerCycleUiTests
         Assert.Contains("$\"Starts in {BannerTimingFormatter.FormatRemaining(phase.Start!.Value - now)}\"", render, StringComparison.Ordinal);
         Assert.Contains("\"Available on loss\"", render, StringComparison.Ordinal);
         Assert.Contains("character.Limited == false", render, StringComparison.Ordinal);
+        Assert.Contains("foreach (var phase in concurrent)", render, StringComparison.Ordinal);
+        Assert.Contains("FormatCurrentBannerTiming(phase, now), phase.BannerSystem", render, StringComparison.Ordinal);
+        Assert.Contains("phase.BannerSystem}:{phase.Start", render, StringComparison.Ordinal);
+        Assert.Contains("bannerSystem == \"re-factor\" ? \"RE-Factor\" : \"Chartered\"", code, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -408,7 +413,9 @@ public sealed class BannerCycleUiTests
         Assert.Contains("_launcherBanners = new LauncherBannersContentService", app, StringComparison.Ordinal);
         Assert.DoesNotContain("PENGO_NYX_LAUNCHER_", app, StringComparison.Ordinal);
         Assert.DoesNotContain("Environment.GetEnvironmentVariable", app, StringComparison.Ordinal);
-        Assert.Contains("new Uri(LauncherBannersTransport.ProductionEndpoint)", app, StringComparison.Ordinal);
+        Assert.Contains("new Uri(LauncherBannersTransport.ProductionV2Endpoint)", app, StringComparison.Ordinal);
+        Assert.Contains("launcher-banners-v1.json", app, StringComparison.Ordinal);
+        Assert.Contains("launcher-banners-v2.json", app, StringComparison.Ordinal);
         Assert.Contains("new Uri(LauncherBannersTransport.ProductionCodesEndpoint)", app, StringComparison.Ordinal);
         Assert.Contains("Assets\\Content\\**\\*", project, StringComparison.Ordinal);
         Assert.Contains("CopyToOutputDirectory=\"PreserveNewest\"", project, StringComparison.Ordinal);

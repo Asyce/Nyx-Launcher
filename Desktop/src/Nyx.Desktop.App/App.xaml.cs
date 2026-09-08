@@ -291,14 +291,22 @@ public partial class App : Application
             LauncherState.Snapshot.PlaytimeSecondsByGame,
             playtime => LauncherState.TryUpdate(state => state with { PlaytimeSecondsByGame = playtime }),
             _sessionRefresh);
+        var bannerContentDirectory = Path.Combine(AppContext.BaseDirectory, "Assets", "Content");
+        var bundledBanners = File.ReadAllBytes(Path.Combine(bannerContentDirectory, "launcher-banners-v1.json"));
+        try
+        {
+            var latest = File.ReadAllBytes(Path.Combine(bannerContentDirectory, "launcher-banners-v2.json"));
+            if (LauncherBannersManifestParser.Parse(latest, fallback: true).SchemaVersion == 2) bundledBanners = latest;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException
+            or InvalidOperationException or KeyNotFoundException or System.Text.Json.JsonException)
+        {
+            // The unchanged bundled v1 feed remains the last-resort fallback.
+        }
         _launcherBanners = new LauncherBannersContentService(
-            File.ReadAllBytes(Path.Combine(
-                AppContext.BaseDirectory,
-                "Assets",
-                "Content",
-                "launcher-banners-v1.json")),
+            bundledBanners,
             Path.Combine(LauncherState.DataDirectory, "ContentCache"),
-            new Uri(LauncherBannersTransport.ProductionEndpoint),
+            new Uri(LauncherBannersTransport.ProductionV2Endpoint),
             codesEndpoint: new Uri(LauncherBannersTransport.ProductionCodesEndpoint),
             toolsEndpoint: new Uri(LauncherBannersTransport.ProductionToolsEndpoint));
         var accountFlags = LauncherState.Snapshot.Preferences.FeatureFlags;

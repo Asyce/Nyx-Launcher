@@ -78,7 +78,8 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
         if (this.interval < TimeSpan.FromMinutes(15)) throw new ArgumentOutOfRangeException(nameof(interval));
         var observedAt = this.clock();
         bundledManifest = LauncherBannersManifestParser.Parse(this.bundledPayload, fallback: true, observedAt);
-        var cached = cache.TryLoadLastKnownGood(observedAt, this.bundledAssetsDirectory);
+        var cached = cache.TryLoadLastKnownGood(observedAt, this.bundledAssetsDirectory,
+            preferV2: this.endpoint.AbsoluteUri == LauncherBannersTransport.ProductionV2Endpoint || bundledManifest.SchemaVersion == 2);
         current = ApplyBundledUpcomingFallback(
             cached is not null && cached.GeneratedAt >= bundledManifest.GeneratedAt
                 ? cached
@@ -190,6 +191,9 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
                 var manifest = ApplyBundledUpcomingFallback(
                     LauncherBannersManifestParser.Parse(payload, fallback: false, clock()),
                     bundledManifest);
+                if (endpoint.AbsoluteUri == LauncherBannersTransport.ProductionV2Endpoint && manifest.SchemaVersion != 2
+                    || endpoint.AbsoluteUri == LauncherBannersTransport.ProductionEndpoint && manifest.SchemaVersion != 1)
+                    throw new InvalidDataException("Launcher banner schema does not match its endpoint.");
                 var promote = true;
                 lock (sync)
                 {
@@ -348,7 +352,8 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
                 pair.Value.Current,
                 pair.Value.News,
                 pair.Value.Upcoming,
-                codesManifest.Games[pair.Key]),
+                codesManifest.Games[pair.Key],
+                pair.Value.Concurrent),
             StringComparer.Ordinal);
         return new LauncherBannersManifest(
             bannerManifest.SchemaVersion,
@@ -377,6 +382,7 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
                 }
 
                 var useBundledUpcoming = manifest.GeneratedAt <= bundled.GeneratedAt
+                    && manifest.SchemaVersion == bundled.SchemaVersion
                     && remoteGame.Upcoming.Count == 0
                     && bundledGame.Upcoming.Count > 0;
                 if (!useBundledUpcoming) return remoteGame;
@@ -388,7 +394,8 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
                     remoteGame.Current,
                     remoteGame.News,
                     useBundledUpcoming ? bundledGame.Upcoming : remoteGame.Upcoming,
-                    remoteGame.Codes);
+                    remoteGame.Codes,
+                    remoteGame.Concurrent);
             },
             StringComparer.Ordinal);
 
@@ -431,7 +438,8 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
 
         var nextExpiry = manifest.Games.Values
             .SelectMany(static game => game.Upcoming.Select(phase => (DateTimeOffset?)phase.Start)
-                .Prepend(game.Current?.EffectiveEnd))
+                .Concat(game.Upcoming.Where(phase => phase.BannerSystem is not null).Select(phase => phase.End))
+                .Concat(game.CurrentPhases.Select(phase => phase.EffectiveEnd)))
             .Where(static boundary => boundary.HasValue)
             .Select(static boundary => boundary!.Value)
             .Where(boundary => boundary > now)

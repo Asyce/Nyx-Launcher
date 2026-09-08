@@ -640,22 +640,27 @@ public sealed class PackagingScriptTests
 
         var repositoryRoot = Path.GetFullPath(Path.Combine(DesktopRoot, ".."));
         var generatedRoot = Path.Combine(repositoryRoot, "Site", "src", "data", "generated");
-        using var manifest = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(generatedRoot, "launcher-banners-v1.json")));
-        var assets = EnumerateObjects(manifest.RootElement)
-            .Where(element => element.TryGetProperty("path", out var path)
-                && path.GetString()?.StartsWith("/launcher-art/", StringComparison.Ordinal) == true)
-            .ToArray();
-        Assert.NotEmpty(assets);
-        foreach (var asset in assets)
+        foreach (var schemaVersion in new[] { 1, 2 })
         {
-            var sha256 = asset.GetProperty("sha256").GetString();
-            Assert.NotNull(sha256);
-            Assert.Equal($"/launcher-art/{sha256}.webp", asset.GetProperty("path").GetString());
-            var file = Path.Combine(generatedRoot, "launcher-art", $"{sha256}.webp");
-            Assert.True(File.Exists(file), $"Missing bundled launcher art: {file}");
-            Assert.Equal(
-                sha256,
-                Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file))).ToLowerInvariant());
+            Assert.Contains($"Assets\\Content\\launcher-banners-v{schemaVersion}.json", project, StringComparison.Ordinal);
+            using var manifest = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(generatedRoot, $"launcher-banners-v{schemaVersion}.json")));
+            Assert.Equal(schemaVersion, manifest.RootElement.GetProperty("schemaVersion").GetInt32());
+            var assets = EnumerateObjects(manifest.RootElement)
+                .Where(element => element.TryGetProperty("path", out var path)
+                    && path.GetString()?.StartsWith("/launcher-art/", StringComparison.Ordinal) == true)
+                .ToArray();
+            Assert.NotEmpty(assets);
+            foreach (var asset in assets)
+            {
+                var sha256 = asset.GetProperty("sha256").GetString();
+                Assert.NotNull(sha256);
+                Assert.Equal($"/launcher-art/{sha256}.webp", asset.GetProperty("path").GetString());
+                var file = Path.Combine(generatedRoot, "launcher-art", $"{sha256}.webp");
+                Assert.True(File.Exists(file), $"Missing bundled launcher art: {file}");
+                Assert.Equal(
+                    sha256,
+                    Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file))).ToLowerInvariant());
+            }
         }
 
         Assert.Contains("Name=\"ExcludeOptionalPublishDiagnostics\"", project, StringComparison.Ordinal);

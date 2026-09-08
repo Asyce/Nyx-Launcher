@@ -65,6 +65,8 @@ public sealed class LauncherBannersContentTests
 
     [Theory]
     [InlineData("https://pengo.gg/dist/launcher-banners-v1.json", true)]
+    [InlineData("https://pengo.gg/dist/launcher-banners-v2.json", true)]
+    [InlineData("https://pengo.gg/dist/launcher-banners-v2.json?x=1", false)]
     [InlineData("https://pengo.gg/dist/launcher-codes-v1.json", true)]
     [InlineData("https://pengo.gg/dist/launcher-tools-v1.json", true)]
     [InlineData("https://pengo.gg/dist/other.json", false)]
@@ -72,7 +74,7 @@ public sealed class LauncherBannersContentTests
     [InlineData("https://pengo.gg:444/dist/launcher-banners-v1.json", false)]
     [InlineData("https://user@pengo.gg/dist/launcher-banners-v1.json", false)]
     [InlineData("https://pengo.gg/dist/launcher-banners-v1.json#x", false)]
-    public void Json_transport_allows_only_the_three_fixed_production_feeds(string url, bool allowed)
+    public void Json_transport_allows_only_the_fixed_production_feeds(string url, bool allowed)
     {
         var action = () => LauncherBannersTransport.ValidateEndpoint(new Uri(url), allowConfigured: true, requireJson: true);
         if (allowed) action(); else Assert.Throws<InvalidOperationException>(action);
@@ -785,7 +787,25 @@ public sealed class LauncherBannersContentTests
     }
 
     [Fact]
-    public async Task Every_available_selected_current_character_has_resolvable_bundled_art()
+    public void V2_bundled_generated_snapshot_matches_its_javascript_revision_and_has_independent_Endfield_systems()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Site", "src", "data", "generated", "launcher-banners-v2.json"))) directory = directory.Parent;
+        Assert.NotNull(directory);
+        var payload = File.ReadAllBytes(Path.Combine(directory!.FullName, "Site", "src", "data", "generated", "launcher-banners-v2.json"));
+        using var document = JsonDocument.Parse(payload);
+        var generatedAt = document.RootElement.GetProperty("generatedAt").GetDateTimeOffset();
+        var manifest = LauncherBannersManifestParser.Parse(payload, observedAt: generatedAt);
+        Assert.Equal(2, manifest.SchemaVersion);
+        Assert.Equal(manifest.Revision, LauncherBannersCache.ComputeSemanticRevision(payload));
+        Assert.NotNull(manifest.Games["ae"].Current!.BannerSystem);
+        Assert.All(manifest.Games["ae"].Upcoming.Where(phase => !phase.Announced), phase => Assert.NotNull(phase.BannerSystem));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task Every_available_selected_current_character_has_resolvable_bundled_art(int schemaVersion)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Site", "src", "data", "generated", "launcher-banners-v1.json"))) directory = directory.Parent;
@@ -795,7 +815,7 @@ public sealed class LauncherBannersContentTests
         try
         {
             await using var service = new LauncherBannersContentService(
-                File.ReadAllBytes(Path.Combine(generated, "launcher-banners-v1.json")),
+                File.ReadAllBytes(Path.Combine(generated, $"launcher-banners-v{schemaVersion}.json")),
                 cache,
                 bundledAssetsDirectory: Path.Combine(generated, "launcher-art"));
             var currentGames = service.Current.Games.Where(pair => pair.Value.Current is not null).ToArray();
@@ -1883,6 +1903,147 @@ public sealed class LauncherBannersContentTests
         Assert.Equal(
             TimeSpan.FromHours(6),
             LauncherBannersContentService.CalculateNextRefreshDelay(manifest, now, TimeSpan.FromHours(6)));
+    }
+
+    [Fact]
+    public void V2_retains_independent_system_windows_and_promotes_only_a_still_active_phase()
+    {
+        var now = DateTimeOffset.Parse("2026-07-17T00:00:00Z");
+        var manifest = LauncherBannersManifestParser.Parse(V2ManifestJson(now), observedAt: now);
+        var game = manifest.Games["ae"];
+        Assert.Equal("Resplendent Spectrum", game.Current!.Phase);
+        Assert.Equal("re-factor", game.Current.BannerSystem);
+        Assert.Equal("Winter Hunt", Assert.Single(game.Concurrent).Phase);
+        Assert.Equal("chartered", game.Concurrent[0].BannerSystem);
+        Assert.Equal(2, game.Upcoming.Count);
+        Assert.Equal(game.Upcoming[0].Start, game.Upcoming[1].Start);
+        Assert.NotEqual(game.Upcoming[0].BannerSystem, game.Upcoming[1].BannerSystem);
+        Assert.Equal(TimeSpan.FromHours(1) + TimeSpan.FromSeconds(30),
+            LauncherBannersContentService.CalculateNextRefreshDelay(manifest, now, TimeSpan.FromHours(6)));
+        Assert.Empty(manifest.ForDisplayAt(now.AddHours(1)).Games["ae"].Concurrent);
+        Assert.Equal("re-factor", manifest.ForDisplayAt(now.AddHours(1)).Games["ae"].Current!.BannerSystem);
+        Assert.Null(manifest.ForDisplayAt(now.AddHours(4)).Games["ae"].Current);
+        Assert.Equal(2, manifest.ForDisplayAt(now.AddHours(5)).Games["ae"].Upcoming.Count);
+        Assert.Empty(manifest.ForDisplayAt(now.AddHours(6)).Games["ae"].Upcoming);
+        Assert.Equal(TimeSpan.FromMinutes(30) + TimeSpan.FromSeconds(30),
+            LauncherBannersContentService.CalculateNextRefreshDelay(manifest, now.AddHours(5.5), TimeSpan.FromHours(6)));
+
+        var reversed = JsonNode.Parse(V2ManifestJson(now))!.AsObject();
+        var ae = reversed["games"]!["ae"]!;
+        var primary = ae["current"]!.DeepClone();
+        ae["current"] = ae["concurrent"]![0]!.DeepClone();
+        ae["concurrent"] = new JsonArray(primary);
+        var reverseManifest = LauncherBannersManifestParser.Parse(JsonSerializer.SerializeToUtf8Bytes(reversed), observedAt: now);
+        Assert.Equal("re-factor", reverseManifest.ForDisplayAt(now.AddHours(1)).Games["ae"].Current!.BannerSystem);
+        Assert.Empty(reverseManifest.ForDisplayAt(now.AddHours(1)).Games["ae"].Concurrent);
+    }
+
+    [Fact]
+    public void V2_rejects_ambiguous_systems_and_v1_rejects_all_v2_fields()
+    {
+        var now = DateTimeOffset.Parse("2026-07-17T00:00:00Z");
+        void Reject(Action<JsonObject> mutate)
+        {
+            var root = JsonNode.Parse(V2ManifestJson(now))!.AsObject();
+            mutate(root);
+            Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.Parse(JsonSerializer.SerializeToUtf8Bytes(root), observedAt: now));
+        }
+        Reject(root => root["schemaVersion"] = 1);
+        Reject(root => root["games"]!["ae"]!.AsObject().Remove("concurrent"));
+        Reject(root => root["games"]!["ae"]!["concurrent"] = null);
+        Reject(root => root["games"]!["ae"]!["concurrent"]![0]!["bannerSystem"] = "unknown");
+        Reject(root => root["games"]!["ae"]!["concurrent"]![0]!["bannerSystem"] = "re-factor");
+        Reject(root => root["games"]!["ae"]!["upcoming"]![1]!["bannerSystem"] = "chartered");
+        Reject(root => root["games"]!["gi"]!["current"]!["bannerSystem"] = "chartered");
+        Reject(root => root["games"]!["hsr"]!["concurrent"] = root["games"]!["ae"]!["concurrent"]!.DeepClone());
+        Reject(root => root["games"]!["ae"]!["concurrent"]![0]!["remaining"]!["durationSeconds"] = 1);
+        Reject(root => root["games"]!["ae"]!["concurrent"]![0]!["unexpected"] = true);
+        Reject(root => root["games"]!["ae"]!["current"] = null);
+    }
+
+    [Fact]
+    public void V2_semantic_revision_ignores_both_countdowns_but_not_independent_windows()
+    {
+        var now = DateTimeOffset.Parse("2026-07-17T00:00:00Z");
+        var root = JsonNode.Parse(V2ManifestJson(now))!.AsObject();
+        var before = LauncherBannersCache.ComputeSemanticRevision(JsonSerializer.SerializeToUtf8Bytes(root));
+        root["games"]!["ae"]!["current"]!["remaining"]!["durationSeconds"] = 42;
+        root["games"]!["ae"]!["concurrent"]![0]!["remaining"]!["durationSeconds"] = 43;
+        Assert.Equal(before, LauncherBannersCache.ComputeSemanticRevision(JsonSerializer.SerializeToUtf8Bytes(root)));
+        root["games"]!["ae"]!["concurrent"]![0]!["end"] = now.AddHours(2).ToString("O");
+        Assert.NotEqual(before, LauncherBannersCache.ComputeSemanticRevision(JsonSerializer.SerializeToUtf8Bytes(root)));
+    }
+
+    [Fact]
+    public async Task V2_cache_hydrates_concurrent_art_preserves_v1_and_survives_code_refresh_and_invalid_remote()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nyx-v2-cache-" + Guid.NewGuid().ToString("N"));
+        var now = DateTimeOffset.UtcNow;
+        try
+        {
+            var cache = new LauncherBannersCache(directory);
+            string Hash(byte marker) => Convert.ToHexString(SHA256.HashData(WebpFixture(marker))).ToLowerInvariant();
+            var legacy = WithSemanticRevision(Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(ManifestWithAssetJson(now.AddMinutes(-10)))
+                .Replace(Hash(31), Hash(77), StringComparison.Ordinal)));
+            await cache.PromoteAsync(LauncherBannersManifestParser.Parse(legacy, observedAt: now), legacy, new FakeTransport(WebpFixture(77)));
+            var payload = V2ManifestJson(now);
+            var manifest = LauncherBannersManifestParser.Parse(payload, observedAt: now);
+            var transport = new QueueAssetTransport(WebpFixture(31), WebpFixture(50));
+            await cache.PromoteAsync(manifest, payload, transport);
+            Assert.Equal(2, transport.AssetRequests);
+            Assert.Equal(legacy, File.ReadAllBytes(cache.LastKnownGoodManifestPath));
+            Assert.Equal(payload, File.ReadAllBytes(cache.LastKnownGoodV2ManifestPath));
+            Assert.Equal(1, cache.TryLoadLastKnownGood(now)!.SchemaVersion);
+            Assert.Equal(2, cache.TryLoadLastKnownGood(now, preferV2: true)!.SchemaVersion);
+            Assert.NotNull(cache.TryResolveManagedAsset(manifest.Games["ae"].Concurrent[0].Characters[0].Icon!));
+            await using (var service = new LauncherBannersContentService(legacy, directory,
+                new Uri(LauncherBannersTransport.ProductionV2Endpoint),
+                new RoutedManifestTransport(payload, CodesJson(now, "V2SYNC", 'c')), () => now))
+            {
+                await service.RefreshAsync();
+                Assert.Single(service.Current.Games["ae"].Concurrent);
+                Assert.Equal("V2SYNC", Assert.Single(service.Current.Games["ae"].Codes).Code);
+            }
+            await using (var offline = new LauncherBannersContentService(legacy, directory,
+                new Uri(LauncherBannersTransport.ProductionV2Endpoint), new FakeTransport(Encoding.UTF8.GetBytes("invalid")), () => now))
+            {
+                await offline.RefreshAsync();
+                Assert.Equal(2, offline.Current.SchemaVersion);
+                Assert.Single(offline.Current.Games["ae"].Concurrent);
+            }
+            Assert.Equal(payload, File.ReadAllBytes(cache.LastKnownGoodV2ManifestPath));
+            File.WriteAllText(cache.LastKnownGoodV2ManifestPath, "invalid");
+            Assert.Equal(1, cache.TryLoadLastKnownGood(now, preferV2: true)!.SchemaVersion);
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+    }
+
+    private static byte[] V2ManifestJson(DateTimeOffset now)
+    {
+        var root = JsonNode.Parse(ManifestWithAssetJson(now))!.AsObject();
+        root["schemaVersion"] = 2;
+        foreach (var game in root["games"]!.AsObject()) game.Value!["concurrent"] = new JsonArray();
+        var ae = root["games"]!["ae"]!;
+        var current = root["games"]!["gi"]!["current"]!.DeepClone();
+        current["phase"] = "Resplendent Spectrum";
+        current["bannerSystem"] = "re-factor";
+        current["end"] = now.AddHours(4).ToString("O");
+        current["remaining"]!["endsAt"] = now.AddHours(4).ToString("O");
+        current["remaining"]!["durationSeconds"] = 4 * 3600;
+        ae["current"] = current;
+        var secondary = JsonNode.Parse(ManifestWithGiPhasesJson(now, now.AddHours(-2), now.AddHours(1)))!["games"]!["gi"]!["current"]!.DeepClone();
+        secondary["phase"] = "Winter Hunt";
+        secondary["bannerSystem"] = "chartered";
+        ae["concurrent"] = new JsonArray(secondary);
+        ae["upcoming"] = new JsonArray(new[] { "chartered", "re-factor" }.Select(system => (JsonNode)new JsonObject
+        {
+            ["phase"] = "Next " + system,
+            ["bannerSystem"] = system,
+            ["start"] = now.AddHours(5).ToString("O"),
+            ["end"] = now.AddHours(6).ToString("O"),
+            ["characters"] = new JsonArray(TestCharacterJson("next-" + system)),
+        }).ToArray());
+        return WithSemanticRevision(JsonSerializer.SerializeToUtf8Bytes(root));
     }
 
     private static LauncherBannersManifest ManifestModel(params LauncherBannersAsset[] assets)

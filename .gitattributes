@@ -7,6 +7,7 @@
 
 # Deployment verifies these generated launcher assets byte-for-byte against Git.
 Site/src/data/generated/launcher-*-v1.json text eol=lf
+Site/src/data/generated/launcher-banners-v2.json text eol=lf
 Site/src/data/generated/launcher-art/*.webp binary
 contracts/pengo-achievements-v1.fixture.json text eol=lf
 contracts/gear-export-*.fixture.json text eol=lf

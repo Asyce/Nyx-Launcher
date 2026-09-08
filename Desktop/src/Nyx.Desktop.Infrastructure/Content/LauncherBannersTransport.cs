@@ -13,6 +13,7 @@ public interface ILauncherBannersTransport
 public sealed class LauncherBannersTransport : ILauncherBannersTransport, IDisposable
 {
     public const string ProductionEndpoint = "https://pengo.gg/dist/launcher-banners-v1.json";
+    public const string ProductionV2Endpoint = "https://pengo.gg/dist/launcher-banners-v2.json";
     public const string ProductionCodesEndpoint = "https://pengo.gg/dist/launcher-codes-v1.json";
     public const string ProductionToolsEndpoint = "https://pengo.gg/dist/launcher-tools-v1.json";
     public const int MaximumManifestBytes = 2 * 1024 * 1024;
@@ -74,6 +75,7 @@ public sealed class LauncherBannersTransport : ILauncherBannersTransport, IDispo
         {
             var approved = requireJson
                 ? string.Equals(endpoint.AbsoluteUri, ProductionEndpoint, StringComparison.Ordinal)
+                    || string.Equals(endpoint.AbsoluteUri, ProductionV2Endpoint, StringComparison.Ordinal)
                     || string.Equals(endpoint.AbsoluteUri, ProductionCodesEndpoint, StringComparison.Ordinal)
                     || string.Equals(endpoint.AbsoluteUri, ProductionToolsEndpoint, StringComparison.Ordinal)
                 : IsApprovedManifestAssetEndpoint(endpoint);

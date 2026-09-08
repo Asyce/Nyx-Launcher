@@ -13,7 +13,7 @@ public sealed record LauncherBannersManifest
         LauncherBannersHealth health,
         IReadOnlyDictionary<string, LauncherBannersGame> games)
     {
-        if (schemaVersion != 1) throw new ArgumentOutOfRangeException(nameof(schemaVersion));
+        if (schemaVersion is not (1 or 2)) throw new ArgumentOutOfRangeException(nameof(schemaVersion));
         if (string.IsNullOrWhiteSpace(revision) || revision.Length != 64 || revision.Any(c => !Uri.IsHexDigit(c))) throw new ArgumentOutOfRangeException(nameof(revision));
         SchemaVersion = schemaVersion;
         Revision = revision;
@@ -23,6 +23,11 @@ public sealed record LauncherBannersManifest
         foreach (var game in games ?? throw new ArgumentNullException(nameof(games)))
         {
             if (!CanonicalGames.Contains(game.Key, StringComparer.Ordinal) || game.Value is null || game.Value.GameId != game.Key) throw new InvalidDataException("Launcher manifest must use the canonical five games.");
+            var phases = game.Value.CurrentPhases.Select(phase => phase.BannerSystem)
+                .Concat(game.Value.Upcoming.Where(phase => !phase.Announced).Select(phase => phase.BannerSystem));
+            if (schemaVersion == 1 && (game.Value.Concurrent.Count > 0 || phases.Any(system => system is not null))
+                || schemaVersion == 2 && game.Key == "ae" && phases.Any(system => system is null))
+                throw new InvalidDataException("Launcher banner systems do not match the schema.");
             copy.Add(game.Key, game.Value);
         }
         if (copy.Count != 5) throw new InvalidDataException("Launcher manifest must cover all five games.");
@@ -47,22 +52,21 @@ public sealed record LauncherBannersManifest
                 var healthy = overallHealthy
                     && Health.Games.TryGetValue(pair.Key, out var gameHealth)
                     && gameHealth.Status == "ok";
-                var current = healthy
-                    && game.Current is { } phase
-                    && phase.Start <= observedAt
-                    && (phase.EffectiveEnd is null || observedAt < phase.EffectiveEnd)
-                        ? phase
-                        : null;
+                var active = healthy
+                    ? game.CurrentPhases.Where(phase => phase.Start <= observedAt
+                        && (phase.EffectiveEnd is null || observedAt < phase.EffectiveEnd)).ToArray()
+                    : [];
                 var upcoming = healthy
                     ? game.UpcomingForDisplayAt(observedAt)
                     : [];
                 return new LauncherBannersGame(
                     game.GameId,
                     game.Region,
-                    current,
+                    active.FirstOrDefault(),
                     game.News,
                     upcoming,
-                    game.Codes);
+                    game.Codes,
+                    active.Skip(1).ToArray());
             },
             StringComparer.Ordinal);
         return new LauncherBannersManifest(SchemaVersion, Revision, GeneratedAt, Health, visibleGames);
@@ -115,30 +119,44 @@ public sealed record LauncherBannersGame
         LauncherBannersCurrentPhase? current,
         IReadOnlyList<LauncherBannersNewsItem> news,
         IReadOnlyList<LauncherBannersUpcomingPhase>? upcoming = null,
-        IReadOnlyList<LauncherRedemptionCode>? codes = null)
+        IReadOnlyList<LauncherRedemptionCode>? codes = null,
+        IReadOnlyList<LauncherBannersCurrentPhase>? concurrent = null)
     {
         if (gameId is not ("gi" or "hsr" or "zzz" or "wuwa" or "ae")) throw new ArgumentOutOfRangeException(nameof(gameId));
         if (region is not ("global" or "america" or "europe" or "asia")) throw new ArgumentOutOfRangeException(nameof(region));
         GameId = gameId;
         Region = region;
         Current = current;
+        var additional = (concurrent ?? []).ToArray();
+        if (additional.Length > 4 || additional.Any(phase => phase is null)
+            || gameId != "ae" && additional.Length > 0
+            || current is null && additional.Length > 0)
+            throw new InvalidDataException("Invalid concurrent launcher banner phases.");
+        Concurrent = new ReadOnlyCollection<LauncherBannersCurrentPhase>(additional);
         News = new ReadOnlyCollection<LauncherBannersNewsItem>((news ?? throw new ArgumentNullException(nameof(news))).ToArray());
         var future = (upcoming ?? []).ToArray();
         if (future.Any(phase => phase is null)) throw new InvalidDataException("Launcher upcoming phases cannot contain null entries.");
+        if (current?.BannerSystem is null && current?.EffectiveEnd is { } legacyEnd
+            && future.Any(phase => !phase.Announced && phase.Start < legacyEnd))
+            throw new InvalidDataException("Launcher current and upcoming banner phase windows overlap.");
+        if (future.Where(phase => phase.Announced).Any(phase => phase.BannerSystem is not null)
+            || gameId != "ae" && (future.Any(phase => phase.BannerSystem is not null) || CurrentPhases.Any(phase => phase.BannerSystem is not null)))
+            throw new InvalidDataException("Launcher banner system is not valid for this game or announcement.");
         var windows = future
             .Where(phase => !phase.Announced)
-            .Select(phase => (Start: phase.Start!.Value, End: phase.End!.Value))
+            .Select(phase => (Start: phase.Start!.Value, End: (DateTimeOffset?)phase.End!.Value, System: phase.BannerSystem))
+            .Concat(CurrentPhases.Select(phase => (Start: phase.Start, End: phase.EffectiveEnd, System: phase.BannerSystem)))
             .OrderBy(window => window.Start)
             .ThenBy(window => window.End)
             .ToArray();
-        for (var index = 1; index < windows.Length; index++)
+        foreach (var group in windows.GroupBy(window => window.System))
         {
-            if (windows[index].Start < windows[index - 1].End) throw new InvalidDataException("Launcher banner phase windows overlap.");
-        }
-        var currentBoundary = current?.NextChangeAt ?? current?.End;
-        if (currentBoundary is not null && windows.Any(window => window.Start < currentBoundary))
-        {
-            throw new InvalidDataException("Launcher current and upcoming banner phase windows overlap.");
+            var ordered = group.ToArray();
+            for (var index = 1; index < ordered.Length; index++)
+            {
+                if (ordered[index - 1].End is { } end && ordered[index].Start < end)
+                    throw new InvalidDataException("Launcher banner phase windows overlap within one system.");
+            }
         }
         Upcoming = new ReadOnlyCollection<LauncherBannersUpcomingPhase>(future);
         Codes = new ReadOnlyCollection<LauncherRedemptionCode>((codes ?? []).ToArray());
@@ -147,6 +165,8 @@ public sealed record LauncherBannersGame
     public string GameId { get; }
     public string Region { get; }
     public LauncherBannersCurrentPhase? Current { get; }
+    public IReadOnlyList<LauncherBannersCurrentPhase> Concurrent { get; }
+    public IEnumerable<LauncherBannersCurrentPhase> CurrentPhases => Current is null ? Concurrent : Concurrent.Prepend(Current);
     public IReadOnlyList<LauncherBannersNewsItem> News { get; }
     public IReadOnlyList<LauncherBannersUpcomingPhase> Upcoming { get; }
     public IReadOnlyList<LauncherRedemptionCode> Codes { get; }
@@ -155,7 +175,7 @@ public sealed record LauncherBannersGame
     {
         if (limit < 0) throw new ArgumentOutOfRangeException(nameof(limit));
         return Upcoming
-            .Where(phase => phase.Announced || phase.Start > observedAt)
+            .Where(phase => phase.Announced || phase.Start > observedAt || phase.BannerSystem is not null && observedAt < phase.End)
             .OrderBy(phase => phase.Announced)
             .ThenBy(phase => phase.Start)
             .Take(limit)
@@ -210,7 +230,8 @@ public sealed record LauncherBannersUpcomingPhase
         DateTimeOffset? start,
         DateTimeOffset? end,
         IReadOnlyList<LauncherBannersCharacter> characters,
-        bool announced = false)
+        bool announced = false,
+        string? bannerSystem = null)
     {
         if (announced ? start is not null || end is not null : start is null || end is null || end <= start)
             throw new ArgumentOutOfRangeException(nameof(end));
@@ -223,6 +244,8 @@ public sealed record LauncherBannersUpcomingPhase
         Start = start;
         End = end;
         Announced = announced;
+        if (bannerSystem is not (null or "chartered" or "re-factor")) throw new InvalidDataException("Invalid launcher banner system.");
+        BannerSystem = bannerSystem;
         Characters = new ReadOnlyCollection<LauncherBannersCharacter>(copy);
     }
 
@@ -230,6 +253,7 @@ public sealed record LauncherBannersUpcomingPhase
     public DateTimeOffset? Start { get; }
     public DateTimeOffset? End { get; }
     public bool Announced { get; }
+    public string? BannerSystem { get; }
     public IReadOnlyList<LauncherBannersCharacter> Characters { get; }
 }
 
@@ -246,7 +270,8 @@ public sealed record LauncherBannersCurrentPhase
         IReadOnlyList<LauncherBannersAsset> variants,
         IReadOnlyList<LauncherBannersChannel>? channels = null,
         DateTimeOffset? nextChangeAt = null,
-        string? timingMode = null)
+        string? timingMode = null,
+        string? bannerSystem = null)
     {
         if (end is not null && end <= start) throw new ArgumentOutOfRangeException(nameof(end));
         if (remainingSeconds < 0) throw new ArgumentOutOfRangeException(nameof(remainingSeconds));
@@ -270,6 +295,8 @@ public sealed record LauncherBannersCurrentPhase
         End = end;
         NextChangeAt = nextChangeAt;
         TimingMode = timingMode;
+        if (bannerSystem is not (null or "chartered" or "re-factor")) throw new InvalidDataException("Invalid launcher banner system.");
+        BannerSystem = bannerSystem;
         RemainingSeconds = remainingSeconds;
         Characters = new ReadOnlyCollection<LauncherBannersCharacter>(characterCopy);
         Channels = new ReadOnlyCollection<LauncherBannersChannel>(channelCopy);
@@ -289,6 +316,7 @@ public sealed record LauncherBannersCurrentPhase
     public DateTimeOffset? NextChangeAt { get; }
     public DateTimeOffset? EffectiveEnd => NextChangeAt ?? End;
     public string TimingMode { get; }
+    public string? BannerSystem { get; }
     public long RemainingSeconds { get; }
     public IReadOnlyList<LauncherBannersCharacter> Characters { get; }
     public IReadOnlyList<LauncherBannersChannel> Channels { get; }

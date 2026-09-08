@@ -225,7 +225,8 @@ $requiredOutputPaths = @(
     (Join-Path $outputRoot 'Assets\Catalog\giicon.png'),
     (Join-Path $outputRoot 'Assets\Iris\nyx-logo.png'),
     (Join-Path $outputRoot 'Assets\Brand\kofi-logo.png'),
-    (Join-Path $outputRoot 'Assets\Content\launcher-banners-v1.json')
+    (Join-Path $outputRoot 'Assets\Content\launcher-banners-v1.json'),
+    (Join-Path $outputRoot 'Assets\Content\launcher-banners-v2.json')
 )
 if (-not $CheckOnly) {
     $requiredOutputPaths += $achievementHelperOutput
