@@ -55,6 +55,54 @@ public sealed class HoyoLabGameBundleMergeTests
     }
 
     [Fact]
+    public void Genshin_builds_merge_latest_values_semantically_and_block_role_tombstones()
+    {
+        var binding = new PublisherRoleBinding("123456789", "os_euro");
+        var snapshot = HoyoLabGenshinBuildSnapshotTests.Snapshot();
+        var semanticallyEqual = HoyoLabGenshinBuildSnapshotTests.Snapshot(
+            HoyoLabGenshinBuildSnapshotTests.CharactersJson.Replace(
+                "\n", " ", StringComparison.Ordinal));
+        var localRole = GenshinRole(binding, Older, snapshot);
+        var remoteRole = GenshinRole(binding, Newer, semanticallyEqual);
+        var consents = Consents(builds: true);
+
+        var result = MergeValid(
+            Bundle([localRole], binding, consents, gameId: HoyoLabGameBundleRules.GenshinGameId),
+            Bundle([remoteRole], binding, consents, gameId: HoyoLabGameBundleRules.GenshinGameId));
+
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Merged, result.Outcome);
+        var mergedRole = Assert.Single(Assert.IsType<HoyoLabGameBundle>(result.Bundle).Roles);
+        Assert.Equal(Newer, mergedRole.Observations.Builds);
+        Assert.True(HoyoLabGenshinBuildRules.ValuesEqual(semanticallyEqual, mergedRole.GenshinBuilds));
+
+        AssertConflict(MergeValid(
+            Bundle([localRole], binding, consents, gameId: HoyoLabGameBundleRules.GenshinGameId),
+            Bundle(
+                [GenshinRole(
+                    binding,
+                    Older,
+                    HoyoLabGenshinBuildSnapshotTests.Snapshot(
+                        HoyoLabGenshinBuildSnapshotTests.CharactersJson.Replace(
+                            "\"level\":95",
+                            "\"level\":96",
+                            StringComparison.Ordinal)))],
+                binding,
+                consents,
+                gameId: HoyoLabGameBundleRules.GenshinGameId)));
+
+        var olderTombstone = MergeValid(
+            Bundle([localRole], binding, consents, gameId: HoyoLabGameBundleRules.GenshinGameId),
+            Bundle(
+                [],
+                null,
+                consents,
+                roleTombstones: [new(binding, Oldest)],
+                gameId: HoyoLabGameBundleRules.GenshinGameId));
+        Assert.Equal(HoyoLabGameBundleMergeOutcome.Idempotent, olderTombstone.Outcome);
+        Assert.Contains(olderTombstone.Bundle!.Roles, role => role.Role.Binding == binding);
+    }
+
+    [Fact]
     public void Equal_observations_are_idempotent_only_when_values_match()
     {
         var localRole = Role(
@@ -443,16 +491,30 @@ public sealed class HoyoLabGameBundleMergeTests
                     Reserve: 20),
             achievementsAt is null ? null : achievements?.ToArray() ?? []);
 
+    private static HoyoLabGameBundleRole GenshinRole(
+        PublisherRoleBinding binding,
+        DateTimeOffset buildsAt,
+        HoyoLabGenshinBuildSnapshot builds) => new(
+        new(
+            binding,
+            "Genshin",
+            PublisherRoleRecordRules.CanonicalRegionLabel(binding.Server)),
+        new(null, null, buildsAt, null, null, null, null, null),
+        null,
+        null,
+        builds);
+
     private static PublisherRoleBinding Binding(
         int index,
         string server = "prod_official_eur") => new(index.ToString("D20"), server);
 
     private static HoyoLabCapabilityConsentSet Consents(
         bool resources = false,
-        bool achievements = false) => new(
+        bool achievements = false,
+        bool builds = false) => new(
             resources,
             Inventory: false,
-            Builds: false,
+            Builds: builds,
             achievements,
             Exploration: false,
             Endgame: false,

@@ -1124,7 +1124,7 @@ public sealed class HoyoLiveSessionUiTests
     }
 
     [Fact]
-    public void Star_rail_account_manager_exposes_only_active_account_capability_consents()
+    public void Hoyo_account_manager_exposes_only_active_account_and_receiver_ready_capability_consents()
     {
         var page = ReadAppFile("MainPage.xaml.cs");
         var manager = Slice(
@@ -1132,6 +1132,10 @@ public sealed class HoyoLiveSessionUiTests
             "private async Task ShowHoyoLabAccountManagerAsync",
             "private void AutomaticDailyCheckInToggle_Click");
         var controls = Slice(manager, "if (gameId is \"hsr\" or \"gi\")", "var actionButtons");
+        var buildsAt = controls.IndexOf("if (gameId == \"gi\" && PublisherAccountService.GenshinBuildsAvailable)", StringComparison.Ordinal);
+        Assert.True(buildsAt > 0);
+        var existingControls = controls[..buildsAt];
+        var buildControls = controls[buildsAt..];
         var content = Slice(manager, "var content = new StackPanel", "content.Children.Add(slots)");
         var apply = Slice(manager, "void ApplyCapabilityConsent", "void FailClosedCapabilityConsent");
         var reload = Slice(manager, "async Task ReloadCapabilityConsentAsync", "async Task RunManagerActionAsync");
@@ -1140,7 +1144,8 @@ public sealed class HoyoLiveSessionUiTests
             "async Task SetCapabilityConsentAsync",
             "if (rememberResources is not null)");
 
-        Assert.Equal(2, Regex.Matches(controls, "new ToggleSwitch").Count);
+        Assert.Equal(2, Regex.Matches(existingControls, "new ToggleSwitch").Count);
+        Assert.Single(Regex.Matches(buildControls, "new ToggleSwitch"));
         Assert.Contains("var gameName = gameId == \"hsr\" ? \"Star Rail\" : \"Genshin\";", controls, StringComparison.Ordinal);
         Assert.Contains("var resourceName = gameId == \"hsr\" ? \"resources\" : \"Resin\";", controls, StringComparison.Ordinal);
         Assert.Contains("Header = $\"Remember {gameName} {resourceName}\"", controls, StringComparison.Ordinal);
@@ -1159,7 +1164,10 @@ public sealed class HoyoLiveSessionUiTests
             "Remember Star Rail achievements for the active HoYoLAB account",
             controls,
             StringComparison.Ordinal);
-        Assert.Equal(2, Regex.Matches(controls, "AutomationProperties.SetHelpText\\(").Count);
+        Assert.Equal(2, Regex.Matches(existingControls, "AutomationProperties.SetHelpText\\(").Count);
+        Assert.Single(Regex.Matches(buildControls, "AutomationProperties.SetHelpText\\("));
+        Assert.Contains("Remember Genshin characters & equipped builds", buildControls, StringComparison.Ordinal);
+        Assert.Contains("This is not a full-bag artifact export.", buildControls, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.SetLiveSetting(managerStatus", manager, StringComparison.Ordinal);
         Assert.Contains("IsEnabled = false", controls, StringComparison.Ordinal);
         Assert.Contains("if (gameId == \"hsr\")", controls, StringComparison.Ordinal);
@@ -1181,7 +1189,8 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("HoyoLabGameBundleRules.Resources", manager, StringComparison.Ordinal);
         Assert.Contains("HoyoLabGameBundleRules.Achievements", manager, StringComparison.Ordinal);
         Assert.DoesNotContain("HoyoLabGameBundleRules.Inventory", manager, StringComparison.Ordinal);
-        Assert.DoesNotContain("HoyoLabGameBundleRules.Builds", manager, StringComparison.Ordinal);
+        Assert.Contains("SetCapabilityConsentAsync(rememberBuilds, HoyoLabGameBundleRules.Builds)", manager, StringComparison.Ordinal);
+        Assert.Contains("refreshBuilds.IsEnabled = enabled && hasActiveRole && gameBundle?.Consents.Builds == true", manager, StringComparison.Ordinal);
         Assert.DoesNotContain("selectedSlotId", reload, StringComparison.Ordinal);
     }
 
@@ -1211,7 +1220,7 @@ public sealed class HoyoLiveSessionUiTests
     }
 
     [Fact]
-    public void Star_rail_toggle_tasks_fail_closed_and_report_non_page_failures()
+    public void Hoyo_toggle_tasks_fail_closed_and_report_non_page_failures()
     {
         var manager = Slice(
             ReadAppFile("MainPage.xaml.cs").Replace("\r\n", "\n", StringComparison.Ordinal),
@@ -1231,6 +1240,7 @@ public sealed class HoyoLiveSessionUiTests
             "suppressCapabilityChanged = true",
             "rememberResources.IsOn",
             "rememberAchievements.IsOn",
+            "rememberBuilds.IsOn",
             "suppressCapabilityChanged = false",
             "UpdateManagerActionStates()");
         AssertOrdered(
@@ -1252,7 +1262,7 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)", setter, StringComparison.Ordinal);
         Assert.Equal(2, Regex.Matches(setter, "catch \\(Exception\\)").Count);
         Assert.Equal(2, Regex.Matches(setter, "FailClosedCapabilityConsent\\(\\)").Count);
-        Assert.Equal(2, Regex.Matches(manager, "_ = SetCapabilityConsentAsync\\(").Count);
+        Assert.Equal(3, Regex.Matches(manager, "_ = SetCapabilityConsentAsync\\(").Count);
         Assert.Contains("if (completed && (!saved || gameBundle is null))", setter, StringComparison.Ordinal);
         Assert.Contains("the switch was reverted", setter, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.SetLiveSetting(managerStatus", manager, StringComparison.Ordinal);

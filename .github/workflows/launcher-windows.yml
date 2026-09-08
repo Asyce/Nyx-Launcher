@@ -52,6 +52,15 @@ jobs:
         shell: pwsh
         run: dotnet test Desktop\Nyx.Desktop.slnx --configuration Release --no-build --no-restore --verbosity minimal --maxcpucount:1 --blame-hang-timeout 3m --blame-hang-dump-type none
 
+      - name: Set up Node for embedded browser checks
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '22'
+
+      - name: Check bounded Genshin build capture
+        shell: pwsh
+        run: node --test Desktop/tests/scripts/genshin-build-capture.test.mjs
+
       - name: Run portable locked Rust tests
         shell: pwsh
         # These two integration tests require the reviewed Npcap 1.88 installation and run on PENGO.

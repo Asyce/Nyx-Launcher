@@ -13,6 +13,8 @@ public sealed class HoyoLabSyncCoordinatorTests
 {
     private static readonly DateTimeOffset Now =
         new(2026, 8, 30, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset Older = Now.AddHours(-2);
+    private static readonly DateTimeOffset Newer = Now.AddHours(-1);
     private const string DisplayCode =
         "NYX-HOYO-AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH";
     private const string AlternateCode =
@@ -1683,6 +1685,53 @@ public sealed class HoyoLabSyncCoordinatorTests
     }
 
     [Fact]
+    public async Task Genshin_build_cutoff_survives_restart_and_blocks_remote_role_replay()
+    {
+        using var harness = new Harness(GenshinBundleWithBuilds(Older));
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(
+                DisplayCode,
+                gameId: HoyoLabGameBundleRules.GenshinGameId)).Status);
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            harness.Coordinator.QueueRoleDeletion(
+                GenshinBinding,
+                gameId: HoyoLabGameBundleRules.GenshinGameId).Status);
+        using (var pending = LoadState(harness.ManagedSlotRoot))
+            Assert.Equal(Older, Assert.Single(pending.PendingRoleDeletions).KnownBuildsAt);
+
+        harness.Cloud.SeedBundle(
+            Fixture.SyncId,
+            DisplayCode,
+            GenshinBundleWithBuilds(
+                Newer,
+                HoyoLabGenshinBuildSnapshotTests.CharactersJson.Replace(
+                    "\"level\":95",
+                    "\"level\":96",
+                    StringComparison.Ordinal)),
+            Newer,
+            HoyoLabGameBundleRules.GenshinGameId);
+        harness.Cloud.ClearRequests();
+        harness.Coordinator.Dispose();
+        using var restart = CreateCoordinator(
+            harness.PublisherRoot,
+            harness.SlotId,
+            harness.ProtectedRoot,
+            harness.Authority,
+            harness.Cloud,
+            harness.Files,
+            harness.Protector);
+
+        var result = await restart.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Conflict, result.Status);
+        Assert.Equal(["pull"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var after = LoadState(harness.ManagedSlotRoot);
+        Assert.Equal(Older, Assert.Single(after.PendingRoleDeletions).KnownBuildsAt);
+    }
+
+    [Fact]
     public async Task Role_delete_cas_conflict_retries_once_without_rebasing_the_tombstone()
     {
         using var harness = new Harness(TwoRoleBundle(selected: SurvivorBinding));
@@ -1928,6 +1977,9 @@ public sealed class HoyoLabSyncCoordinatorTests
             Assert.Equal(
                 expectedRole.CompletedHsrAchievementIds ?? Array.Empty<long>(),
                 actualRole.CompletedHsrAchievementIds ?? Array.Empty<long>());
+            Assert.True(HoyoLabGenshinBuildRules.ValuesEqual(
+                expectedRole.GenshinBuilds,
+                actualRole.GenshinBuilds));
         }
 
         Assert.Equal(
@@ -2017,6 +2069,27 @@ public sealed class HoyoLabSyncCoordinatorTests
             new(true, false, false, false, false, false, false, false),
             [],
             []);
+
+    private static HoyoLabGameBundle GenshinBundleWithBuilds(
+        DateTimeOffset observedAt,
+        string charactersJson = HoyoLabGenshinBuildSnapshotTests.CharactersJson) => new(
+        HoyoLabGameBundleRules.SchemaVersion,
+        HoyoLabGameBundleRules.GenshinGameId,
+        [
+            new(
+                new(
+                    GenshinBinding,
+                    "Test Traveler",
+                    PublisherRoleRecordRules.CanonicalRegionLabel(GenshinBinding.Server)),
+                new(null, null, observedAt, null, null, null, null, null),
+                null,
+                null,
+                HoyoLabGenshinBuildSnapshotTests.Snapshot(charactersJson)),
+        ],
+        GenshinBinding,
+        new(false, false, true, false, false, false, false, false),
+        [],
+        []);
 
     private static HoyoLabGameBundle TwoRoleBundle(PublisherRoleBinding selected)
     {
@@ -2168,7 +2241,12 @@ public sealed class HoyoLabSyncCoordinatorTests
             Protector = new CopyProtector();
             Files = new SystemPublisherRoleBindingFileBoundary();
             Clock = new FixedTimeProvider(Now);
-            var bundles = new HoyoLabGameBundleStore(ProtectedRoot, Protector, Files, Clock);
+            var bundles = new HoyoLabGameBundleStore(
+                ProtectedRoot,
+                Protector,
+                Files,
+                Clock,
+                bundle.GameId);
             Assert.True(bundles.TrySave(bundle));
             Authority = new Authority();
             Cloud = new FakeCloud();

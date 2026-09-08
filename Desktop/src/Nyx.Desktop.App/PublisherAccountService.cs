@@ -251,6 +251,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
         CancellationToken cancellationToken)
     {
         if (!HoyoLabGameBundleRules.SupportsLocalCapability(gameId, capability)
+            || enabled && gameId == "gi" && capability == HoyoLabGameBundleRules.Builds && !GenshinBuildsAvailable
             || !consent.IsEnabled("HoYoLAB")
             || !HasUsableHoyoAccount()
             || !OwnsProfile("HoYoLAB"))
@@ -3267,7 +3268,8 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
                 role,
                 resource,
                 resource is null ? null : role.Binding,
-                operation.Cancellation.Token);
+                operation.Cancellation.Token,
+                rememberGenshinBuilds: GenshinBuildsAvailable);
             return saved && CanPublish("HoYoLAB", operation);
         }
     }

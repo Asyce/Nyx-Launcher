@@ -1552,6 +1552,8 @@ public sealed partial class MainPage : Page
             "Choose the region for this game");
         ToggleSwitch? rememberResources = null;
         ToggleSwitch? rememberAchievements = null;
+        ToggleSwitch? rememberBuilds = null;
+        Button? refreshBuilds = null;
         StackPanel? capabilityPanel = null;
         if (gameId is "hsr" or "gi")
         {
@@ -1598,6 +1600,21 @@ public sealed partial class MainPage : Page
             capabilityPanel.Children.Add(rememberResources);
             if (rememberAchievements is not null)
                 capabilityPanel.Children.Add(rememberAchievements);
+            if (gameId == "gi" && PublisherAccountService.GenshinBuildsAvailable)
+            {
+                rememberBuilds = new ToggleSwitch
+                {
+                    Header = "Remember Genshin characters & equipped builds",
+                    IsEnabled = false,
+                    OnContent = "Remember",
+                    OffContent = "Do not remember",
+                };
+                AutomationProperties.SetName(rememberBuilds, "Remember Genshin characters and equipped builds for the active HoYoLAB account");
+                AutomationProperties.SetHelpText(rememberBuilds, "Includes levels, talents, constellations and equipped gear from HoYoLAB. This is not a full-bag artifact export.");
+                refreshBuilds = CreateHoyoLabManagerButton("Refresh characters & builds", "Refresh Genshin characters and equipped builds for the active HoYoLAB account");
+                capabilityPanel.Children.Add(rememberBuilds);
+                capabilityPanel.Children.Add(refreshBuilds);
+            }
             capabilityPanel.Children.Add(capabilityHelp);
         }
         var actionButtons = new Grid
@@ -1642,7 +1659,13 @@ public sealed partial class MainPage : Page
         {
             XamlRoot = XamlRoot,
             Title = "HoYoLAB accounts & region",
-            Content = content,
+            Content = new ScrollViewer
+            {
+                Content = content,
+                MaxHeight = Math.Clamp(ActualHeight - 180, 180, 640),
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            },
             Background = (Brush)Application.Current.Resources["SettingsSurfaceBrush"],
             BorderBrush = (Brush)Application.Current.Resources["DeckBorderBrush"],
             BorderThickness = new Thickness(1),
@@ -1722,6 +1745,10 @@ public sealed partial class MainPage : Page
                 rememberResources.IsEnabled = enabled && hasActiveRole;
             if (rememberAchievements is not null)
                 rememberAchievements.IsEnabled = enabled && hasActiveRole;
+            if (rememberBuilds is not null)
+                rememberBuilds.IsEnabled = enabled && hasActiveRole;
+            if (refreshBuilds is not null)
+                refreshBuilds.IsEnabled = enabled && hasActiveRole && gameBundle?.Consents.Builds == true;
         }
 
         void ApplyCapabilityConsent(HoyoLabGameBundle? snapshot)
@@ -1740,6 +1767,8 @@ public sealed partial class MainPage : Page
                 if (rememberAchievements is not null)
                     rememberAchievements.IsOn = hasActiveRole
                         && snapshot?.Consents.Achievements == true;
+                if (rememberBuilds is not null)
+                    rememberBuilds.IsOn = hasActiveRole && snapshot?.Consents.Builds == true;
             }
             finally
             {
@@ -2073,6 +2102,36 @@ public sealed partial class MainPage : Page
                 _ = SetCapabilityConsentAsync(
                     rememberAchievements,
                     HoyoLabGameBundleRules.Achievements);
+        }
+        if (rememberBuilds is not null)
+        {
+            rememberBuilds.Toggled += (_, _) =>
+                _ = SetCapabilityConsentAsync(rememberBuilds, HoyoLabGameBundleRules.Builds);
+        }
+        if (refreshBuilds is not null)
+        {
+            refreshBuilds.Click += async (_, _) =>
+            {
+                var activeSlotId = publisherAccounts.HoyoLabAccounts.ActiveSlotId;
+                var binding = gameBundle?.SelectedRole;
+                if (activeSlotId is null || binding is null) return;
+                await RunManagerActionAsync(async cancellationToken =>
+                {
+                    managerStatus.Text = "Refreshing characters and equipped builds from HoYoLAB…";
+                    var result = await publisherAccounts.RefreshGenshinBuildsAsync(activeSlotId, binding, cancellationToken);
+                    managerStatus.Text = result.Status switch
+                    {
+                        HoyoLabGenshinBuildReadStatus.Completed => $"Remembered {result.Snapshot!.Characters.GetArrayLength()} characters and their equipped builds. Use Sync & My HoYo to share the copy.",
+                        HoyoLabGenshinBuildReadStatus.LoginRequired => "Sign in to HoYoLAB, then refresh again. The previous copy is unchanged.",
+                        HoyoLabGenshinBuildReadStatus.NotEnabled => "Select an active Genshin region and turn on Remember characters & equipped builds first.",
+                        HoyoLabGenshinBuildReadStatus.Canceled => "Refresh canceled. No partial build copy was saved.",
+                        HoyoLabGenshinBuildReadStatus.TimedOut => "Refresh timed out. Try again; the previous copy is unchanged.",
+                        HoyoLabGenshinBuildReadStatus.TooLarge => "This build copy exceeds Nyx's supported size. The previous copy is unchanged.",
+                        HoyoLabGenshinBuildReadStatus.LocalStorageUnavailable => "Nyx could not save the build copy. The previous copy is unchanged.",
+                        _ => "Nyx could not complete this refresh. Check the selected HoYoLAB region and try again; the previous copy is unchanged.",
+                    };
+                }, selectedSlotId);
+            };
         }
 
         RenderManagerSlots(preserveSelection: null);

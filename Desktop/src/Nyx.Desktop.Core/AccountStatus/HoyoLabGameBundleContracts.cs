@@ -43,7 +43,8 @@ public sealed record HoyoLabGameBundleRole(
     PublisherRoleRecord Role,
     HoyoLabCapabilityObservations Observations,
     PublisherResourceSnapshot? Resource,
-    IReadOnlyList<long>? CompletedHsrAchievementIds)
+    IReadOnlyList<long>? CompletedHsrAchievementIds,
+    HoyoLabGenshinBuildSnapshot? GenshinBuilds = null)
 {
     public override string ToString() => nameof(HoyoLabGameBundleRole);
 }
@@ -120,7 +121,7 @@ public static class HoyoLabGameBundleRules
             || bundle.CapabilityTombstones.Count > MaximumCapabilityTombstones
             || bundle.RoleTombstones.Count > MaximumRoleTombstones
             || bundle.Consents.Inventory
-            || bundle.Consents.Builds
+            || bundle.GameId == GameId && bundle.Consents.Builds
             || bundle.Consents.Exploration
             || bundle.Consents.Endgame
             || bundle.Consents.Events
@@ -191,6 +192,10 @@ public static class HoyoLabGameBundleRules
                 && (activeRole.CompletedHsrAchievementIds is not null
                     || activeRole.Observations.Achievements is not null))
                 return false;
+            if (tombstone.Capability == Builds
+                && (activeRole.GenshinBuilds is not null
+                    || activeRole.Observations.Builds is not null))
+                return false;
         }
         return true;
     }
@@ -201,6 +206,9 @@ public static class HoyoLabGameBundleRules
         {
             Resource = role.Resource is null ? null : role.Resource with { IsStale = true },
             CompletedHsrAchievementIds = role.CompletedHsrAchievementIds?.ToArray(),
+            GenshinBuilds = role.GenshinBuilds is null
+                ? null
+                : HoyoLabGenshinBuildRules.Normalize(role.GenshinBuilds),
         }).ToArray(),
         CapabilityTombstones = bundle.CapabilityTombstones.ToArray(),
         RoleTombstones = bundle.RoleTombstones.ToArray(),
@@ -211,7 +219,10 @@ public static class HoyoLabGameBundleRules
     public static IReadOnlyList<string> SupportedGames { get; } = Array.AsReadOnly<string>([GameId, GenshinGameId]);
 
     public static bool SupportsLocalCapability(string gameId, string capability) =>
-        IsSupportedGame(gameId) && (capability == Resources || (gameId == GameId && capability == Achievements));
+        IsSupportedGame(gameId)
+        && (capability == Resources
+            || (gameId == GameId && capability == Achievements)
+            || (gameId == GenshinGameId && capability == Builds));
 
     public static string ResourceName(string gameId) => gameId switch
     {
@@ -231,9 +242,9 @@ public static class HoyoLabGameBundleRules
             || role.Observations is null
             || !PublisherRoleRecordRules.IsValid(gameId, role.Role)
             || !IsValidTimestamp(role.Observations.Resources, utcNow)
+            || !IsValidTimestamp(role.Observations.Builds, utcNow)
             || !IsValidTimestamp(role.Observations.Achievements, utcNow)
             || role.Observations.Inventory is not null
-            || role.Observations.Builds is not null
             || role.Observations.Exploration is not null
             || role.Observations.Endgame is not null
             || role.Observations.Events is not null
@@ -254,6 +265,19 @@ public static class HoyoLabGameBundleRules
             return false;
         if (role.Resource is null && role.Observations.Resources is not null)
             return false;
+
+        if (role.GenshinBuilds is not null)
+        {
+            if (gameId != GenshinGameId
+                || !consents.Builds
+                || role.Observations.Builds is null
+                || !HoyoLabGenshinBuildRules.IsValid(role.GenshinBuilds))
+                return false;
+        }
+        else if (role.Observations.Builds is not null)
+        {
+            return false;
+        }
 
         if (role.CompletedHsrAchievementIds is { } ids)
         {
@@ -279,7 +303,7 @@ public static class HoyoLabGameBundleRules
     private static bool IsValidTombstoneCapability(string gameId, string capability) =>
         gameId == GameId
             ? Capabilities.Contains(capability, StringComparer.Ordinal)
-            : capability == Resources;
+            : capability is Resources or Builds;
 
     private static bool IsValidTimestamp(DateTimeOffset? value, DateTimeOffset utcNow) =>
         value is null || IsValidTimestamp(value.Value, utcNow);

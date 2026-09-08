@@ -34,7 +34,9 @@ public sealed partial class MainPage
         var otherGameName = gameId == HoyoLabGameBundleRules.GenshinGameId ? "Star Rail" : "Genshin";
         var sharedData = gameId == HoyoLabGameBundleRules.GameId
             ? "Only remembered resources and completed achievements are shared."
-            : "Only remembered Resin is shared.";
+            : PublisherAccountService.GenshinBuildsAvailable
+                ? "Only remembered Resin, characters and equipped builds are shared. Full-bag inventory is not included."
+                : "Only remembered Resin is shared.";
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
             pageLease?.CancellationToken ?? CancellationToken.None);
         var token = cancellation.Token;

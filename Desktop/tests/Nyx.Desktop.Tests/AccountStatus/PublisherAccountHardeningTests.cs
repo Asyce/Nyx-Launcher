@@ -5578,6 +5578,44 @@ public sealed class PublisherAccountHardeningTests
         Assert.DoesNotContain("includes(", script, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Genshin_build_refresh_checks_slot_role_and_consent_before_capture_and_before_save()
+    {
+        var service = ReadAppFile("PublisherAccountService.GenshinBuilds.cs");
+        var before = service[..service.IndexOf("await window.ReadGenshinBuildsAsync", StringComparison.Ordinal)];
+        var publish = Slice(service, "lock (sync)", "Updated?.Invoke");
+
+        Assert.Contains("GenshinBuildsAvailable => false", service, StringComparison.Ordinal);
+        Assert.Contains("!GenshinBuildsAvailable", before, StringComparison.Ordinal);
+        Assert.Contains("!CanUseGameBundle(\"gi\", operation)", before, StringComparison.Ordinal);
+        Assert.Contains("operation.HoyoContext?.SlotId != expectedSlotId", before, StringComparison.Ordinal);
+        Assert.Contains("before?.Consents.Builds != true", before, StringComparison.Ordinal);
+        Assert.Contains("before.SelectedRole != expectedBinding", before, StringComparison.Ordinal);
+        Assert.Contains("TryLoadRoleRecord(\"gi\", operation)?.Binding != expectedBinding", before, StringComparison.Ordinal);
+        Assert.Contains("!CanPublish(\"HoYoLAB\", operation)", publish, StringComparison.Ordinal);
+        Assert.Contains("operation.HoyoContext?.SlotId != expectedSlotId", publish, StringComparison.Ordinal);
+        Assert.Contains("current?.Consents.Builds != true", publish, StringComparison.Ordinal);
+        Assert.Contains("current.SelectedRole != expectedBinding", publish, StringComparison.Ordinal);
+        Assert.Contains("TryLoadRoleRecord(\"gi\", operation)?.Binding != expectedBinding", publish, StringComparison.Ordinal);
+        Assert.Contains("TryRecordGenshinBuilds(expectedBinding, result.Snapshot, observedAt, token)", publish, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryRecordGenshinBuilds", before, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryDelete", service, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Genshin_build_browser_capture_is_bounded_cancelable_and_always_releases_its_script()
+    {
+        var browser = ReadAppFile("PublisherSessionWindow.GenshinBuilds.cs");
+        Assert.Contains("purpose != PublisherSessionPurpose.Resource || authorizedGameId != \"gi\"", browser, StringComparison.Ordinal);
+        Assert.Contains("IsValidRoleBinding(\"gi\", expectedBinding)", browser, StringComparison.Ordinal);
+        Assert.Contains("CreateLinkedTokenSource(cancellationToken, lifetime.Token)", browser, StringComparison.Ordinal);
+        Assert.Contains("HoyoLabGenshinBuildCapture.TimeoutSeconds + 2", browser, StringComparison.Ordinal);
+        Assert.Contains("WaitAsync(TimeSpan.FromSeconds(2), linked.Token)", browser, StringComparison.Ordinal);
+        Assert.Contains("ParseResult(result, expectedBinding)", browser, StringComparison.Ordinal);
+        var cleanup = browser[browser.LastIndexOf("finally", StringComparison.Ordinal)..];
+        Assert.Contains("await AbortResourceFetchAsync(controllerKey)", cleanup, StringComparison.Ordinal);
+    }
+
     private static PublisherResourceReadResult DailyRoleRead(
         string gameId,
         PublisherResourceReadOutcome outcome,

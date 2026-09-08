@@ -67,10 +67,18 @@ public static class HoyoLabGameBundleMerge
                     remoteRole?.CompletedHsrAchievementIds,
                     static (left, right) => left.SequenceEqual(right),
                     out var achievementsAt,
-                    out var achievements))
+                    out var achievements)
+                || !TryMergeObservation(
+                    localRole?.Observations.Builds,
+                    localRole?.GenshinBuilds,
+                    remoteRole?.Observations.Builds,
+                    remoteRole?.GenshinBuilds,
+                    static (left, right) => HoyoLabGenshinBuildRules.ValuesEqual(left, right),
+                    out var buildsAt,
+                    out var genshinBuilds))
                 return Conflict();
 
-            var newestRoleObservation = Latest(resourcesAt, achievementsAt);
+            var newestRoleObservation = Latest(Latest(resourcesAt, achievementsAt), buildsAt);
             if (!ApplyCapabilityTombstone(
                     capabilityTombstones,
                     binding,
@@ -82,7 +90,13 @@ public static class HoyoLabGameBundleMerge
                     binding,
                     HoyoLabGameBundleRules.Achievements,
                     ref achievementsAt,
-                    ref achievements))
+                    ref achievements)
+                || !ApplyCapabilityTombstone(
+                    capabilityTombstones,
+                    binding,
+                    HoyoLabGameBundleRules.Builds,
+                    ref buildsAt,
+                    ref genshinBuilds))
                 return Conflict();
 
             if (roleTombstones.TryGetValue(binding, out var roleTombstone))
@@ -102,14 +116,15 @@ public static class HoyoLabGameBundleMerge
                 new(
                     resourcesAt,
                     null,
-                    null,
+                    buildsAt,
                     achievementsAt,
                     null,
                     null,
                     null,
                     null),
                 resource,
-                achievements?.ToArray()));
+                achievements?.ToArray(),
+                genshinBuilds));
         }
 
         var orderedCapabilityTombstones = capabilityTombstones.Values
@@ -255,7 +270,8 @@ public static class HoyoLabGameBundleMerge
         && (left.CompletedHsrAchievementIds is null
             ? right.CompletedHsrAchievementIds is null
             : right.CompletedHsrAchievementIds is not null
-                && left.CompletedHsrAchievementIds.SequenceEqual(right.CompletedHsrAchievementIds));
+                && left.CompletedHsrAchievementIds.SequenceEqual(right.CompletedHsrAchievementIds))
+        && HoyoLabGenshinBuildRules.ValuesEqual(left.GenshinBuilds, right.GenshinBuilds);
 
     private static HoyoLabGameBundleMergeResult Conflict() =>
         new(HoyoLabGameBundleMergeOutcome.Conflict, null);
