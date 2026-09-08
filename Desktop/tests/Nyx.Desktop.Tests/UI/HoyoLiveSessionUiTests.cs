@@ -1083,6 +1083,8 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("AutomationProperties.SetName(labelBox", manager, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.SetName(button, accessibleName)", manager, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.SetLiveSetting(managerStatus, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite)", manager, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.SetAutomationId(managerStatus, \"HoyoAccountManagerStatus\")", manager, StringComparison.Ordinal);
+        Assert.DoesNotContain("AutomationProperties.SetName(managerStatus", manager, StringComparison.Ordinal);
     }
 
     [Fact]

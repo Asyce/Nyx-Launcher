@@ -17,6 +17,7 @@ public enum HoyoLabHsrEventsReadStatus
 
 public sealed record HoyoLabHsrEventsReadResult(HoyoLabHsrEventsReadStatus Status, HoyoLabHsrEventsSnapshot? Snapshot = null)
 {
+    public string? Diagnostic { get; init; }
     public override string ToString() => nameof(HoyoLabHsrEventsReadResult);
 }
 
@@ -96,7 +97,12 @@ public static class HoyoLabHsrEventsCapture
           const controller = new AbortController();
           const state = { result: null, abort: () => controller.abort() };
           Object.defineProperty(window, config.key, { configurable: true, value: state });
-          const failure = code => { throw code; };
+          const rememberFailure = error => {
+            state.failureFrames = String(error?.stack || '').split('\n').slice(2, 5)
+              .map(line => Number(line.match(/:(\d+):\d+\)?$/)?.[1] || 0))
+              .filter(line => Number.isInteger(line) && line > 0 && line <= 4096);
+          };
+          const failure = code => { rememberFailure(new Error()); throw code; };
           const plain = value => value !== null && typeof value === 'object' && !Array.isArray(value)
             && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
           const integer = (value, minimum = 0) => Number.isInteger(value) && value >= minimum && value <= 2147483647
@@ -265,6 +271,7 @@ public static class HoyoLabHsrEventsCapture
               finally { encoded.fill(0); }
               state.result = result;
             } catch (error) {
+              if (!state.failureFrames?.length) rememberFailure(error);
               events = null;
               if (window[config.key] === state) state.result = { status: timedOut ? 'timed-out'
                 : controller.signal.aborted ? 'canceled'

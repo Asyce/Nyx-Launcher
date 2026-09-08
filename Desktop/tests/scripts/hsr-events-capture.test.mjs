@@ -300,6 +300,16 @@ function assertNoPartialSuccess(result, expectedStatus = 'needs-review') {
   assert.equal(Object.hasOwn(result, 'events'), false);
 }
 
+test('failure diagnostics contain only bounded script lines and stay outside the result', async () => {
+  const scenario = createScenario({ retcode: 42 });
+  const result = await resultOf(scenario);
+  assertNoPartialSuccess(result);
+  const frames = scenario.state().failureFrames;
+  assert.ok(frames.length > 0 && frames.length <= 3);
+  assert.ok(frames.every(line => Number.isInteger(line) && line > 0 && line <= 4096));
+  assert.equal(Object.hasOwn(result, 'failureFrames'), false);
+});
+
 test('happy path uses exact role GETs, the misspelled calendar endpoint, and a canonical projection', async () => {
   const scenario = createScenario();
   const result = await resultOf(scenario);

@@ -1539,7 +1539,7 @@ public sealed partial class MainPage : Page
             Foreground = (Brush)Application.Current.Resources["MistBrush"],
             TextWrapping = TextWrapping.Wrap,
         };
-        AutomationProperties.SetName(managerStatus, "HoYoLAB account manager status");
+        AutomationProperties.SetAutomationId(managerStatus, "HoyoAccountManagerStatus");
         AutomationProperties.SetLiveSetting(managerStatus, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
         managerStatus.Text = string.Empty;
 
@@ -2180,7 +2180,7 @@ public sealed partial class MainPage : Page
                             HoyoLabHsrBuildReadStatus.TimedOut => "Refresh timed out. Try again; the previous copy is unchanged.",
                             HoyoLabHsrBuildReadStatus.TooLarge => "This build copy exceeds Nyx's supported size. The previous copy is unchanged.",
                             HoyoLabHsrBuildReadStatus.LocalStorageUnavailable => "Nyx could not save the build copy. The previous copy is unchanged.",
-                            _ => "Nyx could not complete this refresh. Check the selected HoYoLAB region and try again; the previous copy is unchanged.",
+                            _ => $"Nyx could not complete this refresh ({hsrResult.Diagnostic ?? "reader-session"}). The previous copy is unchanged.",
                         };
                         return;
                     }
@@ -2194,7 +2194,7 @@ public sealed partial class MainPage : Page
                         HoyoLabGenshinBuildReadStatus.TimedOut => "Refresh timed out. Try again; the previous copy is unchanged.",
                         HoyoLabGenshinBuildReadStatus.TooLarge => "This build copy exceeds Nyx's supported size. The previous copy is unchanged.",
                         HoyoLabGenshinBuildReadStatus.LocalStorageUnavailable => "Nyx could not save the build copy. The previous copy is unchanged.",
-                        _ => "Nyx could not complete this refresh. Check the selected HoYoLAB region and try again; the previous copy is unchanged.",
+                        _ => $"Nyx could not complete this refresh ({result.Diagnostic ?? "reader-session"}). The previous copy is unchanged.",
                     };
                 }, selectedSlotId);
             };
@@ -2257,7 +2257,7 @@ public sealed partial class MainPage : Page
                             HoyoLabHsrEventsReadStatus.TimedOut => "Refresh timed out. Try again; the previous copy is unchanged.",
                             HoyoLabHsrEventsReadStatus.TooLarge => "This events copy exceeds Nyx's supported size. The previous copy is unchanged.",
                             HoyoLabHsrEventsReadStatus.LocalStorageUnavailable => "Nyx could not save the events copy. The previous copy is unchanged.",
-                            _ => "Nyx could not complete this refresh. Check the selected HoYoLAB region and try again; the previous copy is unchanged.",
+                            _ => $"Nyx could not complete this refresh ({hsrResult.Diagnostic ?? "reader-session"}). The previous copy is unchanged.",
                         };
                         return;
                     }
