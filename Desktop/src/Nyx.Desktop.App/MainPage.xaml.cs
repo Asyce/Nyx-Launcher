@@ -293,7 +293,10 @@ public sealed partial class MainPage : Page
                 ?? (LauncherMotionBackground.Source is not null
                     ? LauncherMotionBackground
                     : LauncherMotionBackgroundNext);
-            motion.MediaPlayer?.Play();
+            if (motion.Source is null)
+                PrepareLauncherMotionBackground(activeLauncherVisual.Files[0], launcherVisualGeneration);
+            else
+                motion.MediaPlayer?.Play();
         }
         else if (activeLauncherVisual is { Kind: "gallery", Files.Count: > 1 })
         {
@@ -490,12 +493,10 @@ public sealed partial class MainPage : Page
         visibleLauncherImageBackground = BackgroundArtwork;
         if (LauncherMotionBackground.MediaPlayer is { } primaryMotion)
         {
-            primaryMotion.MediaOpened += LauncherMotionPlayer_MediaOpened;
             primaryMotion.MediaFailed += LauncherMotionPlayer_MediaFailed;
         }
         if (LauncherMotionBackgroundNext.MediaPlayer is { } secondaryMotion)
         {
-            secondaryMotion.MediaOpened += LauncherMotionPlayer_MediaOpened;
             secondaryMotion.MediaFailed += LauncherMotionPlayer_MediaFailed;
         }
         bannerCountdownTimer.Tick += BannerCountdownTimer_Tick;
@@ -6392,6 +6393,11 @@ public sealed partial class MainPage : Page
             : 0;
         if (selection.Kind == "video")
         {
+            if (launcherMotionPaused && selection.Files.Count > 1)
+            {
+                PrepareLauncherImageBackground(selection.Files[1], generation, TimeSpan.Zero);
+                return;
+            }
             var hasVisibleBackground = visibleLauncherMotionBackground?.Source is not null
                 || visibleLauncherImageBackground?.Source is not null;
             if (!hasVisibleBackground && selection.Files.Count > 1)
@@ -6409,7 +6415,7 @@ public sealed partial class MainPage : Page
             launcherGalleryTimer.Start();
     }
 
-    private void PrepareLauncherMotionBackground(string file, int generation)
+    private async void PrepareLauncherMotionBackground(string file, int generation)
     {
         var incoming = ReferenceEquals(visibleLauncherMotionBackground, LauncherMotionBackground)
             ? LauncherMotionBackgroundNext
@@ -6418,47 +6424,33 @@ public sealed partial class MainPage : Page
         if (ReferenceEquals(incoming, LauncherMotionBackground)) launcherMotionPrimaryGeneration = generation;
         else launcherMotionSecondaryGeneration = generation;
         if (incoming.MediaPlayer is not { } player) return;
-        player.MediaOpened -= LauncherMotionPlayer_MediaOpened;
-        player.MediaOpened += LauncherMotionPlayer_MediaOpened;
         player.MediaFailed -= LauncherMotionPlayer_MediaFailed;
         player.MediaFailed += LauncherMotionPlayer_MediaFailed;
         player.IsMuted = true;
         player.IsLoopingEnabled = true;
-        incoming.Source = MediaSource.CreateFromUri(new Uri(file));
+        var source = MediaSource.CreateFromUri(new Uri(file));
+        var readiness = LauncherMotionReadiness.WaitForFrameAsync(
+            player, source, pageLease?.CancellationToken ?? CancellationToken.None);
+        incoming.Source = source;
         if (!launcherMotionPaused) player.Play();
-    }
-
-    private void LauncherMotionPlayer_MediaOpened(Windows.Media.Playback.MediaPlayer sender, object args)
-    {
-        _ = DispatcherQueue.TryEnqueue(() =>
+        bool ready;
+        try { ready = await readiness; }
+        catch (OperationCanceledException) { return; }
+        if (generation != launcherVisualGeneration || !ReferenceEquals(incoming.Source, source)) return;
+        if (!ready)
         {
-            var incoming = ReferenceEquals(LauncherMotionBackground.MediaPlayer, sender)
-                ? LauncherMotionBackground
-                : ReferenceEquals(LauncherMotionBackgroundNext.MediaPlayer, sender)
-                    ? LauncherMotionBackgroundNext
-                    : null;
-            if (incoming is null) return;
-            var generation = ReferenceEquals(incoming, LauncherMotionBackground)
-                ? launcherMotionPrimaryGeneration
-                : launcherMotionSecondaryGeneration;
-            if (generation != launcherVisualGeneration)
-            {
-                incoming.MediaPlayer?.Pause();
-                incoming.Source = null;
-                return;
-            }
-            if (launcherMotionPaused) incoming.MediaPlayer?.Pause();
-            BeginLauncherBackgroundCrossfade(
-                incoming,
-                generation,
-                TimeSpan.FromMilliseconds(380));
-        });
+            ApplyLauncherMotionFallback(generation);
+            return;
+        }
+        if (launcherMotionPaused) player.Pause();
+        BeginLauncherBackgroundCrossfade(incoming, generation, TimeSpan.FromMilliseconds(380));
     }
 
     private void LauncherMotionPlayer_MediaFailed(
         Windows.Media.Playback.MediaPlayer sender,
         Windows.Media.Playback.MediaPlayerFailedEventArgs args)
     {
+        var source = sender.Source;
         _ = DispatcherQueue.TryEnqueue(() =>
         {
             var incoming = ReferenceEquals(LauncherMotionBackground.MediaPlayer, sender)
@@ -6466,19 +6458,21 @@ public sealed partial class MainPage : Page
                 : ReferenceEquals(LauncherMotionBackgroundNext.MediaPlayer, sender)
                     ? LauncherMotionBackgroundNext
                     : null;
-            if (incoming is null) return;
+            if (incoming is null || source is null || !ReferenceEquals(incoming.Source, source)) return;
             var generation = ReferenceEquals(incoming, LauncherMotionBackground)
                 ? launcherMotionPrimaryGeneration
                 : launcherMotionSecondaryGeneration;
-            if (generation != launcherVisualGeneration
-                || activeLauncherVisual is not { Kind: "video" } selection) return;
-            HideLauncherMotionBackgrounds();
-            if (selection.Files.Count > 1)
-                PrepareLauncherImageBackground(
-                    selection.Files[1],
-                    generation,
-                    TimeSpan.FromMilliseconds(380));
+            ApplyLauncherMotionFallback(generation);
         });
+    }
+
+    private void ApplyLauncherMotionFallback(int generation)
+    {
+        if (generation != launcherVisualGeneration
+            || activeLauncherVisual is not { Kind: "video" } selection) return;
+        HideLauncherMotionBackgrounds();
+        if (selection.Files.Count > 1)
+            PrepareLauncherImageBackground(selection.Files[1], generation, TimeSpan.FromMilliseconds(380));
     }
 
     private void HideLauncherMotionBackgrounds()

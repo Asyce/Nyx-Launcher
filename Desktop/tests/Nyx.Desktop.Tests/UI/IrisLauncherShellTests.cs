@@ -366,6 +366,30 @@ public sealed class IrisLauncherShellTests
     }
 
     [Fact]
+    public void Launcher_video_waits_for_a_decoded_frame_and_falls_back_on_silent_decoder_failure()
+    {
+        var code = ReadAppFile("MainPage.xaml.cs");
+        var readiness = ReadAppFile("LauncherMotionReadiness.cs");
+        var prepare = Slice(code, "private async void PrepareLauncherMotionBackground", "private void LauncherMotionPlayer_MediaFailed");
+        Assert.DoesNotContain("LauncherMotionPlayer_MediaOpened", code, StringComparison.Ordinal);
+        Assert.True(prepare.IndexOf("LauncherMotionReadiness.WaitForFrameAsync", StringComparison.Ordinal)
+            < prepare.IndexOf("incoming.Source = source", StringComparison.Ordinal));
+        Assert.True(prepare.IndexOf("ready = await readiness", StringComparison.Ordinal)
+            < prepare.IndexOf("BeginLauncherBackgroundCrossfade", StringComparison.Ordinal));
+        Assert.Contains("generation != launcherVisualGeneration || !ReferenceEquals(incoming.Source, source)", prepare, StringComparison.Ordinal);
+        Assert.Contains("ApplyLauncherMotionFallback(generation);", prepare, StringComparison.Ordinal);
+        Assert.Contains("catch (OperationCanceledException) { return; }", prepare, StringComparison.Ordinal);
+        Assert.Contains("player.VideoFrameAvailable += FrameAvailable;", readiness, StringComparison.Ordinal);
+        Assert.Contains("player.IsVideoFrameServerEnabled = true;", readiness, StringComparison.Ordinal);
+        Assert.Contains("WaitAsync(TimeSpan.FromSeconds(3), cancellationToken)", readiness, StringComparison.Ordinal);
+        Assert.Contains("catch (TimeoutException) { return false; }", readiness, StringComparison.Ordinal);
+        Assert.Contains("player.VideoFrameAvailable -= FrameAvailable;", readiness, StringComparison.Ordinal);
+        Assert.Contains("player.MediaFailed -= Failed;", readiness, StringComparison.Ordinal);
+        Assert.Contains("player.Source is null || ReferenceEquals(player.Source, source)", readiness, StringComparison.Ordinal);
+        Assert.Contains("player.IsVideoFrameServerEnabled = false;", readiness, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Official_switch_keeps_the_previous_layer_until_cached_or_preloaded_art_is_ready()
     {
         var code = ReadAppFile("MainPage.xaml.cs");
