@@ -90,6 +90,20 @@ public sealed class BannerCycleUiTests
     }
 
     [Fact]
+    public void Banner_scroll_viewport_receives_the_available_height_below_its_header()
+    {
+        var xaml = System.Xml.Linq.XDocument.Parse(ReadAppFile("MainPage.xaml"));
+        System.Xml.Linq.XNamespace names = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var content = xaml.Descendants().Single(element => (string?)element.Attribute(names + "Name") == "ContentPanel");
+        var stack = xaml.Descendants().Single(element => (string?)element.Attribute(names + "Name") == "BannerCycleStack");
+        var rows = stack.Elements().Single(element => element.Name.LocalName == "Grid.RowDefinitions").Elements().ToArray();
+
+        Assert.Equal("Grid", content.Name.LocalName);
+        Assert.Equal("Auto", (string?)rows[0].Attribute("Height"));
+        Assert.Equal("*", (string?)rows[1].Attribute("Height"));
+    }
+
+    [Fact]
     public void Banner_panel_uses_one_compact_timeline_with_intrinsic_single_line_character_names()
     {
         var xaml = ReadAppFile("MainPage.xaml");
