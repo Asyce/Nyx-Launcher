@@ -814,9 +814,13 @@ public sealed class LauncherBannersContentTests
         var cache = Path.Combine(Path.GetTempPath(), "nyx-launcher-cache-" + Guid.NewGuid().ToString("N"));
         try
         {
+            var payload = File.ReadAllBytes(Path.Combine(generated, $"launcher-banners-v{schemaVersion}.json"));
+            using var document = JsonDocument.Parse(payload);
+            var generatedAt = document.RootElement.GetProperty("generatedAt").GetDateTimeOffset();
             await using var service = new LauncherBannersContentService(
-                File.ReadAllBytes(Path.Combine(generated, $"launcher-banners-v{schemaVersion}.json")),
+                payload,
                 cache,
+                clock: () => generatedAt,
                 bundledAssetsDirectory: Path.Combine(generated, "launcher-art"));
             var currentGames = service.Current.Games.Where(pair => pair.Value.Current is not null).ToArray();
             Assert.NotEmpty(currentGames);
