@@ -6149,6 +6149,9 @@ public sealed partial class MainPage : Page
     {
         if (selected.Id == "ae")
         {
+            AutomationProperties.SetName(
+                ChangePublisherAccountButton,
+                "Open Endfield account in SKPORT");
             var endfieldIdentityText = publisherAccounts.EndfieldIdentity?.DisplayText ?? string.Empty;
             AccountAndToolsIdentityText.Text = endfieldIdentityText;
             AccountAndToolsIdentityText.Visibility = !accountSectionExpanded || string.IsNullOrEmpty(endfieldIdentityText)
@@ -6159,6 +6162,9 @@ public sealed partial class MainPage : Page
                 string.IsNullOrEmpty(endfieldIdentityText)
                     ? "No Endfield account selected"
                     : $"Endfield account: {endfieldIdentityText}");
+            AutomationProperties.SetHelpText(
+                AccountAndToolsIdentityText,
+                "Endfield account identity; connection state is shown separately.");
             return;
         }
 

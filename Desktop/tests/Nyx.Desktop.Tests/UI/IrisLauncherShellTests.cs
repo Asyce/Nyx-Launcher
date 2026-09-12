@@ -10,6 +10,31 @@ public sealed class IrisLauncherShellTests
     private static readonly string WorkspaceRoot = FindWorkspaceRoot();
 
     [Fact]
+    public void Endfield_account_render_resets_provider_accessibility_before_returning()
+    {
+        var render = Slice(
+            ReadAppFile("MainPage.xaml.cs"),
+            "private void RenderHoyoLabAccountIdentity",
+            "private ImageSource? ResolveImageSource");
+        var endfield = Regex.Replace(
+            Slice(render, "if (selected.Id == \"ae\")", "return;"),
+            @"\s+",
+            " ");
+
+        Assert.Contains(
+            "AutomationProperties.SetName( ChangePublisherAccountButton, \"Open Endfield account in SKPORT\")",
+            endfield,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "AutomationProperties.SetHelpText( AccountAndToolsIdentityText, \"Endfield account identity; connection state is shown separately.\")",
+            endfield,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("HoYoLAB", endfield, StringComparison.Ordinal);
+        Assert.Contains("Choose the HoYoLAB region for this game", render, StringComparison.Ordinal);
+        Assert.Contains("Change HoYoLAB account or region", render, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Account_and_export_status_keep_polite_live_regions_and_dynamic_accessible_names()
     {
         var xaml = ReadAppFile("MainPage.xaml");
