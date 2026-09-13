@@ -100,8 +100,9 @@ public sealed class LauncherVisualsCache : IAsyncDisposable
             LastFailure = null;
             try
             {
-                if (gameId == "gi")
-                    return await RefreshGenshinAsync(
+                if (gameId is "gi" or "hsr")
+                    return await RefreshCompatibleHoyoAsync(
+                        gameId,
                         ReadOfficialHoyoAssetsAsync(cancellationToken),
                         ReadManifestFallbackAsync(cancellationToken),
                         cancellationToken);
@@ -145,14 +146,14 @@ public sealed class LauncherVisualsCache : IAsyncDisposable
             {
                 try
                 {
-                    if (gameId == "gi")
+                    if (gameId is "gi" or "hsr")
                     {
                         Task<Manifest?> pending;
                         lock (fallbackGate)
                         {
                             pending = fallbackManifest ??= ReadManifestFallbackAsync(cancellationToken);
                         }
-                        return await RefreshGenshinAsync(hoyoAssets, pending, cancellationToken);
+                        return await RefreshCompatibleHoyoAsync(gameId, hoyoAssets, pending, cancellationToken);
                     }
                     if (gameId == "ae") return await RefreshOfficialEndfieldAsync(cancellationToken);
                     var asset = gameId == "wuwa"
@@ -244,7 +245,10 @@ public sealed class LauncherVisualsCache : IAsyncDisposable
         if (ownsHttp) http.Dispose();
     }
 
-    private async Task<LauncherVisualSelection?> RefreshGenshinAsync(
+    // These official WebMs can use RGB VP9 profiles the native player cannot decode.
+    // Reuse Pengo's publish-time H.264 conversion; no codec installation is needed.
+    private async Task<LauncherVisualSelection?> RefreshCompatibleHoyoAsync(
+        string gameId,
         Task<IReadOnlyDictionary<string, OfficialVisual>> officialAssets,
         Task<Manifest?> fallbackManifest,
         CancellationToken cancellationToken)
@@ -252,7 +256,7 @@ public sealed class LauncherVisualsCache : IAsyncDisposable
         OfficialImage? fallback = null;
         try
         {
-            fallback = (await officialAssets)["gi"].Image;
+            fallback = (await officialAssets)[gameId].Image;
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
         {
@@ -260,12 +264,12 @@ public sealed class LauncherVisualsCache : IAsyncDisposable
         }
 
         var manifest = await fallbackManifest;
-        if (manifest?.Games.TryGetValue("gi", out var entry) == true
+        if (manifest?.Games.TryGetValue(gameId, out var entry) == true
             && entry is { Kind: "video", Assets: [{ MediaType: "video/mp4" }] })
         {
             try
             {
-                return await AcquireSelectionAsync("gi", manifest.Revision, entry, cancellationToken, fallback);
+                return await AcquireSelectionAsync(gameId, manifest.Revision, entry, cancellationToken, fallback);
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
             {
@@ -277,14 +281,14 @@ public sealed class LauncherVisualsCache : IAsyncDisposable
         {
             try
             {
-                return await AcquireOfficialImageSelectionAsync("gi", fallback, cancellationToken);
+                return await AcquireOfficialImageSelectionAsync(gameId, fallback, cancellationToken);
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
             {
                 LastFailure = exception.GetType().Name + ": " + exception.Message;
             }
         }
-        return TryLoadLastGood("gi");
+        return TryLoadLastGood(gameId);
     }
 
     private async Task<LauncherVisualSelection?> RefreshManifestFallbackAsync(
@@ -725,7 +729,7 @@ public sealed class LauncherVisualsCache : IAsyncDisposable
                 || (state.Kind == "gallery" && state.Files.Count != 3)
                 || (state.Kind == "image" && state.Files.Count != 1)
                 || (state.Kind == "video" && state.Files.Count is not (1 or 2))
-                || (gameId == "gi" && state.Kind == "video"
+                || (gameId is "gi" or "hsr" && state.Kind == "video"
                     && state.Files[0].EndsWith(".webm", StringComparison.OrdinalIgnoreCase))
                 || state.Files.Any(static name => string.IsNullOrWhiteSpace(name) || Path.GetFileName(name) != name)
                 || state.Files.Distinct(StringComparer.OrdinalIgnoreCase).Count() != state.Files.Count
