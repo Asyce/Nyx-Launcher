@@ -252,6 +252,7 @@ public sealed partial class MainPage : Page
     private Task? launcherVisualPreloadTask;
     private Image? visibleLauncherImageBackground;
     private MediaPlayerElement? visibleLauncherMotionBackground;
+    private MediaPlayerElement? pendingLauncherMotionBackground;
     private Storyboard? launcherBackgroundCrossfade;
     private long launcherBackgroundTransitionToken;
     private long launcherImageRequestToken;
@@ -289,7 +290,7 @@ public sealed partial class MainPage : Page
 
         if (activeLauncherVisual is { Kind: "video" })
         {
-            var motion = visibleLauncherMotionBackground
+            var motion = pendingLauncherMotionBackground ?? visibleLauncherMotionBackground
                 ?? (LauncherMotionBackground.Source is not null
                     ? LauncherMotionBackground
                     : LauncherMotionBackgroundNext);
@@ -694,6 +695,7 @@ public sealed partial class MainPage : Page
         LauncherMotionBackgroundNext.MediaPlayer?.Pause();
         launcherVisualRequestedGameId = null;
         activeLauncherVisual = null;
+        pendingLauncherMotionBackground = null;
         bannerCountdownTimer.Stop();
         publisherResourceRefreshTimer.Stop();
         codeCopyResetTimer.Stop();
@@ -6337,6 +6339,7 @@ public sealed partial class MainPage : Page
         var generation = ++launcherVisualGeneration;
         launcherGalleryTimer.Stop();
         activeLauncherVisual = null;
+        pendingLauncherMotionBackground = null;
         if (isOfficial)
         {
             launcherImageRequestToken++;
@@ -6385,29 +6388,17 @@ public sealed partial class MainPage : Page
             || selected.Id != selection.GameId) return;
         if (activeLauncherVisual?.GameId == selection.GameId
             && activeLauncherVisual.Revision == selection.Revision
-            && activeLauncherVisual.Files.SequenceEqual(selection.Files)
-            && (selection.Kind != "video" || visibleLauncherMotionBackground is not null)) return;
+            && activeLauncherVisual.Files.SequenceEqual(selection.Files)) return;
         activeLauncherVisual = selection;
         launcherGalleryIndex = selection.Kind == "gallery" && selection.Files.Count > 1
             ? Random.Shared.Next(selection.Files.Count)
             : 0;
         if (selection.Kind == "video")
         {
-            if (launcherMotionPaused && selection.Files.Count > 1)
-            {
-                PrepareLauncherImageBackground(selection.Files[1], generation, TimeSpan.Zero);
-                return;
-            }
-            var hasVisibleBackground = visibleLauncherMotionBackground?.Source is not null
-                || visibleLauncherImageBackground?.Source is not null;
-            if (!hasVisibleBackground && selection.Files.Count > 1)
-            {
-                SetBackgroundSource(selection.Files[1]);
-                BackgroundArtwork.Opacity = 1;
-                BackgroundArtworkNext.Opacity = 0;
-                visibleLauncherImageBackground = BackgroundArtwork;
-            }
-            PrepareLauncherMotionBackground(selection.Files[0], generation);
+            if (selection.Files.Count > 1)
+                PrepareLauncherImageBackground(selection.Files[1], generation, TimeSpan.FromMilliseconds(380));
+            if (!launcherMotionPaused)
+                PrepareLauncherMotionBackground(selection.Files[0], generation);
             return;
         }
         ApplyLauncherGalleryFrame();
@@ -6424,6 +6415,7 @@ public sealed partial class MainPage : Page
         if (ReferenceEquals(incoming, LauncherMotionBackground)) launcherMotionPrimaryGeneration = generation;
         else launcherMotionSecondaryGeneration = generation;
         if (incoming.MediaPlayer is not { } player) return;
+        pendingLauncherMotionBackground = incoming;
         player.MediaFailed -= LauncherMotionPlayer_MediaFailed;
         player.MediaFailed += LauncherMotionPlayer_MediaFailed;
         player.IsMuted = true;
@@ -6439,9 +6431,11 @@ public sealed partial class MainPage : Page
         if (generation != launcherVisualGeneration || !ReferenceEquals(incoming.Source, source)) return;
         if (!ready)
         {
-            ApplyLauncherMotionFallback(generation);
+            ApplyLauncherMotionFallback(incoming, generation);
             return;
         }
+        pendingLauncherMotionBackground = null;
+        launcherImageRequestToken++;
         if (launcherMotionPaused) player.Pause();
         BeginLauncherBackgroundCrossfade(incoming, generation, TimeSpan.FromMilliseconds(380));
     }
@@ -6462,15 +6456,23 @@ public sealed partial class MainPage : Page
             var generation = ReferenceEquals(incoming, LauncherMotionBackground)
                 ? launcherMotionPrimaryGeneration
                 : launcherMotionSecondaryGeneration;
-            ApplyLauncherMotionFallback(generation);
+            ApplyLauncherMotionFallback(incoming, generation);
         });
     }
 
-    private void ApplyLauncherMotionFallback(int generation)
+    private void ApplyLauncherMotionFallback(MediaPlayerElement incoming, int generation)
     {
         if (generation != launcherVisualGeneration
             || activeLauncherVisual is not { Kind: "video" } selection) return;
-        HideLauncherMotionBackgrounds();
+        if (ReferenceEquals(pendingLauncherMotionBackground, incoming))
+        {
+            pendingLauncherMotionBackground = null;
+            incoming.MediaPlayer?.Pause();
+            incoming.Source = null;
+            incoming.Opacity = 0;
+            // The poster is already loading or visible; do not restart its transition.
+            return;
+        }
         if (selection.Files.Count > 1)
             PrepareLauncherImageBackground(selection.Files[1], generation, TimeSpan.FromMilliseconds(380));
     }
@@ -6481,6 +6483,7 @@ public sealed partial class MainPage : Page
         launcherBackgroundCrossfade = null;
         launcherBackgroundTransitionToken++;
         visibleLauncherMotionBackground = null;
+        pendingLauncherMotionBackground = null;
         foreach (var motion in new[] { LauncherMotionBackground, LauncherMotionBackgroundNext })
         {
             motion.Opacity = 0;
@@ -6609,7 +6612,9 @@ public sealed partial class MainPage : Page
 
         foreach (var motionLayer in new[] { LauncherMotionBackground, LauncherMotionBackgroundNext })
         {
-            if (ReferenceEquals(motionLayer, incoming)) continue;
+            // Showing the poster must not stop the video that is still being prepared.
+            if (ReferenceEquals(motionLayer, incoming)
+                || ReferenceEquals(motionLayer, pendingLauncherMotionBackground)) continue;
             motionLayer.MediaPlayer?.Pause();
             motionLayer.Source = null;
         }

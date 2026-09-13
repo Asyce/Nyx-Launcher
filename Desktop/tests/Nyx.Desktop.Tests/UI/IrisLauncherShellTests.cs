@@ -377,7 +377,7 @@ public sealed class IrisLauncherShellTests
         Assert.True(prepare.IndexOf("ready = await readiness", StringComparison.Ordinal)
             < prepare.IndexOf("BeginLauncherBackgroundCrossfade", StringComparison.Ordinal));
         Assert.Contains("generation != launcherVisualGeneration || !ReferenceEquals(incoming.Source, source)", prepare, StringComparison.Ordinal);
-        Assert.Contains("ApplyLauncherMotionFallback(generation);", prepare, StringComparison.Ordinal);
+        Assert.Contains("ApplyLauncherMotionFallback(incoming, generation);", prepare, StringComparison.Ordinal);
         Assert.Contains("catch (OperationCanceledException) { return; }", prepare, StringComparison.Ordinal);
         Assert.Contains("player.VideoFrameAvailable += FrameAvailable;", readiness, StringComparison.Ordinal);
         Assert.Contains("player.IsVideoFrameServerEnabled = true;", readiness, StringComparison.Ordinal);
@@ -403,9 +403,31 @@ public sealed class IrisLauncherShellTests
         Assert.DoesNotContain("BackgroundArtwork.Source = null;", selectionHandler, StringComparison.Ordinal);
         Assert.DoesNotContain("BackgroundArtworkNext.Source = null;", selectionHandler, StringComparison.Ordinal);
         Assert.Contains("PrepareLauncherImageBackground(fallback, generation", selectionHandler, StringComparison.Ordinal);
-        Assert.Contains("if (!hasVisibleBackground && selection.Files.Count > 1)", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("hasVisibleBackground", code, StringComparison.Ordinal);
         Assert.Contains("requestToken != launcherImageRequestToken || generation != launcherVisualGeneration", code, StringComparison.Ordinal);
         Assert.Contains("if (!launcherMotionPaused) player.Play();", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Video_poster_loads_without_waiting_for_the_decoder_and_cannot_replace_ready_motion()
+    {
+        var code = ReadAppFile("MainPage.xaml.cs");
+        var selection = Slice(code, "private void ApplyLauncherVisual", "private async void PrepareLauncherMotionBackground");
+        var video = Slice(selection, "if (selection.Kind == \"video\")", "ApplyLauncherGalleryFrame();");
+        var prepare = Slice(code, "private async void PrepareLauncherMotionBackground", "private void LauncherMotionPlayer_MediaFailed");
+        var fallback = Slice(code, "private void ApplyLauncherMotionFallback", "private void HideLauncherMotionBackgrounds");
+        var completed = Slice(code, "private void CompleteLauncherBackgroundCrossfade", "private void SetBackgroundSource");
+
+        Assert.Matches(@"if \(selection.Files.Count > 1\)\s*PrepareLauncherImageBackground\(selection.Files\[1\], generation, TimeSpan.FromMilliseconds\(380\)\);", video);
+        Assert.True(video.IndexOf("PrepareLauncherImageBackground", StringComparison.Ordinal)
+            < video.IndexOf("PrepareLauncherMotionBackground", StringComparison.Ordinal));
+        Assert.DoesNotContain("visibleLauncherMotionBackground", selection, StringComparison.Ordinal);
+        Assert.Contains("pendingLauncherMotionBackground = incoming;", prepare, StringComparison.Ordinal);
+        Assert.Matches(@"pendingLauncherMotionBackground = null;\s*launcherImageRequestToken\+\+;[\s\S]*?BeginLauncherBackgroundCrossfade", prepare);
+        Assert.Matches(@"ReferenceEquals\(motionLayer, pendingLauncherMotionBackground\)\) continue;\s*motionLayer.MediaPlayer\?\.Pause", completed);
+        Assert.DoesNotContain("HideLauncherMotionBackgrounds", fallback, StringComparison.Ordinal);
+        Assert.Matches(@"ReferenceEquals\(pendingLauncherMotionBackground, incoming\)[\s\S]*?incoming.Source = null;[\s\S]*?return;[\s\S]*?PrepareLauncherImageBackground", fallback);
+        Assert.Contains("var motion = pendingLauncherMotionBackground ?? visibleLauncherMotionBackground", code, StringComparison.Ordinal);
     }
 
     [Fact]
