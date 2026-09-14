@@ -163,24 +163,362 @@ public sealed class HoyoLabAccountSlotServiceTests
     }
 
     [Fact]
-    public void Forget_is_write_ahead_pending_retriable_and_never_deletes_legacy_profile()
+    public void Explicit_local_removal_detaches_sync_then_clears_only_the_revalidated_account()
     {
         var method = Slice("public async Task<bool> ForgetHoyoLabAccountAsync", "public void ApplyPasswordSavingPreference");
-        AssertOrdered(method, "TryMarkRemovalPending", "TryDeleteManagedDirectory", "TryRemoveSlot");
-        Assert.Contains("target.RemovalPending", method, StringComparison.Ordinal);
-        Assert.Contains("if (!target.IsLegacy)", method, StringComparison.Ordinal);
+        var syncService = File.ReadAllText(FindRepositoryFile(
+            "Desktop", "src", "Nyx.Desktop.App", "PublisherAccountService.HoyoSync.cs"));
+        var cleanup = syncService[syncService.IndexOf("private bool TryRemoveHoyoSlotLocally", StringComparison.Ordinal)..];
+        AssertOrdered(method, "removeEverywhere: false", "previousSession.CancelAsync", "gate.WaitAsync",
+            "hoyoSlots.TryGetProtectedStateRoot", "syncCleanup.Detach", "TryPublishHoyoSyncCleanup(operation",
+            "TryRemoveHoyoSlotLocally", "&& removed");
+        AssertOrdered(cleanup, "OwnsProfile(\"HoYoLAB\")", "hoyoSlots.TryLoad()", "hoyoSlots.IsSlotRemoved",
+            "TryMarkRemovalPending", "TryGetWebView2ProfilePath", "TryDeleteExactDirectory(legacyProfile)",
+            "TryGetSlotContainerPath", "TryDeleteManagedDirectory", "TryRemoveSlot");
+        Assert.Contains("target.RemovalPending", cleanup, StringComparison.Ordinal);
+        Assert.Contains("target.IsLegacy", cleanup, StringComparison.Ordinal);
+        Assert.Contains("new PublisherRoleBindingStore(root).DeleteProvider(\"HoYoLAB\")", cleanup, StringComparison.Ordinal);
         Assert.DoesNotContain("Path.Combine(root, \"HoYoLAB\")", method, StringComparison.Ordinal);
-        Assert.Contains("SetConnection(\"HoYoLAB\", PublisherConnectionState.NotConnected)", method, StringComparison.Ordinal);
+        Assert.DoesNotContain("DeletePendingAsync", cleanup, StringComparison.Ordinal);
+        Assert.Contains("SetConnection(\"HoYoLAB\", PublisherConnectionState.NotConnected)", cleanup, StringComparison.Ordinal);
     }
 
     [Fact]
     public void Revocation_deletes_all_hoyo_roots_and_index_last()
     {
-        var method = Slice("private bool TryDeleteAllHoyoState()", "private bool TryDeleteExactDirectory");
+        var method = Slice("private bool TryDeleteAllHoyoState(PublisherOperation operation)", "private bool TryDeleteExactDirectory");
         Assert.Contains("Accounts\", \"HoYoLAB", method, StringComparison.Ordinal);
         Assert.Contains(".protected-role-bindings", method, StringComparison.Ordinal);
         Assert.Contains(".protected-resource-snapshots", method, StringComparison.Ordinal);
+        Assert.Contains(".protected-hoyolab-game-bundles", method, StringComparison.Ordinal);
+        Assert.Contains("CanDeleteAllHoyoProtectedState(operation)", method, StringComparison.Ordinal);
         AssertOrdered(method, "TryDeleteExactDirectory(legacyResources)", "hoyoSlots.TryDeleteIndex()");
+    }
+
+    [Fact]
+    public void Game_bundle_public_surface_is_slot_revalidated_and_supports_only_proven_consents()
+    {
+        var hsrSnapshot = Slice(
+            "public async Task<HoyoLabGameBundle?> GetHsrGameBundleSnapshotAsync",
+            "public async Task<HoyoLabGameBundle?> GetGenshinGameBundleSnapshotAsync");
+        Assert.Contains(
+            "await GetGameBundleSnapshotAsync(HoyoLabGameBundleRules.GameId",
+            hsrSnapshot,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("GenshinGameId", hsrSnapshot, StringComparison.Ordinal);
+
+        var genshinSnapshot = Slice(
+            "public async Task<HoyoLabGameBundle?> GetGenshinGameBundleSnapshotAsync",
+            "public async Task<HoyoLabGameBundle?> GetGameBundleSnapshotAsync");
+        Assert.Contains(
+            "await GetGameBundleSnapshotAsync(HoyoLabGameBundleRules.GenshinGameId",
+            genshinSnapshot,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("HoyoLabGameBundleRules.GameId", genshinSnapshot, StringComparison.Ordinal);
+
+        var snapshot = Slice(
+            "public async Task<HoyoLabGameBundle?> GetGameBundleSnapshotAsync",
+            "public async Task<bool> SetHsrCapabilityConsentAsync");
+        AssertOrdered(
+            snapshot,
+            "CreateOperation(\"HoYoLAB\"",
+            "gate.WaitAsync",
+            "ProfileAccessAllowedAfterGate",
+            "TryMigrateGameBundleFromV1(gameId, operation)",
+            "CanPublish(\"HoYoLAB\", operation)",
+            "var snapshot = GameBundle(gameId).TryLoad()",
+            "snapshot is not null && CanPublish(\"HoYoLAB\", operation)");
+
+        var setter = Slice(
+            "private async Task<bool> SetGameBundleCapabilityConsentAsync",
+            "public HoyoLabAccountIdentity? GetHoyoLabIdentity");
+        Assert.Contains(
+            "HoyoLabGameBundleRules.SupportsLocalCapability(gameId, capability)",
+            setter,
+            StringComparison.Ordinal);
+        Assert.Contains("HoyoLabGameBundleRules.Resources", setter, StringComparison.Ordinal);
+        Assert.DoesNotContain("HoyoLabGameBundleRules.Inventory", setter, StringComparison.Ordinal);
+        AssertOrdered(
+            setter,
+            "gate.WaitAsync",
+            "ProfileAccessAllowedAfterGate",
+            "TryMigrateGameBundleFromV1(gameId, operation)",
+            "CanPublish(\"HoYoLAB\", operation)",
+            "var bundle = GameBundle(gameId)",
+            "var saved = bundle.TrySetCapabilityConsent(",
+            "resourceBinding = bundle.TryLoad()?.SelectedRole",
+            "TryLoadResourceSnapshot(",
+            "TryMirrorGameResource(gameId, resourceBinding, resource, operation)",
+            "return CanPublish(\"HoYoLAB\", operation)");
+        Assert.Contains(
+            "enabled && capability == HoyoLabGameBundleRules.Resources",
+            setter,
+            StringComparison.Ordinal);
+
+        var hsrConsent = Slice(
+            "public async Task<bool> SetHsrCapabilityConsentAsync",
+            "public async Task<bool> SetGenshinCapabilityConsentAsync");
+        Assert.Contains("HoyoLabGameBundleRules.GameId", hsrConsent, StringComparison.Ordinal);
+        Assert.DoesNotContain("GenshinGameId", hsrConsent, StringComparison.Ordinal);
+
+        var genshinConsent = Slice(
+            "public async Task<bool> SetGenshinCapabilityConsentAsync",
+            "private async Task<bool> SetGameBundleCapabilityConsentAsync");
+        Assert.Contains("HoyoLabGameBundleRules.GenshinGameId", genshinConsent, StringComparison.Ordinal);
+        Assert.DoesNotContain("HoyoLabGameBundleRules.GameId", genshinConsent, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void V1_remains_authoritative_while_game_bundle_mirrors_are_best_effort()
+    {
+        var helpers = Slice(
+            "private bool TryMigrateGameBundleFromV1",
+            "private PublisherResourceSnapshot? TryLoadResourceSnapshot");
+        AssertOrdered(
+            helpers,
+            "roleBindings.TryLoadRecord(gameId)",
+            "resourceSnapshots.TryLoad(gameId, role.Binding)",
+            "CanPublish(\"HoYoLAB\", operation)",
+            "GameBundle(gameId).TryMigrateFromV1(");
+        Assert.Contains("var saved = GameBundle(gameId).TrySelectRole(", helpers, StringComparison.Ordinal);
+        Assert.Contains("var saved = GameBundle(gameId).TryRecordResource", helpers, StringComparison.Ordinal);
+        Assert.Contains("var saved = hoyoGameBundle.TryRecordCompletedAchievements", helpers, StringComparison.Ordinal);
+
+        var stores = Slice(
+            "private HoyoLabGameBundleStore GameBundle",
+            "private bool CanDeleteAllHoyoProtectedState");
+        Assert.Contains(
+            "gameId == HoyoLabGameBundleRules.GameId ? hoyoGameBundle : genshinGameBundle",
+            stores,
+            StringComparison.Ordinal);
+
+        var refresh = Slice(
+            "private async Task<PublisherResourceSnapshot?> RefreshResourceCoreAsync",
+            "public Task<DailyCheckInResult> CheckInAsync");
+        AssertOrdered(
+            refresh,
+            "resourceRead.Candidates is { Count: 1 } selectedSingleRole",
+            "activeBinding = selectedSingleRole[0].Binding",
+            "SaveRoleRecord(",
+            "resourceSnapshots.Save(snapshot with { IsStale = false }, activeBinding)",
+            "TryMirrorGameResource(entry.GameId, activeBinding, snapshot, operation)",
+            "return CanPublish(entry.Provider, operation) ? snapshot : null");
+
+        var export = Slice(
+            "private async Task<ExportArtifactMetadata> ExportHsrAchievementsCoreAsync",
+            "private async Task<HoyoLabHsrAchievementResult> ReadHsrAchievementsWithVisibleRecoveryAsync");
+        AssertOrdered(
+            export,
+            "SaveRoleBinding(gameId, result.Role, operation)",
+            "achievementWriter.WriteAsync(",
+            "TryMirrorHsrAchievements(result.Role, result.AchievementIds, operation)",
+            "return artifact");
+    }
+
+    [Fact]
+    public void Game_resource_mirror_matches_the_persisted_snapshot_second_precision()
+    {
+        var resource = Slice(
+            "private bool TryMirrorGameResource",
+            "private bool TryMirrorHsrAchievements");
+
+        Assert.Contains(
+            "ObservedAt = DateTimeOffset.FromUnixTimeSeconds(resource.ObservedAt.ToUnixTimeSeconds())",
+            resource,
+            StringComparison.Ordinal);
+        Assert.Contains("GameBundle(gameId).TryRecordResource", resource, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Legacy_compatibility_never_reads_writes_or_migrates_any_v2_game_bundle()
+    {
+        var availability = Slice(
+            "private bool CanUseGameBundle",
+            "private bool CanDeleteAllHoyoProtectedState");
+        Assert.Contains("hoyoSlotManagerAvailable", availability, StringComparison.Ordinal);
+        Assert.Contains("LegacyCompatibility: false", availability, StringComparison.Ordinal);
+        Assert.Contains("CanMutateHoyoProtectedState(operation)", availability, StringComparison.Ordinal);
+
+        var snapshot = Slice(
+            "public async Task<HoyoLabGameBundle?> GetGameBundleSnapshotAsync",
+            "public async Task<bool> SetHsrCapabilityConsentAsync");
+        AssertOrdered(
+            snapshot,
+            "ProfileAccessAllowedAfterGate",
+            "CanUseGameBundle(gameId, operation)",
+            "TryMigrateGameBundleFromV1(gameId, operation)",
+            "GameBundle(gameId).TryLoad()");
+
+        var setter = Slice(
+            "private async Task<bool> SetGameBundleCapabilityConsentAsync",
+            "public HoyoLabAccountIdentity? GetHoyoLabIdentity");
+        AssertOrdered(
+            setter,
+            "ProfileAccessAllowedAfterGate",
+            "CanUseGameBundle(gameId, operation)",
+            "TryMigrateGameBundleFromV1(gameId, operation)",
+            "var saved = bundle.TrySetCapabilityConsent(");
+
+        var helpers = Slice(
+            "private bool TryMigrateGameBundleFromV1",
+            "private PublisherResourceSnapshot? TryLoadResourceSnapshot");
+        Assert.Equal(3, helpers.Split(
+            "CanUseGameBundle(gameId, operation)",
+            StringSplitOptions.None).Length - 1);
+        Assert.Contains(
+            "CanUseGameBundle(HoyoLabGameBundleRules.GameId, operation)",
+            helpers,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Exact_game_role_cleanup_tombstones_v2_before_v1_and_rechecks_the_slot()
+    {
+        var cleanup = Slice(
+            "private bool TryDeleteProtectedGameState(",
+            "private bool TryDeleteProtectedProviderState(");
+        AssertOrdered(
+            cleanup,
+            "operation?.HoyoContext is { LegacyCompatibility: false }",
+            "lock (sync)",
+            "CanUseGameBundle(gameId, operation)",
+            "GameBundle(gameId).TryDeleteRole(binding, operation.Cancellation.Token)",
+            "CanUseGameBundle(gameId, operation)",
+            "PublisherProtectedStateDeletionPolicy.TryDeleteGameState(");
+        Assert.Contains("HoyoLabGameBundleRules.IsSupportedGame(gameId)", cleanup, StringComparison.Ordinal);
+        Assert.Contains("catch (OperationCanceledException)", cleanup, StringComparison.Ordinal);
+        Assert.Contains("QuarantineProvider(provider, operation)", cleanup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Best_effort_game_mirrors_contain_store_cancellation_after_v1_success()
+    {
+        foreach (var helper in new[]
+                 {
+                     Slice("private bool TryMirrorGameRole", "private bool TryMirrorGameResource"),
+                     Slice("private bool TryMirrorGameResource", "private bool TryMirrorHsrAchievements"),
+                     Slice("private bool TryMirrorHsrAchievements", "private PublisherResourceSnapshot? TryLoadResourceSnapshot"),
+                 })
+        {
+            Assert.Contains("try", helper, StringComparison.Ordinal);
+            Assert.Contains("operation.Cancellation.Token", helper, StringComparison.Ordinal);
+            Assert.Contains("catch (OperationCanceledException)", helper, StringComparison.Ordinal);
+            Assert.Contains("return false", helper, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void Game_bundle_mutations_hold_the_generation_lock_through_store_write_and_final_recheck()
+    {
+        var setter = Slice(
+            "private async Task<bool> SetGameBundleCapabilityConsentAsync",
+            "public HoyoLabAccountIdentity? GetHoyoLabIdentity");
+        AssertLockedMutation(
+            setter,
+            "bundle.TrySetCapabilityConsent",
+            "if (!saved || !CanPublish(\"HoYoLAB\", operation)) return false");
+
+        var migration = Slice(
+            "private bool TryMigrateGameBundleFromV1",
+            "private bool TryMirrorGameRole");
+        AssertLockedMutation(migration, "GameBundle(gameId).TryMigrateFromV1");
+
+        var role = Slice("private bool TryMirrorGameRole", "private bool TryMirrorGameResource");
+        AssertLockedMutation(role, "GameBundle(gameId).TrySelectRole");
+
+        var resource = Slice(
+            "private bool TryMirrorGameResource",
+            "private bool TryMirrorHsrAchievements");
+        AssertLockedMutation(resource, "GameBundle(gameId).TryRecordResource");
+
+        var achievements = Slice(
+            "private bool TryMirrorHsrAchievements",
+            "private PublisherResourceSnapshot? TryLoadResourceSnapshot");
+        AssertLockedMutation(achievements, "hoyoGameBundle.TryRecordCompletedAchievements");
+
+        var rotation = Slice(
+            "PublisherProfileMutationSnapshot ProfileSnapshot) BeginRotatedOperation(",
+            "private CancellationTokenSource RotateSession");
+        AssertOrdered(rotation, "lock (sync)", "GenerationFor(provider).Advance()");
+        var sessionRotation = Slice(
+            "private CancellationTokenSource RotateSession",
+            "private void ApplyProviderConsentSnapshot");
+        AssertOrdered(sessionRotation, "lock (sync)", "GenerationFor(provider).Advance()");
+    }
+
+    [Fact]
+    public void Disconnect_returns_the_state_that_protected_cleanup_actually_committed()
+    {
+        var disconnect = Slice(
+            "private async Task<PublisherConnectionState> DisconnectCoreAsync",
+            "private SemaphoreSlim GateFor");
+        Assert.Contains("return CommitInterruptedProfileChange(", disconnect, StringComparison.Ordinal);
+        Assert.Contains("return CommitDeletedProfile(entry.Provider, operation)", disconnect, StringComparison.Ordinal);
+        AssertOrdered(
+            disconnect,
+            "CanCommitInterruptedProfileChange(entry.Provider, operation, enteredGate)",
+            "return CommitInterruptedProfileChange(",
+            "return PublisherConnectionState.NeedsReview");
+
+        var commit = Slice(
+            "private PublisherConnectionState CommitInterruptedProfileChange(",
+            "private Task DeleteProfileDirectoryAsync(");
+        AssertOrdered(
+            commit,
+            "TryDeleteCapturedHoyoProtectedState(operation)",
+            "QuarantineProvider(provider)",
+            "return PublisherConnectionState.NeedsReview");
+        AssertOrdered(
+            commit,
+            "TryDeleteProtectedProviderState(provider, operation)",
+            "return PublisherConnectionState.NeedsReview");
+        Assert.Contains("return terminalState", commit, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Bundle_store_rotates_with_the_exact_slot_and_all_provider_cleanup_paths_include_it()
+    {
+        var constructor = Slice("public PublisherAccountService(", "public event EventHandler? Updated");
+        Assert.Contains("hoyoGameBundle = new(protectedStateRoot)", constructor, StringComparison.Ordinal);
+
+        var rotation = Slice("private void RefreshActiveHoyoSlot()", "private string ResolveCurrentHoyoProtectedStateRootOrLegacy");
+        AssertOrdered(
+            rotation,
+            "ResolveCurrentHoyoProtectedStateRootOrLegacy()",
+            "roleBindings = new(protectedRoot)",
+            "resourceSnapshots = new(protectedRoot)",
+            "hoyoGameBundle = new(protectedRoot)");
+
+        var quarantine = Slice("private void QuarantineProvider(", "private bool TryDeleteProtectedGameState(");
+        Assert.Contains("CanMutateHoyoProtectedState(operation)", quarantine, StringComparison.Ordinal);
+        Assert.Contains("hoyoGameBundle.TryDelete()", quarantine, StringComparison.Ordinal);
+
+        var providerDelete = Slice("private bool TryDeleteProtectedProviderState(", "private bool CanMutateHoyoProtectedState");
+        AssertOrdered(
+            providerDelete,
+            "PublisherProtectedStateDeletionPolicy.TryDeleteProviderState(",
+            "CanMutateHoyoProtectedState(operation)",
+            "hoyoGameBundle.TryDelete()");
+
+        var interrupted = Slice(
+            "private PublisherConnectionState CommitInterruptedProfileChange(",
+            "private Task DeleteProfileDirectoryAsync(");
+        AssertOrdered(
+            interrupted,
+            "provider == \"HoYoLAB\" && !CanMutateHoyoProtectedState(operation)",
+            "TryDeleteCapturedHoyoProtectedState(operation)",
+            "TryDeleteProtectedProviderState(provider, operation)",
+            "if (provider == \"HoYoLAB\") hoyo = terminalState");
+
+        var capturedDelete = Slice(
+            "private bool TryDeleteCapturedHoyoProtectedState",
+            "private void SetQuarantinedResourceFailure(");
+        Assert.Contains("operation.HoyoContext is not { } context", capturedDelete, StringComparison.Ordinal);
+        Assert.Contains("new PublisherResourceSnapshotStore(context.ProtectedStateRoot)", capturedDelete, StringComparison.Ordinal);
+        Assert.Contains("new PublisherRoleBindingStore(context.ProtectedStateRoot)", capturedDelete, StringComparison.Ordinal);
+        Assert.Contains("new HoyoLabGameBundleStore", capturedDelete, StringComparison.Ordinal);
+        Assert.Contains("legacyDeleted && bundleDeleted", capturedDelete, StringComparison.Ordinal);
+        Assert.DoesNotContain("hoyoGameBundle.TryDelete()", capturedDelete, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -206,15 +544,21 @@ public sealed class HoyoLabAccountSlotServiceTests
     }
 
     [Fact]
-    public void Password_cleanup_enumerates_every_indexed_profile_and_rejects_target_changes()
+    public void Password_cleanup_keeps_the_legacy_profile_deduplicates_and_rejects_target_changes()
     {
         var targets = Slice("private bool TryGetHoyoPasswordCleanupTargets", "private bool AreHoyoPasswordCleanupTargetsCurrent");
         AssertOrdered(
             targets,
             "hoyoSlots.TryLoad()",
+            "Path.Combine(root, \"HoYoLAB\")",
+            "IsSafePublisherProfilePath(indexedLegacyProfile, allowMissingLeaf: true)",
+            "new HashSet<string>(StringComparer.OrdinalIgnoreCase)",
             "foreach (var slot in index.Slots)",
             "hoyoSlots.TryGetWebView2ProfilePath(slot",
-            "resolved.Add(profile)");
+            "resolved.Add(profile)",
+            "profiles = resolved.ToArray()");
+        Assert.Contains("indexedLegacyProfile,", targets, StringComparison.Ordinal);
+        Assert.DoesNotContain("index.LegacyFallback", targets, StringComparison.Ordinal);
         Assert.Contains("hoyoSlots.IsLegacyCompatibilityStillSafe()", targets, StringComparison.Ordinal);
 
         var revalidate = Slice("private bool AreHoyoPasswordCleanupTargetsCurrent", "private static bool HoyoSlotIndexesMatch");
@@ -223,24 +567,48 @@ public sealed class HoyoLabAccountSlotServiceTests
     }
 
     [Fact]
-    public void Password_opt_out_restart_checks_all_slots_and_only_all_slot_cleanup_can_complete()
+    public void Hoyo_password_shutdown_is_permanent_while_skport_keeps_the_saved_preference()
     {
         var constructor = Slice("public PublisherAccountService(", "public event EventHandler? Updated");
+        AssertOrdered(
+            constructor,
+            "hoyoPasswordStorage = new(",
+            "passwordSavingEnabled: false",
+            "skportPasswordStorage = new(",
+            "publisherPasswordSavingEnabled");
         Assert.Contains("HoyoProfilesNeedPasswordCleanup()", constructor, StringComparison.Ordinal);
-        var preference = Slice("public void ApplyPasswordSavingPreference", "public async Task<bool> ClearSavedPasswordsAsync");
-        Assert.Contains("provider == \"HoYoLAB\"", preference, StringComparison.Ordinal);
-        Assert.Contains("HoyoProfilesNeedPasswordCleanup()", preference, StringComparison.Ordinal);
+        var preference = Slice("public void ApplyPasswordSavingPreference", "public Task<bool> ClearSavedHoyoLabPasswordsAsync");
+        Assert.Contains("skportPasswordStorage.ApplyPreference(", preference, StringComparison.Ordinal);
+        Assert.Contains("enabled,", preference, StringComparison.Ordinal);
+        Assert.DoesNotContain("hoyoPasswordStorage", preference, StringComparison.Ordinal);
+        Assert.DoesNotContain("HoyoProfilesNeedPasswordCleanup", preference, StringComparison.Ordinal);
 
         var need = Slice("private bool HoyoProfilesNeedPasswordCleanup", "private bool PublisherProfileEntryExistsOrUnknown");
         Assert.Contains("TryGetHoyoPasswordCleanupTargets", need, StringComparison.Ordinal);
         Assert.Contains("profiles.Select(PublisherProfileEntryExistsOrUnknown)", need, StringComparison.Ordinal);
         Assert.Contains("HoyoLabPasswordCleanupRules.RequiresCleanup", need, StringComparison.Ordinal);
 
-        var ordinaryWindow = Slice("private PublisherSessionWindow CreateWindow", "private async Task<bool> ClearSavedPasswordsAsync(");
+        var ordinaryWindow = Slice("private PublisherSessionWindow CreateWindow", "private async Task<bool> ClearSavedSkportPasswordsCoreAsync(");
         Assert.Contains("PendingCleanup is PublisherProfileCleanupScope.PasswordsOnly", ordinaryWindow, StringComparison.Ordinal);
         Assert.Contains("Every HoYoLAB account must finish password cleanup", ordinaryWindow, StringComparison.Ordinal);
         Assert.Contains("provider == \"HoYoLAB\"", ordinaryWindow, StringComparison.Ordinal);
         Assert.Contains("? static () => { }", ordinaryWindow, StringComparison.Ordinal);
+
+        var hoyoCleanup = Slice("public Task<bool> ClearSavedHoyoLabPasswordsAsync", "public Task<bool> ClearSavedSkportPasswordsAsync");
+        Assert.Contains("ClearAllHoyoSavedPasswordsAsync(cancellationToken)", hoyoCleanup, StringComparison.Ordinal);
+        Assert.DoesNotContain("SKPORT", hoyoCleanup, StringComparison.Ordinal);
+        var skportCleanup = Slice("public Task<bool> ClearSavedSkportPasswordsAsync", "public bool HasPendingConsentRevocation");
+        Assert.Contains("skportPasswordStorage.ApplyPreference(", skportCleanup, StringComparison.Ordinal);
+        Assert.Contains("ClearSavedSkportPasswordsCoreAsync(cancellationToken)", skportCleanup, StringComparison.Ordinal);
+        Assert.DoesNotContain("HoYoLAB", skportCleanup, StringComparison.Ordinal);
+        Assert.DoesNotContain("ClearAllHoyoSavedPasswordsAsync", skportCleanup, StringComparison.Ordinal);
+
+        var skportCore = Slice("private async Task<bool> ClearSavedSkportPasswordsCoreAsync", "public async Task<PublisherEndfieldAccountReviewResult>");
+        Assert.Contains("const string provider = \"SKPORT\"", skportCore, StringComparison.Ordinal);
+        Assert.DoesNotContain("HoYoLAB", skportCore, StringComparison.Ordinal);
+        Assert.DoesNotContain("operation.HoyoContext", skportCore, StringComparison.Ordinal);
+        Assert.DoesNotContain("ClearAllHoyoSavedPasswordsAsync", skportCore, StringComparison.Ordinal);
+        Assert.DoesNotContain("private async Task<bool> ClearSavedPasswordsAsync(", Service, StringComparison.Ordinal);
 
         var allSlotCleanup = Slice("private async Task<bool> ClearAllHoyoSavedPasswordsAsync", "private bool TryGetHoyoPasswordCleanupTargets");
         Assert.Contains("succeeded: false", allSlotCleanup, StringComparison.Ordinal);
@@ -297,6 +665,18 @@ public sealed class HoyoLabAccountSlotServiceTests
     }
 
     [Fact]
+    public void Chosen_resource_role_preserves_official_identity_candidates()
+    {
+        var selection = Slice("var selectedSnapshot =", "var nextState = PublisherAccountStatePolicy.ForAuthenticatedResourceRead");
+        Assert.Contains(
+            "candidates.Where(candidate => candidate.Binding == selectedChoice.Binding).ToArray()",
+            selection,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("new(selectedChoice.Binding, selectedSnapshot)", selection, StringComparison.Ordinal);
+        AssertOrdered(selection, "resourceRead = new(", "SaveRoleRecord(", "officialCandidates,");
+    }
+
+    [Fact]
     public void Cached_resources_are_built_locally_then_committed_atomically()
     {
         var method = Slice("private void RestoreCachedResources()", "private void TrySetCanceledConnectState");
@@ -309,6 +689,45 @@ public sealed class HoyoLabAccountSlotServiceTests
             "if (!CanPublish(\"HoYoLAB\", operation)) return",
             "resources[gameId] = snapshot",
             "resourceStates[gameId] = state");
+        Assert.Contains("snapshot.ObservedAt > now", method, StringComparison.Ordinal);
+        Assert.Contains("PublisherResourceRefreshPolicy.IsFresh(snapshot.ObservedAt, now)", method, StringComparison.Ordinal);
+        Assert.Contains("snapshot with { IsStale = !fresh }", method, StringComparison.Ordinal);
+        Assert.Contains("PublisherResourceState.Fresh", method, StringComparison.Ordinal);
+        Assert.DoesNotContain("snapshot.IsStale", method, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Account_restore_and_resource_refresh_durations_are_local_fail_closed_surfaces()
+    {
+        var surface = Slice(
+            "public TimeSpan? LastAccountRestoreDuration",
+            "public HoyoLabAccountSlotManagerState HoyoLabAccounts");
+        Assert.Contains("Volatile.Read(ref lastAccountRestoreDurationTicks)", surface, StringComparison.Ordinal);
+        Assert.Contains("public bool TryGetResourceRefreshDuration(string? gameId, out TimeSpan duration)", surface, StringComparison.Ordinal);
+        Assert.Contains("\"gi\" => Volatile.Read(ref giResourceRefreshDurationTicks)", surface, StringComparison.Ordinal);
+        Assert.Contains("\"hsr\" => Volatile.Read(ref hsrResourceRefreshDurationTicks)", surface, StringComparison.Ordinal);
+        Assert.Contains("\"zzz\" => Volatile.Read(ref zzzResourceRefreshDurationTicks)", surface, StringComparison.Ordinal);
+        Assert.Contains("_ => -1", surface, StringComparison.Ordinal);
+        Assert.Contains("return ticks >= 0", surface, StringComparison.Ordinal);
+
+        var refresh = Slice(
+            "private async Task<PublisherResourceSnapshot?> RefreshResourceCoreAsync",
+            "public Task<DailyCheckInResult> CheckInAsync");
+        AssertOrdered(
+            refresh,
+            "var started = Stopwatch.GetTimestamp()",
+            "try",
+            "finally",
+            "SetResourceRefreshDuration(entry.GameId, Stopwatch.GetElapsedTime(started))");
+
+        var restore = Slice("private void RestoreCachedResources()", "private void TrySetCanceledConnectState");
+        AssertOrdered(
+            restore,
+            "var started = Stopwatch.GetTimestamp()",
+            "try",
+            "finally",
+            "Volatile.Write(",
+            "Stopwatch.GetElapsedTime(started).Ticks");
     }
 
     private static string Slice(string start, string end)
@@ -328,6 +747,20 @@ public sealed class HoyoLabAccountSlotServiceTests
             Assert.True(current > previous, $"Expected '{marker}' after the prior marker.");
             previous = current;
         }
+    }
+
+    private static void AssertLockedMutation(
+        string value,
+        string mutation,
+        string finalRecheck = "return saved && CanPublish(\"HoYoLAB\", operation)")
+    {
+        AssertOrdered(
+            value,
+            "lock (sync)",
+            "if (!CanPublish(\"HoYoLAB\", operation)) return false",
+            mutation,
+            "operation.Cancellation.Token",
+            finalRecheck);
     }
 
     private static HoyoLabAccountSlot Slot(string label) => new(

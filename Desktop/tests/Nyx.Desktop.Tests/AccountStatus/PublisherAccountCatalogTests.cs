@@ -1,4 +1,5 @@
 using Nyx.Desktop.Core.AccountStatus;
+using Nyx.Desktop.Core.Games;
 
 namespace Nyx.Desktop.Tests.AccountStatus;
 
@@ -7,8 +8,17 @@ public sealed class PublisherAccountCatalogTests
     [Fact]
     public void Catalog_CoversExactlyTheFiveCanonicalGames()
     {
+        var entries = PublisherAccountCatalog.All;
+
         Assert.Equal(["ae", "gi", "hsr", "wuwa", "zzz"],
-            PublisherAccountCatalog.All.Select(static entry => entry.GameId).Order(StringComparer.Ordinal));
+            entries.Select(static entry => entry.GameId).Order(StringComparer.Ordinal));
+        Assert.All(entries, static entry =>
+        {
+            var game = GameCatalog.GetRequired(entry.GameId);
+            Assert.Equal(game.AccountProvider, entry.Provider);
+            Assert.Equal(game.SupportsDailyCheckIn, entry.SupportsDailyCheckIn);
+            Assert.Equal(game.SupportsNumericResource, entry.SupportsNumericResource);
+        });
     }
 
     [Theory]
@@ -27,7 +37,9 @@ public sealed class PublisherAccountCatalogTests
     public void WuWa_HasNoGuessedDailyCheckInUrl()
     {
         var entry = PublisherAccountCatalog.Get("wuwa");
+        Assert.Equal("KURO GAMES", entry.Provider);
         Assert.False(entry.SupportsDailyCheckIn);
+        Assert.True(entry.SupportsNumericResource);
         Assert.Null(entry.CheckInUri);
     }
 

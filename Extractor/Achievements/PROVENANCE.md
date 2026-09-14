@@ -1,19 +1,27 @@
 # Provenance
 
 Pinned on 2026-08-03 for this branch-only test build.
+Stardb public key maps refreshed on 2026-08-31; other pins are unchanged.
 
 The user attested that Stardb's owner directly permitted Pengo/Nyx to reuse the
 public Stardb key maps and extractor behavior. The two maps came from Stardb
-v2.20.0 commit `a0a4d55abf921be4228d6afa94ec0f814549ba16`:
+v2.21.0 commit `50c04597d37cf366290de6e316aaca98dd57acfc`:
 
 | Map | Source path | Entries | Upstream raw SHA-256 | Canonical JSON SHA-256 |
 | --- | --- | ---: | --- | --- |
 | GI | `keys/gi.json` | 10 | `e0e1fcbfb6aa5d727367a60574b7688a4da14abe12c5a3bdad3a7fc87c694d18` | `37ccd359c35b0f990032e7941ed140914a322b935706a1c66d252b27dd74f3c3` |
-| HSR | `keys/hsr.json` | 29 | `79779916153d42b35771dc5fe6620334726805c9ecd46ecfdfb383d9077a6b85` | `e9381b6b79fd2a41dd3c7ade82508c5eafec9f19e15d7fa2bc0e4a7bcdd42512` |
+| HSR | `keys/hsr.json` | 30 | `85a98f5abf9b4041d6752e8f60b6db760d5a9753ad73874a9d5744f9c1d7944a` | `8ffac930c0ff2821c0d8f9c0bcbcdaba64a8be0395c6263572c3c5afa65d34ec` |
 
 `apply_patch` changed only JSON line endings. Tests hash the sorted canonical
 JSON, so any changed, missing, or extra key fails. The raw hashes above identify
 the exact upstream files.
+
+The v2.21.0 refresh adds exactly one HSR entry and preserves all 29 v2.20.0
+entries byte-for-byte; GI upstream bytes are unchanged. A regression removes
+only the added HSR ID and checks the previous canonical hash, and checks the
+added value's standard base64 encoding and 4096-byte decoded length. This is
+static key-map compatibility, not proof of live HSR 4.5 achievement or gear
+capture compatibility; parser, capture, and export behavior remain unchanged.
 
 Pinned parser forks are vendored in this folder so their release behavior can
 be audited without relying on a moving Git checkout:
@@ -39,7 +47,11 @@ retained LF-normalized PEM source hashes are:
 On a Windows checkout Git may render the same PEM text as 1,704 CRLF bytes.
 Tests normalize line endings before checking the retained source hashes.
 
-Packet capture starts from crates.io `pktmon` 0.6.2. Pengo vendors its Windows
+Packet capture starts from `emmachase/pktmon` commit
+`33d1c0c421ed8610540bae3e34da3c1182cf28a2` and its crates.io `pktmon` 0.6.2
+archive SHA-256
+`138ba8229225b0334707e461dee957b8bbb0ca61c9be21d773991443e4364a08`. Pengo
+vendors its Windows
 11 realtime files, loads its DLL only from verified System32, bounds callback
 descriptors, and removes the legacy ETL backend, fallback, and competing raw
 console shutdown hook. See
@@ -65,14 +77,40 @@ by tests:
 
 | Catalog | IDs | LF-normalized raw SHA-256 |
 | --- | ---: | --- |
-| GI | 1,759 | `5608dd41a26a06639c6455d65de7abdd2a7e5e997f55c6ed93dec6d08dc673b5` |
-| HSR | 1,869 | `1686a1deb2a03e758e1047684acc9e760d5c793b2e2717bb4d1bc9eeb7c60502` |
+| GI | 1,844 | `34b5f76579e435249e456ff4eba6a767f8562275f24270ee6111d0f46bfd268e` |
+| HSR | 1,921 | `827c248889146ef686dcca52e445615a2c9db9b025c4bddfc739b44498662149` |
 
 The build accepts only the repository's exact reviewed JSON bytes after the
 single Windows-safe conversion from CRLF to LF. A bare carriage return,
 changed field, changed ID, missing row, duplicate ID, or extra row still fails
 the build. This avoids a false hash failure when Git checks out the same files
 with Windows line endings.
+
+## Optimizer manual-import schema pins
+
+Pengo adapted only the manual-import schema shapes accepted by these pinned
+consumers. No optimizer code was copied or adapted.
+
+| Consumer | Reviewed commit | Test-only contract fixture | Fixture SHA-256 |
+| --- | --- | --- | --- |
+| HSR Optimizer / Fribbels | `99790f5514159655eb9865de612c7cdec01ae097` | `contracts/gear-export-hsr-fribbels-v4.fixture.json` | `8b22587549c236134d6f3acba9b96b11ca000ad7273bdc1053cc903ec96ad9dc` |
+| Genshin Optimizer | `984d82cda1e37a3a634ab14d2059b6ad91b90a4a` | `contracts/gear-export-genshin-good-v3.fixture.json` | `3f91ecb188798db18de8e782ce88360a4f37864d37c55285957a91af8f8d1f64` |
+
+Both fixtures are synthetic, identity-free, and used only for contract tests.
+Local pinned-consumer acceptance passed at the exact commits above:
+
+- HSR: a one-test Vitest wrapper instantiated
+  `KelzFormatParser(ReliquaryArchiverConfig)` over the exact fixture: 1/1
+  passed.
+- Genshin: a one-test Vitest wrapper called `parseGOODImport` with
+  `ArtCharDatabase` and `SandboxStorage` over the exact fixture: 1/1 passed.
+
+At exact pin `984d82c`, the parser accepts missing optional `initialValue` and
+preserves it absent. This is a fixture/parser observation, not a
+packet-semantics claim.
+
+These checks do not claim that the launcher implements gear export or that a
+gear-export feature has been released.
 
 ## Npcap fallback review pin
 
@@ -94,3 +132,107 @@ bind the accepted files to that review. No Npcap source or binary is copied into
 this repository. The game enum selects one of two compiled filters only:
 `udp and (port 22101 or port 22102)` for GI and
 `udp and (port 23301 or port 23302)` for HSR.
+
+## Genshin 7.0 offline artifact map
+
+At the audited pin, Dimbreath/animegamedata2 has no repository license. On
+2026-08-27 the user confirmed the necessary rightsholder approval for this
+exact HoYo data use. That approval is limited to generating this
+Pengo-generated offline mapping; it is not a public code license. The
+generator copies no upstream code, uses only Python's standard library,
+requires explicit local source roots, and never fetches at build time or
+runtime.
+
+The approved raw source is
+[`Dimbreath/animegamedata2`](https://gitlab.com/Dimbreath/animegamedata2/-/tree/26df1dfbdf05a82bbb1d97506859f3e1c40718d8)
+at commit `26df1dfbdf05a82bbb1d97506859f3e1c40718d8`:
+
+| Source path | Rows | SHA-256 |
+| --- | ---: | --- |
+| `ExcelBinOutput/ReliquaryExcelConfigData.json` | 4,352 | `1b0ea4e5642f183d579e1f2701359a5e5afebfc886f7379d0f6ddf3dc7d9b4e5` |
+| `ExcelBinOutput/ReliquaryMainPropExcelConfigData.json` | 66 | `c7c9ea5520fd090a090c0c7a12e750ac85fd80985a687194a30b9aa254d5c60b` |
+| `ExcelBinOutput/ReliquaryAffixExcelConfigData.json` | 350 | `0e1f1461d86597b3126b4f9ed61ee8975a7839e47111060458e51ae1b756bc39` |
+
+The validation source is
+[`frzyc/genshin-optimizer`](https://github.com/frzyc/genshin-optimizer/tree/984d82cda1e37a3a634ab14d2059b6ad91b90a4a)
+at commit `984d82cda1e37a3a634ab14d2059b6ad91b90a4a`:
+
+| Source path | SHA-256 |
+| --- | --- |
+| `libs/gi/dm/src/mapping/artifact.ts` | `0619c7e58d77d04c5f3da37649f4bb860dbe6d9d2c18aeec016ee6ca16facda3` |
+| `libs/gi/consts/src/artifact.ts` | `704ea84c1555e999ad6057e822e29922c58cfbc0cd7d8c52a616af9d5fc35781` |
+| `libs/gi/dm/src/dm/character/AvatarExcelConfigData_idmap_gen.json` | `1c8f30d9aa78c0ad8afcd3f27bb3c0cecb6e26409174c6238a476d15a7b3c12e` |
+| `libs/gi/consts/src/character.ts` | `1594571fb4a96c184f99e0f424313ff2c1ea8c749abd50a1b38f1dfde2962fdc` |
+
+Hashes are over UTF-8 bytes after one Windows-safe CRLF-to-LF conversion.
+Bare carriage returns are rejected. The generated map contains 3,520 item
+rows, a 625-ID low-rarity allowlist, 56 main-property rows, 198
+active/unactivated affix rows, and 124 character IDs covering 119 character
+keys. All 29 referenced main-property depots and all 12 referenced
+append-property depots are covered.
+
+The 4,352 raw item rows have exactly these exclusions: 625 one- and two-star
+rows, 175 rows from unsupported sets `15000`, `15004`, and `15012`, 32 rows
+with no set ID, and zero unexplained rows. Percent properties are converted to
+the GOOD percentage scale. Affix rows carry only their mapped `key` and
+`value`; no `initialValue` is invented for unactivated or active rows.
+
+The canonical contract is 613,555 UTF-8 bytes with SHA-256
+`377e333336e6a94d01785612533c4241a83e49e1d414efe283e1458fefe78b1b`. Its
+offline check covers canonical bytes, pins, counts, sorted IDs, depot
+coverage, exclusions, and synthetic lookups including item `31533`, main
+property `13007`, affixes `501022`, `501201`, `501241`, `501221`, character
+`10000061`, and rejection of affix `401021` when used with depot `501`.
+
+This mapping is checked-in static data only. It is not embedded in the helper
+or package and does not enable gear export. It contains no user export,
+account or game file, capture, packet, log, token, key, or network behavior.
+Any later public packaging requires a separate permission and notice review.
+
+## HSR 4.5 synthetic command-body qualification
+
+`src/gear_observer/hsr_wire.rs` is reachable only through the existing
+`cfg(test)` gear observer. It accepts a command ID and borrowed protobuf body,
+not packets or ciphertext. Its wire shapes are adapted from MIT-licensed
+IceDynamix/reliquary 23 at commit
+`d5cf3b7e7e66470d2d8efff6676aa18762b21d3b`. The immutable raw source SHA-256
+values were checked on 2026-08-31:
+
+| Source path | SHA-256 |
+| --- | --- |
+| `src/network/command/proto/GetBagScRsp.rs` | `77f9c854a0d7253c33bfae5655a947d75f88588a3c2b6bd34ef235e2b08dde9f` |
+| `src/network/command/proto/Relic.rs` | `a93111b0d82acddfdfd3f0ac5eae1e7edbc36d8300fdd30f55ae67b90c88ebd7` |
+| `src/network/command/proto/RelicAffix.rs` | `51781661a10cd1e3267e5d3a2a5613f9e2feeffc799ae3fea70f19cac5984ebf` |
+| `src/network/command/proto/PlayerGetTokenScRsp.rs` | `b49710d182a56649d017664670a4c08d3ea4a7d9ed13e4cb2970db89c6c2f532` |
+| `src/network/command/proto/PlayerLoginFinishScRsp.rs` | `8da042b890155f31a1496872e1470fe2287c7960f2352abf9b90d0ed1af05912` |
+| `src/network/command/command_id.rs` | `b145f494da230dff5f48bd0592d32c8079b9f8e65a3fe127e0bce653f2a45610` |
+
+The related archiver reference is IceDynamix/reliquary-archiver 0.18 at
+`cb109f17a4a15b7604cfe9d078a8735e7735cd25`; no archiver code is copied into
+this slice. Both pinned `LICENSE` files normalize to the existing IceDynamix
+MIT notice SHA-256
+`61b5493c729fd3f29a72ede2e52bf36e8122fc2b460a5cadbc9446cfda5fa9fe`.
+
+Only commands 19 (token), 36 (login finish), and 513 (bag) are qualified.
+Token seed wire data is validated then discarded; description, BlackInfo,
+authkey, and unrelated messages are skipped without retaining their bytes.
+The bag result has only its return code and relic rows; every listed relic
+field and current/preview/reforge affix is decoded without stat calculations.
+
+The already-locked `protobuf` 3.7.2 is exposed as a direct dev-only dependency;
+no package or version changes. Its concrete `CodedInputStream` handles tags,
+varints, skipping, and nested limits. The existing frame and gear-row limits
+apply. The qualification profile intentionally rejects duplicate known scalar
+fields and groups, unlike general protobuf merge semantics. Omitted zero/false
+scalars and empty repeated lists remain valid. Unrelated message payloads are
+opaque: their declared wire type and length, not their internal schema, are
+checked. Results and errors do not retain the token seed or auth bytes.
+
+Tests alone supply explicit synthetic context, mapping, serialized, and imported
+counts to the unchanged observer. Decoded row count and login finish do not
+prove a full snapshot. The bag schema has no UID, pagination, total, or
+completion marker. Upstream tail-magic proof is absent, and the current
+transport heuristically finds a seed and drops direction/flow from returned
+commands. These remain blockers before any live account attribution or
+complete-bag claim. This slice changes no runtime transport, parser, exporter,
+feature flag, mapping, launcher UI, or production package behavior.

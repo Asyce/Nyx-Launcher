@@ -21,17 +21,23 @@ public sealed class AchievementImportBridge
     private const int NonceBytes = 32;
     private readonly Uri siteOrigin;
     private readonly TimeSpan lifetime;
+    private readonly TimeSpan endfieldPullLifetime;
 
     public AchievementImportBridge(
         Uri? siteOrigin = null,
-        TimeSpan? lifetime = null)
+        TimeSpan? lifetime = null,
+        TimeSpan? endfieldPullLifetime = null,
+        string releaseChannel = "stable")
     {
         this.siteOrigin = siteOrigin ?? new Uri("https://pengo.gg");
         this.lifetime = lifetime ?? TimeSpan.FromMinutes(2);
-        if (!IsExactSiteOrigin(this.siteOrigin))
-            throw new ArgumentException("The achievement site origin is not approved.", nameof(siteOrigin));
+        this.endfieldPullLifetime = endfieldPullLifetime ?? TimeSpan.FromSeconds(15);
+        if (!IsExactSiteOrigin(this.siteOrigin, releaseChannel))
+            throw new ArgumentException("The Pengo site origin is not approved.", nameof(siteOrigin));
         if (this.lifetime <= TimeSpan.Zero || this.lifetime > TimeSpan.FromMinutes(5))
             throw new ArgumentOutOfRangeException(nameof(lifetime));
+        if (this.endfieldPullLifetime <= TimeSpan.Zero || this.endfieldPullLifetime > TimeSpan.FromSeconds(15))
+            throw new ArgumentOutOfRangeException(nameof(endfieldPullLifetime));
     }
 
     public async ValueTask<AchievementImportBridgeSession> StartAsync(
@@ -45,10 +51,45 @@ public sealed class AchievementImportBridge
             "hsr" => "/hsr/achievements",
             _ => throw new ExportProviderException("achievement-handoff-unsupported"),
         };
-        var artifact = await ReadAndValidateArtifactAsync(
-            gameId,
+        return await StartArtifactAsync(
             artifactPath,
+            route,
+            "nyx-import=v1",
+            "v1/achievement-import",
+            lifetime,
+            bytes => ValidateAchievementArtifact(gameId, bytes),
+            "achievement-handoff-invalid",
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public ValueTask<AchievementImportBridgeSession> StartEndfieldPullAsync(
+        string artifactPath,
+        CancellationToken cancellationToken = default) =>
+        StartArtifactAsync(
+            artifactPath,
+            "/endfield",
+            "nyx-import=v2&type=pulls",
+            "v2/pull-import",
+            endfieldPullLifetime,
+            EndfieldPullContract.Validate,
+            "pull-handoff-invalid",
             cancellationToken);
+
+    private async ValueTask<AchievementImportBridgeSession> StartArtifactAsync(
+        string artifactPath,
+        string route,
+        string fragmentPrefix,
+        string loopbackPath,
+        TimeSpan expiresAfter,
+        Action<ReadOnlyMemory<byte>> validate,
+        string invalidCode,
+        CancellationToken cancellationToken)
+    {
+        var artifact = await ReadAndValidateArtifactAsync(
+            artifactPath,
+            validate,
+            invalidCode,
+            cancellationToken).ConfigureAwait(false);
         var listener = new TcpListener(IPAddress.Loopback, 0);
         try
         {
@@ -71,16 +112,16 @@ public sealed class AchievementImportBridge
             {
                 Path = route,
                 Query = string.Empty,
-                Fragment = $"nyx-import=v1&port={port}&nonce={nonce}",
+                Fragment = $"{fragmentPrefix}&port={port}&nonce={nonce}",
             }.Uri;
             return new(
                 listener,
                 artifact,
-                nonce,
                 port,
                 siteOrigin.GetLeftPart(UriPartial.Authority),
                 browser,
-                lifetime,
+                $"/{loopbackPath}/{nonce}",
+                expiresAfter,
                 cancellationToken);
         }
         catch
@@ -92,8 +133,9 @@ public sealed class AchievementImportBridge
     }
 
     private static async Task<byte[]> ReadAndValidateArtifactAsync(
-        string gameId,
         string artifactPath,
+        Action<ReadOnlyMemory<byte>> validate,
+        string invalidCode,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(artifactPath);
@@ -101,39 +143,45 @@ public sealed class AchievementImportBridge
             || artifactPath.StartsWith("\\\\", StringComparison.Ordinal)
             || artifactPath.StartsWith("\\\\?\\", StringComparison.Ordinal)
             || artifactPath.StartsWith("\\\\.\\", StringComparison.Ordinal))
-            throw new ExportProviderException("achievement-handoff-invalid");
+            throw new ExportProviderException(invalidCode);
         var path = Path.GetFullPath(artifactPath);
         if (!File.Exists(path)
             || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-            throw new ExportProviderException("achievement-handoff-invalid");
+            throw new ExportProviderException(invalidCode);
 
-        byte[] bytes;
-        await using (var stream = new FileStream(
-            path,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            32 * 1024,
-            FileOptions.Asynchronous | FileOptions.SequentialScan))
-        {
-            if (stream.Length is <= 0 or > MaximumArtifactBytes)
-                throw new ExportProviderException("achievement-handoff-invalid");
-            bytes = new byte[stream.Length];
-            await stream.ReadExactlyAsync(bytes, cancellationToken);
-        }
+        byte[]? bytes = null;
         try
         {
-            ValidateArtifact(gameId, bytes);
-            return bytes;
+            await using (var stream = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                32 * 1024,
+                FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                if (stream.Length is <= 0 or > MaximumArtifactBytes)
+                    throw new ExportProviderException(invalidCode);
+                bytes = new byte[stream.Length];
+                await stream.ReadExactlyAsync(bytes, cancellationToken);
+            }
+            var result = bytes ?? throw new ExportProviderException(invalidCode);
+            validate(result);
+            bytes = null;
+            return result;
         }
+        catch (OperationCanceledException) { throw; }
         catch
         {
-            CryptographicOperations.ZeroMemory(bytes);
-            throw;
+            throw new ExportProviderException(invalidCode);
+        }
+        finally
+        {
+            if (bytes is not null) CryptographicOperations.ZeroMemory(bytes);
         }
     }
 
-    private static void ValidateArtifact(string expectedGameId, ReadOnlyMemory<byte> utf8Json)
+    private static void ValidateAchievementArtifact(string expectedGameId, ReadOnlyMemory<byte> utf8Json)
     {
         try
         {
@@ -239,26 +287,33 @@ public sealed class AchievementImportBridge
         return seen.SetEquals(expected);
     }
 
-    private static bool IsExactSiteOrigin(Uri uri) =>
-        uri.IsAbsoluteUri
-        && string.IsNullOrEmpty(uri.UserInfo)
-        && uri.IsDefaultPort
-        && string.IsNullOrEmpty(uri.AbsolutePath.Trim('/'))
-        && string.IsNullOrEmpty(uri.Query)
-        && string.IsNullOrEmpty(uri.Fragment)
-        && string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
-        && string.Equals(uri.Host, "pengo.gg", StringComparison.OrdinalIgnoreCase);
+    private static bool IsExactSiteOrigin(Uri uri, string releaseChannel)
+    {
+        if (!uri.IsAbsoluteUri
+            || !string.IsNullOrEmpty(uri.UserInfo)
+            || !string.IsNullOrEmpty(uri.AbsolutePath.Trim('/'))
+            || !string.IsNullOrEmpty(uri.Query)
+            || !string.IsNullOrEmpty(uri.Fragment))
+            return false;
+        if (uri.IsDefaultPort
+            && string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(uri.Host, "pengo.gg", StringComparison.OrdinalIgnoreCase))
+            return true;
+        return releaseChannel == "development"
+            && uri.Port == 5173
+            && string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(uri.Host, "127.0.0.1", StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 public sealed class AchievementImportBridgeSession : IAsyncDisposable
 {
     private const int MaximumHeaderBytes = 16 * 1024;
-    private const int MaximumConnections = 8;
     private readonly TcpListener listener;
     private readonly byte[] artifact;
-    private readonly string nonce;
     private readonly int port;
     private readonly string allowedOrigin;
+    private readonly string expectedPath;
     private readonly CancellationTokenSource lifetime;
     private readonly TaskCompletionSource<AchievementImportDeliveryState> completion =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -269,18 +324,18 @@ public sealed class AchievementImportBridgeSession : IAsyncDisposable
     internal AchievementImportBridgeSession(
         TcpListener listener,
         byte[] artifact,
-        string nonce,
         int port,
         string allowedOrigin,
         Uri browserUri,
+        string expectedPath,
         TimeSpan expiresAfter,
         CancellationToken cancellationToken)
     {
         this.listener = listener;
         this.artifact = artifact;
-        this.nonce = nonce;
         this.port = port;
         this.allowedOrigin = allowedOrigin;
+        this.expectedPath = expectedPath;
         BrowserUri = browserUri;
         lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         lifetime.CancelAfter(expiresAfter);
@@ -294,13 +349,20 @@ public sealed class AchievementImportBridgeSession : IAsyncDisposable
     {
         try
         {
-            for (var attempt = 0; attempt < MaximumConnections
-                && !lifetime.IsCancellationRequested
-                && Volatile.Read(ref delivered) == 0; attempt++)
+            while (!lifetime.IsCancellationRequested
+                && Volatile.Read(ref delivered) == 0)
             {
                 using var client = await listener.AcceptTcpClientAsync(lifetime.Token);
                 client.NoDelay = true;
-                await HandleAsync(client, lifetime.Token);
+                try
+                {
+                    await HandleAsync(client, lifetime.Token);
+                }
+                catch (IOException) when (!lifetime.IsCancellationRequested
+                    && Volatile.Read(ref delivered) == 0)
+                {
+                    // A dropped invalid client cannot consume the capability.
+                }
             }
             if (Volatile.Read(ref delivered) != 0)
                 completion.TrySetResult(AchievementImportDeliveryState.Delivered);
@@ -341,7 +403,6 @@ public sealed class AchievementImportBridgeSession : IAsyncDisposable
             await WriteEmptyAsync(stream, 403, "Forbidden", includeCors: false, cancellationToken);
             return;
         }
-        var expectedPath = $"/v1/achievement-import/{nonce}";
         if (!string.Equals(request.Path, expectedPath, StringComparison.Ordinal))
         {
             await WriteEmptyAsync(stream, 404, "Not Found", includeCors: true, cancellationToken);

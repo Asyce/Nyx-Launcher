@@ -10,15 +10,15 @@ use auto_reliquary::{
 use base64::{Engine, prelude::BASE64_STANDARD};
 use std::collections::HashMap;
 
-pub const STARDB_SOURCE_COMMIT: &str = "a0a4d55abf921be4228d6afa94ec0f814549ba16";
+pub const STARDB_SOURCE_COMMIT: &str = "50c04597d37cf366290de6e316aaca98dd57acfc";
 pub const GI_SOURCE_SHA256: &str =
     "e0e1fcbfb6aa5d727367a60574b7688a4da14abe12c5a3bdad3a7fc87c694d18";
 pub const HSR_SOURCE_SHA256: &str =
-    "79779916153d42b35771dc5fe6620334726805c9ecd46ecfdfb383d9077a6b85";
+    "85a98f5abf9b4041d6752e8f60b6db760d5a9753ad73874a9d5744f9c1d7944a";
 pub const GI_CANONICAL_SHA256: &str =
     "37ccd359c35b0f990032e7941ed140914a322b935706a1c66d252b27dd74f3c3";
 pub const HSR_CANONICAL_SHA256: &str =
-    "e9381b6b79fd2a41dd3c7ade82508c5eafec9f19e15d7fa2bc0e4a7bcdd42512";
+    "8ffac930c0ff2821c0d8f9c0bcbcdaba64a8be0395c6263572c3c5afa65d34ec";
 
 enum GameDecoderInner {
     Gi(GiSniffer),
@@ -145,7 +145,7 @@ mod tests {
         let hsr_map =
             serde_json::from_slice::<std::collections::BTreeMap<u32, String>>(hsr).unwrap();
         assert_eq!(gi_map.len(), 10);
-        assert_eq!(hsr_map.len(), 29);
+        assert_eq!(hsr_map.len(), 30);
         assert_eq!(
             hash(&serde_json::to_vec(&gi_map).unwrap()),
             GI_CANONICAL_SHA256
@@ -157,6 +157,28 @@ mod tests {
         assert_eq!(GI_SOURCE_SHA256.len(), 64);
         assert_eq!(HSR_SOURCE_SHA256.len(), 64);
         assert_eq!(STARDB_SOURCE_COMMIT.len(), 40);
+    }
+
+    #[test]
+    fn hsr_key_update_preserves_all_previous_entries() {
+        let mut hsr_map = serde_json::from_slice::<std::collections::BTreeMap<u32, String>>(
+            include_bytes!("../keys/hsr.json"),
+        )
+        .unwrap();
+        let added = hsr_map
+            .remove(&3136867684)
+            .expect("new pinned HSR key is missing");
+        let decoded = BASE64_STANDARD.decode(&added).unwrap();
+        assert_eq!(decoded.len(), 4096);
+        assert!(
+            BASE64_STANDARD.encode(&decoded) == added,
+            "new HSR key must use canonical standard base64"
+        );
+        assert_eq!(hsr_map.len(), 29);
+        assert_eq!(
+            hash(&serde_json::to_vec(&hsr_map).unwrap()),
+            "e9381b6b79fd2a41dd3c7ade82508c5eafec9f19e15d7fa2bc0e4a7bcdd42512"
+        );
     }
 
     #[test]

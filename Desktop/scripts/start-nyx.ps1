@@ -72,7 +72,8 @@ if ($CheckOnly -and $Restore) {
 }
 
 $desktopRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$globalJsonPath = Join-Path $desktopRoot 'global.json'
+$repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $desktopRoot '..'))
+$globalJsonPath = Join-Path $repositoryRoot 'global.json'
 $projectPath = Join-Path $desktopRoot 'src\Nyx.Desktop.App\Nyx.Desktop.App.csproj'
 $assetsPath = Join-Path $desktopRoot 'src\Nyx.Desktop.App\obj\project.assets.json'
 
@@ -100,11 +101,11 @@ try {
     $pinnedSdk = [string] $globalJson.sdk.version
 }
 catch {
-    Stop-NyxStart -Code $script:ExitProject -Message 'Desktop\global.json is invalid.'
+    Stop-NyxStart -Code $script:ExitProject -Message 'global.json is invalid.'
 }
 
 if ([string]::IsNullOrWhiteSpace($pinnedSdk) -or $pinnedSdk.Length -gt 32) {
-    Stop-NyxStart -Code $script:ExitProject -Message 'Desktop\global.json does not contain a valid pinned SDK version.'
+    Stop-NyxStart -Code $script:ExitProject -Message 'global.json does not contain a valid pinned SDK version.'
 }
 
 $dotnet = Get-Command 'dotnet.exe' -CommandType Application -ErrorAction SilentlyContinue
@@ -171,7 +172,7 @@ if ($targetFramework.Length -gt 80 -or
 $isAdministrator = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 
-if ($isAdministrator) {
+if ($isAdministrator -and -not $CheckOnly) {
     Stop-NyxStart -Code $script:ExitRegistration -Message 'Close this administrator window and start Nyx normally. The launcher itself never needs elevation.'
 }
 
@@ -225,8 +226,11 @@ $requiredOutputPaths = @(
     (Join-Path $outputRoot 'Assets\Iris\nyx-logo.png'),
     (Join-Path $outputRoot 'Assets\Brand\kofi-logo.png'),
     (Join-Path $outputRoot 'Assets\Content\launcher-banners-v1.json'),
-    $achievementHelperOutput
+    (Join-Path $outputRoot 'Assets\Content\launcher-banners-v2.json')
 )
+if (-not $CheckOnly) {
+    $requiredOutputPaths += $achievementHelperOutput
+}
 
 function Test-UnpackagedOutput {
     foreach ($path in $requiredOutputPaths) {
@@ -245,7 +249,7 @@ if ($CheckOnly) {
     if (-not (Test-UnpackagedOutput)) {
         Stop-NyxStart -Code $script:ExitRunSupport -Message 'The reviewed unpackaged x64 build output is incomplete. Build Nyx, then retry.'
     }
-    Write-Host "Nyx developer start is ready (Windows x64, SDK $pinnedSdk, unpackaged self-contained app)." -ForegroundColor Green
+    Write-Host "Nyx app preflight passed (Windows x64, SDK $pinnedSdk). A real start will build and verify its achievement helper before launching." -ForegroundColor Green
     exit 0
 }
 
@@ -255,7 +259,6 @@ $python = @(Get-Command 'python.exe' -CommandType Application -ErrorAction Silen
 if ($null -eq $cargo -or $null -eq $python) {
     Stop-NyxStart -Code $script:ExitRunSupport -Message 'Install Rust and Python so Nyx can build and verify the achievement helper.'
 }
-$repositoryRoot = [System.IO.Path]::GetFullPath((Join-Path $desktopRoot '..'))
 $achievementHelperRoot = Join-Path $repositoryRoot 'Extractor\Achievements'
 $achievementHelperBuildRoot = Join-Path $desktopRoot '.verification-build\achievement-helper'
 $genshin120HelperRoot = Join-Path $desktopRoot 'tools\Nyx.Genshin120.NativeHelper'
@@ -296,7 +299,7 @@ if (-not (Test-Path -LiteralPath $genshin120UpstreamRoot -PathType Container)) {
         Stop-NyxStart -Code $script:ExitRunSupport -Message 'Install Git so Nyx can verify the pinned Genshin 120 FPS helper source.'
     }
     [void] (New-Item -ItemType Directory -Path (Split-Path -Parent $genshin120UpstreamRoot) -Force)
-    & $git.Source clone --quiet --depth 1 --branch v3.5.0 https://github.com/34736384/genshin-fps-unlock.git $genshin120UpstreamRoot
+    & $git.Source -c core.longpaths=true clone --quiet --depth 1 --branch v3.5.0 https://github.com/34736384/genshin-fps-unlock.git $genshin120UpstreamRoot
     if ($LASTEXITCODE -ne 0) {
         Stop-NyxStart -Code $script:ExitRun -Message 'The pinned Genshin 120 FPS source could not be retrieved.'
     }

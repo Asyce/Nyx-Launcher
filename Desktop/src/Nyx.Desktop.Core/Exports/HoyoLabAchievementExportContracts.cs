@@ -24,6 +24,32 @@ public static class HoyoLabHsrAchievementResultParser
     public const int MaximumScriptResultCharacters = 1_048_576;
     public const long MaximumAchievementId = 9_007_199_254_740_991;
 
+    public static bool IsSuccessfulListEnvelope(ReadOnlyMemory<byte> utf8Json)
+    {
+        if (utf8Json.IsEmpty
+            || utf8Json.Length > PublisherAccountCatalog.MaximumResourceResponseBytes)
+            return false;
+        try
+        {
+            using var document = JsonDocument.Parse(utf8Json, StrictOptions);
+            var root = document.RootElement;
+            return root.ValueKind == JsonValueKind.Object
+                && TryGetUniqueProperty(root, "retcode", out var retcode)
+                && retcode.ValueKind == JsonValueKind.Number
+                && retcode.TryGetInt32(out var code)
+                && code == 0
+                && TryGetUniqueProperty(root, "data", out var data)
+                && data.ValueKind == JsonValueKind.Object
+                && TryGetUniqueProperty(data, "achievement_list", out var list)
+                && list.ValueKind == JsonValueKind.Array
+                && list.GetArrayLength() <= MaximumAchievementCount;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     public static HoyoLabHsrAchievementResult Parse(
         string scriptResult,
         IReadOnlySet<long> currentCatalogIds,
@@ -179,6 +205,23 @@ public static class HoyoLabHsrAchievementResultParser
                 return false;
         }
         return seen.SetEquals(expected);
+    }
+
+    private static bool TryGetUniqueProperty(
+        JsonElement root,
+        string name,
+        out JsonElement value)
+    {
+        value = default;
+        var found = false;
+        foreach (var property in root.EnumerateObject())
+        {
+            if (!property.NameEquals(name)) continue;
+            if (found) return false;
+            value = property.Value;
+            found = true;
+        }
+        return found;
     }
 
     private static bool TryParseRetcodeState(string? state, string prefix, out int retcode)

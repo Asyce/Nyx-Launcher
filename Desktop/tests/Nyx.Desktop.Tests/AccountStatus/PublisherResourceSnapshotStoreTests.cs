@@ -85,11 +85,22 @@ public sealed class PublisherResourceSnapshotStoreTests
             now - TimeSpan.FromMinutes(4),
             now,
             selected: false));
-        Assert.True(PublisherResourceRefreshPolicy.IsDue(
-            now,
-            now,
-            selected: false,
-            force: true));
+    }
+
+    [Fact]
+    public void Freshness_policy_uses_the_five_minute_boundary_and_rejects_future_observations()
+    {
+        var now = new DateTimeOffset(2026, 7, 29, 10, 0, 0, TimeSpan.Zero);
+
+        Assert.True(PublisherResourceRefreshPolicy.IsFresh(
+            now - TimeSpan.FromMinutes(5) + TimeSpan.FromTicks(1),
+            now));
+        Assert.False(PublisherResourceRefreshPolicy.IsFresh(
+            now - TimeSpan.FromMinutes(5),
+            now));
+        Assert.False(PublisherResourceRefreshPolicy.IsFresh(
+            now + TimeSpan.FromTicks(1),
+            now));
     }
 
     [Fact]
@@ -135,6 +146,7 @@ public sealed class PublisherResourceSnapshotStoreTests
                 : inner.GetAttributes(path);
         public FileStream OpenRead(string path) => inner.OpenRead(path);
         public FileStream CreateNewWriteThrough(string path) => inner.CreateNewWriteThrough(path);
+        public void MoveNew(string source, string destination) => inner.MoveNew(source, destination);
         public void MoveOverwrite(string source, string destination) =>
             inner.MoveOverwrite(source, destination);
         public void Delete(string path) => inner.Delete(path);

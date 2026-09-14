@@ -6,20 +6,47 @@ namespace Nyx.Desktop.Tests.UI;
 public sealed class PublisherVisibleConnectRecoveryTests
 {
     [Theory]
-    [InlineData("gi")]
-    [InlineData("hsr")]
-    [InlineData("zzz")]
-    public void Ordinary_HoYoLAB_add_and_connect_start_at_the_fixed_home(string gameId)
+    [InlineData("gi", "https://act.hoyolab.com/app/community-game-records-sea/index.html#/ys", "https://act.hoyolab.com/app/community-game-records-sea/index.html")]
+    [InlineData("hsr", "https://account.hoyolab.com/login-platform/index.html?st=https%3A%2F%2Fact.hoyolab.com%2Fapp%2Fcommunity-game-records-sea%2Frpg%2Findex.html%3Fhyl_auth_required%3Dtrue%23%2Fhsr&token_type=6&client_type=4&app_id=c9oqaq3s3gu8&game_biz=hkrpg_global&lang=en-us&theme=dark-hoyolab&hide_logo=0&ux_mode=popup&iframe_level=1#/password-login", "https://account.hoyolab.com/login-platform/index.html?st=https%3A%2F%2Fact.hoyolab.com%2Fapp%2Fcommunity-game-records-sea%2Frpg%2Findex.html%3Fhyl_auth_required%3Dtrue%23%2Fhsr&token_type=6&client_type=4&app_id=c9oqaq3s3gu8&game_biz=hkrpg_global&lang=en-us&theme=dark-hoyolab&hide_logo=0&ux_mode=popup&iframe_level=1")]
+    [InlineData("zzz", "https://act.hoyolab.com/app/zzz-game-record/index.html#/zzz", "https://act.hoyolab.com/app/zzz-game-record/index.html")]
+    public void Ordinary_HoYoLAB_add_and_connect_start_at_the_games_reviewed_login_page(
+        string gameId,
+        string expected,
+        string expectedDocument)
     {
         var entry = PublisherAccountCatalog.Get(gameId);
         var initialUri = PublisherVisibleConnectNavigationPolicy.GetInitialUri(entry);
 
-        Assert.Equal(new Uri("https://www.hoyolab.com/home"), initialUri);
+        Assert.Equal(expected, initialUri.AbsoluteUri);
         Assert.True(PublisherVisibleConnectNavigationPolicy.IsAllowedInitial(
             "HoYoLAB",
             PublisherSessionPurpose.Connect,
             gameId,
             initialUri));
+        Assert.True(PublisherAccountCatalog.IsAllowedWebResourceRequest(
+            "HoYoLAB",
+            PublisherSessionPurpose.Connect,
+            gameId,
+            new Uri(expectedDocument),
+            "GET",
+            PublisherWebResourceContext.Document));
+    }
+
+    [Theory]
+    [InlineData("http://act.hoyolab.com/app/community-game-records-sea/index.html#/ys")]
+    [InlineData("https://user:password@act.hoyolab.com/app/community-game-records-sea/index.html#/ys")]
+    [InlineData("https://act.hoyolab.com:444/app/community-game-records-sea/index.html#/ys")]
+    [InlineData("https://act.hoyolab.com/app/community-game-records-sea/index.html")]
+    [InlineData("https://act.hoyolab.com/app/community-game-records-sea/index.html?gid=2#/ys")]
+    [InlineData("https://act.hoyolab.com/app/community-game-records-sea/index.html#/ys/other")]
+    [InlineData("https://act.hoyolab.com.evil.example/app/community-game-records-sea/index.html#/ys")]
+    public void Genshin_login_page_exception_is_exact(string target)
+    {
+        Assert.False(PublisherVisibleConnectNavigationPolicy.IsAllowedInitial(
+            "HoYoLAB",
+            PublisherSessionPurpose.Connect,
+            "gi",
+            new Uri(target)));
     }
 
     [Fact]
@@ -97,8 +124,7 @@ public sealed class PublisherVisibleConnectRecoveryTests
         Assert.Contains("core.DownloadStarting += Core_DownloadStarting", popup, StringComparison.Ordinal);
         Assert.Contains("core.PermissionRequested += Core_PermissionRequested", popup, StringComparison.Ordinal);
         Assert.Contains("accounts.google.com", popup, StringComparison.Ordinal);
-        Assert.Contains("/third_party/v1/google_callback", popup, StringComparison.Ordinal);
-        Assert.Contains("/endfield/sign-in", popup, StringComparison.Ordinal);
+        Assert.Contains("PublisherAccountCatalog.IsOfficialPublisherUri(\"SKPORT\", \"ae\"", popup, StringComparison.Ordinal);
         Assert.Contains("StringComparison.OrdinalIgnoreCase", popup, StringComparison.Ordinal);
         Assert.True(
             popup.IndexOf("core.NavigationStarting +=", StringComparison.Ordinal)
@@ -118,13 +144,50 @@ public sealed class PublisherVisibleConnectRecoveryTests
             "public Task<PublisherVisibleConnectCompletion> WaitForConnectCompletionAsync");
 
         var baseline = monitor.IndexOf("var baselineEstablished = false", StringComparison.Ordinal);
-        var transition = monitor.IndexOf(
-            "baselineEstablished && !wasAuthenticated && authenticated",
+        var decision = monitor.IndexOf(
+            "PublisherVisibleConnectFlow.ShouldAutoComplete",
             StringComparison.Ordinal);
+        var completion = monitor.IndexOf("TryCompleteVisibleConnectAsync", StringComparison.Ordinal);
         var update = monitor.IndexOf("wasAuthenticated = authenticated", StringComparison.Ordinal);
-        Assert.True(baseline >= 0 && baseline < transition && transition < update);
+        Assert.True(baseline >= 0 && baseline < decision && decision < completion && completion < update);
+        Assert.Contains("else", monitor[completion..update], StringComparison.Ordinal);
         Assert.Contains("baselineEstablished = true", monitor, StringComparison.Ordinal);
         Assert.DoesNotContain("ReviewedEndfieldIdentity", monitor, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Hsr_achievement_connect_auto_completes_only_after_the_official_list_responds()
+    {
+        var source = ReadAppFile("PublisherSessionWindow.xaml.cs");
+        var monitor = Slice(
+            source,
+            "private async Task MonitorVisibleConnectAsync",
+            "public Task<PublisherVisibleConnectCompletion> WaitForConnectCompletionAsync");
+        var request = Slice(
+            source,
+            "private async void Core_WebResourceRequested",
+            "private bool TryAuthorizeWebResourceRequest");
+        var response = Slice(
+            source,
+            "private void Core_WebResourceResponseReceived",
+            "private static async Task CompleteSessionProbeAsync");
+
+        Assert.Contains("PublisherAccountCatalog.IsExactAchievementPageUri", monitor, StringComparison.Ordinal);
+        Assert.Contains("PublisherVisibleConnectFlow.ShouldAutoComplete", monitor, StringComparison.Ordinal);
+        Assert.Contains("HsrAchievementListNetworkState.ResponseAccepted", monitor, StringComparison.Ordinal);
+        Assert.Contains("if (shouldAutoComplete)", monitor, StringComparison.Ordinal);
+        Assert.Contains("await TryCompleteVisibleConnectAsync", monitor, StringComparison.Ordinal);
+        Assert.Contains("IsVisibleHsrAchievementConnect", request, StringComparison.Ordinal);
+        Assert.Contains("IsExactHsrAchievementPageListRequest", request, StringComparison.Ordinal);
+        Assert.Contains("TryRecordHsrAchievementListRequest(args.Request", request, StringComparison.Ordinal);
+        Assert.Contains("IsVisibleHsrAchievementConnect", response, StringComparison.Ordinal);
+        Assert.Contains("HsrAchievementRequestTokenHeader", response, StringComparison.Ordinal);
+        Assert.Contains("request.Headers.SetHeader", response, StringComparison.Ordinal);
+        Assert.Contains("request.Headers.GetHeader", response, StringComparison.Ordinal);
+        Assert.Contains("lock (hsrAchievementListGate)", response, StringComparison.Ordinal);
+        Assert.Contains("IsCurrentHsrAchievementRequest", response, StringComparison.Ordinal);
+        Assert.Contains("IsSuccessfulListEnvelope", response, StringComparison.Ordinal);
+        Assert.Contains("ResetHsrAchievementListRequest", source, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -142,30 +205,94 @@ public sealed class PublisherVisibleConnectRecoveryTests
             new Uri(target)));
     }
 
+    [Theory]
+    [InlineData("HoYoLAB", "hsr", "https://sg-public-api.hoyolab.com/future/official/path")]
+    [InlineData("HoYoLAB", "gi", "https://webstatic.hoyoverse.com/future/official/path")]
+    [InlineData("HoYoLAB", "zzz", "https://api-takumi.mihoyo.com/future/official/path")]
+    [InlineData("HoYoLAB", "hsr", "https://hoyo.link/future")]
+    [InlineData("KURO GAMES", "wuwa", "https://prod-alicdn-gamestarter.kurogame.com/future")]
+    [InlineData("KURO GAMES", "wuwa", "https://pc-launcher-sdk-api.kurogame.net/future")]
+    [InlineData("KURO GAMES", "wuwa", "https://www.kurogames.com/future")]
+    [InlineData("KURO GAMES", "wuwa", "https://api.kurobbs.com/future")]
+    [InlineData("SKPORT", "ae", "https://game.skport.com/future")]
+    [InlineData("SKPORT", "ae", "https://launcher.gryphline.com/future")]
+    [InlineData("SKPORT", "ae", "https://ak.hypergryph.com/future")]
+    [InlineData("SKPORT", "ae", "https://web-static.hg-cdn.com/future")]
+    public void Embedded_browser_trusts_publisher_owned_https_domains(
+        string provider,
+        string gameId,
+        string target)
+    {
+        Assert.True(PublisherAccountCatalog.IsOfficialPublisherUri(
+            provider,
+            gameId,
+            new Uri(target)));
+        Assert.True(PublisherVisibleConnectNavigationPolicy.IsAllowed(
+            provider,
+            gameId,
+            new Uri(target)));
+    }
+
+    [Theory]
+    [InlineData("HoYoLAB", "hsr", "https://hoyolab.com.attacker.example/path")]
+    [InlineData("SKPORT", "ae", "https://gryphline.com.attacker.example/path")]
+    [InlineData("SKPORT", "ae", "https://hg-cdn.com.attacker.example/path")]
+    [InlineData("KURO GAMES", "wuwa", "https://kurogame.com.attacker.example/path")]
+    [InlineData("HoYoLAB", "hsr", "http://act.hoyolab.com/path")]
+    [InlineData("HoYoLAB", "hsr", "https://act.hoyolab.com:444/path")]
+    [InlineData("HoYoLAB", "ae", "https://act.hoyolab.com/path")]
+    public void Embedded_browser_still_rejects_external_or_mismatched_domains(
+        string provider,
+        string gameId,
+        string target)
+    {
+        Assert.False(PublisherAccountCatalog.IsOfficialPublisherUri(
+            provider,
+            gameId,
+            new Uri(target)));
+    }
+
     [Fact]
-    public void Initial_home_exception_requires_a_current_HoYo_game()
+    public void Official_publisher_requests_bypass_the_legacy_path_filter_before_body_reading()
+    {
+        var source = ReadAppFile("PublisherSessionWindow.xaml.cs");
+        var handler = Slice(
+            source,
+            "private async void Core_WebResourceRequested",
+            "private bool TryAuthorizeWebResourceRequest");
+
+        var official = handler.IndexOf(
+            "PublisherAccountCatalog.IsOfficialPublisherUri",
+            StringComparison.Ordinal);
+        var connect = handler.IndexOf(
+            "if (purpose == PublisherSessionPurpose.Connect",
+            StringComparison.Ordinal);
+        var bodyRead = handler.IndexOf("ReadBoundedAsync", StringComparison.Ordinal);
+        Assert.True(official >= 0 && official < connect && connect < bodyRead);
+        var resourceObservation = handler.IndexOf(
+            "purpose == PublisherSessionPurpose.Resource",
+            StringComparison.Ordinal);
+        var trustedAuthorization = handler.IndexOf(
+            "var authorized = isOfficialPublisherRequest || TryAuthorizeWebResourceRequest(args);",
+            StringComparison.Ordinal);
+        var achievementObservation = handler.IndexOf(
+            "IsHsrAchievementListCandidate(parsedRequestUri)",
+            StringComparison.Ordinal);
+        Assert.True(
+            resourceObservation >= 0
+            && resourceObservation < connect
+            && connect < trustedAuthorization
+            && trustedAuthorization < achievementObservation);
+    }
+
+    [Fact]
+    public void Initial_login_requires_a_current_HoYo_game()
     {
         Assert.False(PublisherVisibleConnectNavigationPolicy.IsAllowedInitial(
             "HoYoLAB",
             PublisherSessionPurpose.Connect,
             "unknown",
-            new Uri("https://www.hoyolab.com/home")));
-    }
-
-    [Theory]
-    [InlineData("https://www.hoyolab.com/home/")]
-    [InlineData("https://www.hoyolab.com/home?next=1")]
-    [InlineData("https://www.hoyolab.com/home#next")]
-    [InlineData("http://www.hoyolab.com/home")]
-    [InlineData("https://user:password@www.hoyolab.com/home")]
-    [InlineData("https://www.hoyolab.com:444/home")]
-    public void Initial_home_exception_is_exact(string target)
-    {
-        Assert.False(PublisherVisibleConnectNavigationPolicy.IsAllowedInitial(
-            "HoYoLAB",
-            PublisherSessionPurpose.Connect,
-            "hsr",
-            new Uri(target)));
+            PublisherVisibleConnectNavigationPolicy.HoyoLabGenshinLoginUri));
     }
 
     [Fact]

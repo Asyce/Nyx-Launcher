@@ -2,6 +2,7 @@ use crate::gen::protos::Unk;
 use protobuf::Message;
 use protobuf::UnknownValueRef::*;
 use std::collections::{BTreeSet, HashMap};
+use zeroize::Zeroizing;
 
 const MIN_ACHIEVEMENT_PACKET_BYTES: usize = 1000;
 const MAX_QUEST_ROWS: usize = 10_000;
@@ -9,24 +10,23 @@ const MAX_QUEST_ROW_FIELDS: usize = 16;
 const EARLIEST_FINISH_TIMESTAMP: u64 = 1_420_066_800;
 const STARDB_ACHIEVEMENT_SENTINEL: u64 = 4_040_201;
 
-pub fn matches_player_get_token_sc_rsp(data: Vec<u8>) -> Option<u64> {
-    let d_msg = Unk::parse_from_bytes(&data);
+pub fn matches_player_get_token_sc_rsp(data: &[u8]) -> Option<Zeroizing<u64>> {
+    let d_msg = Unk::parse_from_bytes(data);
     match d_msg {
         Ok(d_msg) => {
-            let mut possible_seeds: Vec<u64> = vec![];
+            let mut possible_seed = None;
             let unknown_fields = d_msg.unknown_fields();
             for (_, field_data) in unknown_fields.iter() {
                 if let Varint(seed) = field_data {
-                    if seed > 1 << 32 {
-                        possible_seeds.push(seed)
+                    if seed <= 1 << 32 {
+                        continue;
+                    }
+                    if possible_seed.replace(Zeroizing::new(seed)).is_some() {
+                        return None;
                     }
                 };
             }
-            if possible_seeds.len() == 1 {
-                Some(possible_seeds[0])
-            } else {
-                None
-            }
+            possible_seed
         }
         _ => None,
     }

@@ -82,7 +82,7 @@ public static class GameRailSignalProjector
         };
     }
 
-    private static GameRailSignal? ProjectPublisher(
+    public static GameRailSignal? ProjectPublisher(
         string gameId,
         HoyoPublisherStatusResult? result)
     {

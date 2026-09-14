@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using Nyx.Desktop.Core.Content;
 
 namespace Nyx.Desktop.Infrastructure.Content;
@@ -13,16 +14,19 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
     private readonly string bundledAssetsDirectory;
     private readonly Uri endpoint;
     private readonly Uri codesEndpoint;
+    private readonly Uri? toolsEndpoint;
     private readonly Func<DateTimeOffset> clock;
     private readonly TimeSpan interval;
     private readonly CancellationTokenSource shutdown = new();
     private LauncherBannersManifest current;
     private LauncherCodesManifest? currentCodes;
+    private LauncherToolsManifest? currentTools;
     private Task? refresh;
     private Task<CodesRefreshResult>? codesRefresh;
     private Task? pump;
     private bool automaticRefreshEnabled;
     private bool disposed;
+    private long lastRefreshDurationTicks = -1;
 
     public LauncherBannersContentService(
         byte[] bundledPayload,
@@ -32,7 +36,8 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
         Func<DateTimeOffset>? clock = null,
         TimeSpan? interval = null,
         string? bundledAssetsDirectory = null,
-        Uri? codesEndpoint = null)
+        Uri? codesEndpoint = null,
+        Uri? toolsEndpoint = null)
         : this(
             bundledPayload,
             new LauncherBannersCache(cacheDirectory),
@@ -41,7 +46,8 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
             clock,
             interval,
             bundledAssetsDirectory,
-            codesEndpoint)
+            codesEndpoint,
+            toolsEndpoint)
     {
     }
 
@@ -53,7 +59,8 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
         Func<DateTimeOffset>? clock,
         TimeSpan? interval,
         string? bundledAssetsDirectory,
-        Uri? codesEndpoint = null)
+        Uri? codesEndpoint = null,
+        Uri? toolsEndpoint = null)
     {
         this.bundledPayload = bundledPayload?.ToArray() ?? throw new ArgumentNullException(nameof(bundledPayload));
         this.cache = cache ?? throw new ArgumentNullException(nameof(cache));
@@ -62,20 +69,25 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
         LauncherBannersTransport.ValidateEndpoint(this.endpoint, allowConfigured: true, requireJson: true);
         this.codesEndpoint = codesEndpoint ?? new Uri(LauncherBannersTransport.ProductionCodesEndpoint);
         LauncherBannersTransport.ValidateEndpoint(this.codesEndpoint, allowConfigured: true, requireJson: true);
+        this.toolsEndpoint = toolsEndpoint;
+        if (this.toolsEndpoint is not null)
+            LauncherBannersTransport.ValidateEndpoint(this.toolsEndpoint, allowConfigured: true, requireJson: true);
         this.transport = transport ?? new LauncherBannersTransport();
         this.clock = clock ?? (() => DateTimeOffset.UtcNow);
         this.interval = interval ?? TimeSpan.FromHours(6);
         if (this.interval < TimeSpan.FromMinutes(15)) throw new ArgumentOutOfRangeException(nameof(interval));
         var observedAt = this.clock();
         bundledManifest = LauncherBannersManifestParser.Parse(this.bundledPayload, fallback: true, observedAt);
-        var cached = cache.TryLoadLastKnownGood(observedAt, this.bundledAssetsDirectory);
-        current = ApplyBundledCollections(
+        var cached = cache.TryLoadLastKnownGood(observedAt, this.bundledAssetsDirectory,
+            preferV2: this.endpoint.AbsoluteUri == LauncherBannersTransport.ProductionV2Endpoint || bundledManifest.SchemaVersion == 2);
+        current = ApplyBundledUpcomingFallback(
             cached is not null && cached.GeneratedAt >= bundledManifest.GeneratedAt
                 ? cached
                 : bundledManifest,
             bundledManifest);
         currentCodes = cache.TryLoadLastKnownGoodCodes(this.clock());
         if (currentCodes is not null) current = ApplyCodes(current, currentCodes);
+        currentTools = cache.TryLoadLastKnownGoodTools(observedAt);
     }
 
     public LauncherBannersManifest Current
@@ -88,18 +100,28 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
         }
     }
 
+    public TimeSpan? LastRefreshDuration
+    {
+        get
+        {
+            var ticks = Volatile.Read(ref lastRefreshDurationTicks);
+            return ticks < 0 ? null : TimeSpan.FromTicks(ticks);
+        }
+    }
+
     public event EventHandler? Updated;
+
+    public IReadOnlyList<LauncherOfficialTool> OfficialToolsFor(string gameId)
+    {
+        if (string.IsNullOrEmpty(gameId)) return [];
+        lock (sync)
+            return (currentTools?.Tools ?? [])
+                .Where(tool => string.Equals(tool.Game, gameId, StringComparison.Ordinal))
+                .ToArray();
+    }
 
     public string? TryResolveManagedAsset(LauncherBannersAsset asset) =>
         cache.TryResolveBundledAsset(asset, bundledAssetsDirectory) ?? cache.TryResolveManagedAsset(asset);
-
-    public string PinUserArt(string gameId, LauncherBannersAsset asset) =>
-        cache.PinUserArt(gameId, asset, TryResolveManagedAsset(asset)
-            ?? throw new FileNotFoundException("The validated launcher art is unavailable."));
-
-    public string? TryResolveUserArt(string? relative) => cache.TryResolveUserArt(relative);
-
-    public void ReleaseUserArt(string? relative) => cache.ReleaseUserArt(relative);
 
     public void Start()
         => SetAutomaticRefreshEnabled(true);
@@ -144,63 +166,116 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
 
     private async Task RunRefreshAsync()
     {
-        var changed = false;
+        var started = Stopwatch.GetTimestamp();
         try
         {
-            LauncherBannersManifest selected;
-            lock (sync) selected = current;
+            var changed = false;
             try
             {
-                changed |= await cache.HydrateAssetsAsync(
-                    selected,
-                    transport,
-                    bundledAssetsDirectory,
-                    shutdown.Token).ConfigureAwait(false);
+                LauncherBannersManifest selected;
+                lock (sync) selected = current;
+                try
+                {
+                    changed |= await cache.HydrateAssetsAsync(
+                        selected,
+                        transport,
+                        bundledAssetsDirectory,
+                        shutdown.Token).ConfigureAwait(false);
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException || !shutdown.IsCancellationRequested)
+                {
+                    // Stale art must not prevent fetching a newer manifest.
+                }
+
+                var payload = await transport.GetManifestAsync(endpoint, LauncherBannersTransport.MaximumManifestBytes, shutdown.Token).ConfigureAwait(false);
+                var manifest = ApplyBundledUpcomingFallback(
+                    LauncherBannersManifestParser.Parse(payload, fallback: false, clock()),
+                    bundledManifest);
+                if (endpoint.AbsoluteUri == LauncherBannersTransport.ProductionV2Endpoint && manifest.SchemaVersion != 2
+                    || endpoint.AbsoluteUri == LauncherBannersTransport.ProductionEndpoint && manifest.SchemaVersion != 1)
+                    throw new InvalidDataException("Launcher banner schema does not match its endpoint.");
+                var promote = true;
+                lock (sync)
+                {
+                    if (manifest.GeneratedAt < current.GeneratedAt)
+                        throw new InvalidDataException("Launcher banner generation moved backwards.");
+                    if (manifest.GeneratedAt == current.GeneratedAt)
+                    {
+                        if (!string.Equals(manifest.Revision, current.Revision, StringComparison.Ordinal))
+                            throw new InvalidDataException("Launcher banner revision changed without a newer generation.");
+                    }
+                }
+                if (promote)
+                {
+                    await cache.PromoteAsync(manifest, payload, transport, bundledAssetsDirectory, shutdown.Token).ConfigureAwait(false);
+                    if (!shutdown.IsCancellationRequested)
+                    {
+                        lock (sync) current = currentCodes is null ? manifest : ApplyCodes(manifest, currentCodes);
+                        changed = true;
+                    }
+                }
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !shutdown.IsCancellationRequested)
             {
-                // Stale art must not prevent fetching a newer manifest.
+                // Keep the current snapshot. If startup loaded a corrupt cache, the
+                // bundled parser already supplied the complete last-resort payload.
             }
-
-            var payload = await transport.GetManifestAsync(endpoint, LauncherBannersTransport.MaximumManifestBytes, shutdown.Token).ConfigureAwait(false);
-            var manifest = ApplyBundledCollections(
-                LauncherBannersManifestParser.Parse(payload, fallback: false, clock()),
-                bundledManifest);
-            var promote = true;
-            lock (sync)
+            if (toolsEndpoint is not null)
             {
-                if (manifest.GeneratedAt < current.GeneratedAt)
-                    throw new InvalidDataException("Launcher banner generation moved backwards.");
-                if (manifest.GeneratedAt == current.GeneratedAt)
+                try
                 {
-                    if (!string.Equals(manifest.Revision, current.Revision, StringComparison.Ordinal))
-                        throw new InvalidDataException("Launcher banner revision changed without a newer generation.");
+                    var payload = await transport.GetManifestAsync(
+                        toolsEndpoint,
+                        LauncherBannersTransport.MaximumManifestBytes,
+                        shutdown.Token).ConfigureAwait(false);
+                    var tools = LauncherBannersManifestParser.ParseTools(payload, fallback: false, clock());
+                    var unchanged = false;
+                    lock (sync)
+                    {
+                        if (currentTools is not null)
+                        {
+                            if (tools.GeneratedAt < currentTools.GeneratedAt)
+                                throw new InvalidDataException("Launcher tools generation moved backwards.");
+                            if (tools.GeneratedAt == currentTools.GeneratedAt)
+                            {
+                                if (!tools.Tools.SequenceEqual(currentTools.Tools))
+                                    throw new InvalidDataException("Launcher tools changed without a newer generation.");
+                                unchanged = true;
+                            }
+                        }
+                    }
+                    if (!unchanged)
+                    {
+                        await cache.PromoteToolsAsync(tools, payload, shutdown.Token).ConfigureAwait(false);
+                        if (!shutdown.IsCancellationRequested)
+                        {
+                            lock (sync)
+                            {
+                                changed |= !(currentTools?.Tools ?? []).SequenceEqual(tools.Tools);
+                                currentTools = tools;
+                            }
+                        }
+                    }
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException || !shutdown.IsCancellationRequested)
+                {
+                    // Keep the last approved tools snapshot.
                 }
             }
-            if (promote)
+            try
             {
-                await cache.PromoteAsync(manifest, payload, transport, bundledAssetsDirectory, shutdown.Token).ConfigureAwait(false);
-                if (!shutdown.IsCancellationRequested)
-                {
-                    lock (sync) current = currentCodes is null ? manifest : ApplyCodes(manifest, currentCodes);
-                    changed = true;
-                }
+                var codesResult = await StartCodesRefreshAsync(publishEvent: false).ConfigureAwait(false);
+                changed |= codesResult.Changed;
             }
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException || !shutdown.IsCancellationRequested)
-        {
-            // Keep the current snapshot. If startup loaded a corrupt cache, the
-            // bundled parser already supplied the complete last-resort payload.
-        }
-        try
-        {
-            var codesResult = await StartCodesRefreshAsync(publishEvent: false).ConfigureAwait(false);
-            changed |= codesResult.Changed;
+            finally
+            {
+                if (changed) Updated?.Invoke(this, EventArgs.Empty);
+                lock (sync) refresh = null;
+            }
         }
         finally
         {
-            if (changed) Updated?.Invoke(this, EventArgs.Empty);
-            lock (sync) refresh = null;
+            Volatile.Write(ref lastRefreshDurationTicks, Stopwatch.GetElapsedTime(started).Ticks);
         }
     }
 
@@ -278,7 +353,7 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
                 pair.Value.News,
                 pair.Value.Upcoming,
                 codesManifest.Games[pair.Key],
-                pair.Value.Collections),
+                pair.Value.Concurrent),
             StringComparer.Ordinal);
         return new LauncherBannersManifest(
             bannerManifest.SchemaVersion,
@@ -288,7 +363,7 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
             games);
     }
 
-    internal static LauncherBannersManifest ApplyBundledCollections(
+    internal static LauncherBannersManifest ApplyBundledUpcomingFallback(
         LauncherBannersManifest manifest,
         LauncherBannersManifest bundled)
     {
@@ -306,11 +381,11 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
                     return remoteGame;
                 }
 
-                var useBundledCollections = remoteGame.Collections.Count == 0 && bundledGame.Collections.Count > 0;
                 var useBundledUpcoming = manifest.GeneratedAt <= bundled.GeneratedAt
+                    && manifest.SchemaVersion == bundled.SchemaVersion
                     && remoteGame.Upcoming.Count == 0
                     && bundledGame.Upcoming.Count > 0;
-                if (!useBundledCollections && !useBundledUpcoming) return remoteGame;
+                if (!useBundledUpcoming) return remoteGame;
 
                 changed = true;
                 return new LauncherBannersGame(
@@ -320,7 +395,7 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
                     remoteGame.News,
                     useBundledUpcoming ? bundledGame.Upcoming : remoteGame.Upcoming,
                     remoteGame.Codes,
-                    useBundledCollections ? bundledGame.Collections : remoteGame.Collections);
+                    remoteGame.Concurrent);
             },
             StringComparer.Ordinal);
 
@@ -363,7 +438,8 @@ public sealed class LauncherBannersContentService : IAsyncDisposable
 
         var nextExpiry = manifest.Games.Values
             .SelectMany(static game => game.Upcoming.Select(phase => (DateTimeOffset?)phase.Start)
-                .Prepend(game.Current?.EffectiveEnd))
+                .Concat(game.Upcoming.Where(phase => phase.BannerSystem is not null).Select(phase => phase.End))
+                .Concat(game.CurrentPhases.Select(phase => phase.EffectiveEnd)))
             .Where(static boundary => boundary.HasValue)
             .Select(static boundary => boundary!.Value)
             .Where(boundary => boundary > now)

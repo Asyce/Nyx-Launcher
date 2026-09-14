@@ -13,9 +13,9 @@ public sealed class BannerCycleUiTests
         Assert.Contains("launcherBanners.Current.Games.TryGetValue(selected.Id", render, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.SetName(\n                BannerCycleRegion", render, StringComparison.Ordinal);
         Assert.Contains("RenderBannerRows(selected.Id, current, now)", render, StringComparison.Ordinal);
-        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now)", render, StringComparison.Ordinal);
+        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now, launcherGame.Concurrent)", render, StringComparison.Ordinal);
         Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 5)", render, StringComparison.Ordinal);
-        Assert.DoesNotContain("phase.Start > now", render, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Where(phase => phase.Start > now)", render, StringComparison.Ordinal);
         Assert.Contains("FormatCurrentBannerTiming(current, now)", render, StringComparison.Ordinal);
         Assert.DoesNotContain("SetBannerCard", render, StringComparison.Ordinal);
         Assert.DoesNotContain("latestContent.Current", render, StringComparison.Ordinal);
@@ -90,16 +90,41 @@ public sealed class BannerCycleUiTests
     }
 
     [Fact]
-    public void Banner_panel_uses_one_compact_full_width_timeline_with_wrapped_characters()
+    public void Banner_scroll_viewport_receives_the_available_height_below_its_header()
+    {
+        var xaml = System.Xml.Linq.XDocument.Parse(ReadAppFile("MainPage.xaml"));
+        System.Xml.Linq.XNamespace names = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var content = xaml.Descendants().Single(element => (string?)element.Attribute(names + "Name") == "ContentPanel");
+        var stack = xaml.Descendants().Single(element => (string?)element.Attribute(names + "Name") == "BannerCycleStack");
+        var rows = stack.Elements().Single(element => element.Name.LocalName == "Grid.RowDefinitions").Elements().ToArray();
+
+        Assert.Equal("Grid", content.Name.LocalName);
+        Assert.Equal("Auto", (string?)rows[0].Attribute("Height"));
+        Assert.Equal("*", (string?)rows[1].Attribute("Height"));
+    }
+
+    [Fact]
+    public void Banner_panel_uses_one_compact_timeline_with_intrinsic_single_line_character_names()
     {
         var xaml = ReadAppFile("MainPage.xaml");
         var code = ReadAppFile("MainPage.xaml.cs");
-        var columns = Slice(xaml, "x:Name=\"BannerCycleColumns\"", "x:Name=\"BannerCollectionList\"");
+        var columns = Slice(xaml, "x:Name=\"BannerCycleColumns\"", "x:Name=\"LowerActionRegion\"");
         var bannerRegion = Slice(xaml, "x:Name=\"BannerCycleRegion\"", "x:Name=\"BannerCycleStack\"");
+        var scrollViewer = Slice(xaml, "x:Name=\"BannerCycleScrollViewer\"", "x:Name=\"BannerCycleColumns\"");
 
-        Assert.Contains("Width=\"704\"", bannerRegion, StringComparison.Ordinal);
-        Assert.Contains("Height=\"390\"", bannerRegion, StringComparison.Ordinal);
+        Assert.DoesNotContain(" Width=\"704\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain(" Height=\"390\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MaxWidth=\"848\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("BannerContentRegion.Width = bannerWidth", code, StringComparison.Ordinal);
+        Assert.Contains("BannerContentRegion.VerticalAlignment = VerticalAlignment.Top", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("BannerCycleRegion.Height =", code, StringComparison.Ordinal);
         Assert.Contains("BorderBrush=\"{ThemeResource DeckBorderBrush}\"", bannerRegion, StringComparison.Ordinal);
+        Assert.Contains("MaxHeight=\"330\"", scrollViewer, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Current and upcoming banner details\"", scrollViewer, StringComparison.Ordinal);
+        Assert.Contains("HorizontalScrollMode=\"Disabled\"", scrollViewer, StringComparison.Ordinal);
+        Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", scrollViewer, StringComparison.Ordinal);
+        Assert.Contains("VerticalScrollMode=\"Auto\"", scrollViewer, StringComparison.Ordinal);
+        Assert.DoesNotContain(" Height=", scrollViewer, StringComparison.Ordinal);
         Assert.Contains("Margin=\"14,0,14,10\"", columns, StringComparison.Ordinal);
         Assert.DoesNotContain("CurrentBannerColumn", xaml + code, StringComparison.Ordinal);
         Assert.DoesNotContain("UpcomingBannerColumn", xaml + code, StringComparison.Ordinal);
@@ -108,16 +133,37 @@ public sealed class BannerCycleUiTests
         Assert.Contains("ItemsSource=\"{x:Bind BannerCharacterRows, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"UpcomingBannerList\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{x:Bind UpcomingBannerGroups, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(columns, "<ItemsWrapGrid").Count);
-        Assert.Contains("MaximumRowsOrColumns=\"5\"", columns, StringComparison.Ordinal);
-        Assert.Contains("ItemWidth=\"128\"", columns, StringComparison.Ordinal);
-        Assert.Contains("ItemWidth=\"{Binding ItemWidth}\"", columns, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding}\"", columns, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding CharacterRows}\"", columns, StringComparison.Ordinal);
+        Assert.Contains("Orientation=\"Vertical\"", columns, StringComparison.Ordinal);
+        Assert.Contains("Orientation=\"Horizontal\"", columns, StringComparison.Ordinal);
+        Assert.DoesNotContain("Width=\"160\"", columns, StringComparison.Ordinal);
+        Assert.DoesNotContain("Width=\"132\"", columns, StringComparison.Ordinal);
+        Assert.Equal(2, columns.Split("Spacing=\"12\"", StringSplitOptions.None).Length - 1);
+        Assert.Equal(2, columns.Split("MaxWidth=\"400\"", StringSplitOptions.None).Length - 1);
+        Assert.Equal(2, columns.Split("MaxWidth=\"354\"", StringSplitOptions.None).Length - 1);
+        Assert.Equal(2, columns.Split("StretchDirection=\"DownOnly\"", StringSplitOptions.None).Length - 1);
+        Assert.Contains("MinHeight=\"38\"", columns, StringComparison.Ordinal);
+        Assert.Contains("Width=\"38\"", columns, StringComparison.Ordinal);
+        Assert.Contains("Height=\"38\"", columns, StringComparison.Ordinal);
+        Assert.Contains("Width=\"34\"", columns, StringComparison.Ordinal);
+        Assert.Contains("Height=\"34\"", columns, StringComparison.Ordinal);
+        Assert.Contains("FontSize=\"15\"", columns, StringComparison.Ordinal);
+        Assert.DoesNotContain("LineHeight=\"20\"", columns, StringComparison.Ordinal);
+        Assert.DoesNotContain("LineStackingStrategy=\"BlockLineHeight\"", columns, StringComparison.Ordinal);
+        Assert.Equal(2, columns.Split("TextWrapping=\"NoWrap\"", StringSplitOptions.None).Length - 1);
+        Assert.DoesNotContain("MaxLines=\"1\"", columns, StringComparison.Ordinal);
+        Assert.DoesNotContain("TextTrimming=\"CharacterEllipsis\"", columns, StringComparison.Ordinal);
+        Assert.DoesNotContain("DisplayFontSize", xaml + code, StringComparison.Ordinal);
+        Assert.DoesNotContain("ItemWidth", xaml + code, StringComparison.Ordinal);
         Assert.Contains("private const int MaximumDisplayedCurrentBannerCharacters = 10", code, StringComparison.Ordinal);
-        Assert.Contains("private const int MaximumDisplayedBannerCharactersPerPhase = 5", code, StringComparison.Ordinal);
-        Assert.Contains("OrderBannerCharacters(phase.Characters)", code, StringComparison.Ordinal);
-        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now)", code, StringComparison.Ordinal);
+        Assert.Contains("private const int MaximumDisplayedBannerCharactersPerPhase = 10", code, StringComparison.Ordinal);
+        Assert.Contains("OrderBannerCharacters(characters)", code, StringComparison.Ordinal);
+        Assert.Contains("DisplayCharacters(phase.Characters)", code, StringComparison.Ordinal);
+        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now, launcherGame.Concurrent)", code, StringComparison.Ordinal);
         Assert.Contains("launcherGame.UpcomingForDisplayAt(now, 5)", code, StringComparison.Ordinal);
-        Assert.Contains("ItemWidth = Math.Clamp(640d / Math.Min(5, Characters.Count), 128, 320)", code, StringComparison.Ordinal);
+        Assert.Contains("rows.Chunk(2)", code, StringComparison.Ordinal);
+        Assert.Contains("CharacterRows = Characters.Chunk(2).ToArray()", code, StringComparison.Ordinal);
         Assert.Contains("CreateOverflow", code, StringComparison.Ordinal);
         Assert.DoesNotContain("x:Name=\"UpcomingPhaseDivider\"", columns, StringComparison.Ordinal);
     }
@@ -235,6 +281,10 @@ public sealed class BannerCycleUiTests
 
         Assert.Contains("\"gi\" => \"1. Turn on Achievements.", help, StringComparison.Ordinal);
         Assert.DoesNotContain("\"gi\" => \"1. Choose Game", help, StringComparison.Ordinal);
+        Assert.Contains(
+            "1. Connect HoYoLAB above.\\n2. Turn on Achievements.\\n3. Choose HoYoLAB as the source.",
+            help,
+            StringComparison.Ordinal);
         Assert.Contains("\"zzz\" => \"Achievement export is disabled.", help, StringComparison.Ordinal);
         Assert.Contains("\"wuwa\" => \"Achievement export is not ready.", help, StringComparison.Ordinal);
         Assert.Contains("\"ae\" => \"Achievement export is deliberately not being added", help, StringComparison.Ordinal);
@@ -279,28 +329,25 @@ public sealed class BannerCycleUiTests
     }
 
     [Fact]
-    public void Current_and_upcoming_banners_share_the_panel_and_empty_upcoming_collapses_fail_closed()
+    public void Current_and_upcoming_banners_share_the_panel_without_retired_collection_ui()
     {
         var xaml = ReadAppFile("MainPage.xaml");
         var code = ReadAppFile("MainPage.xaml.cs");
-        var categories = Slice(
-            code,
-            "private void RenderBannerCategories",
-            "private static string FormatCurrentBannerTiming");
-
-        Assert.DoesNotContain("PermanentBannerCategoryButton", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("PERMANENT", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"FATE COLLAB\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Style=\"{StaticResource NyxOfficialLauncherStyle}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("gameId == \"hsr\" && collab is not null", categories, StringComparison.Ordinal);
-        Assert.DoesNotContain("collection.Kind == \"permanent\"", categories, StringComparison.Ordinal);
-        Assert.DoesNotContain("category == \"permanent\"", categories, StringComparison.Ordinal);
-        Assert.Contains("var hasCurrent = BannerCharacterRows.Count > 0", categories, StringComparison.Ordinal);
-        Assert.Contains("CurrentBannerSection.Visibility = hasCurrent ? Visibility.Visible : Visibility.Collapsed", categories, StringComparison.Ordinal);
-        Assert.Contains("UpcomingBannerList.Visibility = hasUpcoming ? Visibility.Visible : Visibility.Collapsed", categories, StringComparison.Ordinal);
-        Assert.Contains("BannerCollectionList.Visibility = Visibility.Collapsed", categories, StringComparison.Ordinal);
-        Assert.DoesNotContain("GridLength", categories, StringComparison.Ordinal);
-        Assert.DoesNotContain("category == \"upcoming\" ? Visibility.Visible", categories, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"CurrentBannerSection\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"UpcomingBannerList\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("RenderBannerRows(selected.Id, current, now)", code, StringComparison.Ordinal);
+        Assert.Contains("RenderUpcomingBannerGroups(selected.Id, current, upcoming, now, launcherGame.Concurrent)", code, StringComparison.Ordinal);
+        foreach (var symbol in new[]
+                 {
+                     "BannerCollection",
+                     "RenderBannerCategories",
+                     "BannerCategoryButton",
+                     "selectedBannerCategories",
+                     "FATE COLLAB",
+                 })
+        {
+            Assert.DoesNotContain(symbol, xaml + code, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
@@ -315,6 +362,10 @@ public sealed class BannerCycleUiTests
         Assert.Contains("$\"Starts in {BannerTimingFormatter.FormatRemaining(phase.Start!.Value - now)}\"", render, StringComparison.Ordinal);
         Assert.Contains("\"Available on loss\"", render, StringComparison.Ordinal);
         Assert.Contains("character.Limited == false", render, StringComparison.Ordinal);
+        Assert.Contains("foreach (var phase in concurrent)", render, StringComparison.Ordinal);
+        Assert.Contains("FormatCurrentBannerTiming(phase, now), phase.BannerSystem", render, StringComparison.Ordinal);
+        Assert.Contains("phase.BannerSystem}:{phase.Start", render, StringComparison.Ordinal);
+        Assert.Contains("bannerSystem == \"re-factor\" ? \"RE-Factor\" : \"Chartered\"", code, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -376,14 +427,16 @@ public sealed class BannerCycleUiTests
         Assert.Contains("_launcherBanners = new LauncherBannersContentService", app, StringComparison.Ordinal);
         Assert.DoesNotContain("PENGO_NYX_LAUNCHER_", app, StringComparison.Ordinal);
         Assert.DoesNotContain("Environment.GetEnvironmentVariable", app, StringComparison.Ordinal);
-        Assert.Contains("new Uri(LauncherBannersTransport.ProductionEndpoint)", app, StringComparison.Ordinal);
+        Assert.Contains("new Uri(LauncherBannersTransport.ProductionV2Endpoint)", app, StringComparison.Ordinal);
+        Assert.Contains("launcher-banners-v1.json", app, StringComparison.Ordinal);
+        Assert.Contains("launcher-banners-v2.json", app, StringComparison.Ordinal);
         Assert.Contains("new Uri(LauncherBannersTransport.ProductionCodesEndpoint)", app, StringComparison.Ordinal);
         Assert.Contains("Assets\\Content\\**\\*", project, StringComparison.Ordinal);
         Assert.Contains("CopyToOutputDirectory=\"PreserveNewest\"", project, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Launcher_uses_bundled_manrope_for_all_text_and_keeps_symbol_fonts_for_icons()
+    public void Launcher_uses_bundled_manrope_for_all_text()
     {
         var typography = ReadAppFile("Themes", "NyxTypography.xaml");
         var project = ReadAppFile("Nyx.Desktop.App.csproj");
@@ -420,7 +473,6 @@ public sealed class BannerCycleUiTests
         Assert.DoesNotContain("Segoe UI Variable", typography, StringComparison.Ordinal);
         Assert.DoesNotContain("Segoe UI Variable", publisherWindow, StringComparison.Ordinal);
         Assert.DoesNotContain("GI.ttf", typography, StringComparison.Ordinal);
-        Assert.Contains("FontFamily=\"Segoe Fluent Icons\"", publisherWindow, StringComparison.Ordinal);
     }
 
     [Fact]

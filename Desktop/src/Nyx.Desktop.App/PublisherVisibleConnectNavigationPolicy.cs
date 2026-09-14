@@ -4,14 +4,22 @@ namespace Nyx_Desktop_App;
 
 internal static class PublisherVisibleConnectNavigationPolicy
 {
-    internal static Uri HoyoLabHomeUri { get; } =
-        new("https://www.hoyolab.com/home");
+    internal static Uri HoyoLabGenshinLoginUri { get; } =
+        new("https://act.hoyolab.com/app/community-game-records-sea/index.html#/ys");
+
+    internal static Uri HoyoLabHsrLoginUri { get; } =
+        new("https://account.hoyolab.com/login-platform/index.html?st=https%3A%2F%2Fact.hoyolab.com%2Fapp%2Fcommunity-game-records-sea%2Frpg%2Findex.html%3Fhyl_auth_required%3Dtrue%23%2Fhsr&token_type=6&client_type=4&app_id=c9oqaq3s3gu8&game_biz=hkrpg_global&lang=en-us&theme=dark-hoyolab&hide_logo=0&ux_mode=popup&iframe_level=1#/password-login");
 
     public static Uri GetInitialUri(PublisherAccountCatalogEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
         return entry.Provider == "HoYoLAB"
-            ? HoyoLabHomeUri
+            ? entry.GameId == "gi"
+                ? HoyoLabGenshinLoginUri
+                : entry.GameId == "hsr"
+                    ? HoyoLabHsrLoginUri
+                    : entry.ResourceUri
+                        ?? throw new InvalidOperationException("No official account page is configured.")
             : entry.CheckInUri ?? entry.ResourceUri
                 ?? throw new InvalidOperationException("No official account page is configured.");
     }
@@ -30,11 +38,19 @@ internal static class PublisherVisibleConnectNavigationPolicy
                 target)
             || purpose == PublisherSessionPurpose.Connect
                 && provider == "HoYoLAB"
-                && gameId is ("gi" or "hsr" or "zzz")
+                && gameId == "gi"
                 && target.IsAbsoluteUri
                 && string.Equals(
                     target.OriginalString,
-                    HoyoLabHomeUri.AbsoluteUri,
+                    HoyoLabGenshinLoginUri.AbsoluteUri,
+                    StringComparison.Ordinal)
+            || purpose == PublisherSessionPurpose.Connect
+                && provider == "HoYoLAB"
+                && gameId == "hsr"
+                && target.IsAbsoluteUri
+                && string.Equals(
+                    target.OriginalString,
+                    HoyoLabHsrLoginUri.AbsoluteUri,
                     StringComparison.Ordinal);
     }
 
@@ -44,29 +60,7 @@ internal static class PublisherVisibleConnectNavigationPolicy
         Uri target)
     {
         ArgumentNullException.ThrowIfNull(target);
-        if (!target.IsAbsoluteUri
-            || !string.Equals(
-                target.Scheme,
-                Uri.UriSchemeHttps,
-                StringComparison.OrdinalIgnoreCase)
-            || !target.IsDefaultPort
-            || !string.IsNullOrEmpty(target.UserInfo))
-            return false;
-
-        if (provider == "HoYoLAB")
-        {
-            var host = target.Host;
-            return host.Equals("hoyolab.com", StringComparison.OrdinalIgnoreCase)
-                || host.EndsWith(".hoyolab.com", StringComparison.OrdinalIgnoreCase)
-                || host.Equals("hoyoverse.com", StringComparison.OrdinalIgnoreCase)
-                || host.EndsWith(".hoyoverse.com", StringComparison.OrdinalIgnoreCase);
-        }
-
-        return PublisherAccountCatalog.IsAllowedTopLevelNavigation(
-            provider,
-            PublisherSessionPurpose.Connect,
-            gameId,
-            target);
+        return PublisherAccountCatalog.IsOfficialPublisherUri(provider, gameId, target);
     }
 
     public static bool IsAllowedPopup(

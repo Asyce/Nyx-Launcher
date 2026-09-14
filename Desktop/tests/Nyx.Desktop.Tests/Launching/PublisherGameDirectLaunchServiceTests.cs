@@ -106,6 +106,7 @@ public sealed class PublisherGameDirectLaunchServiceTests
         var result = fixture.Service.LaunchGame("ae", EndfieldRoot);
 
         Assert.Equal(PublisherGameLaunchStatus.Running, result.Status);
+        Assert.True(result.StartedByThisCall);
         Assert.Equal(2, fixture.Validator.Calls.Count);
         Assert.Single(fixture.Starter.Starts);
         Assert.All(fixture.Validator.Inspections, inspection => Assert.True(inspection.Disposed));
@@ -187,6 +188,34 @@ public sealed class PublisherGameDirectLaunchServiceTests
 
         Assert.Equal(PublisherGameLaunchStatus.Ready, observed.Status);
         Assert.Equal(PublisherGameInspectionReason.None, observed.InspectionReason);
+        Assert.Empty(starter.Starts);
+    }
+
+    [Fact]
+    public void Exact_wuwa_pre_install_version_unavailable_proof_is_admitted()
+    {
+        var result = new PublisherGameInspectionResult(
+            "wuwa",
+            PublisherGameInspectionStatus.NeedsReview,
+            PublisherGameInspectionReason.VersionUnavailable,
+            PublisherGameVersionState.Unavailable,
+            WuWaRoot,
+            maintenanceTarget: new(
+                "wuwa",
+                WuWaRoot,
+                Path.Combine(WuWaRoot, "launcher.exe"),
+                "2.6.3.0"),
+            preInstallAvailable: true);
+        var validator = new FakeValidator(() => new FakeInspection(result));
+        var process = new FakeProcessInspector();
+        var starter = new FakeStarter();
+        var service = new PublisherGameDirectLaunchService(validator, process, starter);
+
+        var observed = service.CheckGame("wuwa", WuWaRoot);
+
+        Assert.Equal(PublisherGameLaunchStatus.Ready, observed.Status);
+        Assert.Equal(PublisherGameInspectionReason.VersionUnavailable, observed.InspectionReason);
+        Assert.Equal(2, process.Checks.Count);
         Assert.Empty(starter.Starts);
     }
 
@@ -278,6 +307,21 @@ public sealed class PublisherGameDirectLaunchServiceTests
         Assert.Equal(PublisherGameLaunchStatus.NeedsReview, uncertain.Service.LaunchGame("ae", EndfieldRoot).Status);
         Assert.Empty(seen.Starter.ElevatedStarts);
         Assert.Empty(uncertain.Starter.ElevatedStarts);
+    }
+
+    [Fact]
+    public void Process_appearing_at_dispatch_is_reported_as_preexisting()
+    {
+        var fixture = new Fixture(
+            "ae",
+            EndfieldRoot,
+            [RunningProcessStatus.NotRunning, RunningProcessStatus.Running]);
+
+        var result = fixture.Service.LaunchGame("ae", EndfieldRoot);
+
+        Assert.Equal(PublisherGameLaunchStatus.Running, result.Status);
+        Assert.False(result.StartedByThisCall);
+        Assert.Empty(fixture.Starter.Starts);
     }
 
     [Fact]

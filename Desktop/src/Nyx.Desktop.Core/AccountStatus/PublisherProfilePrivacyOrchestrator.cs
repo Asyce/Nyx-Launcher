@@ -12,9 +12,14 @@ public enum PublisherBrowsingDataKind
 /// Runs the password-only cleanup gate before publisher navigation.
 /// Delegates keep WebView2 and test doubles outside the policy layer.
 /// </summary>
-public sealed class PublisherPasswordNavigationGate
+public sealed class PublisherPasswordNavigationGate : IAsyncDisposable
 {
     private readonly SemaphoreSlim preparationGate = new(1, 1);
+    private readonly object admissionSync = new();
+    private Task? disposal;
+    private TaskCompletionSource? operationsDrained;
+    private int activeOperations;
+    private bool admissionClosed;
     private bool prepared;
 
     public PublisherPasswordNavigationGate(bool passwordSavingEnabled = false)
@@ -29,16 +34,41 @@ public sealed class PublisherPasswordNavigationGate
     {
         ArgumentNullException.ThrowIfNull(clearBrowsingData);
         ArgumentNullException.ThrowIfNull(navigate);
-        await EnsurePreparedAsync(clearBrowsingData, cancellationToken);
-        await navigate(cancellationToken);
+        EnterOperation();
+        try
+        {
+            await EnsurePreparedAsync(clearBrowsingData, cancellationToken);
+            await navigate(cancellationToken);
+        }
+        finally
+        {
+            ReleaseOperation();
+        }
     }
 
-    public Task ClearSavedPasswordsAsync(
+    public async Task ClearSavedPasswordsAsync(
         Func<PublisherBrowsingDataKind, CancellationToken, Task> clearBrowsingData,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(clearBrowsingData);
-        return EnsurePreparedAsync(clearBrowsingData, cancellationToken);
+        EnterOperation();
+        try
+        {
+            await EnsurePreparedAsync(clearBrowsingData, cancellationToken);
+        }
+        finally
+        {
+            ReleaseOperation();
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        lock (admissionSync)
+        {
+            disposal ??= DisposeCoreAsync();
+            return new(disposal);
+        }
     }
 
     private async Task EnsurePreparedAsync(
@@ -59,6 +89,45 @@ public sealed class PublisherPasswordNavigationGate
         {
             preparationGate.Release();
         }
+    }
+
+    private void EnterOperation()
+    {
+        lock (admissionSync)
+        {
+            ObjectDisposedException.ThrowIf(admissionClosed, this);
+            activeOperations++;
+        }
+    }
+
+    private void ReleaseOperation()
+    {
+        TaskCompletionSource? drained = null;
+        lock (admissionSync)
+        {
+            activeOperations--;
+            if (admissionClosed && activeOperations == 0)
+            {
+                drained = operationsDrained;
+            }
+        }
+
+        drained?.TrySetResult();
+    }
+
+    private async Task DisposeCoreAsync()
+    {
+        Task drain;
+        lock (admissionSync)
+        {
+            admissionClosed = true;
+            drain = activeOperations == 0
+                ? Task.CompletedTask
+                : (operationsDrained ??= new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+        }
+
+        await drain.ConfigureAwait(false);
+        preparationGate.Dispose();
     }
 }
 

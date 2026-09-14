@@ -161,6 +161,44 @@ public sealed class HoyoPullExportProviderTests
     }
 
     [Fact]
+    public async Task CredentialUrl_IsConfinedToOfficialInMemoryRequestState()
+    {
+        const string secret = "FULL_PRIVATE_AUTH_TOKEN";
+        var game = HoyoPullGameConfiguration.For("gi");
+        var candidate = Assert.Single(HoyoPullHistoryLinkReader.ExtractNewestWithOffsets(
+            Link(game, secret) + "&gacha_type=999&size=1&end_id=private&page=7&evil=DROP_ME",
+            game,
+            1,
+            16 * 1024));
+        var auth = candidate.Query;
+        var requests = new List<Uri>();
+        using var http = new HttpClient(new DelegateHandler(request =>
+        {
+            requests.Add(request.RequestUri!);
+            return JsonResponse(Page([]));
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
+
+        var archive = await new HoyoPullApiClient(
+            http,
+            new PullExportSafetyLimits(),
+            new NoWaitPullRequestPacer()).DownloadNewestValidAsync(game, [auth], default);
+
+        Assert.Contains(auth.Pairs, pair => pair.Key == "authkey" && pair.Value == secret);
+        Assert.Equal(nameof(HoyoAuthQuery), auth.ToString());
+        Assert.DoesNotContain(secret, candidate.ToString(), StringComparison.Ordinal);
+        Assert.NotEmpty(requests);
+        Assert.All(requests, request =>
+        {
+            Assert.True(HoyoPullApiClient.IsOfficialEndpoint(request, game.Endpoint));
+            Assert.Contains(secret, request.Query, StringComparison.Ordinal);
+            Assert.DoesNotContain("evil", request.Query, StringComparison.Ordinal);
+            Assert.DoesNotContain("private", request.Query, StringComparison.Ordinal);
+        });
+        Assert.DoesNotContain(secret, archive.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void LinkReader_RejectsOversizedCacheWithoutLeakingPath()
     {
         using var temp = new TemporaryDirectory();
@@ -229,7 +267,8 @@ public sealed class HoyoPullExportProviderTests
         {
             requests.Add(request.RequestUri!);
             return JsonResponse(Page([]));
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         var api = new HoyoPullApiClient(http, new PullExportSafetyLimits(), new NoWaitPullRequestPacer());
         var auth = new HoyoAuthQuery([
             new("auth_appid", "webview_gacha"), new("authkey", "ZZZ_SANITIZED_TEST_TOKEN"),
@@ -264,7 +303,8 @@ public sealed class HoyoPullExportProviderTests
             return JsonResponse(Page(type == "2"
                 ? [Record(type, "100", rankType: "4"), Record(type, "100", rankType: "4")]
                 : []));
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         var validApi = new HoyoPullApiClient(validHttp, new PullExportSafetyLimits(), new NoWaitPullRequestPacer());
         var auth = new HoyoAuthQuery([new("authkey", "DEDUP_TEST_TOKEN"), new("lang", "en-us")]);
 
@@ -277,7 +317,8 @@ public sealed class HoyoPullExportProviderTests
             return JsonResponse(Page(type == "2"
                 ? [Record(type, "100", rankType: "4"), Record(type, "100", rankType: "4", uid: "600000002")]
                 : []));
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         var mixedApi = new HoyoPullApiClient(mixedHttp, new PullExportSafetyLimits(), new NoWaitPullRequestPacer());
 
         var error = await Assert.ThrowsAsync<PullExportException>(async () =>
@@ -302,7 +343,8 @@ public sealed class HoyoPullExportProviderTests
             if (query["gacha_type"] == "2" && query["end_id"] == "0")
                 return JsonResponse(Page(Enumerable.Range(1, 20).Select(id => Record("2", id.ToString(), rankType: "4")).ToArray()));
             return JsonResponse(new { retcode = -1, message = "rejected" });
-        })) { Timeout = Timeout.InfiniteTimeSpan };
+        }))
+        { Timeout = Timeout.InfiniteTimeSpan };
         using var provider = new HoyoPullExportProvider(http, profile, downloads, new NoWaitPullRequestPacer());
 
         await using var session = await provider.PrepareAsync("zzz", default);
@@ -552,7 +594,7 @@ public sealed class HoyoPullExportProviderTests
     [Fact]
     public async Task Provider_UnchangedStaleCacheTimesOutWithoutRequestOrOutput()
     {
-        using var fixture = new ObservationFixture("STALE_PRIVATE_TOKEN");
+        using var fixture = new ObservationFixture("STALE_PRIVATE_TOKEN", observationDuration: TimeSpan.FromMilliseconds(60));
         await using var session = await fixture.Provider.PrepareAsync("gi", default);
 
         var error = await Assert.ThrowsAsync<PullExportException>(async () =>
@@ -611,7 +653,7 @@ public sealed class HoyoPullExportProviderTests
     [Fact]
     public async Task Provider_UnrelatedInvalidMutationIsNotFreshAndMakesNoRequestOrOutput()
     {
-        using var fixture = new ObservationFixture("BASELINE_PRIVATE_TOKEN");
+        using var fixture = new ObservationFixture("BASELINE_PRIVATE_TOKEN", observationDuration: TimeSpan.FromMilliseconds(60));
         await using var session = await fixture.Provider.PrepareAsync("gi", default);
         File.AppendAllText(
             fixture.Cache,
@@ -715,19 +757,19 @@ public sealed class HoyoPullExportProviderTests
         string gachaId = "",
         string rankType = "5",
         string uid = "600000001") => new
-    {
-        uid,
-        gacha_id = gachaId,
-        gacha_type = gachaType,
-        item_id = "1001",
-        count = "1",
-        time = "2026-07-17 12:34:56",
-        name = "Test Item",
-        lang = "en-us",
-        item_type = "Character",
-        rank_type = rankType,
-        id,
-    };
+        {
+            uid,
+            gacha_id = gachaId,
+            gacha_type = gachaType,
+            item_id = "1001",
+            count = "1",
+            time = "2026-07-17 12:34:56",
+            name = "Test Item",
+            lang = "en-us",
+            item_type = "Character",
+            rank_type = rankType,
+            id,
+        };
 
     private static HttpResponseMessage JsonResponse(object value) => new(HttpStatusCode.OK)
     {
@@ -762,7 +804,7 @@ public sealed class HoyoPullExportProviderTests
         private readonly HoyoPullGameConfiguration game = HoyoPullGameConfiguration.For("gi");
         private readonly HttpClient http;
 
-        public ObservationFixture(string token, string prefix = "")
+        public ObservationFixture(string token, string prefix = "", TimeSpan? observationDuration = null)
         {
             Downloads = temp.Combine("downloads");
             Cache = MakeProfileCache(
@@ -773,15 +815,18 @@ public sealed class HoyoPullExportProviderTests
             {
                 Interlocked.Increment(ref requests);
                 return JsonResponse(Page([]));
-            })) { Timeout = Timeout.InfiniteTimeSpan };
+            }))
+            { Timeout = Timeout.InfiniteTimeSpan };
             Provider = new HoyoPullExportProvider(
                 http,
                 temp.Combine("profile"),
                 Downloads,
                 new NoWaitPullRequestPacer(),
                 new PullExportSafetyLimits(
-                    TotalDuration: TimeSpan.FromSeconds(1),
-                    CacheObservationDuration: TimeSpan.FromMilliseconds(60),
+                    TotalDuration: TimeSpan.FromSeconds(10),
+                    // Successful filesystem observations must not race a 60 ms scheduler deadline.
+                    // Only the two deliberate timeout cases request that short budget.
+                    CacheObservationDuration: observationDuration ?? TimeSpan.FromSeconds(5),
                     CachePollInterval: TimeSpan.FromMilliseconds(5)));
         }
 

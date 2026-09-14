@@ -20,6 +20,8 @@ public sealed class GenshinGameSessionAdapter : IGameSessionAdapter
     private readonly Func<IReadOnlyList<string>> readLaunchArguments;
     private readonly Func<bool> read120FpsOnLaunch;
     private readonly object stateSync = new();
+    private string? activeRoot;
+    private string? pendingRoot;
     private string? version;
     private GenshinLaunchFailureReason lastLaunchFailureReason;
     private bool lastLaunchUsed120Fps;
@@ -142,20 +144,44 @@ public sealed class GenshinGameSessionAdapter : IGameSessionAdapter
         try
         {
             var roots = discover();
-            if (roots.GameRoot is null)
+            var discoveredRoot = NormalizeRoot(roots.GameRoot);
+            var known = ReadRoots();
+            if (discoveredRoot is null)
             {
-                StoreObservation(version: null);
-                return new(
-                    LocalReadinessEvidence.NotFound,
-                    ExactProcessPresence.Uncertain,
-                    ExactProcessPresence.Uncertain);
+                return ObserveMissingRoot(known);
             }
 
-            var inspection = inspect(roots.GameRoot);
+            if (known.Active is not null
+                && !string.Equals(known.Active, discoveredRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                var previous = check(known.Active);
+                if (previous.Status is GenshinLaunchStatus.Running)
+                {
+                    ClearPendingRoot();
+                    StoreActiveRoot(known.Active, known.Version);
+                    return RunningEvidence;
+                }
+
+                if (previous.Status is not GenshinLaunchStatus.Ready)
+                {
+                    ClearPendingRoot();
+                    StoreObservation(version: null);
+                    return ReviewEvidence;
+                }
+
+                if (!string.Equals(known.Pending, discoveredRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    StorePendingRoot(discoveredRoot);
+                    StoreObservation(version: null);
+                    return ReviewEvidence;
+                }
+            }
+
+            var inspection = inspect(discoveredRoot);
             if (inspection.Status is not GenshinInspectionStatus.Ready
                 || string.IsNullOrWhiteSpace(inspection.CanonicalRoot)
                 || !string.Equals(
-                    Path.TrimEndingDirectorySeparator(roots.GameRoot),
+                    discoveredRoot,
                     inspection.CanonicalRoot,
                     StringComparison.OrdinalIgnoreCase))
             {
@@ -167,14 +193,11 @@ public sealed class GenshinGameSessionAdapter : IGameSessionAdapter
             switch (result.Status)
             {
                 case GenshinLaunchStatus.Ready:
-                    StoreObservation(inspection.Version);
+                    StoreActiveRoot(discoveredRoot, inspection.Version);
                     return GameSessionEvidence.ReadyAndAbsent;
                 case GenshinLaunchStatus.Running:
-                    StoreObservation(inspection.Version);
-                    return new(
-                        LocalReadinessEvidence.Ready,
-                        ExactProcessPresence.Absent,
-                        ExactProcessPresence.Present);
+                    StoreActiveRoot(discoveredRoot, inspection.Version);
+                    return RunningEvidence;
                 default:
                     StoreObservation(version: null);
                     return ReviewEvidence;
@@ -195,17 +218,27 @@ public sealed class GenshinGameSessionAdapter : IGameSessionAdapter
             // Discovery is repeated at dispatch time. GenshinLaunchService then performs
             // its own exact revalidation immediately before any normal or elevated start.
             var roots = discover();
-            if (roots.GameRoot is null)
+            var discoveredRoot = NormalizeRoot(roots.GameRoot);
+            if (discoveredRoot is null)
             {
                 StoreLaunchFailure(GenshinLaunchFailureReason.None);
                 return GameLaunchDispatchResult.NeedsReview;
             }
 
-            var inspection = inspect(roots.GameRoot);
+            var known = ReadRoots();
+            if (known.Active is not null
+                && !string.Equals(known.Active, discoveredRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return check(known.Active).Status is GenshinLaunchStatus.Running
+                    ? GameLaunchDispatchResult.AlreadyRunning
+                    : GameLaunchDispatchResult.NeedsReview;
+            }
+
+            var inspection = inspect(discoveredRoot);
             if (inspection.Status is not GenshinInspectionStatus.Ready
                 || string.IsNullOrWhiteSpace(inspection.CanonicalRoot)
                 || !string.Equals(
-                    Path.TrimEndingDirectorySeparator(roots.GameRoot),
+                    discoveredRoot,
                     inspection.CanonicalRoot,
                     StringComparison.OrdinalIgnoreCase))
             {
@@ -233,11 +266,65 @@ public sealed class GenshinGameSessionAdapter : IGameSessionAdapter
         StoreLaunchFailure(result.FailureReason);
         return result.Status switch
         {
-            GenshinLaunchStatus.Running => GameLaunchDispatchResult.Accepted,
+            GenshinLaunchStatus.Running when result.StartedByThisCall => GameLaunchDispatchResult.Accepted,
+            GenshinLaunchStatus.Running => GameLaunchDispatchResult.AlreadyRunning,
             GenshinLaunchStatus.LaunchFailed => GameLaunchDispatchResult.Failed,
             _ => GameLaunchDispatchResult.NeedsReview,
         };
     }
+
+    private GameSessionEvidence ObserveMissingRoot((string? Active, string? Pending, string? Version) known)
+    {
+        if (known.Active is null)
+        {
+            StoreObservation(version: null);
+            return new(
+                LocalReadinessEvidence.NotFound,
+                ExactProcessPresence.Uncertain,
+                ExactProcessPresence.Uncertain);
+        }
+        StoreObservation(version: null);
+        return ReviewEvidence;
+    }
+
+    private (string? Active, string? Pending, string? Version) ReadRoots()
+    {
+        lock (stateSync)
+        {
+            return (activeRoot, pendingRoot, version);
+        }
+    }
+
+    private void StoreActiveRoot(string root, string? observedVersion)
+    {
+        lock (stateSync)
+        {
+            activeRoot = root;
+            pendingRoot = null;
+            version = observedVersion;
+        }
+    }
+
+    private void StorePendingRoot(string root)
+    {
+        lock (stateSync)
+        {
+            pendingRoot = root;
+        }
+    }
+
+    private void ClearPendingRoot()
+    {
+        lock (stateSync)
+        {
+            pendingRoot = null;
+        }
+    }
+
+    private static string? NormalizeRoot(string? root) =>
+        string.IsNullOrWhiteSpace(root)
+            ? null
+            : Path.TrimEndingDirectorySeparator(root);
 
     private void StoreObservation(string? version)
     {
@@ -291,4 +378,9 @@ public sealed class GenshinGameSessionAdapter : IGameSessionAdapter
         LocalReadinessEvidence.NeedsReview,
         ExactProcessPresence.Uncertain,
         ExactProcessPresence.Uncertain);
+
+    private static GameSessionEvidence RunningEvidence { get; } = new(
+        LocalReadinessEvidence.Ready,
+        ExactProcessPresence.Absent,
+        ExactProcessPresence.Present);
 }

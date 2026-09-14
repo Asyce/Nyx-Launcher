@@ -58,7 +58,8 @@ public sealed record PublisherGameInspectionResult
         PublisherGameVersionState versionState,
         string? canonicalRoot = null,
         string? version = null,
-        ValidatedOfficialMaintenanceTarget? maintenanceTarget = null)
+        ValidatedOfficialMaintenanceTarget? maintenanceTarget = null,
+        bool preInstallAvailable = false)
     {
         if (gameId is not ("wuwa" or "ae"))
         {
@@ -109,6 +110,23 @@ public sealed record PublisherGameInspectionResult
                 nameof(maintenanceTarget));
         }
 
+        if (preInstallAvailable
+            && (gameId != "wuwa"
+                || maintenanceTarget is null
+                || (status, reason, versionState) is not (
+                    PublisherGameInspectionStatus.Ready,
+                    PublisherGameInspectionReason.None,
+                    PublisherGameVersionState.Available)
+                    and not (
+                        PublisherGameInspectionStatus.NeedsReview,
+                        PublisherGameInspectionReason.VersionUnavailable,
+                        PublisherGameVersionState.Unavailable)))
+        {
+            throw new ArgumentException(
+                "Pre-install advisory requires a fully validated WuWa installation state.",
+                nameof(preInstallAvailable));
+        }
+
         GameId = gameId;
         Status = status;
         Reason = reason;
@@ -116,6 +134,7 @@ public sealed record PublisherGameInspectionResult
         CanonicalRoot = canonicalRoot;
         Version = version;
         MaintenanceTarget = maintenanceTarget;
+        PreInstallAvailable = preInstallAvailable;
     }
 
     public string GameId { get; }
@@ -131,6 +150,8 @@ public sealed record PublisherGameInspectionResult
     public string? Version { get; }
 
     public ValidatedOfficialMaintenanceTarget? MaintenanceTarget { get; }
+
+    public bool PreInstallAvailable { get; }
 
     public bool HasFullInstallMaintenanceProof => MaintenanceTarget is not null;
 

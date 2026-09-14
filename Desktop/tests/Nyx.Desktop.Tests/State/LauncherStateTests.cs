@@ -1,9 +1,12 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Nyx.Desktop.Core.AccountStatus;
+using Nyx.Desktop.Core.Exports;
 using Nyx.Desktop.Core.Games;
 using Nyx.Desktop.Core.State;
 using Nyx.Desktop.Core.Features;
 using Nyx.Desktop.Infrastructure.State;
+using Nyx_Desktop_App;
 
 namespace Nyx.Desktop.Tests.State;
 
@@ -13,9 +16,9 @@ public sealed class LauncherStateTests
     public void Official_launch_options_round_trip_only_known_valid_entries()
     {
         var result = LauncherStateMigrations.Read(
-            """{"version":4,"selectedGameId":"zzz","officialLaunchOptions":{"gi":{"rawArguments":"--name \"Traveler One\"","enabled":true},"hsr":{"rawArguments":"--saved while off","enabled":false},"zzz":{"rawArguments":"\"unterminated","enabled":true},"wuwa":7,"ae":{"rawArguments":"--future","enabled":true,"schemaVersion":2},"future":{"rawArguments":"--bad","enabled":true}}}""");
+            """{"version":6,"selectedGameId":"zzz","officialLaunchOptions":{"gi":{"rawArguments":"--name \"Traveler One\"","enabled":true},"hsr":{"rawArguments":"--saved while off","enabled":false},"zzz":{"rawArguments":"\"unterminated","enabled":true},"wuwa":7,"ae":{"rawArguments":"--future","enabled":true,"schemaVersion":2},"future":{"rawArguments":"--bad","enabled":true}}}""");
 
-        Assert.Equal(LauncherStateReadStatus.Loaded, result.Status);
+        Assert.Equal(LauncherStateReadStatus.Migrated, result.Status);
         Assert.Equal("zzz", result.State!.SelectedGameId);
         Assert.Equal(["gi", "hsr", "zzz", "wuwa", "ae"], result.State.OfficialLaunchOptions.Keys);
         Assert.Equal(new OfficialGameLaunchOptions { RawArguments = "--name \"Traveler One\"", Enabled = true }, result.State.OfficialLaunchOptions["gi"]);
@@ -34,9 +37,9 @@ public sealed class LauncherStateTests
     public void Malformed_or_ambiguous_official_launch_options_default_without_replacing_other_state()
     {
         var wrongShape = LauncherStateMigrations.Read(
-            """{"version":4,"selectedGameId":"hsr","officialLaunchOptions":[{"enabled":true}]}""");
+            """{"version":6,"selectedGameId":"hsr","officialLaunchOptions":[{"enabled":true}]}""");
         var duplicate = LauncherStateMigrations.Read(
-            """{"version":4,"selectedGameId":"ae","officialLaunchOptions":{"gi":{"rawArguments":"--one","enabled":true},"gi":{"rawArguments":"--two","enabled":true}}}""");
+            """{"version":6,"selectedGameId":"ae","officialLaunchOptions":{"gi":{"rawArguments":"--one","enabled":true},"gi":{"rawArguments":"--two","enabled":true}}}""");
 
         Assert.Equal("hsr", wrongShape.State!.SelectedGameId);
         Assert.All(wrongShape.State.OfficialLaunchOptions.Values, option => Assert.Equal(new OfficialGameLaunchOptions(), option));
@@ -91,7 +94,7 @@ public sealed class LauncherStateTests
     public void Per_game_panel_visibility_defaults_on_and_round_trips_only_official_games()
     {
         var result = LauncherStateMigrations.Read("""
-        {"version":4,"preferences":{"panelVisibility":{
+        {"version":6,"preferences":{"panelVisibility":{
           "gi":{"showBanners":false,"showRedemptionCodes":true,"showAccountAndExport":false},
           "future":{"showBanners":false}
         }}}
@@ -105,6 +108,75 @@ public sealed class LauncherStateTests
 
         var roundTrip = LauncherStateMigrations.Read(LauncherStateMigrations.Write(result.State));
         Assert.Equal(result.State.Preferences.PanelVisibility, roundTrip.State!.Preferences.PanelVisibility);
+    }
+
+    [Fact]
+    public void Version_five_and_six_start_v7_playtime_empty_and_never_migrate_endfield_history()
+    {
+        var v5 = LauncherStateMigrations.Read("""
+        {"version":5,"playtimeSecondsByGame":{"gi":42},"endfieldPlaytime":{"intervals":[{}]}}
+        """);
+        var v6 = LauncherStateMigrations.Read("""
+        {"version":6,"playtimeSecondsByGame":{"gi":42},"endfieldPlaytime":{"intervals":[{}]}}
+        """);
+
+        Assert.Equal(LauncherStateReadStatus.Migrated, v5.Status);
+        Assert.Equal(LauncherStateReadStatus.Migrated, v6.Status);
+        Assert.Empty(v5.State!.PlaytimeSecondsByGame);
+        Assert.Empty(v6.State!.PlaytimeSecondsByGame);
+        Assert.Contains("\"version\": 7", LauncherStateMigrations.Write(v6.State));
+        Assert.DoesNotContain("endfieldPlaytime", LauncherStateMigrations.Write(v6.State), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void V7_playtime_seconds_round_trip_and_normalization_keep_only_allowed_nonnegative_values()
+    {
+        var result = LauncherStateMigrations.Read("""
+        {
+          "version":7,
+          "customGames":[{"id":"custom-test","name":"Test","executablePath":"C:\\Games\\game.exe","iconPath":"C:\\Games\\icon.png"}],
+          "playtimeSecondsByGame":{
+            "gi":42,
+            "custom-test":7,
+            "hsr":-9223372036854775809,
+            "zzz":9223372036854775808,
+            "future":99,
+            "wuwa":"bad",
+            "ae":1.5
+          }
+        }
+        """);
+
+        var totals = result.State!.PlaytimeSecondsByGame;
+        Assert.Equal(42, totals["gi"]);
+        Assert.Equal(7, totals["custom-test"]);
+        Assert.Equal(0, totals["hsr"]);
+        Assert.Equal(long.MaxValue, totals["zzz"]);
+        Assert.DoesNotContain("future", totals.Keys);
+        Assert.DoesNotContain("wuwa", totals.Keys);
+        Assert.DoesNotContain("ae", totals.Keys);
+
+        var roundTrip = LauncherStateMigrations.Read(LauncherStateMigrations.Write(result.State));
+        Assert.Equal(totals, roundTrip.State!.PlaytimeSecondsByGame);
+        Assert.DoesNotContain("endfieldPlaytime", LauncherStateMigrations.Write(result.State), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void V7_playtime_serialization_has_only_the_total_dictionary()
+    {
+        var written = LauncherStateMigrations.Write(LauncherState.Defaults() with
+        {
+            PlaytimeSecondsByGame = new Dictionary<string, long>
+            {
+                ["gi"] = long.MaxValue,
+            },
+        });
+
+        using var document = JsonDocument.Parse(written);
+        Assert.Equal(7, document.RootElement.GetProperty("version").GetInt32());
+        var playtime = document.RootElement.GetProperty("playtimeSecondsByGame");
+        Assert.Equal(long.MaxValue, playtime.GetProperty("gi").GetInt64());
+        Assert.DoesNotContain("endfieldPlaytime", written, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -124,7 +196,7 @@ public sealed class LauncherStateTests
         var merged = LauncherSettingsStateMerge.Apply(
             latest,
             opened,
-            SettingsEdit(opened, opened.RailOrder, 100) with
+            SettingsEdit(opened, opened.RailOrder) with
             {
                 OpenedPanelVisibility = new(),
                 PanelVisibility = new() { ShowRedemptionCodes = false },
@@ -201,8 +273,8 @@ public sealed class LauncherStateTests
         Assert.DoesNotContain("evil", state.RailOrder);
         Assert.DoesNotContain("custom-duplicate", state.RailOrder);
         Assert.DoesNotContain("custom-duplicate", state.Appearance.Keys);
-        Assert.Equal(120, state.Appearance["gi"].ArtScale);
-        Assert.Equal(170, state.Appearance["custom-good"].ArtScale);
+        Assert.Equal(new GameAppearanceState(), state.Appearance["gi"]);
+        Assert.Equal(new GameAppearanceState(), state.Appearance["custom-good"]);
         Assert.Equal("gi", state.SelectedGameId);
     }
 
@@ -231,11 +303,26 @@ public sealed class LauncherStateTests
         Assert.Equal(["custom-b", "gi", "hsr", "zzz", "wuwa", "ae", "custom-a"], result.State!.RailOrder);
         Assert.Equal("custom-b", result.State.SelectedGameId);
         Assert.Equal(["custom-a", "custom-b"], result.State.CustomGames.Select(static game => game.Id));
-        Assert.Equal(500, result.State.Appearance["gi"].ArtScale);
-        Assert.True(result.State.Appearance["gi"].ArtPinned);
+        Assert.Equal(new GameAppearanceState(), result.State.Appearance["gi"]);
         Assert.True(result.State.Export.IsArmed);
         Assert.Null(result.State.Export.OutputDirectory);
         Assert.Empty(result.State.Export.OutputPaths);
+    }
+
+    [Fact]
+    public void Version_five_does_not_arm_Endfield_from_the_v0_global_export_bit()
+    {
+        var migrated = LauncherStateMigrations.Read(
+            """{"version":0,"export":{"isArmed":true}}""");
+
+        Assert.Equal(LauncherStateReadStatus.Migrated, migrated.Status);
+        Assert.True(migrated.State!.Export.IsArmed);
+        Assert.Equal(
+            ExportKind.None,
+            ExportArmSnapshot.From(
+                migrated.State.Export,
+                "ae",
+                migrated.State.Preferences.FeatureFlags).RequestedKinds);
     }
 
     [Fact]
@@ -254,7 +341,7 @@ public sealed class LauncherStateTests
     public void Hsr_120_fps_preference_is_optional_in_v4_and_round_trips()
     {
         var oldV4 = LauncherStateMigrations.Read("""{"version":4,"selectedGameId":"hsr"}""");
-        Assert.Equal(LauncherStateReadStatus.Loaded, oldV4.Status);
+        Assert.Equal(LauncherStateReadStatus.Migrated, oldV4.Status);
         Assert.False(oldV4.State!.Preferences.Hsr120FpsOnLaunch);
         Assert.False(oldV4.State.Preferences.Genshin120FpsOnLaunch);
 
@@ -272,7 +359,7 @@ public sealed class LauncherStateTests
     public void Genshin_120_fps_preference_is_optional_in_v4_and_round_trips()
     {
         var oldV4 = LauncherStateMigrations.Read("""{"version":4,"selectedGameId":"gi"}""");
-        Assert.Equal(LauncherStateReadStatus.Loaded, oldV4.Status);
+        Assert.Equal(LauncherStateReadStatus.Migrated, oldV4.Status);
         Assert.False(oldV4.State!.Preferences.Genshin120FpsOnLaunch);
 
         var enabled = oldV4.State with
@@ -300,7 +387,7 @@ public sealed class LauncherStateTests
             + "}}";
         var result = LauncherStateMigrations.Read(json);
 
-        Assert.Equal(LauncherStateReadStatus.Loaded, result.Status);
+        Assert.Equal(LauncherStateReadStatus.Migrated, result.Status);
         Assert.Equal(LauncherState.CurrentVersion, result.State!.Version);
         Assert.True(result.State.Preferences.Hsr120FpsOnLaunch);
         Assert.False(result.State.Preferences.Genshin120FpsOnLaunch);
@@ -348,21 +435,19 @@ public sealed class LauncherStateTests
         {
             GameId = "gi",
             OpenedAppearance = new(),
-            Appearance = new() { ArtScale = 125 },
+            Appearance = new() { IconPath = @"C:\Edited\gi.png" },
             RailOrder = opened.RailOrder,
             OpenedManualInstallRoot = null,
             ManualInstallRoot = null,
             OpenedOfficialLaunchOptions = opened.OfficialLaunchOptions["gi"],
             OfficialLaunchOptions = opened.OfficialLaunchOptions["gi"],
             PublisherPasswordSavingEnabled = opened.Preferences.PublisherPasswordSavingEnabled,
-            AutomaticArt = opened.Preferences.FeatureFlags.AutomaticArt,
-            RemoteBannerManifest = opened.Preferences.FeatureFlags.RemoteBannerManifest,
         };
 
         var merged = LauncherSettingsStateMerge.Apply(latest, opened, edit);
 
         Assert.True(merged.Preferences.Hsr120FpsOnLaunch);
-        Assert.Equal(125, merged.Appearance["gi"].ArtScale);
+        Assert.Equal(@"C:\Edited\gi.png", merged.Appearance["gi"].IconPath);
     }
 
     [Fact]
@@ -387,7 +472,8 @@ public sealed class LauncherStateTests
         Assert.False(result.State.Export.Games["zzz"].AchievementsArmed);
         Assert.True(result.State.Export.Games["wuwa"].PullsArmed);
         Assert.False(result.State.Export.Games["wuwa"].AchievementsArmed);
-        Assert.DoesNotContain("ae", result.State.Export.Games.Keys);
+        Assert.True(result.State.Export.Games["ae"].PullsArmed);
+        Assert.False(result.State.Export.Games["ae"].AchievementsArmed);
     }
 
     [Fact]
@@ -410,53 +496,51 @@ public sealed class LauncherStateTests
     }
 
     [Fact]
-    public void Pinned_art_uses_only_a_safe_relative_content_address()
-    {
-        var hash = new string('a', 64);
-        var valid = LauncherStateMigrations.Read(
-            $"{{\"version\":1,\"appearance\":{{\"gi\":{{\"artPinned\":true,\"pinnedArtFile\":\"gi/{hash}.webp\"}}}}}}");
-        Assert.Equal(LauncherStateReadStatus.Migrated, valid.Status);
-        Assert.Equal(LauncherState.CurrentVersion, valid.State!.Version);
-        Assert.Equal($"gi/{hash}.webp", valid.State!.Appearance["gi"].PinnedArtFile);
-        Assert.Contains($"gi/{hash}.webp", LauncherStateMigrations.Write(valid.State), StringComparison.Ordinal);
-
-        var unsafeState = LauncherStateMigrations.Read("""
-        {"version":1,"appearance":{"gi":{"artPinned":true,"pinnedArtFile":"../outside.webp"}}}
-        """);
-        Assert.Null(unsafeState.State!.Appearance["gi"].PinnedArtFile);
-    }
-
-    [Fact]
-    public void Version_one_pinned_variant_is_preserved_for_lazy_protected_copy()
+    public void Legacy_global_and_per_game_art_settings_load_but_disappear_after_save()
     {
         var result = LauncherStateMigrations.Read("""
-        {"version":1,"appearance":{"gi":{"artPinned":true,"artVariant":"citlali-card"}}}
+        {
+          "version":1,
+          "appearance":{"gi":{
+            "iconPath":"C:\\User\\gi.png",
+            "backgroundPath":"C:\\User\\gi.jpg",
+            "automaticArt":false,
+            "artScale":325,
+            "artX":12,
+            "artY":-4,
+            "artVariant":"old-banner",
+            "artFit":"contain",
+            "artPinned":true,
+            "pinnedArtFile":"gi/old.webp"
+          }},
+          "preferences":{"featureFlags":{
+            "remoteBannerManifest":false,
+            "automaticArt":false,
+            "giPulls":false
+          }}
+        }
         """);
 
-        Assert.Equal(LauncherStateReadStatus.Migrated, result.Status);
-        Assert.Equal(LauncherState.CurrentVersion, result.State!.Version);
-        Assert.True(result.State.Appearance["gi"].ArtPinned);
-        Assert.Equal("citlali-card", result.State.Appearance["gi"].ArtVariant);
-        Assert.Null(result.State.Appearance["gi"].PinnedArtFile);
-    }
+        Assert.True(result.IsUsable);
+        Assert.Equal(@"C:\User\gi.png", result.State!.Appearance["gi"].IconPath);
+        Assert.Equal(@"C:\User\gi.jpg", result.State.Appearance["gi"].BackgroundPath);
+        Assert.Equal(new GameAppearanceState
+        {
+            IconPath = @"C:\User\gi.png",
+            BackgroundPath = @"C:\User\gi.jpg",
+        }, result.State.Appearance["gi"]);
 
-    [Fact]
-    public void Rolled_over_version_one_pin_stays_pending_until_its_exact_variant_returns()
-    {
-        var migrated = LauncherStateMigrations.Read("""
-        {"version":1,"appearance":{"gi":{"artPinned":true,"artVariant":"old-banner-art"}}}
-        """);
-        var appearance = migrated.State!.Appearance["gi"];
-
-        Assert.Equal(
-            LauncherPinnedArtMigrationStatus.Pending,
-            LauncherPinnedArtMigration.Evaluate(appearance, protectedFileValid: false, ["new-banner-art"]));
-        Assert.True(appearance.ArtPinned);
-        Assert.Equal("old-banner-art", appearance.ArtVariant);
-        Assert.Null(appearance.PinnedArtFile);
-        Assert.Equal(
-            LauncherPinnedArtMigrationStatus.AvailableForProtection,
-            LauncherPinnedArtMigration.Evaluate(appearance, protectedFileValid: false, ["old-banner-art"]));
+        var written = LauncherStateMigrations.Write(result.State);
+        foreach (var retired in new[]
+                 {
+                     "remoteBannerManifest", "automaticArt", "artScale", "artX", "artY",
+                     "artVariant", "artFit", "artPinned", "pinnedArtFile",
+                 })
+        {
+            Assert.DoesNotContain(retired, written, StringComparison.OrdinalIgnoreCase);
+        }
+        Assert.Contains("iconPath", written, StringComparison.Ordinal);
+        Assert.Contains("backgroundPath", written, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -507,6 +591,32 @@ public sealed class LauncherStateTests
         Assert.Equal(LauncherStateReadStatus.Loaded, roundTrip.Status);
         Assert.False(roundTrip.State!.Preferences.FeatureFlags.ZzzPulls);
         Assert.False(roundTrip.State.Preferences.FeatureFlags.WuWaPulls);
+    }
+
+    [Fact]
+    public void Version_five_activates_Endfield_pulls_once_and_then_preserves_user_choices()
+    {
+        var migrated = LauncherStateMigrations.Read("""
+        {"version":4,"preferences":{"featureFlags":{"giPulls":false,"endfieldPulls":false,"endfieldAchievements":true}}}
+        """);
+
+        Assert.Equal(LauncherStateReadStatus.Migrated, migrated.Status);
+        Assert.False(migrated.State!.Preferences.FeatureFlags.GiPulls);
+        Assert.True(migrated.State.Preferences.FeatureFlags.EndfieldPulls);
+        Assert.False(migrated.State.Preferences.FeatureFlags.EndfieldAchievements);
+
+        var chosenOff = migrated.State with
+        {
+            Preferences = migrated.State.Preferences with
+            {
+                FeatureFlags = migrated.State.Preferences.FeatureFlags with { EndfieldPulls = false },
+            },
+        };
+        var roundTrip = LauncherStateMigrations.Read(LauncherStateMigrations.Write(chosenOff));
+
+        Assert.Equal(LauncherStateReadStatus.Loaded, roundTrip.Status);
+        Assert.False(roundTrip.State!.Preferences.FeatureFlags.EndfieldPulls);
+        Assert.False(roundTrip.State.Preferences.FeatureFlags.EndfieldAchievements);
     }
 
     [Fact]
@@ -888,7 +998,7 @@ public sealed class LauncherStateTests
     }
 
     [Fact]
-    public void Retired_official_news_flag_is_accepted_but_not_written_again()
+    public void Retired_feature_flags_are_accepted_but_not_written_again()
     {
         var result = LauncherStateMigrations.Read("""
         {"version":1,"preferences":{"featureFlags":{"officialNews":false,"remoteBannerManifest":true}}}
@@ -898,7 +1008,9 @@ public sealed class LauncherStateTests
         var state = Assert.IsType<LauncherState>(result.State);
         var written = LauncherStateMigrations.Write(state);
         Assert.DoesNotContain("officialNews", written, StringComparison.OrdinalIgnoreCase);
-        Assert.True(state.Preferences.FeatureFlags.RemoteBannerManifest);
+        Assert.DoesNotContain("remoteBannerManifest", written, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("automaticArt", written, StringComparison.OrdinalIgnoreCase);
+        Assert.True(state.Preferences.FeatureFlags.GiPulls);
     }
 
     [Fact]
@@ -943,8 +1055,8 @@ public sealed class LauncherStateTests
                 CustomGames = state.CustomGames.Append(concurrentGame).ToArray(),
                 RailOrder = state.RailOrder.Append(concurrentGame.Id).ToArray(),
                 Appearance = state.Appearance
-                    .Append(new KeyValuePair<string, GameAppearanceState>("gi", new() { ArtX = 88 }))
-                    .Append(new KeyValuePair<string, GameAppearanceState>("hsr", new() { ArtScale = 175 }))
+                    .Append(new KeyValuePair<string, GameAppearanceState>("gi", new() { BackgroundPath = @"C:\Concurrent\gi.jpg" }))
+                    .Append(new KeyValuePair<string, GameAppearanceState>("hsr", new() { IconPath = @"C:\Concurrent\hsr.png" }))
                     .ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal),
                 Preferences = state.Preferences with
                 {
@@ -958,14 +1070,14 @@ public sealed class LauncherStateTests
             settingsStore.Update(latest => LauncherSettingsStateMerge.Apply(
                 latest,
                 opened,
-                SettingsEdit(opened, opened.RailOrder, artScale: 140)));
+                SettingsEdit(opened, opened.RailOrder, iconPath: @"C:\Edited\gi.png")));
 
             var saved = settingsStore.Load().State!;
             Assert.Contains(saved.CustomGames, game => game.Id == concurrentGame.Id);
             Assert.Contains(concurrentGame.Id, saved.RailOrder);
-            Assert.Equal(175, saved.Appearance["hsr"].ArtScale);
-            Assert.Equal(140, saved.Appearance["gi"].ArtScale);
-            Assert.Equal(88, saved.Appearance["gi"].ArtX);
+            Assert.Equal(@"C:\Concurrent\hsr.png", saved.Appearance["hsr"].IconPath);
+            Assert.Equal(@"C:\Edited\gi.png", saved.Appearance["gi"].IconPath);
+            Assert.Equal(@"C:\Concurrent\gi.jpg", saved.Appearance["gi"].BackgroundPath);
             Assert.False(saved.Preferences.StayVisibleAfterLaunch);
             Assert.False(saved.Preferences.PublisherPasswordSavingEnabled);
             Assert.Equal(@"D:\NyxData", saved.Preferences.DataDirectory);
@@ -1048,8 +1160,6 @@ public sealed class LauncherStateTests
                 OpenedOfficialLaunchOptions = openedOptions["ae"],
                 OfficialLaunchOptions = editedOptions,
                 PublisherPasswordSavingEnabled = opened.Preferences.PublisherPasswordSavingEnabled,
-                AutomaticArt = opened.Preferences.FeatureFlags.AutomaticArt,
-                RemoteBannerManifest = opened.Preferences.FeatureFlags.RemoteBannerManifest,
             });
 
         Assert.Equal(@"D:\Edited\Endfield", merged.Preferences.ManualInstallRoots["ae"]);
@@ -1081,7 +1191,7 @@ public sealed class LauncherStateTests
             settingsStore.Update(latest => LauncherSettingsStateMerge.Apply(
                 latest,
                 opened,
-                SettingsEdit(opened, localOrder, artScale: 130)));
+                SettingsEdit(opened, localOrder)));
 
             var saved = settingsStore.Load().State!;
             Assert.Equal(localOrder, saved.RailOrder.Take(localOrder.Length));
@@ -1122,7 +1232,6 @@ public sealed class LauncherStateTests
                 SettingsEdit(
                     opened,
                     opened.RailOrder,
-                    artScale: 100,
                     gameId: custom.Id,
                     customGame: custom with { Name = "Locally edited name" })));
 
@@ -1193,7 +1302,6 @@ public sealed class LauncherStateTests
                     SettingsEdit(
                         opened,
                         opened.RailOrder,
-                        artScale: 100,
                         gameId: editedGame.Id,
                         customGame: editedGame with
                         {
@@ -1380,6 +1488,141 @@ public sealed class LauncherStateTests
     }
 
     [Fact]
+    public void Controller_reset_preserves_the_newest_validated_playtime_snapshot()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nyx-state-controller-playtime-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new LauncherStateStore(directory);
+            store.Save(LauncherState.Defaults() with
+            {
+                PlaytimeSecondsByGame = new Dictionary<string, long>
+                {
+                    ["gi"] = 10,
+                },
+            });
+            var controller = new LauncherStateController(store);
+
+            Assert.True(controller.TryReset(new Dictionary<string, long>
+            {
+                ["gi"] = 99,
+                ["hsr"] = 4,
+                ["custom-removed"] = 12,
+            }));
+
+            var saved = store.Load().State!;
+            Assert.Equal("gi", saved.SelectedGameId);
+            Assert.Equal(
+                new Dictionary<string, long> { ["gi"] = 99, ["hsr"] = 4 },
+                saved.PlaytimeSecondsByGame);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Store_reset_without_a_snapshot_preserves_current_playtime_and_cleanup_safety()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nyx-state-reset-playtime-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new LauncherStateStore(directory);
+            store.Save(LauncherState.Defaults() with
+            {
+                SelectedGameId = "hsr",
+                PlaytimeSecondsByGame = new Dictionary<string, long>
+                {
+                    ["gi"] = 42,
+                    ["hsr"] = 7,
+                },
+                Preferences = LauncherState.Defaults().Preferences with
+                {
+                    FeatureFlags = LauncherFeatureFlags.Defaults() with
+                    {
+                        HoyoLabAccountAccess = true,
+                        HoyoLabAccountCleanupPending = true,
+                    },
+                },
+            });
+
+            var reset = store.ResetToDefaults();
+
+            Assert.True(reset.IsUsable);
+            var saved = store.Load().State!;
+            Assert.Equal("gi", saved.SelectedGameId);
+            Assert.Equal(
+                new Dictionary<string, long> { ["gi"] = 42, ["hsr"] = 7 },
+                saved.PlaytimeSecondsByGame);
+            Assert.True(saved.Preferences.FeatureFlags.HoyoLabAccountCleanupPending);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("HoYoLAB")]
+    [InlineData("SKPORT")]
+    public void Interrupted_reset_preserves_reconciled_cleanup_safety_in_backup(string provider)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nyx-state-reset-cleanup-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new LauncherStateStore(directory);
+            var primaryFlags = provider switch
+            {
+                "HoYoLAB" => LauncherFeatureFlags.Defaults() with { HoyoLabAccountAccess = true },
+                "SKPORT" => LauncherFeatureFlags.Defaults() with { SkportAccountAccess = true },
+                _ => throw new ArgumentOutOfRangeException(nameof(provider)),
+            };
+            var backupFlags = provider switch
+            {
+                "HoYoLAB" => LauncherFeatureFlags.Defaults() with { HoyoLabAccountCleanupPending = true },
+                "SKPORT" => LauncherFeatureFlags.Defaults() with { SkportAccountCleanupPending = true },
+                _ => throw new ArgumentOutOfRangeException(nameof(provider)),
+            };
+            File.WriteAllText(store.StatePath, LauncherStateMigrations.Write(
+                LauncherState.Defaults() with
+                {
+                    SelectedGameId = "hsr",
+                    Preferences = LauncherState.Defaults().Preferences with { FeatureFlags = primaryFlags },
+                }));
+            File.WriteAllText(store.BackupPath, LauncherStateMigrations.Write(
+                LauncherState.Defaults() with
+                {
+                    SelectedGameId = "zzz",
+                    Preferences = LauncherState.Defaults().Preferences with { FeatureFlags = backupFlags },
+                }));
+
+            using (new FileStream(store.StatePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                var exception = Record.Exception(() => store.ResetToDefaults());
+                Assert.True(exception is IOException or UnauthorizedAccessException);
+            }
+
+            var recovery = LauncherStateMigrations.Read(File.ReadAllText(store.BackupPath)).State!;
+            Assert.Equal("hsr", recovery.SelectedGameId);
+            if (provider == "HoYoLAB")
+            {
+                Assert.True(recovery.Preferences.FeatureFlags.HoyoLabAccountCleanupPending);
+                Assert.False(recovery.Preferences.FeatureFlags.HoyoLabAccountAccess);
+            }
+            else
+            {
+                Assert.True(recovery.Preferences.FeatureFlags.SkportAccountCleanupPending);
+                Assert.False(recovery.Preferences.FeatureFlags.SkportAccountAccess);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Recovered_backup_does_not_silently_authorize_replacing_bad_primary()
     {
         var directory = Path.Combine(Path.GetTempPath(), "nyx-state-recovery-block-" + Guid.NewGuid().ToString("N"));
@@ -1407,6 +1650,121 @@ public sealed class LauncherStateTests
                 "launcher-state-v1.json.recovery.*"));
             Assert.Equal(malformed, File.ReadAllText(recoveryCopy));
             Assert.True(store.CanSave);
+            Assert.Equal("hsr", store.Load().State!.SelectedGameId);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Prepared_restore_keeps_captured_target_when_playtime_save_rotates_backup()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nyx-state-prepared-restore-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new LauncherStateStore(directory);
+            var capturedGame = new CustomGameDefinition
+            {
+                Id = "custom-captured",
+                Name = "Captured",
+                ExecutablePath = @"C:\Games\captured.exe",
+                IconPath = @"C:\Games\captured.png",
+            };
+            var rotatedGame = new CustomGameDefinition
+            {
+                Id = "custom-rotated",
+                Name = "Rotated",
+                ExecutablePath = @"C:\Games\rotated.exe",
+                IconPath = @"C:\Games\rotated.png",
+            };
+            var captured = LauncherCustomGameStateMerge.Add(
+                LauncherState.Defaults() with { SelectedGameId = "hsr" },
+                capturedGame);
+            var primary = LauncherCustomGameStateMerge.Add(
+                LauncherState.Defaults() with { SelectedGameId = "ae" },
+                rotatedGame);
+            store.Save(captured);
+            store.Save(primary);
+
+            var preparedResult = store.PrepareLastKnownGoodRestore(out var prepared);
+            Assert.True(preparedResult.IsUsable);
+            Assert.NotNull(prepared);
+            Assert.Equal("custom-captured", Assert.Single(prepared.Target.CustomGames).Id);
+
+            store.Update(state => state with
+            {
+                SelectedGameId = "zzz",
+                PlaytimeSecondsByGame = new Dictionary<string, long> { ["gi"] = 41 },
+            });
+            var restored = store.CommitPreparedLastKnownGoodRestore(
+                prepared,
+                new Dictionary<string, long> { ["gi"] = 99 });
+
+            Assert.Equal(LauncherStateReadStatus.Recovered, restored.Status);
+            Assert.Equal(prepared.Target.SelectedGameId, restored.State!.SelectedGameId);
+            Assert.Equal("custom-captured", Assert.Single(restored.State.CustomGames).Id);
+            Assert.Equal(99, restored.State.PlaytimeSecondsByGame["gi"]);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Controller_prepared_restore_allows_only_playtime_to_change_before_commit()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nyx-state-controller-prepared-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new LauncherStateStore(directory);
+            store.Save(LauncherState.Defaults() with { SelectedGameId = "hsr" });
+            store.Save(LauncherState.Defaults() with { SelectedGameId = "zzz" });
+            var controller = new LauncherStateController(store);
+            var expected = controller.Snapshot;
+            var preparedResult = controller.PrepareLastKnownGoodRestore(out var prepared);
+            Assert.True(preparedResult.IsUsable);
+            Assert.NotNull(prepared);
+
+            Assert.True(controller.TryUpdate(state => state with
+            {
+                PlaytimeSecondsByGame = new Dictionary<string, long> { ["gi"] = 41 },
+            }));
+            Assert.True(controller.TryCommitPreparedRestore(
+                prepared,
+                expected,
+                new Dictionary<string, long> { ["gi"] = 99 },
+                out var failure));
+
+            Assert.Equal(LauncherStateUpdateFailure.None, failure);
+            Assert.Equal("hsr", controller.Snapshot.SelectedGameId);
+            Assert.Equal(99, controller.Snapshot.PlaytimeSecondsByGame["gi"]);
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Controller_reserved_replace_rejects_a_concurrent_settings_mutation()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nyx-state-controller-conflict-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new LauncherStateStore(directory);
+            store.Save(LauncherState.Defaults());
+            var controller = new LauncherStateController(store);
+            var expected = controller.Snapshot;
+            var target = expected with { SelectedGameId = "ae" };
+            Assert.True(controller.TryUpdate(state => state with { SelectedGameId = "hsr" }));
+
+            Assert.False(controller.TryReplaceSettings(expected, target, out var failure));
+
+            Assert.Equal(LauncherStateUpdateFailure.ConcurrentMutation, failure);
+            Assert.Equal("hsr", controller.Snapshot.SelectedGameId);
             Assert.Equal("hsr", store.Load().State!.SelectedGameId);
         }
         finally
@@ -1514,25 +1872,6 @@ public sealed class LauncherStateTests
         return Process.Start(start) ?? throw new InvalidOperationException("Could not start the state worker.");
     }
 
-    [Theory]
-    [InlineData(null, "cover")]
-    [InlineData("COVER", "cover")]
-    [InlineData("contain", "contain")]
-    [InlineData("fill", "fill")]
-    [InlineData("unsafe-fit", "cover")]
-    public void Pinned_art_fit_migrates_and_round_trips_safely(string? savedFit, string expected)
-    {
-        var fitJson = savedFit is null ? string.Empty : $",\"artFit\":\"{savedFit}\"";
-        var result = LauncherStateMigrations.Read(
-            $"{{\"version\":2,\"appearance\":{{\"gi\":{{\"artPinned\":true{fitJson}}}}}}}");
-
-        Assert.Equal(LauncherStateReadStatus.Migrated, result.Status);
-        Assert.Equal(expected, result.State!.Appearance["gi"].ArtFit);
-        var roundTrip = LauncherStateMigrations.Read(LauncherStateMigrations.Write(result.State));
-        Assert.Equal(LauncherStateReadStatus.Loaded, roundTrip.Status);
-        Assert.Equal(expected, roundTrip.State!.Appearance["gi"].ArtFit);
-    }
-
     [Fact]
     public void Reset_order_restores_official_then_custom_creation_order_without_deleting_data()
     {
@@ -1545,7 +1884,7 @@ public sealed class LauncherStateTests
             CustomGames = [second, first],
             Appearance = new Dictionary<string, GameAppearanceState>
             {
-                [second.Id] = new() { ArtScale = 325 },
+                [second.Id] = new() { BackgroundPath = @"C:\Art\second.jpg" },
             },
         };
 
@@ -1554,7 +1893,7 @@ public sealed class LauncherStateTests
         Assert.Equal(["gi", "hsr", "zzz", "wuwa", "ae", first.Id, second.Id], reset.RailOrder);
         Assert.Equal(second.Id, reset.SelectedGameId);
         Assert.Equal(state.CustomGames, reset.CustomGames);
-        Assert.Equal(325, reset.Appearance[second.Id].ArtScale);
+        Assert.Equal(@"C:\Art\second.jpg", reset.Appearance[second.Id].BackgroundPath);
     }
 
     [Fact]
@@ -1581,13 +1920,34 @@ public sealed class LauncherStateTests
         string id,
         long creationOrder,
         string? executablePath = null) => new()
+        {
+            Id = id,
+            Name = id,
+            ExecutablePath = executablePath ?? $@"C:\Games\{id}.exe",
+            IconPath = $@"C:\Games\{id}.png",
+            CreationOrder = creationOrder,
+        };
+
+    private static IEnumerable<string> PropertyNames(JsonElement value)
     {
-        Id = id,
-        Name = id,
-        ExecutablePath = executablePath ?? $@"C:\Games\{id}.exe",
-        IconPath = $@"C:\Games\{id}.png",
-        CreationOrder = creationOrder,
-    };
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in value.EnumerateObject())
+            {
+                yield return property.Name;
+                foreach (var name in PropertyNames(property.Value))
+                    yield return name;
+            }
+        }
+        else if (value.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var child in value.EnumerateArray())
+            {
+                foreach (var name in PropertyNames(child))
+                    yield return name;
+            }
+        }
+    }
 
     private static void AssertUniqueExecutableIdentities(IReadOnlyList<CustomGameDefinition> games)
     {
@@ -1602,33 +1962,31 @@ public sealed class LauncherStateTests
     private static LauncherSettingsEdit SettingsEdit(
         LauncherState opened,
         IReadOnlyList<string> railOrder,
-        int artScale,
+        string? iconPath = null,
         string gameId = "gi",
         CustomGameDefinition? customGame = null) => new()
-    {
-        GameId = gameId,
-        OpenedAppearance = opened.Appearance.TryGetValue(gameId, out var appearance)
+        {
+            GameId = gameId,
+            OpenedAppearance = opened.Appearance.TryGetValue(gameId, out var appearance)
             ? appearance
             : new GameAppearanceState(),
-        Appearance = new GameAppearanceState { ArtScale = artScale },
-        CustomGame = customGame,
-        RailOrder = railOrder,
-        OpenedManualInstallRoot = opened.Preferences.ManualInstallRoots.TryGetValue(gameId, out var root)
+            Appearance = new GameAppearanceState { IconPath = iconPath },
+            CustomGame = customGame,
+            RailOrder = railOrder,
+            OpenedManualInstallRoot = opened.Preferences.ManualInstallRoots.TryGetValue(gameId, out var root)
             ? root
             : gameId == "ae" ? opened.Preferences.EndfieldInstallRoot : null,
-        ManualInstallRoot = opened.Preferences.ManualInstallRoots.TryGetValue(gameId, out root)
+            ManualInstallRoot = opened.Preferences.ManualInstallRoots.TryGetValue(gameId, out root)
             ? root
             : gameId == "ae" ? opened.Preferences.EndfieldInstallRoot : null,
-        OpenedOfficialLaunchOptions = opened.OfficialLaunchOptions.TryGetValue(gameId, out var options)
+            OpenedOfficialLaunchOptions = opened.OfficialLaunchOptions.TryGetValue(gameId, out var options)
             ? options
             : null,
-        OfficialLaunchOptions = opened.OfficialLaunchOptions.TryGetValue(gameId, out options)
+            OfficialLaunchOptions = opened.OfficialLaunchOptions.TryGetValue(gameId, out options)
             ? options
             : null,
-        PublisherPasswordSavingEnabled = opened.Preferences.PublisherPasswordSavingEnabled,
-        AutomaticArt = opened.Preferences.FeatureFlags.AutomaticArt,
-        RemoteBannerManifest = opened.Preferences.FeatureFlags.RemoteBannerManifest,
-    };
+            PublisherPasswordSavingEnabled = opened.Preferences.PublisherPasswordSavingEnabled,
+        };
 
     private static string FindStateWorker()
     {

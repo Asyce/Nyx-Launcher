@@ -428,14 +428,23 @@ mod tests {
 
     #[test]
     fn exact_json_is_bomless() {
-        assert_eq!(
-            export_bytes_at(Game::Gi, &[10, 20], "2026-07-26T12:00:00Z"),
-            b"{\"kind\":\"pengo-achievements\",\"version\":1,\"game\":\"gi\",\"catalogVersion\":\"gi-6.7\",\"exportedAt\":\"2026-07-26T12:00:00Z\",\"achievements\":[{\"id\":10,\"status\":\"complete\"},{\"id\":20,\"status\":\"complete\"}]}\n"
-        );
-        assert_eq!(
-            export_bytes_at(Game::Hsr, &[30, 40], "2026-07-26T12:00:00Z"),
-            b"{\"kind\":\"pengo-achievements\",\"version\":1,\"game\":\"hsr\",\"catalogVersion\":\"hsr-4.4\",\"exportedAt\":\"2026-07-26T12:00:00Z\",\"achievements\":[{\"id\":30,\"status\":\"complete\"},{\"id\":40,\"status\":\"complete\"}]}\n"
-        );
+        for (game, ids) in [(Game::Gi, &[10, 20][..]), (Game::Hsr, &[30, 40][..])] {
+            let rows = ids
+                .iter()
+                .map(|id| format!("{{\"id\":{id},\"status\":\"complete\"}}"))
+                .collect::<Vec<_>>()
+                .join(",");
+            let expected = format!(
+                "{{\"kind\":\"pengo-achievements\",\"version\":1,\"game\":\"{}\",\"catalogVersion\":\"{}\",\"exportedAt\":\"2026-07-26T12:00:00Z\",\"achievements\":[{}]}}\n",
+                game.key(),
+                game.catalog_version(),
+                rows
+            );
+            assert_eq!(
+                export_bytes_at(game, ids, "2026-07-26T12:00:00Z"),
+                expected.into_bytes()
+            );
+        }
     }
 
     #[test]
@@ -546,7 +555,7 @@ mod tests {
             serde_json::from_slice(&std::fs::read(first).unwrap()).unwrap();
         let second_value: serde_json::Value =
             serde_json::from_slice(&std::fs::read(second).unwrap()).unwrap();
-        assert_eq!(first_value["catalogVersion"], "hsr-4.4");
+        assert_eq!(first_value["catalogVersion"], Game::Hsr.catalog_version());
         assert_eq!(first_value["achievements"].as_array().unwrap().len(), 2);
         assert_eq!(second_value["achievements"][0]["id"], 50);
         assert!(

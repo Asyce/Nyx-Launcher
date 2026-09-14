@@ -1,4 +1,5 @@
 using Microsoft.UI.Windowing;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppLifecycle;
 using System.Diagnostics;
@@ -18,6 +19,7 @@ using Nyx.Desktop.Infrastructure.Cache;
 using Nyx.Desktop.Infrastructure.Exports;
 using Nyx.Desktop.Infrastructure.Hoyo;
 using Nyx.Desktop.Infrastructure.Launching;
+using Nyx.Desktop.Infrastructure.Playtime;
 using Nyx.Desktop.Infrastructure.PublisherMaintenance;
 using Nyx.Desktop.Infrastructure.PublisherGames;
 using Nyx.Desktop.Infrastructure.Sessions;
@@ -31,11 +33,13 @@ public partial class App : Application
 {
     private const string MainApplicationId = "Pengo.Nyx.Desktop";
     private const string MainInstanceKey = "Pengo.Nyx.Desktop.Main";
+    private const uint DeviceNotifyCallback = 2;
 
     private AppInstance? _currentInstance;
     private Window? _window;
     private GameSessionCoordinator? _sessions;
     private GameSessionRefreshPump? _sessionRefresh;
+    private GamePlaytimeService? _gamePlaytime;
     private LauncherBannersContentService? _launcherBanners;
     private LauncherCacheService? _cache;
     private LauncherRecoveryService? _recovery;
@@ -47,11 +51,24 @@ public partial class App : Application
     private PublisherAccountService? _publisherAccounts;
     private Hsr120FpsSetting? _hsr120FpsSetting;
     private GameScreenshotFolderResolver? _screenshotFolders;
-    private bool _accountShutdownStarted;
+    private Genshin120FpsProcessStarter? _genshin120FpsProcessStarter;
+    private readonly CancellationTokenSource _stableUpdateCancellation = new();
+    private Task _stableUpdateTask = Task.CompletedTask;
+    private int _stableUpdateStarted;
+    private bool _stableUpdateHandoffCommitted;
+    private volatile bool _accountShutdownStarted;
     private bool _accountShutdownComplete;
     private CancellationTokenSource? _endfieldDiscoveryCancellation;
+    private Task _endfieldDiscoveryTask = Task.CompletedTask;
     private string? _diagnosticsRoot;
     private string _launchStage = "app-construction";
+    private readonly object _powerCallbackSync = new();
+    private DeviceNotifyCallbackRoutine? _powerCallback;
+    private DispatcherQueue? _powerDispatcher;
+    private nint _powerRegistrationHandle;
+    private int _powerCallbackEnabled;
+    private int _powerCallbacksInFlight;
+    private TaskCompletionSource? _powerCallbacksDrained;
 
     public App()
     {
@@ -83,9 +100,10 @@ public partial class App : Application
     private static string FormatSafeExceptionChain(Exception exception)
     {
         var lines = new List<string>();
-        for (var current = exception; current is not null && lines.Count < 5; current = current.InnerException)
+        var exceptionCount = 0;
+        for (var current = exception; current is not null && exceptionCount < 5; current = current.InnerException, exceptionCount++)
         {
-            lines.Add($"exception-{lines.Count}: {current.GetType().Name} hresult=0x{current.HResult:X8}");
+            lines.Add($"exception-{exceptionCount}: {current.GetType().Name} hresult=0x{current.HResult:X8}");
             var frames = new StackTrace(current, fNeedFileInfo: false).GetFrames();
             if (frames is not null)
             {
@@ -98,6 +116,23 @@ public partial class App : Application
             }
         }
         return string.Join('\n', lines);
+    }
+
+    private void RecordAccountFailure(string provider, string operation, Exception? exception)
+    {
+        try
+        {
+            var folder = _diagnosticsRoot;
+            if (folder is null) return;
+            Directory.CreateDirectory(folder);
+            var details = exception is null ? "No exception supplied." : FormatSafeExceptionChain(exception);
+            // Fixed provider and compiler-supplied method names only; no account,
+            // role, URL, exception message, or browser data enters this record.
+            File.WriteAllText(
+                Path.Combine(folder, "last-account-failure.txt"),
+                $"{DateTimeOffset.UtcNow:O}\nprovider: {provider}\noperation: {operation}\n{details}");
+        }
+        catch (Exception) { }
     }
 
     internal static void SetLaunchStage(string stage)
@@ -136,7 +171,9 @@ public partial class App : Application
             stateStore,
             _cache,
             rediscoverInstalls: RediscoverInstallsAsync,
-            retryContent: RefreshContentAsync);
+            retryContent: RefreshContentAsync,
+            currentPlaytimeTotals: () => _gamePlaytime?.SnapshotTotals()
+                ?? LauncherState.Snapshot.PlaytimeSecondsByGame);
         GenshinInspection = new GenshinInspectionAdapter(
             new WindowsAuthenticodeExecutableMetadataReader());
         GenshinDiscovery = new WindowsGenshinCandidateDiscovery(
@@ -147,13 +184,14 @@ public partial class App : Application
             "Assets",
             "Tools",
             Genshin120HelperPackageIdentity.FileName);
+        _genshin120FpsProcessStarter = new Genshin120FpsProcessStarter(
+            genshin120HelperPath,
+            Genshin120HelperPackageIdentity.Sha256);
         GenshinLaunchService = new GenshinLaunchService(
             new GenshinLaunchIdentityValidator(GenshinInspection),
             new WindowsRunningProcessInspector(),
             new DotNetLaunchProcessStarter(),
-            new Genshin120FpsProcessStarter(
-                genshin120HelperPath,
-                Genshin120HelperPackageIdentity.Sha256));
+            _genshin120FpsProcessStarter);
         GenshinSession = new GenshinGameSessionAdapter(
             GenshinDiscovery,
             GenshinInspection,
@@ -249,15 +287,28 @@ public partial class App : Application
         var adapters = officialAdapters.Concat(customAdapters);
         _sessions = new GameSessionCoordinator(adapters);
         _sessionRefresh = new GameSessionRefreshPump(_sessions);
+        _gamePlaytime = new GamePlaytimeService(
+            LauncherState.Snapshot.PlaytimeSecondsByGame,
+            playtime => LauncherState.TryUpdate(state => state with { PlaytimeSecondsByGame = playtime }),
+            _sessionRefresh);
+        var bannerContentDirectory = Path.Combine(AppContext.BaseDirectory, "Assets", "Content");
+        var bundledBanners = File.ReadAllBytes(Path.Combine(bannerContentDirectory, "launcher-banners-v1.json"));
+        try
+        {
+            var latest = File.ReadAllBytes(Path.Combine(bannerContentDirectory, "launcher-banners-v2.json"));
+            if (LauncherBannersManifestParser.Parse(latest, fallback: true).SchemaVersion == 2) bundledBanners = latest;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException
+            or InvalidOperationException or KeyNotFoundException or System.Text.Json.JsonException)
+        {
+            // The unchanged bundled v1 feed remains the last-resort fallback.
+        }
         _launcherBanners = new LauncherBannersContentService(
-            File.ReadAllBytes(Path.Combine(
-                AppContext.BaseDirectory,
-                "Assets",
-                "Content",
-                "launcher-banners-v1.json")),
+            bundledBanners,
             Path.Combine(LauncherState.DataDirectory, "ContentCache"),
-            new Uri(LauncherBannersTransport.ProductionEndpoint),
-            codesEndpoint: new Uri(LauncherBannersTransport.ProductionCodesEndpoint));
+            new Uri(LauncherBannersTransport.ProductionV2Endpoint),
+            codesEndpoint: new Uri(LauncherBannersTransport.ProductionCodesEndpoint),
+            toolsEndpoint: new Uri(LauncherBannersTransport.ProductionToolsEndpoint));
         var accountFlags = LauncherState.Snapshot.Preferences.FeatureFlags;
         _publisherAccounts = new PublisherAccountService(
             Path.Combine(LauncherState.DataDirectory, "PublisherProfiles"),
@@ -278,7 +329,8 @@ public partial class App : Application
                 TryPersistPublisherCleanupPending(
                     provider,
                     cleanupPending,
-                    accountAccess));
+                    accountAccess),
+            recordAccountFailure: RecordAccountFailure);
         _pullExports = new RoutedPullExportProvider(() =>
         {
             var root = GetManualInstallRoot("wuwa") ?? wuwaRootLocator.LocateRoot();
@@ -309,7 +361,9 @@ public partial class App : Application
             achievementPrepareTimeout: TimeSpan.FromSeconds(30));
         _achievementExportHandoffs = new BoundedAchievementExportHandoffOwner(
             _exports,
-            new AchievementImportBridge(),
+            new AchievementImportBridge(
+                StableUpdateBuildIdentity.PengoSiteOrigin,
+                releaseChannel: StableUpdateBuildIdentity.Channel),
             new WindowsAchievementExportHandoffLauncher());
         _hoyoPublisherStatus = new HoyoPublisherStatusSource(() => new HoyoLocalVersions(
             GenshinSession.Version,
@@ -328,6 +382,11 @@ public partial class App : Application
         _launchStage = "main-window-activation";
         _window.Activate();
         _launchStage = "background-services";
+        _powerDispatcher = _window.DispatcherQueue;
+        if (!TryRegisterSuspendResumeNotifications())
+        {
+            _gamePlaytime.DisableTracking();
+        }
         _sessionRefresh.Start();
         _launcherBanners.Start();
         StartEndfieldSiblingDiscovery(wuwaRootLocator);
@@ -337,21 +396,237 @@ public partial class App : Application
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
 
+    [DllImport("Powrprof.dll")]
+    private static extern uint PowerRegisterSuspendResumeNotification(
+        uint flags,
+        ref DeviceNotifySubscribeParameters recipient,
+        out nint registrationHandle);
+
+    [DllImport("Powrprof.dll")]
+    private static extern uint PowerUnregisterSuspendResumeNotification(
+        nint registrationHandle);
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    private delegate uint DeviceNotifyCallbackRoutine(
+        nint context,
+        uint eventType,
+        nint setting);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct DeviceNotifySubscribeParameters
+    {
+        public DeviceNotifyCallbackRoutine Callback;
+        public nint Context;
+    }
+
+    private bool TryRegisterSuspendResumeNotifications()
+    {
+        _powerCallback = SuspendResumeNotification;
+        var parameters = new DeviceNotifySubscribeParameters
+        {
+            Callback = _powerCallback,
+            Context = 0,
+        };
+        lock (_powerCallbackSync)
+        {
+            _powerCallbackEnabled = 1;
+        }
+
+        try
+        {
+            var result = PowerRegisterSuspendResumeNotification(
+                DeviceNotifyCallback,
+                ref parameters,
+                out var handle);
+            if (result == 0 && handle != 0)
+            {
+                lock (_powerCallbackSync)
+                {
+                    _powerRegistrationHandle = handle;
+                }
+
+                return true;
+            }
+        }
+        catch (Exception)
+        {
+        }
+
+        lock (_powerCallbackSync)
+        {
+            _powerCallbackEnabled = 0;
+            _powerCallback = null;
+        }
+
+        return false;
+    }
+
+    private uint SuspendResumeNotification(nint context, uint eventType, nint setting)
+    {
+        lock (_powerCallbackSync)
+        {
+            if (_powerCallbackEnabled == 0)
+            {
+                return 0;
+            }
+
+            _powerCallbacksInFlight++;
+        }
+
+        try
+        {
+            if (_accountShutdownStarted || _sessionRefresh is not { } refresh)
+            {
+                return 0;
+            }
+
+            switch (GameSessionRefreshPump.ClassifyPowerBroadcast(eventType))
+            {
+                case SystemSuspendResumeEvent.Suspend:
+                    _ = refresh.RequestSystemSuspend();
+                    break;
+
+                case SystemSuspendResumeEvent.AutomaticResume:
+                    if (!refresh.RequestSystemResume())
+                    {
+                        break;
+                    }
+
+                    var dispatcher = _powerDispatcher;
+                    _ = dispatcher?.TryEnqueue(() =>
+                    {
+                        if (!_accountShutdownStarted
+                            && Volatile.Read(ref _powerCallbackEnabled) != 0)
+                        {
+                            _ = RefreshAfterSystemResumeAsync(refresh);
+                        }
+                    });
+                    break;
+            }
+        }
+        catch (Exception)
+        {
+            // The playtime service remains suspended until a reset publication succeeds.
+        }
+        finally
+        {
+            TaskCompletionSource? drained = null;
+            lock (_powerCallbackSync)
+            {
+                _powerCallbacksInFlight--;
+                if (_powerCallbacksInFlight == 0)
+                {
+                    drained = _powerCallbacksDrained;
+                }
+            }
+
+            drained?.TrySetResult();
+        }
+
+        return 0;
+    }
+
+    private async Task RefreshAfterSystemResumeAsync(GameSessionRefreshPump refresh)
+    {
+        try
+        {
+            await refresh.RefreshNowAsync();
+        }
+        catch (Exception)
+        {
+            // The periodic refresh can apply the pending reset publication later.
+        }
+    }
+
+    private Task UnregisterSuspendResumeNotifications()
+    {
+        nint handle;
+        lock (_powerCallbackSync)
+        {
+            _powerCallbackEnabled = 0;
+            handle = _powerRegistrationHandle;
+            _powerRegistrationHandle = 0;
+        }
+
+        var unregistered = handle == 0;
+        if (!unregistered)
+        {
+            try
+            {
+                unregistered = PowerUnregisterSuspendResumeNotification(handle) == 0;
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        lock (_powerCallbackSync)
+        {
+            if (unregistered)
+            {
+                _powerCallback = null;
+            }
+            else if (_powerRegistrationHandle == 0)
+            {
+                // Keep the callback rooted and retry during the next teardown path.
+                _powerRegistrationHandle = handle;
+            }
+
+            if (_powerCallbacksInFlight == 0)
+            {
+                return Task.CompletedTask;
+            }
+
+            _powerCallbacksDrained ??= new(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            return _powerCallbacksDrained.Task;
+        }
+    }
+
     private void CurrentInstance_Activated(object? sender, AppActivationArguments args)
     {
+        if (_accountShutdownStarted) return;
         var window = _window;
         if (window is null) return;
 
-        _ = window.DispatcherQueue.TryEnqueue(window.Activate);
+        _ = window.DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!_accountShutdownStarted) window.Activate();
+        });
     }
 
     private void StartEndfieldSiblingDiscovery(WuWaInstallRootLocator wuwaRootLocator)
     {
         var cancellation = new CancellationTokenSource();
         _endfieldDiscoveryCancellation = cancellation;
-        _ = DiscoverEndfieldSiblingAfterActivationAsync(
+        _endfieldDiscoveryTask = DiscoverEndfieldSiblingAfterActivationAsync(
             wuwaRootLocator,
             cancellation.Token);
+    }
+
+    private void CancelEndfieldSiblingDiscovery()
+    {
+        try { _endfieldDiscoveryCancellation?.Cancel(); }
+        catch (Exception) { }
+    }
+
+    private async Task AwaitEndfieldSiblingDiscoveryAsync()
+    {
+        var cancellation = Interlocked.Exchange(ref _endfieldDiscoveryCancellation, null);
+        var discovery = _endfieldDiscoveryTask;
+        try
+        {
+            await discovery;
+        }
+        catch (Exception)
+        {
+            // Automatic discovery is optional and was already canceled.
+        }
+        finally
+        {
+            cancellation?.Dispose();
+            _endfieldDiscoveryTask = Task.CompletedTask;
+        }
     }
 
     private async Task DiscoverEndfieldSiblingAfterActivationAsync(
@@ -442,6 +717,9 @@ public partial class App : Application
 
     internal GameSessionRefreshPump SessionRefresh =>
         _sessionRefresh ?? throw new InvalidOperationException("Session refresh is not initialized.");
+
+    internal GamePlaytimeService GamePlaytime =>
+        _gamePlaytime ?? throw new InvalidOperationException("Game playtime is not initialized.");
 
     internal SessionUiLifetime SessionUiLifetime { get; } = new();
 
@@ -661,7 +939,8 @@ public partial class App : Application
 
     private void Window_Activated(object sender, WindowActivatedEventArgs args)
     {
-        if (args.WindowActivationState is not WindowActivationState.Deactivated)
+        if (!_accountShutdownStarted
+            && args.WindowActivationState is not WindowActivationState.Deactivated)
         {
             _ = RefreshAfterActivationAsync();
         }
@@ -684,6 +963,18 @@ public partial class App : Application
     {
         var accounts = _publisherAccounts;
         if (accounts is null) return;
+        try
+        {
+            _ = await accounts.ClearSavedHoyoLabPasswordsAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (ObjectDisposedException)
+        {
+            return;
+        }
         foreach (var provider in new[] { "HoYoLAB", "SKPORT" })
         {
             try
@@ -725,6 +1016,16 @@ public partial class App : Application
             {
             }
         }
+        try
+        {
+            _ = await accounts.RetryHoyoLabSyncDeletionsAsync();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     private bool TryPersistPublisherCleanupPending(
@@ -742,9 +1043,15 @@ public partial class App : Application
         args.Cancel = true;
         if (_accountShutdownStarted) return;
         _accountShutdownStarted = true;
+        if (_currentInstance is not null)
+            _currentInstance.Activated -= CurrentInstance_Activated;
+        if (_window is not null)
+            _window.Activated -= Window_Activated;
+        _ = UnregisterSuspendResumeNotifications();
+        if (!_stableUpdateHandoffCommitted) _stableUpdateCancellation.Cancel();
         sender.Hide();
         SessionUiLifetime.Terminate();
-        Interlocked.Exchange(ref _endfieldDiscoveryCancellation, null)?.Cancel();
+        CancelEndfieldSiblingDiscovery();
         _sessionRefresh?.Stop();
         _sessions?.Shutdown();
         _ = ShutDownAccountsAndCloseAsync();
@@ -752,25 +1059,86 @@ public partial class App : Application
 
     private async Task ShutDownAccountsAndCloseAsync()
     {
+        if (_window is MainWindow mainWindow)
+            await DisposeMainPageAsync(mainWindow);
+
+        var bannerShutdown = _launcherBanners is null
+            ? Task.CompletedTask
+            : DisposeLauncherBannersAsync(_launcherBanners);
+        var publisherStatusShutdown = _hoyoPublisherStatus is null
+            ? Task.CompletedTask
+            : DisposePublisherStatusAsync(_hoyoPublisherStatus);
         var wuwaAccountShutdown = _wuwaAccountStatus is null
             ? Task.CompletedTask
             : DisposeWuWaAccountStatusAsync(_wuwaAccountStatus);
         var publisherAccountShutdown = _publisherAccounts is null
             ? Task.CompletedTask
             : DisposePublisherAccountsAsync(_publisherAccounts);
-        var exportShutdown = _exports is null
+        var exportClose = _exports is null
             ? Task.CompletedTask
-            : DisposeExportsAsync(_exports, _pullExports);
-        var achievementHandoffShutdown = _achievementExportHandoffs is null
-            ? Task.CompletedTask
-            : _achievementExportHandoffs.WaitForActiveAsync();
-        await Task.WhenAll(wuwaAccountShutdown, publisherAccountShutdown);
-        await exportShutdown;
-        await achievementHandoffShutdown;
+            : CloseExportsForLauncherAsync(_exports);
+
+        await AwaitEndfieldSiblingDiscoveryAsync();
+        await UnregisterSuspendResumeNotifications();
+        _powerDispatcher = null;
+        _gamePlaytime?.Dispose();
+        if (_sessionRefresh is not null)
+            await DisposeRefreshAsync(_sessionRefresh);
+        if (_sessions is not null)
+            await DisposeSessionsAsync(_sessions);
+        _sessionRefresh = null;
+        _sessions = null;
+        _gamePlaytime = null;
+
+        await Task.WhenAll(
+            bannerShutdown,
+            publisherStatusShutdown,
+            wuwaAccountShutdown,
+            publisherAccountShutdown,
+            _stableUpdateTask,
+            exportClose);
+
+        if (_achievementExportHandoffs is not null)
+            await DisposeAchievementHandoffsAsync(_achievementExportHandoffs);
+        if (_exports is not null)
+            await DisposeExportCoordinatorAsync(_exports);
+        try { _pullExports?.Dispose(); }
+        catch (Exception) { }
+        if (_genshin120FpsProcessStarter is not null)
+            await DisposeGenshin120FpsStarterAsync(_genshin120FpsProcessStarter);
+        await DisposeHoyoPlayExecutorAsync(HoyoPlayExecutor);
+
+        _launcherBanners = null;
+        _hoyoPublisherStatus = null;
+        _wuwaAccountStatus = null;
+        _publisherAccounts = null;
         _exports = null;
         _pullExports = null;
         _achievementExportHandoffs = null;
+        _genshin120FpsProcessStarter = null;
+        _stableUpdateCancellation.Dispose();
         _accountShutdownComplete = true;
+        try
+        {
+            _currentInstance?.UnregisterKey();
+        }
+        catch (Exception)
+        {
+            // Explicit unregistration is best effort; shutdown must still close the window.
+        }
+        _window?.Close();
+    }
+
+    internal void StartStableUpdate(Func<CancellationToken, Task> runUpdate)
+    {
+        ArgumentNullException.ThrowIfNull(runUpdate);
+        if (_accountShutdownStarted || Interlocked.Exchange(ref _stableUpdateStarted, 1) != 0) return;
+        _stableUpdateTask = runUpdate(_stableUpdateCancellation.Token);
+    }
+
+    internal void BeginStableUpdateShutdown()
+    {
+        _stableUpdateHandoffCommitted = true;
         _window?.Close();
     }
 
@@ -783,7 +1151,9 @@ public partial class App : Application
 
         LauncherState.Changed -= LauncherState_Changed;
         SessionUiLifetime.Terminate();
-        Interlocked.Exchange(ref _endfieldDiscoveryCancellation, null)?.Cancel();
+        CancelEndfieldSiblingDiscovery();
+        UnregisterSuspendResumeNotifications().GetAwaiter().GetResult();
+        _powerDispatcher = null;
 
         if (_window is not null)
         {
@@ -792,27 +1162,14 @@ public partial class App : Application
             _window.AppWindow.Closing -= AppWindow_Closing;
         }
 
+        _gamePlaytime?.Dispose();
         _sessionRefresh?.Stop();
         _sessions?.Shutdown();
-        if (_sessionRefresh is not null)
-        {
-            _ = DisposeRefreshAsync(_sessionRefresh);
-        }
-
-        if (_launcherBanners is not null)
-        {
-            _ = DisposeLauncherBannersAsync(_launcherBanners);
-        }
-
-        if (_hoyoPublisherStatus is not null)
-        {
-            _ = DisposePublisherStatusAsync(_hoyoPublisherStatus);
-        }
-
     }
 
     private async Task RefreshAfterActivationAsync()
     {
+        if (_accountShutdownStarted) return;
         WindowReactivated?.Invoke(this, EventArgs.Empty);
 
         try
@@ -837,6 +1194,18 @@ public partial class App : Application
         catch (Exception)
         {
             // Shutdown already blocked new coordinator work.
+        }
+    }
+
+    private static async Task DisposeSessionsAsync(GameSessionCoordinator sessions)
+    {
+        try
+        {
+            await sessions.DisposeAsync();
+        }
+        catch (Exception)
+        {
+            // Admission is closed; adapter cleanup cannot reopen launch work.
         }
     }
 
@@ -888,12 +1257,41 @@ public partial class App : Application
         }
     }
 
-    private static async Task DisposeExportsAsync(
-        ExportCoordinator exports,
-        RoutedPullExportProvider? pulls)
+    private static async Task DisposeMainPageAsync(MainWindow window)
+    {
+        try { await window.ShutDownAsync(); }
+        catch (Exception) { }
+    }
+
+    private static async Task CloseExportsForLauncherAsync(ExportCoordinator exports)
     {
         try { await exports.ShutDownForLauncherCloseAsync(); }
         catch (Exception) { }
-        pulls?.Dispose();
+    }
+
+    private static async Task DisposeAchievementHandoffsAsync(
+        BoundedAchievementExportHandoffOwner handoffs)
+    {
+        try { await handoffs.DisposeAsync(); }
+        catch (Exception) { }
+    }
+
+    private static async Task DisposeExportCoordinatorAsync(ExportCoordinator exports)
+    {
+        try { await exports.DisposeAsync(); }
+        catch (Exception) { }
+    }
+
+    private static async Task DisposeGenshin120FpsStarterAsync(
+        Genshin120FpsProcessStarter starter)
+    {
+        try { await starter.DisposeAsync(); }
+        catch (Exception) { }
+    }
+
+    private static async Task DisposeHoyoPlayExecutorAsync(HoyoPlayHandoffExecutor executor)
+    {
+        try { await executor.DisposeAsync(); }
+        catch (Exception) { }
     }
 }

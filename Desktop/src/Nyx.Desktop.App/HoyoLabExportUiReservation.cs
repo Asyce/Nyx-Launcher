@@ -25,3 +25,40 @@ internal sealed class HoyoLabExportUiReservation
         }
     }
 }
+
+internal static class ExportUiJobRetention
+{
+    public static void RememberLatest<TState>(
+        IDictionary<string, Guid> latestJobs,
+        ISet<Guid> immediateJobs,
+        IDictionary<Guid, TState> handoffs,
+        string gameId,
+        Guid jobId)
+    {
+        if (latestJobs.TryGetValue(gameId, out var previousJobId)
+            && previousJobId != jobId)
+        {
+            immediateJobs.Remove(previousJobId);
+            handoffs.Remove(previousJobId);
+        }
+
+        latestJobs[gameId] = jobId;
+    }
+
+    public static bool TrySetHandoff<TState>(
+        IReadOnlyDictionary<string, Guid> latestJobs,
+        IDictionary<Guid, TState> handoffs,
+        string gameId,
+        Guid jobId,
+        TState state)
+    {
+        if (!latestJobs.TryGetValue(gameId, out var latestJobId)
+            || latestJobId != jobId)
+        {
+            return false;
+        }
+
+        handoffs[jobId] = state;
+        return true;
+    }
+}

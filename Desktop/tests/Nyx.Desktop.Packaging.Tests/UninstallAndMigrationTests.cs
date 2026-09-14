@@ -49,7 +49,7 @@ public sealed class UninstallAndMigrationTests
     {
         using var fixture = new PackageFixture();
         var layout = fixture.CreateLayout();
-        WriteCompleteLayout(layout);
+        // Reach the substitution before any unrelated file deletion.
         var target = SelectRoot(layout, rootName);
         var nested = Path.Combine(target, "race-child");
         var moved = target + "-captured-child";
@@ -77,7 +77,8 @@ public sealed class UninstallAndMigrationTests
                     injected = true;
                 }));
 
-            Assert.True(injected);
+            Assert.True(injected,
+                $"Deletion stopped before the substitution checkpoint (native error {exception.Data["NativeErrorCode"]}): {exception}");
             Assert.Equal("UnsafePath", exception.Code);
             Assert.Equal("outside", File.ReadAllText(sentinel));
             Assert.Equal("owned", File.ReadAllText(Path.Combine(moved, "owned.txt")));
@@ -261,6 +262,7 @@ public sealed class UninstallAndMigrationTests
         Assert.True(defaults.RootElement.GetProperty("retainUserDataOnUninstall").GetBoolean());
         Assert.False(defaults.RootElement.GetProperty("exportPullsArmed").GetBoolean());
         Assert.False(defaults.RootElement.GetProperty("exportAchievementsArmed").GetBoolean());
+        Assert.False(defaults.RootElement.TryGetProperty("automaticArt", out _));
 
         var migrated = LauncherStateMigrations.Read("""
         {"version":0,"selectedGameId":"custom-a","railOrder":["custom-a","gi"],
@@ -285,7 +287,7 @@ public sealed class UninstallAndMigrationTests
 
         var layout = UpdateLayout.ForUserRoots(local, roaming);
 
-        Assert.Equal(NyxUserDataPaths.CanonicalRoot(local), layout.UserDataRoot);
+        Assert.Equal(CoreNyxUserDataPaths.CanonicalRoot(local), layout.UserDataRoot);
         Assert.EndsWith(Path.Combine("Pengo", "Nyx"), layout.UserDataRoot, StringComparison.OrdinalIgnoreCase);
     }
 

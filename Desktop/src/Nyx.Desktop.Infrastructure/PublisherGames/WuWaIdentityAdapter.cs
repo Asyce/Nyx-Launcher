@@ -179,6 +179,41 @@ public sealed class WuWaIdentityAdapter
                 root,
                 launcher.LauncherPath!,
                 launcher.LauncherVersion!);
+            if (rootConfig.Value!.IsPreDownload)
+            {
+                var installedVersion = resource.Value.Version;
+                return Protected(new(
+                    "wuwa",
+                    installedVersion is null
+                        ? PublisherGameInspectionStatus.NeedsReview
+                        : PublisherGameInspectionStatus.Ready,
+                    installedVersion is null
+                        ? PublisherGameInspectionReason.VersionUnavailable
+                        : PublisherGameInspectionReason.None,
+                    installedVersion is null
+                        ? PublisherGameVersionState.Unavailable
+                        : PublisherGameVersionState.Available,
+                    root,
+                    installedVersion,
+                    maintenance,
+                    preInstallAvailable: true),
+                    launcher,
+                    bootstrapProof,
+                    runtimeProof,
+                    () => RemainsCompleteAndStable(
+                        launcher,
+                        bootstrapProof!,
+                        runtimeProof!,
+                        root,
+                        gameRoot,
+                        rootConfigPath,
+                        nestedConfigPath,
+                        resourcePath,
+                        rootConfig.Fingerprint!,
+                        nestedConfig.Fingerprint!,
+                        resource.Fingerprint!));
+            }
+
             if (resource.Value.Version is not null
                 && !string.Equals(
                     rootConfig.Value!.Version,

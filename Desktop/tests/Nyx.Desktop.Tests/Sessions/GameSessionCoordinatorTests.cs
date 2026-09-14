@@ -179,6 +179,172 @@ public sealed class GameSessionCoordinatorTests
         Assert.Equal(1, fixture["gi"].LaunchCount);
     }
 
+    [Fact]
+    public async Task Custom_entry_cannot_be_removed_or_replaced_while_dispatch_is_admitted()
+    {
+        const string gameId = "custom-dispatch-retirement";
+        var fixture = new SessionFixture();
+        var adapter = new FakeSessionAdapter(gameId);
+        var releaseDispatch = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        adapter.Launch = async cancellationToken =>
+        {
+            await releaseDispatch.Task.WaitAsync(cancellationToken);
+            return GameLaunchDispatchResult.Accepted;
+        };
+        await using var coordinator = fixture.CreateCoordinator();
+        Assert.True(coordinator.TryRegisterCustomAdapter(adapter));
+
+        var launch = coordinator.RequestLaunchAsync(gameId).AsTask();
+        await adapter.LaunchEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        Assert.False(coordinator.TryRemoveCustomAdapter(gameId));
+        Assert.False(coordinator.TryRegisterCustomAdapter(new FakeSessionAdapter(gameId)));
+
+        releaseDispatch.TrySetResult();
+        Assert.Equal(GameLaunchRequestOutcome.Accepted,
+            (await launch.WaitAsync(TimeSpan.FromSeconds(1))).Outcome);
+
+        Assert.True(coordinator.TryRemoveCustomAdapter(gameId));
+        var replacement = new FakeSessionAdapter(gameId);
+        Assert.True(coordinator.TryRegisterCustomAdapter(replacement));
+        Assert.Equal(
+            GameLaunchRequestOutcome.Accepted,
+            (await coordinator.RequestLaunchAsync(gameId)).Outcome);
+        Assert.Equal(1, replacement.LaunchCount);
+        Assert.Equal(1, adapter.LaunchCount);
+    }
+
+    [Fact]
+    public async Task Custom_mutation_reservation_refuses_blocked_observation_and_dispatch()
+    {
+        const string observingId = "custom-reserve-observation";
+        const string dispatchingId = "custom-reserve-dispatch";
+        var fixture = new SessionFixture();
+        await using var coordinator = fixture.CreateCoordinator();
+        var observationRelease = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var observing = new FakeSessionAdapter(observingId)
+        {
+            Observe = async cancellationToken =>
+            {
+                await observationRelease.Task.WaitAsync(cancellationToken);
+                return ReadyAbsent;
+            },
+        };
+        var dispatchRelease = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var dispatching = new FakeSessionAdapter(dispatchingId)
+        {
+            Launch = async cancellationToken =>
+            {
+                await dispatchRelease.Task.WaitAsync(cancellationToken);
+                return GameLaunchDispatchResult.Accepted;
+            },
+        };
+        Assert.True(coordinator.TryRegisterCustomAdapter(observing));
+        Assert.True(coordinator.TryRegisterCustomAdapter(dispatching));
+
+        var refresh = coordinator.RefreshAsync(observingId).AsTask();
+        await observing.ObserveEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.False(coordinator.TryReserveCustomAdapterMutations(
+            new Dictionary<string, IGameSessionAdapter?>
+            {
+                [observingId] = new FakeSessionAdapter(observingId),
+            },
+            out _));
+
+        var launch = coordinator.RequestLaunchAsync(dispatchingId).AsTask();
+        await dispatching.LaunchEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.False(coordinator.TryReserveCustomAdapterMutations(
+            new Dictionary<string, IGameSessionAdapter?>
+            {
+                [dispatchingId] = null,
+            },
+            out _));
+
+        observationRelease.TrySetResult();
+        dispatchRelease.TrySetResult();
+        await Task.WhenAll(refresh, launch).WaitAsync(TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task Custom_mutation_reservation_rolls_back_unchanged_or_commits_exact_target()
+    {
+        const string changedId = "custom-reserve-changed";
+        const string addedId = "custom-reserve-added";
+        var fixture = new SessionFixture();
+        await using var coordinator = fixture.CreateCoordinator();
+        var original = new FakeSessionAdapter(changedId);
+        Assert.True(coordinator.TryRegisterCustomAdapter(original));
+        var replacement = new FakeSessionAdapter(changedId);
+        var added = new FakeSessionAdapter(addedId);
+        var mutations = new Dictionary<string, IGameSessionAdapter?>
+        {
+            [changedId] = replacement,
+            [addedId] = added,
+        };
+
+        Assert.True(coordinator.TryReserveCustomAdapterMutations(mutations, out var rollback));
+        Assert.NotNull(rollback);
+        Assert.True(coordinator.TryGetSnapshot(changedId, out _));
+        Assert.False(coordinator.TryGetSnapshot(addedId, out _));
+        Assert.False(coordinator.TryRegisterCustomAdapter(new FakeSessionAdapter(addedId)));
+        Assert.Equal(
+            GameLaunchRequestOutcome.NeedsReview,
+            (await coordinator.RequestLaunchAsync(changedId)).Outcome);
+        rollback.Dispose();
+
+        Assert.Equal(
+            GameLaunchRequestOutcome.Accepted,
+            (await coordinator.RequestLaunchAsync(changedId)).Outcome);
+        Assert.Equal(1, original.LaunchCount);
+        Assert.Equal(0, replacement.LaunchCount);
+
+        Assert.True(coordinator.TryReserveCustomAdapterMutations(mutations, out var commit));
+        Assert.NotNull(commit);
+        commit.Commit();
+        commit.Dispose();
+
+        Assert.True(coordinator.TryGetSnapshot(changedId, out _));
+        Assert.True(coordinator.TryGetSnapshot(addedId, out _));
+        Assert.Equal(
+            GameLaunchRequestOutcome.Accepted,
+            (await coordinator.RequestLaunchAsync(changedId)).Outcome);
+        Assert.Equal(
+            GameLaunchRequestOutcome.Accepted,
+            (await coordinator.RequestLaunchAsync(addedId)).Outcome);
+        Assert.Equal(1, original.LaunchCount);
+        Assert.Equal(1, replacement.LaunchCount);
+        Assert.Equal(1, added.LaunchCount);
+    }
+
+    [Fact]
+    public async Task Process_appearing_between_precheck_and_dispatch_is_not_owned_by_Nyx()
+    {
+        var fixture = new SessionFixture();
+        fixture["gi"].EnqueueObservation(ReadyAbsent);
+        var hooks = new TestHooks
+        {
+            BeforeAdmission = () =>
+            {
+                fixture["gi"].Launch = _ =>
+                    ValueTask.FromResult(GameLaunchDispatchResult.AlreadyRunning);
+                return ValueTask.CompletedTask;
+            },
+        };
+        await using var coordinator = fixture.CreateCoordinator(hooks);
+
+        var result = await coordinator.RequestLaunchAsync("gi");
+
+        Assert.Equal(GameLaunchRequestOutcome.AlreadyRunning, result.Outcome);
+        Assert.Equal(LocalGameStatus.Running, result.Snapshot.Status);
+        Assert.Equal(ExactProcessPresence.Uncertain, result.Snapshot.LastProcessEvidence);
+        Assert.Equal(ExactProcessPresence.Uncertain, result.Snapshot.CurrentRuntimeEvidence);
+        Assert.False(result.Snapshot.CurrentSessionLaunchedByNyx);
+        Assert.Equal(1, fixture["gi"].LaunchCount);
+    }
+
     [Theory]
     [MemberData(nameof(DifferentGamePairs))]
     public async Task Every_different_game_pair_can_dispatch_concurrently(string firstId, string secondId)
@@ -240,6 +406,45 @@ public sealed class GameSessionCoordinatorTests
     }
 
     [Fact]
+    public async Task Launch_and_two_sample_close_durations_preserve_until_an_admitted_relaunch()
+    {
+        var fixture = new SessionFixture();
+        fixture["gi"].EnqueueObservations(
+            ReadyAbsent,
+            ReadyRuntime,
+            ReadyRuntime,
+            ReadyAbsent,
+            ReadyAbsent,
+            ReadyAbsent);
+        await using var coordinator = fixture.CreateCoordinator();
+
+        var launched = await coordinator.RequestLaunchAsync("gi");
+        Assert.Equal(GameLaunchRequestOutcome.Accepted, launched.Outcome);
+        Assert.Null(launched.Snapshot.LastLaunchDetectionDuration);
+
+        fixture.Time.Advance(TimeSpan.FromSeconds(4));
+        var firstRuntime = await coordinator.RefreshAsync("gi");
+        Assert.Equal(TimeSpan.FromSeconds(4), firstRuntime.LastLaunchDetectionDuration);
+
+        fixture.Time.Advance(TimeSpan.FromSeconds(2));
+        var repeatedRuntime = await coordinator.RefreshAsync("gi");
+        Assert.Equal(TimeSpan.FromSeconds(4), repeatedRuntime.LastLaunchDetectionDuration);
+
+        var firstAbsence = await coordinator.RefreshAsync("gi");
+        Assert.Null(firstAbsence.LastCloseDetectionDuration);
+        fixture.Time.Advance(TimeSpan.FromSeconds(1));
+        var closed = await coordinator.RefreshAsync("gi");
+        Assert.Equal(LocalGameStatus.Ready, closed.Status);
+        Assert.Equal(TimeSpan.FromSeconds(1), closed.LastCloseDetectionDuration);
+        Assert.Equal(TimeSpan.FromSeconds(4), closed.LastLaunchDetectionDuration);
+
+        var relaunched = await coordinator.RequestLaunchAsync("gi");
+        Assert.Equal(GameLaunchRequestOutcome.Accepted, relaunched.Outcome);
+        Assert.Null(relaunched.Snapshot.LastLaunchDetectionDuration);
+        Assert.Equal(TimeSpan.FromSeconds(1), relaunched.Snapshot.LastCloseDetectionDuration);
+    }
+
+    [Fact]
     public async Task Bootstrap_without_runtime_fails_only_after_handoff_timeout()
     {
         var fixture = new SessionFixture();
@@ -255,6 +460,7 @@ public sealed class GameSessionCoordinatorTests
 
         Assert.Equal(LocalGameStatus.LaunchFailed, timedOut.Status);
         Assert.Equal(GameSessionFailureReason.StartupTimedOut, timedOut.FailureReason);
+        Assert.False(timedOut.CurrentSessionLaunchedByNyx);
     }
 
     [Fact]
@@ -274,6 +480,7 @@ public sealed class GameSessionCoordinatorTests
         Assert.Equal(1, tooSoon.ConsecutiveAbsentSamples);
         Assert.True(tooSoon.ObservationGeneration > first.ObservationGeneration);
         Assert.Equal(LocalGameStatus.Ready, closed.Status);
+        Assert.Equal(TimeSpan.FromSeconds(1), closed.LastCloseDetectionDuration);
     }
 
     [Fact]
@@ -330,6 +537,7 @@ public sealed class GameSessionCoordinatorTests
 
         Assert.Equal(LocalGameStatus.LaunchFailed, snapshot.Status);
         Assert.Equal(GameSessionFailureReason.StartupTimedOut, snapshot.FailureReason);
+        Assert.False(snapshot.CurrentSessionLaunchedByNyx);
         Assert.Equal(1, fixture["gi"].LaunchCount);
     }
 
@@ -587,6 +795,117 @@ public sealed class GameSessionCoordinatorTests
         Assert.Equal(
             GameLaunchRequestOutcome.CoordinatorStopped,
             (await coordinator.RequestLaunchAsync("ae")).Outcome);
+    }
+
+    [Fact]
+    public async Task Dispose_waits_for_admitted_launch_and_repeated_disposal_is_safe()
+    {
+        var fixture = new SessionFixture();
+        var releaseLaunch = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture["gi"].Launch = _ =>
+        {
+            releaseLaunch.Task.GetAwaiter().GetResult();
+            return ValueTask.FromResult(GameLaunchDispatchResult.Accepted);
+        };
+        await using var coordinator = fixture.CreateCoordinator(
+            adapterCallTimeout: TimeSpan.FromSeconds(2));
+
+        var launch = Task.Run(async () => await coordinator.RequestLaunchAsync("gi"));
+        await fixture["gi"].LaunchEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        var disposals = Enumerable.Range(0, 4)
+            .Select(_ => Task.Run(async () => await coordinator.DisposeAsync()))
+            .ToArray();
+        await Task.Delay(40);
+        Assert.All(disposals, task => Assert.False(task.IsCompleted));
+
+        releaseLaunch.TrySetResult();
+        await Task.WhenAll(disposals.Append(launch)).WaitAsync(TimeSpan.FromSeconds(1));
+        await coordinator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Dispose_waits_for_admitted_refresh_before_disposing_entry_gate()
+    {
+        var fixture = new SessionFixture();
+        var releaseObservation = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture["gi"].Observe = _ =>
+        {
+            releaseObservation.Task.GetAwaiter().GetResult();
+            return ValueTask.FromResult(ReadyAbsent);
+        };
+        await using var coordinator = fixture.CreateCoordinator(
+            adapterCallTimeout: TimeSpan.FromSeconds(2));
+
+        var refresh = Task.Run(async () => await coordinator.RefreshAsync("gi"));
+        await fixture["gi"].ObserveEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        var disposal = Task.Run(async () => await coordinator.DisposeAsync());
+        await Task.Delay(40);
+        Assert.False(disposal.IsCompleted);
+
+        releaseObservation.TrySetResult();
+        await Task.WhenAll(refresh, disposal).WaitAsync(TimeSpan.FromSeconds(1));
+        await coordinator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Dispose_waits_for_resume_worker_release_and_does_not_leak_disposal_errors()
+    {
+        var fixture = new SessionFixture();
+        var resumeApplied = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseResume = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var hooks = new TestHooks
+        {
+            OnResumeApplied = (gameId, _) =>
+            {
+                if (gameId == "gi")
+                {
+                    resumeApplied.TrySetResult();
+                    releaseResume.Task.GetAwaiter().GetResult();
+                }
+            },
+        };
+        await using var coordinator = fixture.CreateCoordinator(hooks);
+
+        var resume = Task.Run(async () => await coordinator.ResetAfterSystemResumeAsync());
+        await resumeApplied.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        var disposal = coordinator.DisposeAsync().AsTask();
+        await Task.Delay(40);
+        Assert.False(disposal.IsCompleted);
+
+        releaseResume.TrySetResult();
+        await Task.WhenAll(resume, disposal).WaitAsync(TimeSpan.FromSeconds(1));
+        await coordinator.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Removed_custom_entry_is_retained_until_admitted_refresh_drains()
+    {
+        const string gameId = "custom-dispose";
+        var fixture = new SessionFixture();
+        var adapter = new FakeSessionAdapter(gameId);
+        var releaseObservation = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        adapter.Observe = _ =>
+        {
+            releaseObservation.Task.GetAwaiter().GetResult();
+            return ValueTask.FromResult(ReadyAbsent);
+        };
+        await using var coordinator = fixture.CreateCoordinator();
+        Assert.True(coordinator.TryRegisterCustomAdapter(adapter));
+
+        var refresh = Task.Run(async () => await coordinator.RefreshAsync(gameId));
+        await adapter.ObserveEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.False(coordinator.TryRemoveCustomAdapter(gameId));
+        Assert.False(coordinator.TryRegisterCustomAdapter(new FakeSessionAdapter(gameId)));
+
+        releaseObservation.TrySetResult();
+        await refresh.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.True(coordinator.TryRemoveCustomAdapter(gameId));
     }
 
     [Fact]

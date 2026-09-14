@@ -13,6 +13,22 @@ public static class LauncherBannersManifestParser
     public static readonly TimeSpan MaximumFutureSkew = TimeSpan.FromMinutes(5);
     private static readonly string[] Games = ["gi", "hsr", "zzz", "wuwa", "ae"];
     private static readonly string[] Regions = ["global", "america", "europe", "asia"];
+    private static readonly LauncherOfficialTool[] ApprovedOfficialTools =
+    [
+        new("gi", "wiki", "Wiki", new Uri("https://wiki.hoyolab.com/pc/genshin/home")),
+        new("gi", "material-calculator", "Material Calculator", new Uri("https://act.hoyolab.com/ys/event/calculator-sea/index.html")),
+        new("gi", "battle-records", "Battle Records", new Uri("https://act.hoyolab.com/app/community-game-records-sea/index.html?gid=2#/ys")),
+        new("gi", "upgrade-guide", "Upgrade Guide", new Uri("https://act.hoyolab.com/ys/event/bbs-lineup-ys-sea/index.html")),
+        new("hsr", "wiki", "Wiki", new Uri("https://wiki.hoyolab.com/pc/hsr/home")),
+        new("hsr", "material-calculator", "Material Calculator", new Uri("https://act.hoyolab.com/sr/event/cultivation-tool/index.html?game_biz=hkrpg_global&hyl_auth_required=true&hyl_hide_status_bar=true&hyl_landscape=true&hyl_presentation_style=fullscreen&mode=fullscreen&utm_campaign=CultivationTool&utm_id=6&utm_medium=tools&utm_source=hoyolab&win_mode=fullscreen#/tools/calculation?target=Character")),
+        new("hsr", "battle-records", "Battle Records", new Uri("https://act.hoyolab.com/app/community-game-records-sea/index.html?gid=6#/hsr")),
+        new("hsr", "upgrade-guide", "Upgrade Guide", new Uri("https://act.hoyolab.com/sr/event/cultivation-tool/#/tools/suggestion")),
+        new("zzz", "wiki", "Wiki", new Uri("https://wiki.hoyolab.com/pc/zzz/home")),
+        new("zzz", "battle-records", "Battle Records", new Uri("https://act.hoyolab.com/app/zzz-game-record/index.html")),
+        new("ae", "wiki", "Wiki", new Uri("https://wiki.skport.com/endfield")),
+        new("ae", "material-calculator", "Material Calculator", new Uri("https://game.skport.com/tools/endfield/cost-calculator?header=0")),
+        new("ae", "team-recommendations", "Team Recommendations", new Uri("https://game.skport.com/tools/endfield/rec-team")),
+    ];
     private static readonly IReadOnlyDictionary<string, string[]> OfficialHosts = new Dictionary<string, string[]>(StringComparer.Ordinal)
     {
         ["gi"] = ["genshin.hoyoverse.com", "sg-hk4e-api.hoyoverse.com", "sg-hk4e-api.hoyolab.com"],
@@ -28,7 +44,7 @@ public static class LauncherBannersManifestParser
         var root = document.RootElement;
         RequireProperties(root, "schemaVersion", "revision", "generatedAt", "health", "games");
         var version = RequiredInt(root, "schemaVersion");
-        if (version != 1) throw new InvalidDataException("Unsupported launcher manifest schema.");
+        if (version is not (1 or 2)) throw new InvalidDataException("Unsupported launcher manifest schema.");
         var revision = RequiredText(root, "revision", 64);
         if (revision.Length != 64 || revision.Any(c => !Uri.IsHexDigit(c))) throw new InvalidDataException("Invalid launcher manifest revision.");
         var generatedAt = RequiredDate(root, "generatedAt");
@@ -44,7 +60,7 @@ public static class LauncherBannersManifestParser
         foreach (var game in Games)
         {
             if (!gameElement.TryGetProperty(game, out var value)) throw new InvalidDataException("Launcher manifest is missing a game.");
-            games.Add(game, ParseGame(game, value, generatedAt));
+            games.Add(game, ParseGame(game, value, generatedAt, version));
         }
         if (gameElement.EnumerateObject().Any(entry => !Games.Contains(entry.Name, StringComparer.Ordinal))) throw new InvalidDataException("Launcher manifest has an unknown game.");
         foreach (var game in Games)
@@ -57,8 +73,9 @@ public static class LauncherBannersManifestParser
         if (health.Status != "ok" || health.Games.Values.Any(game => game.Status != "ok")) throw new InvalidDataException("Launcher manifest health is not safe for promotion.");
         foreach (var game in manifest.Games.Values)
         {
-            if (game.Current is { } current && !(current.Start <= observed && (current.EffectiveEnd is null || observed < current.EffectiveEnd))) throw new InvalidDataException("Launcher current phase is not current.");
-            if (game.Upcoming.Any(phase => !phase.Announced && phase.Start <= observed)) throw new InvalidDataException("Launcher upcoming phase is not in the future.");
+            if (game.CurrentPhases.Any(current => !(current.Start <= observed && (current.EffectiveEnd is null || observed < current.EffectiveEnd)))) throw new InvalidDataException("Launcher current phase is not current.");
+            if (game.Upcoming.Any(phase => !phase.Announced && phase.Start <= observed
+                && (phase.BannerSystem is null || phase.End <= observed))) throw new InvalidDataException("Launcher scheduled phase is no longer usable.");
         }
         return manifest;
     }
@@ -90,6 +107,55 @@ public static class LauncherBannersManifestParser
         return new LauncherCodesManifest(version, revision.ToLowerInvariant(), generatedAt, new ReadOnlyDictionary<string, IReadOnlyList<LauncherRedemptionCode>>(games));
     }
 
+    public static LauncherToolsManifest ParseTools(byte[] payload, bool fallback = false, DateTimeOffset? observedAt = null)
+    {
+        using var document = ParseJson(payload);
+        var root = document.RootElement;
+        RequireProperties(root, "schemaVersion", "generatedAt", "tools");
+        var version = RequiredInt(root, "schemaVersion");
+        if (version != 1) throw new InvalidDataException("Unsupported launcher tools schema.");
+        var generatedAt = RequiredDate(root, "generatedAt");
+        var observed = observedAt ?? DateTimeOffset.UtcNow;
+        if (generatedAt > observed + MaximumFutureSkew
+            || (!fallback && generatedAt < observed - MaximumRemoteAge))
+            throw new InvalidDataException("Launcher tools are outside the freshness window.");
+        if (!root.TryGetProperty("tools", out var toolsElement)
+            || toolsElement.ValueKind is not JsonValueKind.Array
+            || toolsElement.GetArrayLength() > ApprovedOfficialTools.Length)
+            throw new InvalidDataException("Invalid launcher tools.");
+
+        var selected = new HashSet<(string Game, string Id)>();
+        foreach (var item in toolsElement.EnumerateArray())
+        {
+            RequireProperties(item, "game", "id", "label", "url");
+            var game = RequiredExactText(item, "game", 8);
+            var id = RequiredExactText(item, "id", 64);
+            var label = RequiredExactText(item, "label", 80);
+            var rawUrl = RequiredExactText(item, "url", 2048);
+            if (!Uri.TryCreate(rawUrl, UriKind.Absolute, out var url)
+                || !IsApprovedOfficialTool(game, id, label, url))
+                throw new InvalidDataException("Launcher tool is not approved.");
+            if (!selected.Add((game, id))) throw new InvalidDataException("Duplicate launcher tool.");
+        }
+
+        return new LauncherToolsManifest(
+            version,
+            generatedAt,
+            ApprovedOfficialTools.Where(tool => selected.Contains((tool.Game, tool.Id))).ToArray());
+    }
+
+    public static bool IsApprovedOfficialTool(string game, string id, string label, Uri url) =>
+        url is not null
+        && ApprovedOfficialTools.Any(tool =>
+            string.Equals(tool.Game, game, StringComparison.Ordinal)
+            && string.Equals(tool.Id, id, StringComparison.Ordinal)
+            && string.Equals(tool.Label, label, StringComparison.Ordinal)
+            && (string.Equals(tool.Url.OriginalString, url.OriginalString, StringComparison.Ordinal)
+                || (game == "hsr"
+                    && id == "material-calculator"
+                    && label == "Material Calculator"
+                    && string.Equals(url.OriginalString, "https://act.hoyolab.com/sr/event/calculator/index.html", StringComparison.Ordinal))));
+
     private static LauncherBannersHealth ParseHealth(JsonElement element)
     {
         RequireProperties(element, "status", "games");
@@ -112,18 +178,27 @@ public static class LauncherBannersManifestParser
         return new LauncherBannersHealth(status, games);
     }
 
-    private static LauncherBannersGame ParseGame(string game, JsonElement element, DateTimeOffset generatedAt)
+    private static LauncherBannersGame ParseGame(string game, JsonElement element, DateTimeOffset generatedAt, int version)
     {
-        RequireProperties(element, "game", "region", "current", "upcoming", "collections", "news", "codes");
+        RequireProperties(element, ["game", "region", "current", "upcoming", "collections", "news", "codes", .. version == 2 ? new[] { "concurrent" } : []]);
         var region = RequiredText(element, "region", 16);
         if (RequiredText(element, "game", 8) != game || !Regions.Contains(region, StringComparer.Ordinal)) throw new InvalidDataException("Launcher game identity mismatch.");
         LauncherBannersCurrentPhase? current = null;
         var currentElement = element.GetProperty("current");
         if (currentElement.ValueKind is JsonValueKind.Object)
         {
-            current = ParseCurrent(game, currentElement, generatedAt);
+            current = ParseCurrent(game, currentElement, generatedAt, version);
         }
         else if (currentElement.ValueKind is not JsonValueKind.Null) throw new InvalidDataException("Invalid launcher current phase.");
+        var concurrent = new List<LauncherBannersCurrentPhase>();
+        if (version == 2)
+        {
+            if (!element.TryGetProperty("concurrent", out var concurrentElement)
+                || concurrentElement.ValueKind is not JsonValueKind.Array || concurrentElement.GetArrayLength() > 4
+                || game != "ae" && concurrentElement.GetArrayLength() != 0)
+                throw new InvalidDataException("Invalid concurrent launcher banner phases.");
+            concurrent.AddRange(concurrentElement.EnumerateArray().Select(phase => ParseCurrent(game, phase, generatedAt, version)));
+        }
         var newsElement = element.GetProperty("news");
         if (newsElement.ValueKind is not JsonValueKind.Array || newsElement.GetArrayLength() > 32) throw new InvalidDataException("Invalid launcher news.");
         var news = new List<LauncherBannersNewsItem>();
@@ -149,7 +224,7 @@ public static class LauncherBannersManifestParser
                 throw new InvalidDataException("Invalid launcher upcoming phases.");
             foreach (var phaseElement in upcomingElement.EnumerateArray())
             {
-                RequireProperties(phaseElement, "phase", "announced", "start", "end", "characters");
+                RequireProperties(phaseElement, ["phase", "announced", "start", "end", "characters", .. version == 2 && game == "ae" ? new[] { "bannerSystem" } : []]);
                 var announced = NullableBool(phaseElement, "announced") ?? false;
                 var phaseStart = NullableDate(phaseElement, "start");
                 var phaseEnd = NullableDate(phaseElement, "end");
@@ -166,7 +241,12 @@ public static class LauncherBannersManifestParser
                     phaseStart,
                     phaseEnd,
                     characters,
-                    announced));
+                    announced,
+                    version == 2 && game == "ae" && !announced ? RequiredExactText(phaseElement, "bannerSystem", 16) : null));
+                if (announced && phaseElement.TryGetProperty("bannerSystem", out _))
+                    throw new InvalidDataException("Announced launcher phases have no qualified banner system.");
+                if (version == 2 && !announced && phaseStart <= generatedAt)
+                    throw new InvalidDataException("Launcher upcoming phase is not in the future.");
             }
         }
         IReadOnlyList<LauncherRedemptionCode> codes = [];
@@ -174,29 +254,11 @@ public static class LauncherBannersManifestParser
         {
             codes = ParseCodes(codesElement);
         }
-        var collections = new List<LauncherBannersCollection>();
-        if (element.TryGetProperty("collections", out var collectionsElement))
-        {
-            if (collectionsElement.ValueKind is not JsonValueKind.Array
-                || collectionsElement.GetArrayLength() > 2)
-                throw new InvalidDataException("Invalid launcher banner collections.");
-            foreach (var collectionElement in collectionsElement.EnumerateArray())
-            {
-                RequireProperties(collectionElement, "kind", "label", "availability", "characters");
-                var charactersElement = collectionElement.GetProperty("characters");
-                if (charactersElement.ValueKind is not JsonValueKind.Array
-                    || charactersElement.GetArrayLength() is < 1 or > 40)
-                    throw new InvalidDataException("Invalid launcher banner collection characters.");
-                collections.Add(new LauncherBannersCollection(
-                    RequiredText(collectionElement, "kind", 16),
-                    RequiredText(collectionElement, "label", 32),
-                    RequiredText(collectionElement, "availability", 64),
-                    charactersElement.EnumerateArray()
-                        .Select(character => ParseCharacter(game, character))
-                        .ToArray()));
-            }
-        }
-        return new LauncherBannersGame(game, region, current, news, upcoming, codes, collections);
+        if (!element.TryGetProperty("collections", out var collectionsElement)
+            || collectionsElement.ValueKind is not JsonValueKind.Array
+            || collectionsElement.GetArrayLength() != 0)
+            throw new InvalidDataException("Launcher banner collections must be empty.");
+        return new LauncherBannersGame(game, region, current, news, upcoming, codes, concurrent);
     }
 
     private static IReadOnlyList<LauncherRedemptionCode> ParseCodes(JsonElement codesElement)
@@ -227,9 +289,9 @@ public static class LauncherBannersManifestParser
         return codes;
     }
 
-    private static LauncherBannersCurrentPhase ParseCurrent(string game, JsonElement element, DateTimeOffset generatedAt)
+    private static LauncherBannersCurrentPhase ParseCurrent(string game, JsonElement element, DateTimeOffset generatedAt, int version)
     {
-        RequireProperties(element, "phase", "start", "end", "nextChangeAt", "timingMode", "channels", "remaining", "characters", "selectedCharacter", "selectedCharacterId", "selectionReason", "variants");
+        RequireProperties(element, ["phase", "start", "end", "nextChangeAt", "timingMode", "channels", "remaining", "characters", "selectedCharacter", "selectedCharacterId", "selectionReason", "variants", .. version == 2 && game == "ae" ? new[] { "bannerSystem" } : []]);
         var phase = NullableText(element, "phase", 48);
         var start = RequiredDate(element, "start");
         var end = NullableDate(element, "end");
@@ -288,7 +350,10 @@ public static class LauncherBannersManifestParser
         var variants = ParseAssets(game, element.GetProperty("variants"));
         if (variants.Count == 0 || variants.Any(asset => asset.Url is null))
             throw new InvalidDataException("Launcher current phase requires downloadable art.");
-        return new LauncherBannersCurrentPhase(phase, start, end, remainingSeconds, characters, selectedId, selectionReason, variants, channels, nextChangeAt, timingMode);
+        if (version == 2 && (start > generatedAt || nextChangeAt <= generatedAt || game == "ae" && (end is null || nextChangeAt is null)))
+            throw new InvalidDataException("Launcher current phase is not active at generation time.");
+        return new LauncherBannersCurrentPhase(phase, start, end, remainingSeconds, characters, selectedId, selectionReason, variants, channels, nextChangeAt, timingMode,
+            version == 2 && game == "ae" ? RequiredExactText(element, "bannerSystem", 16) : null);
     }
 
     private static bool CharacterMatches(LauncherBannersCharacter left, LauncherBannersCharacter right) =>
@@ -521,6 +586,7 @@ public static class LauncherBannersManifestParser
     }
 
     private static string RequiredText(JsonElement element, string name, int max) { if (!element.TryGetProperty(name, out var value) || value.ValueKind is not JsonValueKind.String) throw new InvalidDataException($"Missing launcher field: {name}."); var text = value.GetString()?.Trim() ?? ""; if (text.Length == 0 || text.Length > max || text.Any(char.IsControl)) throw new InvalidDataException($"Invalid launcher field: {name}."); return text; }
+    private static string RequiredExactText(JsonElement element, string name, int max) { var text = RequiredText(element, name, max); if (!string.Equals(element.GetProperty(name).GetString(), text, StringComparison.Ordinal)) throw new InvalidDataException($"Invalid launcher field: {name}."); return text; }
     private static string? NullableText(JsonElement element, string name, int max) { if (!element.TryGetProperty(name, out var value) || value.ValueKind is JsonValueKind.Null) return null; var text = RequiredText(element, name, max); return text; }
     private static int RequiredInt(JsonElement element, string name) { if (!element.TryGetProperty(name, out var value) || !value.TryGetInt32(out var result)) throw new InvalidDataException($"Invalid launcher integer: {name}."); return result; }
     private static long RequiredLong(JsonElement element, string name) { if (!element.TryGetProperty(name, out var value) || !value.TryGetInt64(out var result)) throw new InvalidDataException($"Invalid launcher integer: {name}."); return result; }

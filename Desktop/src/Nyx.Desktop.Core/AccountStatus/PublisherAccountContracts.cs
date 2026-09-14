@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Nyx.Desktop.Core.Games;
 
 namespace Nyx.Desktop.Core.AccountStatus;
 
@@ -83,12 +84,17 @@ public sealed record PublisherAccountSummary(
 
 public sealed record PublisherAccountCatalogEntry(
     string GameId,
-    string Provider,
     Uri? CheckInUri,
     Uri? ResourceUri,
-    string ResourceName,
-    bool SupportsDailyCheckIn,
-    bool SupportsNumericResource);
+    string ResourceName)
+{
+    public string Provider => GameCatalog.GetRequired(GameId).AccountProvider
+        ?? throw new InvalidOperationException($"Game '{GameId}' has no account provider.");
+
+    public bool SupportsDailyCheckIn => GameCatalog.GetRequired(GameId).SupportsDailyCheckIn;
+
+    public bool SupportsNumericResource => GameCatalog.GetRequired(GameId).SupportsNumericResource;
+}
 
 public sealed record PublisherEndfieldAccountIdentity(string Uid, string Region)
 {
@@ -379,13 +385,14 @@ public static class PublisherResourceRefreshPolicy
     public static readonly TimeSpan SelectedInterval = TimeSpan.FromMinutes(5);
     public static readonly TimeSpan BackgroundInterval = SelectedInterval;
 
+    public static bool IsFresh(DateTimeOffset observedAt, DateTimeOffset now) =>
+        observedAt <= now && now - observedAt < SelectedInterval;
+
     public static bool IsDue(
         DateTimeOffset? lastAttempt,
         DateTimeOffset now,
-        bool selected,
-        bool force = false) =>
-        force
-        || lastAttempt is null
+        bool selected) =>
+        lastAttempt is null
         || now - lastAttempt >= (selected ? SelectedInterval : BackgroundInterval);
 }
 
@@ -563,8 +570,8 @@ public sealed record PublisherRoleChoice(PublisherRoleBinding Binding, string Di
     public override string ToString() => nameof(PublisherRoleChoice);
 }
 
-// Nickname is a transient chooser hint. Persistence boundaries accept only
-// PublisherRoleBinding, so this value never reaches settings or disk.
+// Official nicknames remain attached through role selection. Durable identity
+// uses PublisherRoleRecord in protected account storage, not launcher settings.
 public sealed record PublisherResourceCandidate(
     PublisherRoleBinding Binding,
     PublisherResourceSnapshot? Snapshot,
@@ -1481,41 +1488,41 @@ public static class PublisherAccountPresentation
 {
     public static string? ResourceCaptureGuidance(
         PublisherResourceCaptureDiagnostic diagnostic) => diagnostic switch
-    {
-        PublisherResourceCaptureDiagnostic.NoAcceptedRequest =>
-            "OFFICIAL REQUEST NOT SEEN · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.ResponseRejected =>
-            "RESPONSE NOT ACCEPTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.ResponseIncomplete =>
-            "RESPONSE INCOMPLETE · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.RequestRejected =>
-            "REQUEST REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.PublisherResultRejected =>
-            "PUBLISHER RESULT REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.EnvelopeRejected =>
-            "RESPONSE ENVELOPE REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.DataRejected =>
-            "RESPONSE DATA REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.CoreFieldsRejected =>
-            "RESOURCE FIELDS REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.TimeFieldsRejected =>
-            "RECOVERY FIELDS REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.ReserveRejected =>
-            "RESERVE FIELD REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.BoundsRejected =>
-            "VALUE BOUNDS REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.SignatureRejected =>
-            "SIGNATURE REJECTED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.BrowserRequestBlocked =>
-            "BROWSER REQUEST BLOCKED · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.OperationTimedOut =>
-            "OPERATION TIMED OUT · TRY AGAIN",
-        PublisherResourceCaptureDiagnostic.BrowserSessionUnavailable =>
-            "BROWSER CLOSED · RESTART NYX",
-        PublisherResourceCaptureDiagnostic.LoginRequired => "SIGN IN AGAIN",
-        PublisherResourceCaptureDiagnostic.SelectionRequired => "CHOOSE REGION",
-        _ => null,
-    };
+        {
+            PublisherResourceCaptureDiagnostic.NoAcceptedRequest =>
+                "OFFICIAL REQUEST NOT SEEN · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.ResponseRejected =>
+                "RESPONSE NOT ACCEPTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.ResponseIncomplete =>
+                "RESPONSE INCOMPLETE · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.RequestRejected =>
+                "REQUEST REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.PublisherResultRejected =>
+                "PUBLISHER RESULT REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.EnvelopeRejected =>
+                "RESPONSE ENVELOPE REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.DataRejected =>
+                "RESPONSE DATA REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.CoreFieldsRejected =>
+                "RESOURCE FIELDS REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.TimeFieldsRejected =>
+                "RECOVERY FIELDS REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.ReserveRejected =>
+                "RESERVE FIELD REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.BoundsRejected =>
+                "VALUE BOUNDS REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.SignatureRejected =>
+                "SIGNATURE REJECTED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.BrowserRequestBlocked =>
+                "BROWSER REQUEST BLOCKED · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.OperationTimedOut =>
+                "OPERATION TIMED OUT · TRY AGAIN",
+            PublisherResourceCaptureDiagnostic.BrowserSessionUnavailable =>
+                "BROWSER CLOSED · RESTART NYX",
+            PublisherResourceCaptureDiagnostic.LoginRequired => "SIGN IN AGAIN",
+            PublisherResourceCaptureDiagnostic.SelectionRequired => "CHOOSE REGION",
+            _ => null,
+        };
 
     public static bool IsCurrentDayCheckIn(DailyCheckInResult result, DateTimeOffset now)
     {
@@ -1643,8 +1650,7 @@ public static class PublisherAccountCatalog
         new ReadOnlyDictionary<string, CheckInResponseEndpoint>(
             new Dictionary<string, CheckInResponseEndpoint>(StringComparer.Ordinal)
             {
-                // Reviewed from the official production Genshin sign-in bundle
-                // on 2026-08-02. Keep the retired sg-hk4e API host denied.
+                // Current Genshin endpoints retained for exact response recognition.
                 ["gi"] = new(
                     new("https://sg-act-public-api.hoyolab.com/event/sol/info"),
                     new("https://sg-act-public-api.hoyolab.com/event/sol/sign"),
@@ -1749,23 +1755,23 @@ public static class PublisherAccountCatalog
         new ReadOnlyDictionary<string, PublisherAccountCatalogEntry>(
             new Dictionary<string, PublisherAccountCatalogEntry>(StringComparer.Ordinal)
             {
-                ["gi"] = new("gi", "HoYoLAB",
+                ["gi"] = new("gi",
                     new Uri("https://act.hoyolab.com/ys/event/signin-sea-v3/index.html?act_id=e202102251931481"),
                     new Uri("https://act.hoyolab.com/app/community-game-records-sea/index.html#/ys/realtime"),
-                    "Original Resin", true, true),
-                ["hsr"] = new("hsr", "HoYoLAB",
+                    "Original Resin"),
+                ["hsr"] = new("hsr",
                     new Uri("https://act.hoyolab.com/bbs/event/signin/hkrpg/e202303301540311.html?act_id=e202303301540311&lang=en-us"),
                     new Uri("https://act.hoyolab.com/app/community-game-records-sea/rpg/index.html#/hsr"),
-                    "Trailblaze Power", true, true),
-                ["zzz"] = new("zzz", "HoYoLAB",
+                    "Trailblaze Power"),
+                ["zzz"] = new("zzz",
                     new Uri("https://act.hoyolab.com/bbs/event/signin/zzz/e202406031448091.html?act_id=e202406031448091&lang=en-us"),
                     new Uri("https://act.hoyolab.com/app/zzz-game-record/index.html#/zzz"),
-                    "Battery Charge", true, true),
-                ["wuwa"] = new("wuwa", "KURO GAMES", null, null, "Waveplates", false, true),
-                ["ae"] = new("ae", "SKPORT",
+                    "Battery Charge"),
+                ["wuwa"] = new("wuwa", null, null, "Waveplates"),
+                ["ae"] = new("ae",
                     new Uri("https://game.skport.com/endfield/sign-in"),
                     new Uri("https://game.skport.com/endfield/game-data?header=0"),
-                    "Sanity", true, false),
+                    "Sanity"),
             });
 
     public static IReadOnlyCollection<PublisherAccountCatalogEntry> All => Entries.Values.ToArray();
@@ -1774,6 +1780,42 @@ public static class PublisherAccountCatalog
         Entries.TryGetValue(gameId, out var entry)
             ? entry
             : throw new ArgumentOutOfRangeException(nameof(gameId));
+
+    public static bool IsOfficialPublisherUri(
+        string provider,
+        string gameId,
+        Uri uri)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        if (!Entries.TryGetValue(gameId, out var entry)
+            || !string.Equals(entry.Provider, provider, StringComparison.Ordinal)
+            || !uri.IsAbsoluteUri
+            || !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+            || !uri.IsDefaultPort
+            || !string.IsNullOrEmpty(uri.UserInfo))
+            return false;
+
+        return provider switch
+        {
+            "HoYoLAB" => IsHostOrSubdomain(uri.Host, "hoyolab.com")
+                || IsHostOrSubdomain(uri.Host, "hoyoverse.com")
+                || IsHostOrSubdomain(uri.Host, "mihoyo.com")
+                || IsHostOrSubdomain(uri.Host, "hoyo.link"),
+            "KURO GAMES" => IsHostOrSubdomain(uri.Host, "kurogame.com")
+                || IsHostOrSubdomain(uri.Host, "kurogame.net")
+                || IsHostOrSubdomain(uri.Host, "kurogames.com")
+                || IsHostOrSubdomain(uri.Host, "kurobbs.com"),
+            "SKPORT" => IsHostOrSubdomain(uri.Host, "skport.com")
+                || IsHostOrSubdomain(uri.Host, "gryphline.com")
+                || IsHostOrSubdomain(uri.Host, "hypergryph.com")
+                || IsHostOrSubdomain(uri.Host, "hg-cdn.com"),
+            _ => false,
+        };
+    }
+
+    private static bool IsHostOrSubdomain(string host, string domain) =>
+        string.Equals(host, domain, StringComparison.OrdinalIgnoreCase)
+        || host.EndsWith('.' + domain, StringComparison.OrdinalIgnoreCase);
 
     public static bool IsExactCheckInUri(string gameId, Uri uri)
     {
@@ -1930,9 +1972,8 @@ public static class PublisherAccountCatalog
                 && IsReviewedHoyoAccountDocument(uri);
         }
 
-        // Cross-origin claim APIs can issue a non-mutating CORS preflight.
-        // Keep that handshake exact-game and exact-endpoint without spending
-        // the one authorization reserved for the actual POST.
+        // The legacy fallback policy recognizes the exact non-mutating CORS
+        // preflight. Official publisher traffic bypasses this filter in-app.
         if (purpose == PublisherSessionPurpose.CheckIn
             && method == "OPTIONS"
             && context is PublisherWebResourceContext.XmlHttpRequest
@@ -2130,11 +2171,9 @@ public static class PublisherAccountCatalog
         if (method == "POST"
             && purpose == PublisherSessionPurpose.CheckIn
             && IsExactCheckInResponseUri(gameId, uri, method))
-            // Deliberate publisher-page trust boundary: Nyx authorizes one
-            // exact game's exact sign endpoint after one explicit Daily click,
-            // but does not copy the official page's request body out of the
-            // isolated browser. The one-shot permit and before/after response
-            // proofs bound the operation; body validation is not claimed.
+            // Legacy fallback policy: require a one-shot permit. The live
+            // publisher window trusts official hosts and validates the exact
+            // before/after response instead.
             return claimWriteAuthority?.TryConsume(gameId) == true;
         if (method == "GET"
             && purpose is PublisherSessionPurpose.Connect
@@ -2147,8 +2186,11 @@ public static class PublisherAccountCatalog
             && IsNoRequestBody(requestBody)
             && IsExactResourceRoleDiscoveryRequest(gameId, uri, method))
             return true;
+        // Visible achievement sign-in is a Connect session, but the official
+        // page still needs the same exact badge and read-only export APIs.
         if (gameId == "hsr"
-            && purpose == PublisherSessionPurpose.Achievements
+            && (purpose is PublisherSessionPurpose.Connect
+                or PublisherSessionPurpose.Achievements)
             && IsExactHsrAchievementApiRequest(uri, method))
             return true;
         if (gameId == "hsr"
@@ -2516,6 +2558,58 @@ public static class PublisherAccountCatalog
                 || string.Equals(noSessionRetry, "true", StringComparison.Ordinal));
     }
 
+    public static bool IsExactHsrAchievementPageListRequest(Uri uri, string method)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        if (!IsExactHsrAchievementListEndpoint(uri)
+            || method is not ("GET" or "OPTIONS"))
+            return false;
+        if (IsExactHsrAchievementApiRequest(uri, method))
+            return true;
+
+        var query = ParseBoundedQuery(
+            uri.Query,
+            "game_biz",
+            "badge_region",
+            "badge_uid",
+            "show_hide",
+            "need_all",
+            "page_size",
+            "page_num",
+            "game",
+            "t",
+            "noSessionRetry");
+        return query is not null
+            && query.Count is >= 7 and <= 10
+            && query.TryGetValue("game_biz", out var gameBiz)
+            && string.Equals(gameBiz, "hkrpg_global", StringComparison.Ordinal)
+            && query.TryGetValue("badge_region", out var region)
+            && ResourceServers["hsr"].Contains(region)
+            && query.TryGetValue("badge_uid", out var uid)
+            && uid.Length is >= 1 and <= 20
+            && uid[0] != '0'
+            && uid.All(char.IsAsciiDigit)
+            && query.TryGetValue("show_hide", out var showHide)
+            && string.Equals(showHide, "false", StringComparison.Ordinal)
+            && query.TryGetValue("need_all", out var needAll)
+            && string.Equals(needAll, "false", StringComparison.Ordinal)
+            && query.TryGetValue("page_size", out var pageSize)
+            && string.Equals(pageSize, "20", StringComparison.Ordinal)
+            && query.TryGetValue("page_num", out var pageNumber)
+            && pageNumber.Length is >= 1 and <= 3
+            && pageNumber[0] != '0'
+            && pageNumber.All(char.IsAsciiDigit)
+            && int.TryParse(pageNumber, out var parsedPage)
+            && parsedPage is >= 1 and <= 100
+            && (!query.TryGetValue("game", out var game)
+                || string.Equals(game, "hkrpg", StringComparison.Ordinal))
+            && (!query.TryGetValue("t", out var timestamp)
+                || (timestamp.Length is >= 10 and <= 16
+                    && timestamp.All(char.IsAsciiDigit)))
+            && (!query.TryGetValue("noSessionRetry", out var noSessionRetry)
+                || string.Equals(noSessionRetry, "true", StringComparison.Ordinal));
+    }
+
     public static bool IsExactHsrAchievementListRequestForRole(
         Uri uri,
         string method,
@@ -2720,16 +2814,20 @@ public static class PublisherAccountCatalog
         string.Equals(host, "account.hoyoverse.com", StringComparison.OrdinalIgnoreCase)
         || string.Equals(host, "account.hoyolab.com", StringComparison.OrdinalIgnoreCase);
 
-    private static bool IsExactCurrentHoyoLoginAsset(string path) =>
-        path is
-            "/login-platform/chunk-vendors.8caf3da0.js"
-            or "/login-platform/chunk-common.8caf3da0.js"
-            or "/login-platform/web.8caf3da0.js"
-            or "/login-platform/password-login-web.8caf3da0.js"
-            or "/login-platform/chunk-vendors.8caf3da0.css"
-            or "/login-platform/chunk-common.8caf3da0.css"
-            or "/login-platform/web.8caf3da0.css"
-            or "/login-platform/password-login-web.8caf3da0.css";
+    private static bool IsReviewedHoyoLoginAsset(string path)
+    {
+        var parts = path.Split('.');
+        return parts.Length == 3
+            && parts[0] is
+                "/login-platform/chunk-vendors"
+                or "/login-platform/chunk-common"
+                or "/login-platform/web"
+                or "/login-platform/password-login-web"
+            && parts[1].Length == 8
+            && parts[1].All(static character =>
+                char.IsAsciiDigit(character) || character is >= 'a' and <= 'f')
+            && parts[2] is "js" or "css";
+    }
 
     private static bool IsBoundedOpaqueValue(string value, int maximumLength) =>
         value.Length is > 0
@@ -2790,7 +2888,7 @@ public static class PublisherAccountCatalog
         if (string.Equals(host, "account.hoyolab.com", StringComparison.OrdinalIgnoreCase))
             return connectMode
                 && string.IsNullOrEmpty(uri.Query)
-                && IsExactCurrentHoyoLoginAsset(path);
+                && IsReviewedHoyoLoginAsset(path);
         if (string.Equals(host, "webstatic.hoyoverse.com", StringComparison.OrdinalIgnoreCase))
             return path.StartsWith("/dora/", StringComparison.Ordinal);
         if (string.Equals(host, "act.hoyoverse.com", StringComparison.OrdinalIgnoreCase))

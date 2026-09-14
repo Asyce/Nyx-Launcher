@@ -52,7 +52,8 @@
                             <ToolTip Content="Pause background animation" />
                         </ToolTipService.ToolTip>
                     </Button>
-                    <FontIcon x:Name="AnimationIcon" IsHitTestVisible="False" AutomationProperties.Name="Pause background animation icon" FontFamily="Segoe Fluent Icons" FontSize="20" Glyph="&#xE769;" />
+                    <FontIcon x:Name="AnimationIconOutline" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" FontFamily="Segoe Fluent Icons" FontSize="22" Foreground="Black" Glyph="&#xE769;" />
+                    <FontIcon x:Name="AnimationIcon" IsHitTestVisible="False" AutomationProperties.Name="Pause background animation icon" FontFamily="Segoe Fluent Icons" FontSize="20" Foreground="White" Glyph="&#xE769;" />
                     </Grid>
                     <Grid Width="42" Height="36">
                     <Button
@@ -71,7 +72,8 @@
                             <ToolTip Content="Settings" />
                         </ToolTipService.ToolTip>
                     </Button>
-                    <FontIcon x:Name="SettingsIcon" IsHitTestVisible="False" AutomationProperties.Name="Settings icon" FontFamily="Segoe Fluent Icons" FontSize="22" Glyph="&#xE713;" />
+                    <FontIcon x:Name="SettingsIconOutline" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" FontFamily="Segoe Fluent Icons" FontSize="24" Foreground="Black" Glyph="&#xE713;" />
+                    <FontIcon x:Name="SettingsIcon" IsHitTestVisible="False" AutomationProperties.Name="Settings icon" FontFamily="Segoe Fluent Icons" FontSize="22" Foreground="White" Glyph="&#xE713;" />
                     </Grid>
                     <Grid Width="42" Height="36">
                     <Button
@@ -90,7 +92,8 @@
                             <ToolTip Content="Minimize" />
                         </ToolTipService.ToolTip>
                     </Button>
-                    <FontIcon x:Name="MinimizeIcon" IsHitTestVisible="False" AutomationProperties.Name="Minimize icon" FontFamily="Segoe Fluent Icons" FontSize="20" Glyph="&#xE921;" />
+                    <FontIcon x:Name="MinimizeIconOutline" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" FontFamily="Segoe Fluent Icons" FontSize="22" Foreground="Black" Glyph="&#xE921;" />
+                    <FontIcon x:Name="MinimizeIcon" IsHitTestVisible="False" AutomationProperties.Name="Minimize icon" FontFamily="Segoe Fluent Icons" FontSize="20" Foreground="White" Glyph="&#xE921;" />
                     </Grid>
                     <Grid Width="42" Height="36">
                     <Button
@@ -109,7 +112,8 @@
                             <ToolTip Content="Close" />
                         </ToolTipService.ToolTip>
                     </Button>
-                    <FontIcon x:Name="CloseIcon" IsHitTestVisible="False" AutomationProperties.Name="Close icon" FontFamily="Segoe Fluent Icons" FontSize="20" Glyph="&#xE8BB;" />
+                    <FontIcon x:Name="CloseIconOutline" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" FontFamily="Segoe Fluent Icons" FontSize="22" Foreground="Black" Glyph="&#xE8BB;" />
+                    <FontIcon x:Name="CloseIcon" IsHitTestVisible="False" AutomationProperties.Name="Close icon" FontFamily="Segoe Fluent Icons" FontSize="20" Foreground="White" Glyph="&#xE8BB;" />
                     </Grid>
                 </StackPanel>
             </Grid>

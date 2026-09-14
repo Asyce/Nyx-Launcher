@@ -163,14 +163,7 @@ public sealed class VerifiedAchievementHelperBoundary : IAchievementHelperBounda
             "--parent-watch", "named-mutex",
             "--ipc", "named-pipe",
         };
-        if (outputPath is null)
-        {
-            arguments.AddRange(["--output-root", "downloads"]);
-        }
-        else
-        {
-            arguments.AddRange(["--output-root", "fixed", "--fixed-root", outputRoot]);
-        }
+        arguments.AddRange(["--output-root", "fixed", "--fixed-root", outputRoot]);
         arguments.AddRange(["--timeout-seconds", "300"]);
 
         var invocation = new AchievementHelperInvocation(

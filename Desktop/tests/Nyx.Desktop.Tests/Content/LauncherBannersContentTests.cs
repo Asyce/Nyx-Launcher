@@ -65,16 +65,336 @@ public sealed class LauncherBannersContentTests
 
     [Theory]
     [InlineData("https://pengo.gg/dist/launcher-banners-v1.json", true)]
+    [InlineData("https://pengo.gg/dist/launcher-banners-v2.json", true)]
+    [InlineData("https://pengo.gg/dist/launcher-banners-v2.json?x=1", false)]
     [InlineData("https://pengo.gg/dist/launcher-codes-v1.json", true)]
+    [InlineData("https://pengo.gg/dist/launcher-tools-v1.json", true)]
     [InlineData("https://pengo.gg/dist/other.json", false)]
     [InlineData("https://pengo.gg/dist/launcher-banners-v1.json?x=1", false)]
     [InlineData("https://pengo.gg:444/dist/launcher-banners-v1.json", false)]
     [InlineData("https://user@pengo.gg/dist/launcher-banners-v1.json", false)]
     [InlineData("https://pengo.gg/dist/launcher-banners-v1.json#x", false)]
-    public void Json_transport_allows_only_the_two_fixed_production_feeds(string url, bool allowed)
+    public void Json_transport_allows_only_the_fixed_production_feeds(string url, bool allowed)
     {
         var action = () => LauncherBannersTransport.ValidateEndpoint(new Uri(url), allowConfigured: true, requireJson: true);
         if (allowed) action(); else Assert.Throws<InvalidOperationException>(action);
+    }
+
+    [Fact]
+    public void Tools_parser_accepts_full_subset_and_empty_feeds_in_canonical_order()
+    {
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        var full = LauncherBannersManifestParser.ParseTools(
+            ToolsJson(now.AddMinutes(-10), OfficialToolRows.Reverse()),
+            observedAt: now);
+
+        Assert.Equal(
+            OfficialToolRows,
+            full.Tools.Select(static tool => (tool.Game, tool.Id, tool.Label, tool.Url.OriginalString)));
+        Assert.Equal(13, full.Tools.Count);
+        Assert.DoesNotContain(full.Tools, static tool => tool.Game == "wuwa");
+        Assert.All(full.Tools, tool => Assert.True(LauncherBannersManifestParser.IsApprovedOfficialTool(
+            tool.Game,
+            tool.Id,
+            tool.Label,
+            tool.Url)));
+
+        var subsetRows = new[] { OfficialToolRows[^1], OfficialToolRows[0] };
+        var subset = LauncherBannersManifestParser.ParseTools(
+            ToolsJson(now.AddMinutes(-9), subsetRows),
+            observedAt: now);
+        Assert.Equal(
+            new[] { OfficialToolRows[0], OfficialToolRows[^1] },
+            subset.Tools.Select(static tool => (tool.Game, tool.Id, tool.Label, tool.Url.OriginalString)));
+
+        Assert.Empty(LauncherBannersManifestParser.ParseTools(
+            ToolsJson(now.AddMinutes(-8), []),
+            observedAt: now).Tools);
+    }
+
+    [Fact]
+    public void Tools_parser_rejects_unknown_duplicate_extra_missing_and_malformed_content()
+    {
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        var valid = JsonNode.Parse(ToolsJson(now.AddMinutes(-10), [OfficialToolRows[0]]))!.AsObject();
+
+        var unknown = JsonNode.Parse(ToolsJson(
+            now.AddMinutes(-10),
+            [("wuwa", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/genshin/home")]))!.AsObject();
+        AssertInvalid(unknown);
+
+        var duplicate = valid.DeepClone().AsObject();
+        duplicate["tools"]!.AsArray().Add(duplicate["tools"]![0]!.DeepClone());
+        AssertInvalid(duplicate);
+
+        var extraRowField = valid.DeepClone().AsObject();
+        extraRowField["tools"]![0]!["revision"] = "not-allowed";
+        AssertInvalid(extraRowField);
+
+        var missingRowField = valid.DeepClone().AsObject();
+        missingRowField["tools"]![0]!.AsObject().Remove("label");
+        AssertInvalid(missingRowField);
+
+        var extraRootField = valid.DeepClone().AsObject();
+        extraRootField["revision"] = new string('a', 64);
+        AssertInvalid(extraRootField);
+
+        var missingRootField = valid.DeepClone().AsObject();
+        missingRootField.Remove("tools");
+        AssertInvalid(missingRootField);
+
+        Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.ParseTools(
+            Encoding.UTF8.GetBytes("{"),
+            observedAt: now));
+
+        void AssertInvalid(JsonObject root) => Assert.Throws<InvalidDataException>(() =>
+            LauncherBannersManifestParser.ParseTools(JsonSerializer.SerializeToUtf8Bytes(root), observedAt: now));
+    }
+
+    [Fact]
+    public void Tools_parser_accepts_legacy_hsr_material_calculator_and_returns_the_canonical_url()
+    {
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        const string legacyUrl = "https://act.hoyolab.com/sr/event/calculator/index.html";
+        const string canonicalUrl = "https://act.hoyolab.com/sr/event/cultivation-tool/index.html?game_biz=hkrpg_global&hyl_auth_required=true&hyl_hide_status_bar=true&hyl_landscape=true&hyl_presentation_style=fullscreen&mode=fullscreen&utm_campaign=CultivationTool&utm_id=6&utm_medium=tools&utm_source=hoyolab&win_mode=fullscreen#/tools/calculation?target=Character";
+        var parsed = LauncherBannersManifestParser.ParseTools(
+            ToolsJson(now.AddMinutes(-10), [("hsr", "material-calculator", "Material Calculator", legacyUrl)]),
+            observedAt: now);
+
+        Assert.Equal(canonicalUrl, Assert.Single(parsed.Tools).Url.OriginalString);
+        Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.ParseTools(
+            ToolsJson(now.AddMinutes(-10), [("hsr", "material-calculator", "Material Calculator", legacyUrl + "?x=1")]),
+            observedAt: now));
+        Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.ParseTools(
+            ToolsJson(now.AddMinutes(-10), [("hsr", "wiki", "Wiki", legacyUrl)]),
+            observedAt: now));
+    }
+
+    [Theory]
+    [InlineData("gi", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/genshin/home", true)]
+    [InlineData("gi", "wiki", "Wiki", "http://wiki.hoyolab.com/pc/genshin/home", false)]
+    [InlineData("gi", "wiki", "Wiki", "https://wiki.hoyolab.com:443/pc/genshin/home", false)]
+    [InlineData("gi", "wiki", "Wiki", "https://user@wiki.hoyolab.com/pc/genshin/home", false)]
+    [InlineData("gi", "wiki", "Wiki", "https://evil.hoyolab.com/pc/genshin/home", false)]
+    [InlineData("gi", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/genshin/other", false)]
+    [InlineData("gi", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/genshin/home?x=1", false)]
+    [InlineData("gi", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/genshin/home#x", false)]
+    [InlineData("gi", "wiki", "Official Wiki", "https://wiki.hoyolab.com/pc/genshin/home", false)]
+    [InlineData("hsr", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/genshin/home", false)]
+    [InlineData("gi", "other", "Wiki", "https://wiki.hoyolab.com/pc/genshin/home", false)]
+    public void Official_tool_authority_and_parser_require_the_exact_canonical_tuple(
+        string game,
+        string id,
+        string label,
+        string url,
+        bool approved)
+    {
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        Assert.Equal(
+            approved,
+            LauncherBannersManifestParser.IsApprovedOfficialTool(game, id, label, new Uri(url)));
+        var parse = () => LauncherBannersManifestParser.ParseTools(
+            ToolsJson(now.AddMinutes(-10), [(game, id, label, url)]),
+            observedAt: now);
+        if (approved) parse(); else Assert.Throws<InvalidDataException>(parse);
+    }
+
+    [Fact]
+    public void Tools_parser_rejects_stale_or_future_remote_data_but_allows_an_older_cached_fallback()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-tools-fallback-" + Guid.NewGuid().ToString("N"));
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        var stale = ToolsJson(now - LauncherBannersManifestParser.MaximumRemoteAge - TimeSpan.FromSeconds(1));
+        var future = ToolsJson(now + LauncherBannersManifestParser.MaximumFutureSkew + TimeSpan.FromSeconds(1));
+
+        try
+        {
+            Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.ParseTools(stale, observedAt: now));
+            Assert.Equal(13, LauncherBannersManifestParser.ParseTools(stale, fallback: true, observedAt: now).Tools.Count);
+            Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.ParseTools(future, observedAt: now));
+            Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.ParseTools(future, fallback: true, observedAt: now));
+
+            var cache = new LauncherBannersCache(root);
+            Directory.CreateDirectory(cache.LastKnownGoodDirectory);
+            File.WriteAllBytes(cache.LastKnownGoodToolsPath, stale);
+            Assert.Equal(13, cache.TryLoadLastKnownGoodTools(now)!.Tools.Count);
+            File.WriteAllBytes(cache.LastKnownGoodToolsPath, future);
+            Assert.Null(cache.TryLoadLastKnownGoodTools(now));
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task Tools_cache_reparses_atomic_promotions_and_preserves_the_last_good_on_replay_or_tamper()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-tools-cache-" + Guid.NewGuid().ToString("N"));
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        var firstPayload = ToolsJson(now.AddMinutes(-30), [OfficialToolRows[0], OfficialToolRows[4]]);
+        var first = LauncherBannersManifestParser.ParseTools(firstPayload, observedAt: now);
+        var newerPayload = ToolsJson(now.AddMinutes(-20), [OfficialToolRows[1]]);
+        var newer = LauncherBannersManifestParser.ParseTools(newerPayload, observedAt: now);
+        try
+        {
+            var cache = new LauncherBannersCache(root);
+            await cache.PromoteToolsAsync(first, firstPayload);
+            var saved = File.ReadAllBytes(cache.LastKnownGoodToolsPath);
+            Assert.Equal(first.Tools, cache.TryLoadLastKnownGoodTools(now)!.Tools);
+
+            await Assert.ThrowsAsync<InvalidDataException>(() => cache.PromoteToolsAsync(first, newerPayload));
+            Assert.Equal(saved, File.ReadAllBytes(cache.LastKnownGoodToolsPath));
+
+            var tampered = JsonNode.Parse(newerPayload)!.AsObject();
+            tampered["tools"]![0]!["label"] = "Tampered";
+            await Assert.ThrowsAsync<InvalidDataException>(() => cache.PromoteToolsAsync(
+                newer,
+                JsonSerializer.SerializeToUtf8Bytes(tampered)));
+            Assert.Equal(saved, File.ReadAllBytes(cache.LastKnownGoodToolsPath));
+
+            var replayPayload = ToolsJson(now.AddMinutes(-40), [OfficialToolRows[0]]);
+            var replay = LauncherBannersManifestParser.ParseTools(replayPayload, observedAt: now);
+            await Assert.ThrowsAsync<InvalidDataException>(() => cache.PromoteToolsAsync(replay, replayPayload));
+            Assert.Equal(saved, File.ReadAllBytes(cache.LastKnownGoodToolsPath));
+
+            var replacementPayload = ToolsJson(first.GeneratedAt, [OfficialToolRows[1]]);
+            var replacement = LauncherBannersManifestParser.ParseTools(replacementPayload, observedAt: now);
+            await Assert.ThrowsAsync<InvalidDataException>(() => cache.PromoteToolsAsync(replacement, replacementPayload));
+            Assert.Equal(saved, File.ReadAllBytes(cache.LastKnownGoodToolsPath));
+
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cache.PromoteToolsAsync(
+                newer,
+                newerPayload,
+                cancellation.Token));
+            Assert.Equal(saved, File.ReadAllBytes(cache.LastKnownGoodToolsPath));
+
+            await cache.PromoteToolsAsync(newer, newerPayload);
+            Assert.Equal(newerPayload, File.ReadAllBytes(cache.LastKnownGoodToolsPath));
+            Assert.Equal(newer.Tools, cache.TryLoadLastKnownGoodTools(now)!.Tools);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task Service_fetches_restores_revalidates_and_immediately_applies_tool_removal()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-tools-service-" + Guid.NewGuid().ToString("N"));
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        var bannerEndpoint = new Uri("http://127.0.0.1:32123/launcher-banners-v1.json");
+        var codesEndpoint = new Uri("http://127.0.0.1:32123/launcher-codes-v1.json");
+        var toolsEndpoint = new Uri("http://127.0.0.1:32123/launcher-tools-v1.json");
+        var firstPayload = ToolsJson(now.AddMinutes(-10), [OfficialToolRows[0]]);
+        var olderPayload = ToolsJson(now.AddMinutes(-20), []);
+        var replacementPayload = ToolsJson(now.AddMinutes(-10), [OfficialToolRows[1]]);
+        try
+        {
+            var transport = new RoutedToolsTransport(
+                tools: [firstPayload, firstPayload, olderPayload, replacementPayload]);
+            await using (var service = new LauncherBannersContentService(
+                ManifestJson(null),
+                root,
+                bannerEndpoint,
+                transport,
+                () => now,
+                TimeSpan.FromMinutes(15),
+                codesEndpoint: codesEndpoint,
+                toolsEndpoint: toolsEndpoint))
+            {
+                var updates = 0;
+                service.Updated += (_, _) => updates++;
+                Assert.Empty(service.OfficialToolsFor("gi"));
+
+                await service.RefreshAsync();
+                var firstRead = service.OfficialToolsFor("gi");
+                Assert.Equal("wiki", Assert.Single(firstRead).Id);
+                Assert.NotSame(firstRead, service.OfficialToolsFor("gi"));
+                Assert.Empty(service.OfficialToolsFor("hsr"));
+                Assert.Empty(service.OfficialToolsFor("wuwa"));
+
+                await service.RefreshAsync();
+                await service.RefreshAsync();
+                await service.RefreshAsync();
+
+                Assert.Equal("wiki", Assert.Single(service.OfficialToolsFor("gi")).Id);
+                Assert.Equal(1, updates);
+                Assert.Equal(4, transport.ToolsRequests);
+                Assert.Equal(toolsEndpoint, transport.ToolsEndpoint);
+                Assert.Equal(firstPayload, File.ReadAllBytes(new LauncherBannersCache(root).LastKnownGoodToolsPath));
+            }
+
+            await using (var restarted = new LauncherBannersContentService(
+                ManifestJson(null),
+                root,
+                bannerEndpoint,
+                new RoutedToolsTransport(),
+                () => now,
+                TimeSpan.FromMinutes(15),
+                codesEndpoint: codesEndpoint,
+                toolsEndpoint: toolsEndpoint))
+            {
+                Assert.Equal("wiki", Assert.Single(restarted.OfficialToolsFor("gi")).Id);
+            }
+
+            var removedPayload = ToolsJson(now.AddMinutes(-5), []);
+            await using var removal = new LauncherBannersContentService(
+                ManifestJson(null),
+                root,
+                bannerEndpoint,
+                new RoutedToolsTransport(tools: [removedPayload]),
+                () => now,
+                TimeSpan.FromMinutes(15),
+                codesEndpoint: codesEndpoint,
+                toolsEndpoint: toolsEndpoint);
+            var removalUpdates = 0;
+            removal.Updated += (_, _) => removalUpdates++;
+            Assert.Single(removal.OfficialToolsFor("gi"));
+
+            await removal.RefreshAsync();
+
+            Assert.Empty(removal.OfficialToolsFor("gi"));
+            Assert.Equal(1, removalUpdates);
+            Assert.Empty(new LauncherBannersCache(root).TryLoadLastKnownGoodTools(now)!.Tools);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task Tool_failure_cannot_suppress_independent_banner_or_code_refreshes()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-tools-independent-" + Guid.NewGuid().ToString("N"));
+        var now = DateTimeOffset.Parse("2026-07-17T01:00:00Z");
+        var bannerPayload = ManifestIdentityJson(now.AddMinutes(-20), 'b');
+        var codesPayload = CodesJson(now.AddMinutes(-10), "INDEPENDENT", 'c');
+        var transport = new RoutedToolsTransport(
+            banners: [bannerPayload],
+            codes: [codesPayload],
+            tools: [Encoding.UTF8.GetBytes("{")]);
+        try
+        {
+            await using var service = new LauncherBannersContentService(
+                ManifestJson(null),
+                root,
+                new Uri("http://127.0.0.1:32123/launcher-banners-v1.json"),
+                transport,
+                () => now,
+                TimeSpan.FromMinutes(15),
+                codesEndpoint: new Uri("http://127.0.0.1:32123/launcher-codes-v1.json"),
+                toolsEndpoint: new Uri("http://127.0.0.1:32123/launcher-tools-v1.json"));
+            var updates = 0;
+            service.Updated += (_, _) => updates++;
+
+            await service.RefreshAsync();
+
+            Assert.Equal(now.AddMinutes(-20), service.Current.GeneratedAt);
+            Assert.Equal("INDEPENDENT", Assert.Single(service.Current.Games["gi"].Codes).Code);
+            Assert.Empty(service.OfficialToolsFor("gi"));
+            Assert.Equal(1, updates);
+            var cache = new LauncherBannersCache(root);
+            Assert.True(File.Exists(cache.LastKnownGoodManifestPath));
+            Assert.True(File.Exists(cache.LastKnownGoodCodesPath));
+            Assert.False(File.Exists(cache.LastKnownGoodToolsPath));
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
 
     [Fact]
@@ -202,38 +522,20 @@ public sealed class LauncherBannersContentTests
     }
 
     [Fact]
-    public void Display_projection_preserves_permanent_and_collab_collections()
+    public void Parser_requires_each_schema_v1_game_to_have_exactly_empty_collections()
     {
-        var character = new LauncherBannersCharacter("a", "Alpha", 5, true, null, []);
-        var games = new Dictionary<string, LauncherBannersGame>(StringComparer.Ordinal);
-        foreach (var game in new[] { "gi", "hsr", "zzz", "wuwa", "ae" })
-        {
-            var collections = game == "hsr"
-                ? new[]
-                {
-                    new LauncherBannersCollection("permanent", "Permanent", "Always available", [character]),
-                    new LauncherBannersCollection("collab", "Collab", "Collaboration pool", [character]),
-                }
-                : [new LauncherBannersCollection("permanent", "Permanent", "Always available", [character])];
-            games[game] = new LauncherBannersGame(game, "global", null, [], collections: collections);
-        }
-        var health = new LauncherBannersHealth(
-            "ok",
-            games.ToDictionary(
-                pair => pair.Key,
-                _ => new LauncherBannersGameHealth("ok", null, 0),
-                StringComparer.Ordinal));
-        var manifest = new LauncherBannersManifest(
-            1,
-            new string('a', 64),
-            DateTimeOffset.Parse("2026-07-17T00:00:00Z"),
-            health,
-            games);
+        var accepted = LauncherBannersManifestParser.Parse(ManifestJson(null), true, DateTimeOffset.UtcNow);
+        Assert.All(accepted.Games.Values, game => Assert.Empty(game.Upcoming));
 
-        var projected = manifest.ForDisplayAt(DateTimeOffset.Parse("2026-07-17T01:00:00Z"));
+        var missing = JsonNode.Parse(Encoding.UTF8.GetString(ManifestJson(null)))!.AsObject();
+        missing["games"]!["gi"]!.AsObject().Remove("collections");
+        Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.Parse(
+            JsonSerializer.SerializeToUtf8Bytes(missing), true, DateTimeOffset.UtcNow));
 
-        Assert.Equal(["permanent", "collab"], projected.Games["hsr"].Collections.Select(item => item.Kind));
-        Assert.Equal(["permanent"], projected.Games["gi"].Collections.Select(item => item.Kind));
+        var nonEmpty = JsonNode.Parse(Encoding.UTF8.GetString(ManifestJson(null)))!.AsObject();
+        nonEmpty["games"]!["gi"]!["collections"] = new JsonArray(new JsonObject());
+        Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.Parse(
+            JsonSerializer.SerializeToUtf8Bytes(nonEmpty), true, DateTimeOffset.UtcNow));
     }
 
     [Theory]
@@ -485,7 +787,25 @@ public sealed class LauncherBannersContentTests
     }
 
     [Fact]
-    public async Task Every_available_selected_current_character_has_resolvable_bundled_art()
+    public void V2_bundled_generated_snapshot_matches_its_javascript_revision_and_has_independent_Endfield_systems()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Site", "src", "data", "generated", "launcher-banners-v2.json"))) directory = directory.Parent;
+        Assert.NotNull(directory);
+        var payload = File.ReadAllBytes(Path.Combine(directory!.FullName, "Site", "src", "data", "generated", "launcher-banners-v2.json"));
+        using var document = JsonDocument.Parse(payload);
+        var generatedAt = document.RootElement.GetProperty("generatedAt").GetDateTimeOffset();
+        var manifest = LauncherBannersManifestParser.Parse(payload, observedAt: generatedAt);
+        Assert.Equal(2, manifest.SchemaVersion);
+        Assert.Equal(manifest.Revision, LauncherBannersCache.ComputeSemanticRevision(payload));
+        Assert.NotNull(manifest.Games["ae"].Current!.BannerSystem);
+        Assert.All(manifest.Games["ae"].Upcoming.Where(phase => !phase.Announced), phase => Assert.NotNull(phase.BannerSystem));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task Every_available_selected_current_character_has_resolvable_bundled_art(int schemaVersion)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Site", "src", "data", "generated", "launcher-banners-v1.json"))) directory = directory.Parent;
@@ -494,9 +814,13 @@ public sealed class LauncherBannersContentTests
         var cache = Path.Combine(Path.GetTempPath(), "nyx-launcher-cache-" + Guid.NewGuid().ToString("N"));
         try
         {
+            var payload = File.ReadAllBytes(Path.Combine(generated, $"launcher-banners-v{schemaVersion}.json"));
+            using var document = JsonDocument.Parse(payload);
+            var generatedAt = document.RootElement.GetProperty("generatedAt").GetDateTimeOffset();
             await using var service = new LauncherBannersContentService(
-                File.ReadAllBytes(Path.Combine(generated, "launcher-banners-v1.json")),
+                payload,
                 cache,
+                clock: () => generatedAt,
                 bundledAssetsDirectory: Path.Combine(generated, "launcher-art"));
             var currentGames = service.Current.Games.Where(pair => pair.Value.Current is not null).ToArray();
             Assert.NotEmpty(currentGames);
@@ -916,80 +1240,6 @@ public sealed class LauncherBannersContentTests
     }
 
     [Fact]
-    public void Pinned_user_art_survives_manifest_pruning_and_rejects_tampering()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-cache-" + Guid.NewGuid().ToString("N"));
-        var source = Path.Combine(root, "source.webp");
-        Directory.CreateDirectory(root);
-        try
-        {
-            var bytes = WebpFixture(7);
-            File.WriteAllBytes(source, bytes);
-            var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-            var asset = new LauncherBannersAsset("asset", "test", "/launcher-art/test.webp", null, "image/webp", bytes.Length, new(1, 1), hash, new(0, 0, 1, 1), new("center", "contain", .7, .5));
-            var cache = new LauncherBannersCache(root);
-
-            var relative = cache.PinUserArt("gi", asset, source);
-            var pinned = Assert.IsType<string>(cache.TryResolveUserArt(relative));
-            cache.PruneManagedCache(1, activeManifest: null);
-            Assert.Equal(pinned, cache.TryResolveUserArt(relative));
-
-            File.WriteAllBytes(pinned, WebpFixture(8));
-            Assert.Null(cache.TryResolveUserArt(relative));
-            Assert.Equal(relative, cache.PinUserArt("gi", asset, source));
-            Assert.NotNull(cache.TryResolveUserArt(relative));
-        }
-        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
-    }
-
-    [Fact]
-    public void Pinned_user_art_remains_resolvable_when_state_recovers_its_backup()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "nyx-pinned-backup-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        try
-        {
-            var cache = new LauncherBannersCache(Path.Combine(root, "cache"));
-            var stateStore = new LauncherStateStore(Path.Combine(root, "state"));
-            var firstBytes = WebpFixture(11);
-            var secondBytes = WebpFixture(12);
-            var firstSource = Path.Combine(root, "first.webp");
-            var secondSource = Path.Combine(root, "second.webp");
-            File.WriteAllBytes(firstSource, firstBytes);
-            File.WriteAllBytes(secondSource, secondBytes);
-            var first = AssetFor("first", firstBytes);
-            var second = AssetFor("second", secondBytes);
-            var firstPin = cache.PinUserArt("gi", first, firstSource);
-            var secondPin = cache.PinUserArt("gi", second, secondSource);
-
-            stateStore.Save(StateWithPin(first.Id, firstPin));
-            stateStore.Save(StateWithPin(second.Id, secondPin));
-            File.WriteAllText(stateStore.StatePath, "{bad");
-
-            var recovered = stateStore.Load();
-            Assert.Equal(LauncherStateReadStatus.Recovered, recovered.Status);
-            Assert.Equal(firstPin, recovered.State!.Appearance["gi"].PinnedArtFile);
-            Assert.NotNull(cache.TryResolveUserArt(firstPin));
-        }
-        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
-
-        static LauncherBannersAsset AssetFor(string id, byte[] bytes)
-        {
-            var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-            return new(id, "test", $"/launcher-art/{id}.webp", null, "image/webp", bytes.Length,
-                new(1, 1), hash, new(0, 0, 1, 1), new("center", "contain", .7, .5));
-        }
-
-        static LauncherState StateWithPin(string variant, string pin) => LauncherState.Defaults() with
-        {
-            Appearance = new Dictionary<string, GameAppearanceState>(StringComparer.Ordinal)
-            {
-                ["gi"] = new() { ArtPinned = true, ArtVariant = variant, PinnedArtFile = pin },
-            },
-        };
-    }
-
-    [Fact]
     public void Bundled_asset_is_resolved_and_validated_before_managed_cache()
     {
         var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-cache-" + Guid.NewGuid().ToString("N"));
@@ -1024,7 +1274,9 @@ public sealed class LauncherBannersContentTests
                 new FakeTransport(new HttpRequestException("offline")),
                 () => DateTimeOffset.Parse("2026-07-17T00:00:00Z"),
                 TimeSpan.FromMinutes(15));
+            Assert.Null(service.LastRefreshDuration);
             await service.RefreshAsync();
+            Assert.NotNull(service.LastRefreshDuration);
             Assert.Equal(bundled.Revision, service.Current.Revision);
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
@@ -1053,93 +1305,6 @@ public sealed class LauncherBannersContentTests
 
             Assert.Equal(LauncherBannersManifestParser.Parse(newerPayload, true, now).Revision, service.Current.Revision);
             Assert.Equal(now.AddHours(-1), service.Current.GeneratedAt);
-        }
-        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
-    }
-
-    [Fact]
-    public async Task Service_preserves_reviewed_bundled_collections_when_newer_remote_omits_them()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-cache-" + Guid.NewGuid().ToString("N"));
-        var now = DateTimeOffset.Parse("2026-07-17T02:00:00Z");
-        var bundled = ManifestWithHsrCollectionsJson(now.AddHours(-2), 'a', "Bundled permanent", includeCollab: true);
-        var remote = ManifestWithHsrCollectionsJson(now.AddHours(-1), 'b', null, includeCollab: false);
-        try
-        {
-            await using var service = new LauncherBannersContentService(
-                bundled,
-                root,
-                new Uri("http://127.0.0.1:32123/launcher-banners-v1.json"),
-                new FakeTransport(remote),
-                () => now,
-                TimeSpan.FromMinutes(15));
-
-            await service.RefreshAsync();
-
-            Assert.Equal(LauncherBannersManifestParser.Parse(remote, true, now).Revision, service.Current.Revision);
-            Assert.Equal(["permanent", "collab"], service.Current.Games["hsr"].Collections.Select(item => item.Kind));
-            Assert.Equal("Bundled permanent", service.Current.Games["hsr"].Collections[0].Label);
-        }
-        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
-    }
-
-    [Fact]
-    public async Task Service_uses_newer_remote_collections_when_the_remote_supplies_them()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-cache-" + Guid.NewGuid().ToString("N"));
-        var now = DateTimeOffset.Parse("2026-07-17T02:00:00Z");
-        var bundled = ManifestWithHsrCollectionsJson(now.AddHours(-2), 'a', "Bundled permanent", includeCollab: true);
-        var remote = ManifestWithHsrCollectionsJson(now.AddHours(-1), 'b', "Remote permanent", includeCollab: false);
-        try
-        {
-            await using var service = new LauncherBannersContentService(
-                bundled,
-                root,
-                new Uri("http://127.0.0.1:32123/launcher-banners-v1.json"),
-                new FakeTransport(remote),
-                () => now,
-                TimeSpan.FromMinutes(15));
-
-            await service.RefreshAsync();
-
-            var collection = Assert.Single(service.Current.Games["hsr"].Collections);
-            Assert.Equal("permanent", collection.Kind);
-            Assert.Equal("Remote permanent", collection.Label);
-        }
-        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
-    }
-
-    [Fact]
-    public async Task Service_reapplies_bundled_collections_to_cached_remote_after_restart()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-cache-" + Guid.NewGuid().ToString("N"));
-        var now = DateTimeOffset.Parse("2026-07-17T02:00:00Z");
-        var bundled = ManifestWithHsrCollectionsJson(now.AddHours(-2), 'a', "Bundled permanent", includeCollab: true);
-        var remote = ManifestWithHsrCollectionsJson(now.AddHours(-1), 'b', null, includeCollab: false);
-        try
-        {
-            await using (var service = new LauncherBannersContentService(
-                bundled,
-                root,
-                new Uri("http://127.0.0.1:32123/launcher-banners-v1.json"),
-                new FakeTransport(remote),
-                () => now,
-                TimeSpan.FromMinutes(15)))
-            {
-                await service.RefreshAsync();
-                Assert.Equal(["permanent", "collab"], service.Current.Games["hsr"].Collections.Select(item => item.Kind));
-            }
-
-            await using var restarted = new LauncherBannersContentService(
-                bundled,
-                root,
-                new Uri("http://127.0.0.1:32123/launcher-banners-v1.json"),
-                new FakeTransport(new HttpRequestException("offline")),
-                () => now,
-                TimeSpan.FromMinutes(15));
-
-            Assert.Equal(LauncherBannersManifestParser.Parse(remote, true, now).Revision, restarted.Current.Revision);
-            Assert.Equal(["permanent", "collab"], restarted.Current.Games["hsr"].Collections.Select(item => item.Kind));
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
@@ -1310,7 +1475,9 @@ public sealed class LauncherBannersContentTests
                 () => now,
                 TimeSpan.FromMinutes(15));
             Assert.Equal(LauncherBannersManifestParser.Parse(bundled, true, now).Revision, service.Current.Revision);
+            Assert.Null(service.LastRefreshDuration);
             await service.RefreshAsync();
+            Assert.NotNull(service.LastRefreshDuration);
             Assert.Equal(LauncherBannersManifestParser.Parse(healthy, true, now).Revision, service.Current.Revision);
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
@@ -1437,15 +1604,15 @@ public sealed class LauncherBannersContentTests
         var bundled = UpcomingManifest(now.AddHours(-2), 'a', bundledNames, now.AddHours(1), now.AddHours(2));
         var emptyRemote = UpcomingManifest(now.AddHours(-3), 'b', new Dictionary<string, string>(), now.AddHours(1), now.AddHours(2));
 
-        var merged = LauncherBannersContentService.ApplyBundledCollections(emptyRemote, bundled);
+        var merged = LauncherBannersContentService.ApplyBundledUpcomingFallback(emptyRemote, bundled);
         Assert.All(merged.Games, pair => Assert.Equal($"bundled-{pair.Key}", Assert.Single(Assert.Single(pair.Value.Upcoming).Characters).Name));
         Assert.Equal(
             merged.Games.Select(pair => Assert.Single(Assert.Single(pair.Value.Upcoming).Characters).Name),
-            LauncherBannersContentService.ApplyBundledCollections(emptyRemote, bundled).Games.Select(pair => Assert.Single(Assert.Single(pair.Value.Upcoming).Characters).Name));
+            LauncherBannersContentService.ApplyBundledUpcomingFallback(emptyRemote, bundled).Games.Select(pair => Assert.Single(Assert.Single(pair.Value.Upcoming).Characters).Name));
         Assert.All(merged.ForDisplayAt(now.AddHours(2)).Games.Values, game => Assert.Empty(game.Upcoming));
 
         var remoteNames = new Dictionary<string, string>(StringComparer.Ordinal) { ["hsr"] = "remote-hsr" };
-        var authoritative = LauncherBannersContentService.ApplyBundledCollections(
+        var authoritative = LauncherBannersContentService.ApplyBundledUpcomingFallback(
             UpcomingManifest(now.AddHours(-1), 'c', remoteNames, now.AddHours(1), now.AddHours(2)),
             bundled);
         Assert.Equal("remote-hsr", Assert.Single(Assert.Single(authoritative.Games["hsr"].Upcoming).Characters).Name);
@@ -1474,7 +1641,7 @@ public sealed class LauncherBannersContentTests
         var cache = new LauncherBannersCache(root);
         try
         {
-            var merged = LauncherBannersContentService.ApplyBundledCollections(newer, bundled);
+            var merged = LauncherBannersContentService.ApplyBundledUpcomingFallback(newer, bundled);
             Assert.Empty(merged.Games["ae"].Upcoming);
             Assert.Empty(merged.ForDisplayAt(now).Games["ae"].Upcoming);
 
@@ -1680,6 +1847,31 @@ public sealed class LauncherBannersContentTests
     }
 
     [Fact]
+    public async Task Service_records_whole_refresh_duration_when_shutdown_cancels_it()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-duration-" + Guid.NewGuid().ToString("N"));
+        var transport = new BlockingCodesTransport();
+        try
+        {
+            await using var service = CodesService(
+                root,
+                DateTimeOffset.Parse("2026-07-17T01:00:00Z"),
+                transport);
+            var refresh = service.RefreshAsync();
+            await transport.Started.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+            await service.DisposeAsync();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresh);
+            Assert.NotNull(service.LastRefreshDuration);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public async Task Service_never_returns_a_current_phase_after_it_expires()
     {
         var root = Path.Combine(Path.GetTempPath(), "nyx-launcher-cache-" + Guid.NewGuid().ToString("N"));
@@ -1715,6 +1907,147 @@ public sealed class LauncherBannersContentTests
         Assert.Equal(
             TimeSpan.FromHours(6),
             LauncherBannersContentService.CalculateNextRefreshDelay(manifest, now, TimeSpan.FromHours(6)));
+    }
+
+    [Fact]
+    public void V2_retains_independent_system_windows_and_promotes_only_a_still_active_phase()
+    {
+        var now = DateTimeOffset.Parse("2026-07-17T00:00:00Z");
+        var manifest = LauncherBannersManifestParser.Parse(V2ManifestJson(now), observedAt: now);
+        var game = manifest.Games["ae"];
+        Assert.Equal("Resplendent Spectrum", game.Current!.Phase);
+        Assert.Equal("re-factor", game.Current.BannerSystem);
+        Assert.Equal("Winter Hunt", Assert.Single(game.Concurrent).Phase);
+        Assert.Equal("chartered", game.Concurrent[0].BannerSystem);
+        Assert.Equal(2, game.Upcoming.Count);
+        Assert.Equal(game.Upcoming[0].Start, game.Upcoming[1].Start);
+        Assert.NotEqual(game.Upcoming[0].BannerSystem, game.Upcoming[1].BannerSystem);
+        Assert.Equal(TimeSpan.FromHours(1) + TimeSpan.FromSeconds(30),
+            LauncherBannersContentService.CalculateNextRefreshDelay(manifest, now, TimeSpan.FromHours(6)));
+        Assert.Empty(manifest.ForDisplayAt(now.AddHours(1)).Games["ae"].Concurrent);
+        Assert.Equal("re-factor", manifest.ForDisplayAt(now.AddHours(1)).Games["ae"].Current!.BannerSystem);
+        Assert.Null(manifest.ForDisplayAt(now.AddHours(4)).Games["ae"].Current);
+        Assert.Equal(2, manifest.ForDisplayAt(now.AddHours(5)).Games["ae"].Upcoming.Count);
+        Assert.Empty(manifest.ForDisplayAt(now.AddHours(6)).Games["ae"].Upcoming);
+        Assert.Equal(TimeSpan.FromMinutes(30) + TimeSpan.FromSeconds(30),
+            LauncherBannersContentService.CalculateNextRefreshDelay(manifest, now.AddHours(5.5), TimeSpan.FromHours(6)));
+
+        var reversed = JsonNode.Parse(V2ManifestJson(now))!.AsObject();
+        var ae = reversed["games"]!["ae"]!;
+        var primary = ae["current"]!.DeepClone();
+        ae["current"] = ae["concurrent"]![0]!.DeepClone();
+        ae["concurrent"] = new JsonArray(primary);
+        var reverseManifest = LauncherBannersManifestParser.Parse(JsonSerializer.SerializeToUtf8Bytes(reversed), observedAt: now);
+        Assert.Equal("re-factor", reverseManifest.ForDisplayAt(now.AddHours(1)).Games["ae"].Current!.BannerSystem);
+        Assert.Empty(reverseManifest.ForDisplayAt(now.AddHours(1)).Games["ae"].Concurrent);
+    }
+
+    [Fact]
+    public void V2_rejects_ambiguous_systems_and_v1_rejects_all_v2_fields()
+    {
+        var now = DateTimeOffset.Parse("2026-07-17T00:00:00Z");
+        void Reject(Action<JsonObject> mutate)
+        {
+            var root = JsonNode.Parse(V2ManifestJson(now))!.AsObject();
+            mutate(root);
+            Assert.Throws<InvalidDataException>(() => LauncherBannersManifestParser.Parse(JsonSerializer.SerializeToUtf8Bytes(root), observedAt: now));
+        }
+        Reject(root => root["schemaVersion"] = 1);
+        Reject(root => root["games"]!["ae"]!.AsObject().Remove("concurrent"));
+        Reject(root => root["games"]!["ae"]!["concurrent"] = null);
+        Reject(root => root["games"]!["ae"]!["concurrent"]![0]!["bannerSystem"] = "unknown");
+        Reject(root => root["games"]!["ae"]!["concurrent"]![0]!["bannerSystem"] = "re-factor");
+        Reject(root => root["games"]!["ae"]!["upcoming"]![1]!["bannerSystem"] = "chartered");
+        Reject(root => root["games"]!["gi"]!["current"]!["bannerSystem"] = "chartered");
+        Reject(root => root["games"]!["hsr"]!["concurrent"] = root["games"]!["ae"]!["concurrent"]!.DeepClone());
+        Reject(root => root["games"]!["ae"]!["concurrent"]![0]!["remaining"]!["durationSeconds"] = 1);
+        Reject(root => root["games"]!["ae"]!["concurrent"]![0]!["unexpected"] = true);
+        Reject(root => root["games"]!["ae"]!["current"] = null);
+    }
+
+    [Fact]
+    public void V2_semantic_revision_ignores_both_countdowns_but_not_independent_windows()
+    {
+        var now = DateTimeOffset.Parse("2026-07-17T00:00:00Z");
+        var root = JsonNode.Parse(V2ManifestJson(now))!.AsObject();
+        var before = LauncherBannersCache.ComputeSemanticRevision(JsonSerializer.SerializeToUtf8Bytes(root));
+        root["games"]!["ae"]!["current"]!["remaining"]!["durationSeconds"] = 42;
+        root["games"]!["ae"]!["concurrent"]![0]!["remaining"]!["durationSeconds"] = 43;
+        Assert.Equal(before, LauncherBannersCache.ComputeSemanticRevision(JsonSerializer.SerializeToUtf8Bytes(root)));
+        root["games"]!["ae"]!["concurrent"]![0]!["end"] = now.AddHours(2).ToString("O");
+        Assert.NotEqual(before, LauncherBannersCache.ComputeSemanticRevision(JsonSerializer.SerializeToUtf8Bytes(root)));
+    }
+
+    [Fact]
+    public async Task V2_cache_hydrates_concurrent_art_preserves_v1_and_survives_code_refresh_and_invalid_remote()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "nyx-v2-cache-" + Guid.NewGuid().ToString("N"));
+        var now = DateTimeOffset.UtcNow;
+        try
+        {
+            var cache = new LauncherBannersCache(directory);
+            string Hash(byte marker) => Convert.ToHexString(SHA256.HashData(WebpFixture(marker))).ToLowerInvariant();
+            var legacy = WithSemanticRevision(Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(ManifestWithAssetJson(now.AddMinutes(-10)))
+                .Replace(Hash(31), Hash(77), StringComparison.Ordinal)));
+            await cache.PromoteAsync(LauncherBannersManifestParser.Parse(legacy, observedAt: now), legacy, new FakeTransport(WebpFixture(77)));
+            var payload = V2ManifestJson(now);
+            var manifest = LauncherBannersManifestParser.Parse(payload, observedAt: now);
+            var transport = new QueueAssetTransport(WebpFixture(31), WebpFixture(50));
+            await cache.PromoteAsync(manifest, payload, transport);
+            Assert.Equal(2, transport.AssetRequests);
+            Assert.Equal(legacy, File.ReadAllBytes(cache.LastKnownGoodManifestPath));
+            Assert.Equal(payload, File.ReadAllBytes(cache.LastKnownGoodV2ManifestPath));
+            Assert.Equal(1, cache.TryLoadLastKnownGood(now)!.SchemaVersion);
+            Assert.Equal(2, cache.TryLoadLastKnownGood(now, preferV2: true)!.SchemaVersion);
+            Assert.NotNull(cache.TryResolveManagedAsset(manifest.Games["ae"].Concurrent[0].Characters[0].Icon!));
+            await using (var service = new LauncherBannersContentService(legacy, directory,
+                new Uri(LauncherBannersTransport.ProductionV2Endpoint),
+                new RoutedManifestTransport(payload, CodesJson(now, "V2SYNC", 'c')), () => now))
+            {
+                await service.RefreshAsync();
+                Assert.Single(service.Current.Games["ae"].Concurrent);
+                Assert.Equal("V2SYNC", Assert.Single(service.Current.Games["ae"].Codes).Code);
+            }
+            await using (var offline = new LauncherBannersContentService(legacy, directory,
+                new Uri(LauncherBannersTransport.ProductionV2Endpoint), new FakeTransport(Encoding.UTF8.GetBytes("invalid")), () => now))
+            {
+                await offline.RefreshAsync();
+                Assert.Equal(2, offline.Current.SchemaVersion);
+                Assert.Single(offline.Current.Games["ae"].Concurrent);
+            }
+            Assert.Equal(payload, File.ReadAllBytes(cache.LastKnownGoodV2ManifestPath));
+            File.WriteAllText(cache.LastKnownGoodV2ManifestPath, "invalid");
+            Assert.Equal(1, cache.TryLoadLastKnownGood(now, preferV2: true)!.SchemaVersion);
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+    }
+
+    private static byte[] V2ManifestJson(DateTimeOffset now)
+    {
+        var root = JsonNode.Parse(ManifestWithAssetJson(now))!.AsObject();
+        root["schemaVersion"] = 2;
+        foreach (var game in root["games"]!.AsObject()) game.Value!["concurrent"] = new JsonArray();
+        var ae = root["games"]!["ae"]!;
+        var current = root["games"]!["gi"]!["current"]!.DeepClone();
+        current["phase"] = "Resplendent Spectrum";
+        current["bannerSystem"] = "re-factor";
+        current["end"] = now.AddHours(4).ToString("O");
+        current["remaining"]!["endsAt"] = now.AddHours(4).ToString("O");
+        current["remaining"]!["durationSeconds"] = 4 * 3600;
+        ae["current"] = current;
+        var secondary = JsonNode.Parse(ManifestWithGiPhasesJson(now, now.AddHours(-2), now.AddHours(1)))!["games"]!["gi"]!["current"]!.DeepClone();
+        secondary["phase"] = "Winter Hunt";
+        secondary["bannerSystem"] = "chartered";
+        ae["concurrent"] = new JsonArray(secondary);
+        ae["upcoming"] = new JsonArray(new[] { "chartered", "re-factor" }.Select(system => (JsonNode)new JsonObject
+        {
+            ["phase"] = "Next " + system,
+            ["bannerSystem"] = system,
+            ["start"] = now.AddHours(5).ToString("O"),
+            ["end"] = now.AddHours(6).ToString("O"),
+            ["characters"] = new JsonArray(TestCharacterJson("next-" + system)),
+        }).ToArray());
+        return WithSemanticRevision(JsonSerializer.SerializeToUtf8Bytes(root));
     }
 
     private static LauncherBannersManifest ManifestModel(params LauncherBannersAsset[] assets)
@@ -1774,10 +2107,45 @@ public sealed class LauncherBannersContentTests
         return new LauncherBannersManifest(1, new string(revision, 64), generatedAt, health, games);
     }
 
+    private static readonly (string Game, string Id, string Label, string Url)[] OfficialToolRows =
+    [
+        ("gi", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/genshin/home"),
+        ("gi", "material-calculator", "Material Calculator", "https://act.hoyolab.com/ys/event/calculator-sea/index.html"),
+        ("gi", "battle-records", "Battle Records", "https://act.hoyolab.com/app/community-game-records-sea/index.html?gid=2#/ys"),
+        ("gi", "upgrade-guide", "Upgrade Guide", "https://act.hoyolab.com/ys/event/bbs-lineup-ys-sea/index.html"),
+        ("hsr", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/hsr/home"),
+        ("hsr", "material-calculator", "Material Calculator", "https://act.hoyolab.com/sr/event/cultivation-tool/index.html?game_biz=hkrpg_global&hyl_auth_required=true&hyl_hide_status_bar=true&hyl_landscape=true&hyl_presentation_style=fullscreen&mode=fullscreen&utm_campaign=CultivationTool&utm_id=6&utm_medium=tools&utm_source=hoyolab&win_mode=fullscreen#/tools/calculation?target=Character"),
+        ("hsr", "battle-records", "Battle Records", "https://act.hoyolab.com/app/community-game-records-sea/index.html?gid=6#/hsr"),
+        ("hsr", "upgrade-guide", "Upgrade Guide", "https://act.hoyolab.com/sr/event/cultivation-tool/#/tools/suggestion"),
+        ("zzz", "wiki", "Wiki", "https://wiki.hoyolab.com/pc/zzz/home"),
+        ("zzz", "battle-records", "Battle Records", "https://act.hoyolab.com/app/zzz-game-record/index.html"),
+        ("ae", "wiki", "Wiki", "https://wiki.skport.com/endfield"),
+        ("ae", "material-calculator", "Material Calculator", "https://game.skport.com/tools/endfield/cost-calculator?header=0"),
+        ("ae", "team-recommendations", "Team Recommendations", "https://game.skport.com/tools/endfield/rec-team"),
+    ];
+
+    private static byte[] ToolsJson(
+        DateTimeOffset generatedAt,
+        IEnumerable<(string Game, string Id, string Label, string Url)>? rows = null) =>
+        JsonSerializer.SerializeToUtf8Bytes(new JsonObject
+        {
+            ["schemaVersion"] = 1,
+            ["generatedAt"] = generatedAt.ToString("O"),
+            ["tools"] = new JsonArray((rows ?? OfficialToolRows)
+                .Select(static row => (JsonNode)new JsonObject
+                {
+                    ["game"] = row.Game,
+                    ["id"] = row.Id,
+                    ["label"] = row.Label,
+                    ["url"] = row.Url,
+                })
+                .ToArray()),
+        });
+
     private static byte[] ManifestJson(string? url)
     {
         var newsUrl = url is null ? "null" : $"\"{url}\"";
-        var games = string.Join(',', new[] { "gi", "hsr", "zzz", "wuwa", "ae" }.Select(game => $"\"{game}\":{{\"game\":\"{game}\",\"region\":\"global\",\"current\":null,\"news\":[{{\"id\":\"{game}-news\",\"title\":\"Official\",\"type\":\"event\",\"start\":null,\"end\":null,\"url\":{newsUrl}}}]}}"));
+        var games = string.Join(',', new[] { "gi", "hsr", "zzz", "wuwa", "ae" }.Select(game => $"\"{game}\":{{\"game\":\"{game}\",\"region\":\"global\",\"current\":null,\"collections\":[],\"news\":[{{\"id\":\"{game}-news\",\"title\":\"Official\",\"type\":\"event\",\"start\":null,\"end\":null,\"url\":{newsUrl}}}]}}"));
         var health = string.Join(',', new[] { "gi", "hsr", "zzz", "wuwa", "ae" }.Select(game => $"\"{game}\":{{\"status\":\"ok\",\"reason\":null,\"newsCount\":1}}"));
         return WithSemanticRevision(Encoding.UTF8.GetBytes($"{{\"schemaVersion\":1,\"revision\":\"{new string('a', 64)}\",\"generatedAt\":\"2026-07-17T00:00:00.000Z\",\"health\":{{\"status\":\"ok\",\"games\":{{{health}}}}},\"games\":{{{games}}}}}"));
     }
@@ -1795,46 +2163,6 @@ public sealed class LauncherBannersContentTests
         root["generatedAt"] = generatedAt.ToString("O");
         root["revision"] = new string(revision, 64);
         return WithSemanticRevision(JsonSerializer.SerializeToUtf8Bytes(root));
-    }
-
-    private static byte[] ManifestWithHsrCollectionsJson(
-        DateTimeOffset generatedAt,
-        char revision,
-        string? permanentLabel,
-        bool includeCollab)
-    {
-        var root = JsonNode.Parse(Encoding.UTF8.GetString(ManifestJson(null)))!.AsObject();
-        root["generatedAt"] = generatedAt.ToString("O");
-        root["revision"] = new string(revision, 64);
-        var collections = new JsonArray();
-        if (permanentLabel is not null)
-        {
-            collections.Add(Collection("permanent", permanentLabel, "Always available", "permanent-character"));
-        }
-        if (includeCollab)
-        {
-            collections.Add(Collection("collab", "Collab", "Always available", "collab-character"));
-        }
-        root["games"]!["hsr"]!["collections"] = collections;
-        return WithSemanticRevision(JsonSerializer.SerializeToUtf8Bytes(root));
-
-        static JsonObject Collection(string kind, string label, string availability, string characterId) => new()
-        {
-            ["kind"] = kind,
-            ["label"] = label,
-            ["availability"] = availability,
-            ["characters"] = new JsonArray(new JsonObject
-            {
-                ["id"] = characterId,
-                ["name"] = characterId,
-                ["rarity"] = 5,
-                ["limited"] = false,
-                ["debut"] = null,
-                ["characterUrl"] = null,
-                ["icon"] = null,
-                ["variants"] = new JsonArray(),
-            }),
-        };
     }
 
     private static byte[] CodesJson(DateTimeOffset generatedAt, string code, char revision)
@@ -2051,6 +2379,54 @@ public sealed class LauncherBannersContentTests
 
         public Task<byte[]> GetAssetAsync(Uri endpoint, int maximumBytes, CancellationToken cancellationToken) =>
             Task.FromException<byte[]>(new InvalidOperationException("Launcher art was not requested."));
+    }
+
+    private sealed class RoutedToolsTransport(
+        IEnumerable<object>? banners = null,
+        IEnumerable<object>? codes = null,
+        IEnumerable<object>? tools = null) : ILauncherBannersTransport
+    {
+        private readonly Queue<object> bannerResponses = new(banners ?? []);
+        private readonly Queue<object> codeResponses = new(codes ?? []);
+        private readonly Queue<object> toolResponses = new(tools ?? []);
+
+        public int BannerRequests { get; private set; }
+        public int CodesRequests { get; private set; }
+        public int ToolsRequests { get; private set; }
+        public Uri? ToolsEndpoint { get; private set; }
+
+        public Task<byte[]> GetManifestAsync(Uri endpoint, int maximumBytes, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (endpoint.AbsolutePath.EndsWith("/launcher-tools-v1.json", StringComparison.Ordinal))
+            {
+                ToolsRequests++;
+                ToolsEndpoint = endpoint;
+                return Next(toolResponses);
+            }
+            if (endpoint.AbsolutePath.EndsWith("/launcher-codes-v1.json", StringComparison.Ordinal))
+            {
+                CodesRequests++;
+                return Next(codeResponses);
+            }
+            BannerRequests++;
+            return Next(bannerResponses);
+        }
+
+        public Task<byte[]> GetAssetAsync(Uri endpoint, int maximumBytes, CancellationToken cancellationToken) =>
+            Task.FromException<byte[]>(new InvalidOperationException("Launcher art was not requested."));
+
+        private static async Task<byte[]> Next(Queue<object> responses)
+        {
+            await Task.Yield();
+            if (responses.Count == 0) throw new HttpRequestException("offline");
+            return responses.Dequeue() switch
+            {
+                byte[] payload => payload,
+                Exception exception => throw exception,
+                _ => throw new InvalidDataException("Unexpected test response."),
+            };
+        }
     }
 
     private sealed class BlockingCodesTransport : ILauncherBannersTransport

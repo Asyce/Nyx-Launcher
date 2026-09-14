@@ -41,7 +41,7 @@ internal sealed class WuWaPublicEvidenceParser
                 || versionElement.ValueKind is not JsonValueKind.String
                 || !StrictThreePartVersion.TryParse(versionElement.GetString(), out var version)
                 || !TryGetExactUnique(root, "isPreDownload", out var preDownload)
-                || preDownload.ValueKind is not JsonValueKind.False
+                || preDownload.ValueKind is not (JsonValueKind.False or JsonValueKind.True)
                 || !TryGetExactUnique(root, "appId", out var appId)
                 || appId.ValueKind is not JsonValueKind.String
                 || !string.Equals(appId.GetString(), "50004", StringComparison.Ordinal))
@@ -51,7 +51,7 @@ internal sealed class WuWaPublicEvidenceParser
 
             return new(
                 PublisherGameInspectionReason.None,
-                new(version.ToString(), IsPreDownload: false, "50004"),
+                new(version.ToString(), preDownload.GetBoolean(), "50004"),
                 bounded.Fingerprint,
                 bounded.Snapshot);
         }

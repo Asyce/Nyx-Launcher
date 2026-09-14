@@ -94,27 +94,30 @@ public sealed class PackagedAchievementHelperReadinessTests
     }
 
     [Fact]
-    public void Unsupported_endfield_export_slot_remains_empty_even_when_feature_flags_are_on()
+    public void Endfield_exposes_only_its_enabled_by_default_pull_lane()
     {
         const string gameId = "ae";
         var slot = ExportProviderCatalog.Get(gameId);
-        var flags = LauncherFeatureFlags.Defaults() with
+        var disabled = LauncherFeatureFlags.Defaults() with
         {
-            ZzzPulls = true,
-            ZzzAchievements = true,
-            WuWaPulls = true,
-            WuWaAchievements = true,
-            EndfieldPulls = true,
+            EndfieldPulls = false,
             EndfieldAchievements = true,
         };
 
-        Assert.Equal(ExportKind.None, slot.SupportedKinds);
+        Assert.Equal(ExportKind.Pulls, slot.SupportedKinds);
+        Assert.Equal(
+            ExportKind.Pulls,
+            ExportProviderCatalog.GetEnabled(
+                gameId,
+                LauncherFeatureFlags.Defaults(),
+                AchievementExportSources.Game).SupportedKinds);
         Assert.Equal(
             ExportKind.None,
             ExportProviderCatalog.GetEnabled(
                 gameId,
-                flags,
+                disabled,
                 AchievementExportSources.Game).SupportedKinds);
+        Assert.False(LauncherFeatureFlags.Defaults().EndfieldAchievements);
     }
 
     [Fact]

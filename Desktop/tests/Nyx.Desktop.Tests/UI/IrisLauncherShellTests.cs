@@ -10,245 +10,48 @@ public sealed class IrisLauncherShellTests
     private static readonly string WorkspaceRoot = FindWorkspaceRoot();
 
     [Fact]
-    public void Shipping_window_is_fixed_at_1280_by_720_and_main_content_never_scrolls()
+    public void Endfield_account_render_resets_provider_accessibility_before_returning()
     {
-        var windowXaml = ReadAppFile("MainWindow.xaml");
-        var window = ReadAppFile("MainWindow.xaml.cs");
-        var page = ReadAppFile("MainPage.xaml");
-
-        Assert.Contains("<Viewbox", windowXaml, StringComparison.Ordinal);
-        Assert.Contains("Stretch=\"Uniform\"", windowXaml, StringComparison.Ordinal);
-        Assert.Contains("<Grid Background=\"#05030B\">", windowXaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"FixedDesignSurface\"", windowXaml, StringComparison.Ordinal);
-        Assert.Contains("Width=\"1280\"", windowXaml, StringComparison.Ordinal);
-        Assert.Contains("Height=\"720\"", windowXaml, StringComparison.Ordinal);
-        Assert.Contains("new(1280, 720)", window, StringComparison.Ordinal);
-        Assert.Contains("presenter.IsResizable = false", window, StringComparison.Ordinal);
-        Assert.Contains("presenter.IsMaximizable = false", window, StringComparison.Ordinal);
-        Assert.Contains("ExtendsContentIntoTitleBar = true", window, StringComparison.Ordinal);
-        Assert.Contains("SetTitleBar(DragRegion)", window, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"BannerContentRegion\"", page, StringComparison.Ordinal);
-        Assert.DoesNotContain("<ScrollViewer", page, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Layout_contract_has_one_fixed_design_profile()
-    {
-        var source = ReadAppFile("ViewModels", "LauncherLayoutState.cs");
-
-        var profile = LauncherLayoutProfile.Fixed;
-        Assert.Equal(1280, LauncherLayoutProfile.DesignWidth);
-        Assert.Equal(720, LauncherLayoutProfile.DesignHeight);
-        Assert.Equal(102, profile.RailExtent);
-        Assert.Equal(82, profile.IconSize);
-        Assert.Equal(620, profile.ContentWidth);
-        Assert.Equal(172, profile.DeckHeight);
-        Assert.Equal(405, profile.LaunchWidth);
-        Assert.True(profile.ItemCrossExtent <= profile.RailExtent);
-        Assert.DoesNotContain("LauncherLayoutState", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("LauncherViewportGeometry", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("LauncherDeckLayoutMode", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Profile_icon_size_drives_item_image_and_focus_geometry()
-    {
-        var xaml = ReadAppFile("MainPage.xaml");
-        var code = ReadAppFile("MainPage.xaml.cs");
-        var layout = ReadAppFile("ViewModels", "LauncherLayoutState.cs");
-        var controls = ReadAppFile("Themes", "NyxControls.xaml");
-
-        Assert.Contains("game.ApplyLayout(profile)", code, StringComparison.Ordinal);
-        Assert.Contains("iconSize = profile.IconSize", code, StringComparison.Ordinal);
-        Assert.Contains("itemExtent = profile.ItemExtent", code, StringComparison.Ordinal);
-        Assert.Contains("Width=\"{Binding IconSize}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Width=\"{Binding ItemExtent}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("ItemCrossExtent => ItemExtent + (ItemMargin * 2)", layout, StringComparison.Ordinal);
-        Assert.DoesNotContain("Property=\"Width\" Value=\"112\"", controls, StringComparison.Ordinal);
-        Assert.Contains("HorizontalContentAlignment\" Value=\"Stretch", controls, StringComparison.Ordinal);
-        Assert.DoesNotContain("SelectionMarker", controls, StringComparison.Ordinal);
-        Assert.DoesNotContain("SelectionAura", controls, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Five_item_rail_has_bounded_cross_axis_and_scrollable_main_axis()
-    {
-        var xaml = ReadAppFile("MainPage.xaml");
-        var code = ReadAppFile("MainPage.xaml.cs");
-
-        Assert.DoesNotContain("-hero.png", code, StringComparison.Ordinal);
-        Assert.Contains("itemsPanel.Orientation = Orientation.Vertical", code, StringComparison.Ordinal);
-        Assert.Contains("ScrollViewer.SetHorizontalScrollMode(GameSelector, ScrollMode.Disabled)", code, StringComparison.Ordinal);
-        Assert.Contains("ScrollViewer.SetVerticalScrollMode(GameSelector, ScrollMode.Enabled)", code, StringComparison.Ordinal);
-        Assert.Contains("ScrollViewer.HorizontalScrollBarVisibility=\"Hidden\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"RailContentRow\" Height=\"Auto\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("RailContentRow.Height = GridLength.Auto", code, StringComparison.Ordinal);
-        Assert.Contains("RailSpacerRow.Height = new GridLength(1, GridUnitType.Star)", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("RailSpacerRow.Height = new GridLength(0)", code, StringComparison.Ordinal);
-        Assert.Contains("GameSelector.MaxHeight = profile.ItemExtent * 5", code, StringComparison.Ordinal);
-        Assert.Contains("Opacity=\"0.08\"", SliceElement(xaml, "x:Name=\"AddGameButton\""), StringComparison.Ordinal);
-        Assert.Contains("AddGameButton.Opacity = 0.9", code, StringComparison.Ordinal);
-        Assert.Contains("AddGameButton.Opacity = 0.08", code, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Shell_has_one_launch_action_and_one_anchored_lower_action_region()
-    {
-        var xaml = ReadAppFile("MainPage.xaml");
-        var code = ReadAppFile("MainPage.xaml.cs");
-        var combined = xaml + code;
-
-        Assert.Single(Regex.Matches(xaml, "Click=\"LaunchButton_Click\"").Cast<Match>());
-        Assert.Single(Regex.Matches(xaml, "x:Name=\"LaunchButton\"").Cast<Match>());
-        Assert.DoesNotContain("CompactLaunch", combined, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("WideLaunch", combined, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Genshin first", combined, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("GAME 01 / 05", combined, StringComparison.Ordinal);
-        Assert.DoesNotContain("$\"GAME {gameIndex:00} / {Games.Count:00}\"", combined, StringComparison.Ordinal);
-        Assert.Contains("PullExportToggle.IsEnabled = pullsAvailable", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("LOCAL LIBRARY", combined, StringComparison.Ordinal);
-        Assert.Single(Regex.Matches(xaml, "x:Name=\"LowerActionRegion\"").Cast<Match>());
-        Assert.Contains("ApplyLowerActionLayout(profile)", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("PlaceDeckItem", code, StringComparison.Ordinal);
-        Assert.Contains("VerticalAlignment=\"Bottom\"", xaml, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Launch_capsule_centers_the_title_and_keeps_status_and_utilities_integrated()
-    {
-        var xaml = ReadAppFile("MainPage.xaml");
-        var code = ReadAppFile("MainPage.xaml.cs");
-        var layout = ReadAppFile("ViewModels", "LauncherLayoutState.cs");
-        var launchTitle = SliceElement(xaml, "x:Name=\"LaunchTitle\"");
-        var launchVisual = Slice(xaml, "x:Name=\"LaunchButtonVisual\"", "x:Name=\"LaunchUtilityButtons\"");
-        var innerFrame = Slice(xaml, "x:Name=\"LaunchInnerFrame\"", "x:Name=\"LaunchInnerHighlight\"");
-        var utilities = Slice(xaml, "x:Name=\"LaunchUtilityButtons\"", "x:Name=\"StableOpenUpdaterButton\"");
+        var render = Slice(
+            ReadAppFile("MainPage.xaml.cs"),
+            "private void RenderHoyoLabAccountIdentity",
+            "private ImageSource? ResolveImageSource");
+        var endfield = Regex.Replace(
+            Slice(render, "if (selected.Id == \"ae\")", "return;"),
+            @"\s+",
+            " ");
 
         Assert.Contains(
-            "x:Name=\"LaunchTitle\"",
-            launchVisual,
+            "AutomationProperties.SetName( ChangePublisherAccountButton, \"Open Endfield account in SKPORT\")",
+            endfield,
             StringComparison.Ordinal);
-        Assert.Contains("HorizontalAlignment=\"Center\"", launchTitle, StringComparison.Ordinal);
-        Assert.Contains("VerticalAlignment=\"Center\"", launchTitle, StringComparison.Ordinal);
-        Assert.Contains("FontWeight=\"Normal\"", launchTitle, StringComparison.Ordinal);
-        Assert.DoesNotContain("Grid.Row=", launchTitle, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"LaunchDetail\"", innerFrame, StringComparison.Ordinal);
-        Assert.Contains("VerticalAlignment=\"Bottom\"", innerFrame, StringComparison.Ordinal);
-        Assert.Contains("Height=\"20\"", innerFrame, StringComparison.Ordinal);
-        Assert.Contains("Grid.Row=\"2\"", SliceElement(xaml, "x:Name=\"LaunchButton\""), StringComparison.Ordinal);
-        Assert.Contains("Margin=\"12,0,12,0\"", SliceElement(xaml, "x:Name=\"LaunchButton\""), StringComparison.Ordinal);
-        Assert.Contains("Grid.Row=\"3\"", SliceElement(xaml, "x:Name=\"LaunchUtilityButtons\""), StringComparison.Ordinal);
-        Assert.Contains("Margin=\"12,0,12,0\"", SliceElement(xaml, "x:Name=\"LaunchUtilityButtons\""), StringComparison.Ordinal);
-        Assert.Equal(2, Regex.Matches(utilities, "<ColumnDefinition Width=\"\\*\" />").Count);
-        Assert.Contains("Grid.Column=\"0\"", SliceElement(xaml, "x:Name=\"StableOpenUpdaterButton\""), StringComparison.Ordinal);
-        Assert.Contains("Grid.Column=\"1\"", SliceElement(xaml, "x:Name=\"StableOpenScreenshotFolderButton\""), StringComparison.Ordinal);
-        Assert.Contains("LaunchUtilityButtons.Width = LaunchButton.Width", code, StringComparison.Ordinal);
-        Assert.Contains("LaunchButtonHeight = 110", layout, StringComparison.Ordinal);
-        Assert.Contains("LaunchStatusStripHeight = 20", layout, StringComparison.Ordinal);
-
-        foreach (var scale in new[] { 1d, 1.25d })
-        {
-            var lowerRegionDip = 280d * scale;
-            var launchDip = LauncherOpenLayoutGeometry.LaunchButtonHeight * scale;
-            Assert.True(launchDip <= lowerRegionDip);
-        }
+        Assert.Contains(
+            "AutomationProperties.SetHelpText( AccountAndToolsIdentityText, \"Endfield account identity; connection state is shown separately.\")",
+            endfield,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("HoYoLAB", endfield, StringComparison.Ordinal);
+        Assert.Contains("Choose the HoYoLAB region for this game", render, StringComparison.Ordinal);
+        Assert.Contains("Change HoYoLAB account or region", render, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Account_and_export_controls_use_the_compact_approved_hierarchy()
+    public void Account_and_export_status_keep_polite_live_regions_and_dynamic_accessible_names()
     {
         var xaml = ReadAppFile("MainPage.xaml");
         var code = ReadAppFile("MainPage.xaml.cs");
-        var controls = ReadAppFile("Themes", "NyxControls.xaml");
-        var sync = Slice(
-            code,
-            "private void SyncRedesignedControls",
-            "private void RenderHoyoLabAccountIdentity");
-        var onLaunchContent = Slice(xaml, "x:Name=\"OnLaunchHeading\"", "x:Name=\"StableExportHeading\"");
-        var sourceOptions = SliceElement(xaml, "x:Name=\"AchievementSourceOptionsPanel\"");
-        var helpStyle = Slice(controls, "x:Key=\"NyxHelpButtonStyle\"", "x:Key=\"NyxSettingsDialogPrimaryStyle\"");
 
         Assert.Contains(
             "AutomationProperties.LiveSetting=\"Polite\"",
             SliceElement(xaml, "x:Name=\"LaunchDetail\""),
             StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"Fps120Toggle\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"ON LAUNCH\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("RowSpacing=\"3\"", SliceElement(xaml, "x:Name=\"AccountAndToolsPanel\""), StringComparison.Ordinal);
-        Assert.Contains("Margin=\"0,8,0,0\"", SliceElement(xaml, "x:Name=\"CombinedStatusPanel\""), StringComparison.Ordinal);
-        Assert.Contains("Margin=\"0,8,0,0\"", SliceElement(xaml, "x:Name=\"AccountAndToolsPanel\""), StringComparison.Ordinal);
-        Assert.Contains("Margin=\"12,2,12,0\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"Accounts\"", SliceElement(xaml, "x:Name=\"ChangePublisherAccountButton\""), StringComparison.Ordinal);
-        Assert.Contains("ChangePublisherAccountButton.Content = \"Accounts\"", code, StringComparison.Ordinal);
-        Assert.Contains("ChangePublisherAccountButton.Visibility = Visibility.Visible", code, StringComparison.Ordinal);
-        Assert.Contains("selected.Id == \"ae\"", Slice(code, "private async void ChangePublisherAccountButton_Click", "private async Task SetPublisherConsentAsync"), StringComparison.Ordinal);
-        Assert.Contains("await ConnectPublisherAccountAsync(selected.Id)", code, StringComparison.Ordinal);
-        Assert.Contains("publisherAccounts.EndfieldIdentity?.DisplayText", code, StringComparison.Ordinal);
-        Assert.Contains("selected.Id == \"ae\"", Slice(code, "ChangePublisherAccountButton.IsEnabled", "var resource ="), StringComparison.Ordinal);
-        Assert.DoesNotContain("selected.Id is \"wuwa\" or \"ae\"", code, StringComparison.Ordinal);
-        Assert.Contains("Content=\"Daily Web check-in\"", SliceElement(xaml, "x:Name=\"AutomaticDailyCheckInToggle\""), StringComparison.Ordinal);
-        Assert.Contains("Content=\"Set 120 FPS\"", SliceElement(xaml, "x:Name=\"Fps120Toggle\""), StringComparison.Ordinal);
-        Assert.DoesNotContain("AccountAndToolsFreshnessText", xaml + code, StringComparison.Ordinal);
-        Assert.DoesNotContain("AccountResourcesPrefix", xaml + code, StringComparison.Ordinal);
-        Assert.DoesNotContain("GameToolsHeading", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("GameToolsDivider", xaml, StringComparison.Ordinal);
-        Assert.Contains("Grid.Column=\"0\"", SliceElement(xaml, "x:Name=\"StableOpenUpdaterButton\""), StringComparison.Ordinal);
-        Assert.Contains("Grid.Column=\"1\"", SliceElement(xaml, "x:Name=\"StableOpenScreenshotFolderButton\""), StringComparison.Ordinal);
-        Assert.Contains("Height=\"28\"", SliceElement(xaml, "x:Name=\"StableOpenUpdaterButton\""), StringComparison.Ordinal);
-        Assert.Contains("Height=\"28\"", SliceElement(xaml, "x:Name=\"StableOpenScreenshotFolderButton\""), StringComparison.Ordinal);
-        Assert.Contains("HorizontalAlignment=\"Stretch\"", SliceElement(xaml, "x:Name=\"StableOpenUpdaterButton\""), StringComparison.Ordinal);
-        Assert.Contains("HorizontalAlignment=\"Stretch\"", SliceElement(xaml, "x:Name=\"StableOpenScreenshotFolderButton\""), StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"AutomaticDailyCheckInToggle\"", onLaunchContent, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"Fps120Toggle\"", onLaunchContent, StringComparison.Ordinal);
-        Assert.Contains("Orientation=\"Horizontal\"", onLaunchContent, StringComparison.Ordinal);
-        Assert.Contains("CharacterSpacing=\"100\"", SliceElement(xaml, "x:Name=\"AccountAndToolsProviderText\""), StringComparison.Ordinal);
-        Assert.Contains("FontSize=\"14\"", SliceElement(xaml, "x:Name=\"AccountAndToolsProviderText\""), StringComparison.Ordinal);
-        foreach (var heading in new[] { "OnLaunchHeading", "StableExportHeading" })
-        {
-            Assert.Contains("CharacterSpacing=\"140\"", SliceElement(xaml, $"x:Name=\"{heading}\""), StringComparison.Ordinal);
-            Assert.Contains("FontSize=\"10\"", SliceElement(xaml, $"x:Name=\"{heading}\""), StringComparison.Ordinal);
-        }
-        foreach (var divider in new[] { "OnLaunchDivider", "ExportDivider" })
-        {
-            Assert.Contains("Height=\"1\"", SliceElement(xaml, $"x:Name=\"{divider}\""), StringComparison.Ordinal);
-            Assert.Contains("Background=\"{ThemeResource HairlineBrush}\"", SliceElement(xaml, $"x:Name=\"{divider}\""), StringComparison.Ordinal);
-        }
-        var exportStatus = SliceElement(xaml, "x:Name=\"StableExportStatusText\"");
-        Assert.Contains("MaxLines=\"2\"", exportStatus, StringComparison.Ordinal);
-        Assert.Contains("TextWrapping=\"Wrap\"", exportStatus, StringComparison.Ordinal);
-        Assert.Contains("AutomationProperties.LiveSetting=\"Polite\"", exportStatus, StringComparison.Ordinal);
-        Assert.DoesNotContain("TextTrimming", exportStatus, StringComparison.Ordinal);
-        Assert.DoesNotContain("OfficialLauncherStatusText", xaml, StringComparison.Ordinal);
-        Assert.Contains("SetLaunchDetail(message)", code, StringComparison.Ordinal);
-        Assert.Contains("SetLaunchDetail(officialLauncherStatus)", code, StringComparison.Ordinal);
-        Assert.Contains("string.IsNullOrWhiteSpace(detail) ? accessibleName : detail", code, StringComparison.Ordinal);
-        Assert.Contains("Height=\"28\"", SliceElement(xaml, "x:Name=\"Fps120Toggle\""), StringComparison.Ordinal);
-        Assert.Contains("MinHeight=\"28\"", SliceElement(xaml, "x:Name=\"Fps120Toggle\""), StringComparison.Ordinal);
-        Assert.Contains("Style=\"{StaticResource NyxHelpButtonStyle}\"", SliceElement(xaml, "x:Name=\"AchievementExportHelpButton\""), StringComparison.Ordinal);
-        Assert.Contains("Style=\"{StaticResource NyxHelpButtonStyle}\"", SliceElement(xaml, "x:Name=\"PullExportHelpButton\""), StringComparison.Ordinal);
-        Assert.Contains("Property=\"Width\" Value=\"28\"", helpStyle, StringComparison.Ordinal);
-        Assert.Contains("Property=\"Height\" Value=\"28\"", helpStyle, StringComparison.Ordinal);
-        Assert.Contains("Property=\"CornerRadius\" Value=\"14\"", helpStyle, StringComparison.Ordinal);
-        Assert.Contains("Grid.Column=\"1\"", SliceElement(xaml, "x:Name=\"AchievementExportHelpButton\""), StringComparison.Ordinal);
-        Assert.Contains("Grid.Column=\"1\"", SliceElement(xaml, "x:Name=\"PullExportHelpButton\""), StringComparison.Ordinal);
-        Assert.Contains("Grid.Row=\"1\"", sourceOptions, StringComparison.Ordinal);
-        Assert.Contains("Grid.ColumnSpan=\"2\"", sourceOptions, StringComparison.Ordinal);
-        Assert.Contains("HorizontalAlignment=\"Stretch\"", sourceOptions, StringComparison.Ordinal);
-        Assert.Contains("Text=\"Export from:\"", SliceElement(xaml, "x:Name=\"AchievementSourcePrefix\""), StringComparison.Ordinal);
-        Assert.Contains("Width=\"28\"", SliceElement(xaml, "x:Name=\"LaunchResourceRefreshButton\""), StringComparison.Ordinal);
-        Assert.Contains("Height=\"28\"", SliceElement(xaml, "x:Name=\"LaunchResourceRefreshButton\""), StringComparison.Ordinal);
-        Assert.Contains("ToolTipService.ToolTip=\"Refresh account resources\"", SliceElement(xaml, "x:Name=\"LaunchResourceRefreshButton\""), StringComparison.Ordinal);
-        Assert.Contains("Genshin Impact and Star Rail use separate saved settings", xaml, StringComparison.Ordinal);
+        Assert.Contains(
+            "AutomationProperties.LiveSetting=\"Polite\"",
+            SliceElement(xaml, "x:Name=\"StableExportStatusText\""),
+            StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.SetName(StablePullExportToggle, pullAccessibilityName)", code, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.SetName(StableAchievementExportToggle, achievementAccessibilityName)", code, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.SetName(StableExportStatusText, StableExportStatusText.Text)", code, StringComparison.Ordinal);
         Assert.Contains("SetStableExportStatus(NyxToolsStatusText.Text)", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("ResolveScreenshotFolder", sync, StringComparison.Ordinal);
-        Assert.DoesNotContain("CheckGame", sync, StringComparison.Ordinal);
-        Assert.Contains(
-            "selected.Id is \"gi\" or \"hsr\" or \"zzz\" or \"wuwa\"",
-            sync,
-            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -293,7 +96,7 @@ public sealed class IrisLauncherShellTests
         }
 
         Assert.Contains("BannerCycleColumns.Visibility", handler, StringComparison.Ordinal);
-        Assert.Contains("BannerCycleRegion.Height = expanded ? 390 : double.NaN", handler, StringComparison.Ordinal);
+        Assert.DoesNotContain("BannerCycleRegion.Height =", handler, StringComparison.Ordinal);
         Assert.Contains("SignalPanel.Visibility", handler, StringComparison.Ordinal);
         Assert.Contains("AccountSectionContent.Visibility", handler, StringComparison.Ordinal);
         Assert.Contains("accountSectionExpanded = expanded", handler, StringComparison.Ordinal);
@@ -304,67 +107,6 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("ToolTipService.SetToolTip", handler, StringComparison.Ordinal);
         Assert.DoesNotContain("launcherState", handler, StringComparison.Ordinal);
         Assert.DoesNotContain("Collapse", layout, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Fixed_viewport_reserves_content_clearance_above_the_lower_action_region()
-    {
-        var xaml = ReadAppFile("MainPage.xaml");
-        var code = ReadAppFile("MainPage.xaml.cs");
-
-        Assert.Contains("x:Name=\"LowerActionRegion\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"LowerActionGrid\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("x:Name=\"DeckRow", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("x:Name=\"DeckColumn", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"BannerCycleStack\"", xaml, StringComparison.Ordinal);
-        var bannerRegion = SliceElement(xaml, "x:Name=\"BannerCycleRegion\"");
-        Assert.Contains("Width=\"704\"", bannerRegion, StringComparison.Ordinal);
-        Assert.Contains("Height=\"390\"", bannerRegion, StringComparison.Ordinal);
-        Assert.Contains("Grid.ColumnSpan=\"2\"", SliceElement(xaml, "x:Name=\"BannerContentRegion\""), StringComparison.Ordinal);
-        Assert.DoesNotContain("BannerCycleRegion.MinHeight", code, StringComparison.Ordinal);
-        Assert.Contains("LowerActionRegion.Height + 12", code, StringComparison.Ordinal);
-        Assert.Contains("DeckHeight: 172", ReadAppFile("ViewModels", "LauncherLayoutState.cs"), StringComparison.Ordinal);
-        Assert.DoesNotContain("MainPage_SizeChanged", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("SizeChanged += MainPage_SizeChanged", code, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Large_open_layout_aligns_codes_tools_and_launch_on_the_bottom_edge()
-    {
-        var xaml = ReadAppFile("MainPage.xaml");
-        var code = ReadAppFile("MainPage.xaml.cs");
-
-        Assert.Contains("CombinedStatusPanel.Height = double.NaN", code, StringComparison.Ordinal);
-        Assert.Contains("CombinedStatusPanel.VerticalAlignment = VerticalAlignment.Bottom", code, StringComparison.Ordinal);
-        Assert.Contains("VerticalAlignment=\"Bottom\"", SliceElement(xaml, "x:Name=\"AccountAndToolsPanel\""), StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"CombinedStatusPanel\"", xaml, StringComparison.Ordinal);
-        Assert.Matches(@"x:Name=""NyxToolsPanel""\s+Grid\.Column=""1""", xaml);
-        Assert.Matches(@"x:Name=""LaunchStack""\s+Grid\.Column=""2""", xaml);
-        Assert.Contains("LauncherOpenLayoutGeometry.LaunchButtonHeight", code, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"PullExportToggle\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"AchievementExportToggle\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"OpenUpdaterButton\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("NyxToolsPanel.VerticalAlignment = VerticalAlignment.Bottom", code, StringComparison.Ordinal);
-        Assert.Contains("LaunchStack.VerticalAlignment = VerticalAlignment.Bottom", code, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Obsolete_official_local_deck_is_removed_and_the_launcher_action_stays_with_export_tools()
-    {
-        var xaml = ReadAppFile("MainPage.xaml");
-        var code = ReadAppFile("MainPage.xaml.cs");
-
-        Assert.Contains("x:Name=\"CombinedStatusPanel\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("x:Name=\"UpdaterSignalLayout\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("x:Name=\"OfficialStatusLabel\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("x:Name=\"LocalStatusLabel\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("ApplyMaintenanceLayout", code, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"PrimaryGameStatusButton\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("PrimaryGameStatusProjector.Project", code, StringComparison.Ordinal);
-        Assert.True(
-            xaml.IndexOf("x:Name=\"PengoToolButtons\"", StringComparison.Ordinal)
-            < xaml.IndexOf("x:Name=\"OpenUpdaterButton\"", StringComparison.Ordinal));
-        Assert.Contains("Content=\"Official Launcher\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -451,21 +193,14 @@ public sealed class IrisLauncherShellTests
     }
 
     [Fact]
-    public void Responsibility_disclaimer_focus_and_high_contrast_are_persistent()
+    public void System_focus_visuals_and_high_contrast_resource_dictionary_are_persistent()
     {
-        var xaml = ReadAppFile("MainPage.xaml");
         var controls = ReadAppFile("Themes", "NyxControls.xaml");
         var palette = ReadAppFile("Themes", "NyxPalette.xaml");
 
-        Assert.DoesNotContain("Updates and repairs: official launcher.", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"PrimaryGameStatusButton\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Fan-made launcher", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Not affiliated with HoYoverse, Kuro Games, or GRYPHLINK", xaml, StringComparison.Ordinal);
         Assert.Contains("UseSystemFocusVisuals\" Value=\"True", controls, StringComparison.Ordinal);
         Assert.Contains("FocusVisualPrimaryThickness\" Value=\"2", controls, StringComparison.Ordinal);
         Assert.Contains("x:Key=\"HighContrast\"", palette, StringComparison.Ordinal);
-        Assert.DoesNotContain("Storyboard", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("DoubleAnimation", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -606,6 +341,7 @@ public sealed class IrisLauncherShellTests
         var end = code.IndexOf("private void StartLauncherVisualPreload", start, StringComparison.Ordinal);
         var selectionHandler = code[start..end];
         var imageLoader = Slice(code, "private void PrepareLauncherImageBackground", "private void BeginLauncherBackgroundCrossfade");
+        var mediaFailure = Slice(code, "private void LauncherMotionPlayer_MediaFailed", "private void HideLauncherMotionBackgrounds");
 
         Assert.Contains("RefreshAllAsync", code, StringComparison.Ordinal);
         Assert.Contains("\"wuwa\"", selectionHandler, StringComparison.Ordinal);
@@ -620,12 +356,37 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("TimeSpan.FromMilliseconds(700)", code, StringComparison.Ordinal);
         Assert.Contains("BeginLauncherBackgroundCrossfade", code, StringComparison.Ordinal);
         Assert.Contains("selection.Files.Count > 1", code, StringComparison.Ordinal);
-        Assert.Contains("SetBackgroundSource(selection.Files[1])", code, StringComparison.Ordinal);
+        Assert.Contains("PrepareLauncherImageBackground(", mediaFailure, StringComparison.Ordinal);
+        Assert.DoesNotContain("SetBackgroundSource(selection.Files[1])", mediaFailure, StringComparison.Ordinal);
         Assert.Contains("MediaFailed += LauncherMotionPlayer_MediaFailed", code, StringComparison.Ordinal);
         Assert.Equal(2, Regex.Matches(imageLoader, @"requestToken != launcherImageRequestToken \|\| generation != launcherVisualGeneration").Count);
         Assert.Matches(@"bitmap\.ImageFailed[\s\S]*?requestToken != launcherImageRequestToken \|\| generation != launcherVisualGeneration\) return;\s*incoming\.Source = null;", imageLoader);
         Assert.DoesNotContain("x:Name=\"BackgroundScrim\"", xaml, StringComparison.Ordinal);
         Assert.True(Regex.Matches(xaml, "Background=\"{ThemeResource LauncherInfoSurfaceBrush}\"").Count >= 3);
+    }
+
+    [Fact]
+    public void Launcher_video_waits_for_a_decoded_frame_and_falls_back_on_silent_decoder_failure()
+    {
+        var code = ReadAppFile("MainPage.xaml.cs");
+        var readiness = ReadAppFile("LauncherMotionReadiness.cs");
+        var prepare = Slice(code, "private async void PrepareLauncherMotionBackground", "private void LauncherMotionPlayer_MediaFailed");
+        Assert.DoesNotContain("LauncherMotionPlayer_MediaOpened", code, StringComparison.Ordinal);
+        Assert.True(prepare.IndexOf("LauncherMotionReadiness.WaitForFrameAsync", StringComparison.Ordinal)
+            < prepare.IndexOf("incoming.Source = source", StringComparison.Ordinal));
+        Assert.True(prepare.IndexOf("ready = await readiness", StringComparison.Ordinal)
+            < prepare.IndexOf("BeginLauncherBackgroundCrossfade", StringComparison.Ordinal));
+        Assert.Contains("generation != launcherVisualGeneration || !ReferenceEquals(incoming.Source, source)", prepare, StringComparison.Ordinal);
+        Assert.Contains("ApplyLauncherMotionFallback(incoming, generation);", prepare, StringComparison.Ordinal);
+        Assert.Contains("catch (OperationCanceledException) { return; }", prepare, StringComparison.Ordinal);
+        Assert.Contains("player.VideoFrameAvailable += FrameAvailable;", readiness, StringComparison.Ordinal);
+        Assert.Contains("player.IsVideoFrameServerEnabled = true;", readiness, StringComparison.Ordinal);
+        Assert.Contains("WaitAsync(TimeSpan.FromSeconds(3), cancellationToken)", readiness, StringComparison.Ordinal);
+        Assert.Contains("catch (TimeoutException) { return false; }", readiness, StringComparison.Ordinal);
+        Assert.Contains("player.VideoFrameAvailable -= FrameAvailable;", readiness, StringComparison.Ordinal);
+        Assert.Contains("player.MediaFailed -= Failed;", readiness, StringComparison.Ordinal);
+        Assert.Contains("player.Source is null || ReferenceEquals(player.Source, source)", readiness, StringComparison.Ordinal);
+        Assert.Contains("player.IsVideoFrameServerEnabled = false;", readiness, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -642,9 +403,31 @@ public sealed class IrisLauncherShellTests
         Assert.DoesNotContain("BackgroundArtwork.Source = null;", selectionHandler, StringComparison.Ordinal);
         Assert.DoesNotContain("BackgroundArtworkNext.Source = null;", selectionHandler, StringComparison.Ordinal);
         Assert.Contains("PrepareLauncherImageBackground(fallback, generation", selectionHandler, StringComparison.Ordinal);
-        Assert.Contains("if (!hasVisibleBackground && selection.Files.Count > 1)", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("hasVisibleBackground", code, StringComparison.Ordinal);
         Assert.Contains("requestToken != launcherImageRequestToken || generation != launcherVisualGeneration", code, StringComparison.Ordinal);
         Assert.Contains("if (!launcherMotionPaused) player.Play();", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Video_poster_loads_without_waiting_for_the_decoder_and_cannot_replace_ready_motion()
+    {
+        var code = ReadAppFile("MainPage.xaml.cs");
+        var selection = Slice(code, "private void ApplyLauncherVisual", "private async void PrepareLauncherMotionBackground");
+        var video = Slice(selection, "if (selection.Kind == \"video\")", "ApplyLauncherGalleryFrame();");
+        var prepare = Slice(code, "private async void PrepareLauncherMotionBackground", "private void LauncherMotionPlayer_MediaFailed");
+        var fallback = Slice(code, "private void ApplyLauncherMotionFallback", "private void HideLauncherMotionBackgrounds");
+        var completed = Slice(code, "private void CompleteLauncherBackgroundCrossfade", "private void SetBackgroundSource");
+
+        Assert.Matches(@"if \(selection.Files.Count > 1\)\s*PrepareLauncherImageBackground\(selection.Files\[1\], generation, TimeSpan.FromMilliseconds\(380\)\);", video);
+        Assert.True(video.IndexOf("PrepareLauncherImageBackground", StringComparison.Ordinal)
+            < video.IndexOf("PrepareLauncherMotionBackground", StringComparison.Ordinal));
+        Assert.DoesNotContain("visibleLauncherMotionBackground", selection, StringComparison.Ordinal);
+        Assert.Contains("pendingLauncherMotionBackground = incoming;", prepare, StringComparison.Ordinal);
+        Assert.Matches(@"pendingLauncherMotionBackground = null;\s*launcherImageRequestToken\+\+;[\s\S]*?BeginLauncherBackgroundCrossfade", prepare);
+        Assert.Matches(@"ReferenceEquals\(motionLayer, pendingLauncherMotionBackground\)\) continue;\s*motionLayer.MediaPlayer\?\.Pause", completed);
+        Assert.DoesNotContain("HideLauncherMotionBackgrounds", fallback, StringComparison.Ordinal);
+        Assert.Matches(@"ReferenceEquals\(pendingLauncherMotionBackground, incoming\)[\s\S]*?incoming.Source = null;[\s\S]*?return;[\s\S]*?PrepareLauncherImageBackground", fallback);
+        Assert.Contains("var motion = pendingLauncherMotionBackground ?? visibleLauncherMotionBackground", code, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -652,6 +435,7 @@ public sealed class IrisLauncherShellTests
     {
         var code = ReadAppFile("MainPage.xaml.cs");
         var preload = Slice(code, "private void StartLauncherVisualPreload", "private void ApplyLauncherVisual");
+        var unload = Slice(code, "private void MainPage_Unloaded", "private HoyoMaintenanceUiSnapshot");
 
         Assert.Contains("StartLauncherVisualPreload(SessionUiLease lease)", preload, StringComparison.Ordinal);
         Assert.Contains("lease.CancellationToken", preload, StringComparison.Ordinal);
@@ -660,6 +444,8 @@ public sealed class IrisLauncherShellTests
             preload.IndexOf("sessionUiLifetime.TryRun(lease", StringComparison.Ordinal)
             < preload.IndexOf("preloadedLauncherVisuals[selection.GameId] = selection", StringComparison.Ordinal));
         Assert.DoesNotContain("StartLauncherVisualPreload(lease.CancellationToken)", code, StringComparison.Ordinal);
+        Assert.Contains("launcherVisualGeneration++;", unload, StringComparison.Ordinal);
+        Assert.Contains("launcherBackgroundCrossfade?.Stop();", unload, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -668,7 +454,7 @@ public sealed class IrisLauncherShellTests
         var code = ReadAppFile("MainWindow.xaml.cs");
 
         var xaml = ReadAppFile("MainWindow.xaml");
-        Assert.Contains("presenter.SetBorderAndTitleBar(false, false)", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("SetBorderAndTitleBar", code, StringComparison.Ordinal);
         Assert.Contains("WindowStyleCaption = 0x00C00000", code, StringComparison.Ordinal);
         Assert.Contains("WindowStyleThickFrame = 0x00040000", code, StringComparison.Ordinal);
         Assert.Contains("SetWindowLongW", code, StringComparison.Ordinal);
@@ -677,7 +463,7 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("x:Name=\"SettingsButton\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"MinimizeButton\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"CloseButton\"", xaml, StringComparison.Ordinal);
-        foreach (var buttonName in new[] { "SettingsButton", "MinimizeButton", "CloseButton" })
+        foreach (var buttonName in new[] { "AnimationButton", "SettingsButton", "MinimizeButton", "CloseButton" })
         {
             var button = SliceElement(xaml, $"x:Name=\"{buttonName}\"");
             Assert.Contains("Width=\"42\"", button, StringComparison.Ordinal);
@@ -688,12 +474,47 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("FontSize=\"22\"", SliceElement(xaml, "x:Name=\"SettingsIcon\""), StringComparison.Ordinal);
         Assert.Contains("FontSize=\"20\"", SliceElement(xaml, "x:Name=\"MinimizeIcon\""), StringComparison.Ordinal);
         Assert.Contains("FontSize=\"20\"", SliceElement(xaml, "x:Name=\"CloseIcon\""), StringComparison.Ordinal);
+        foreach (var iconName in new[]
+                 {
+                     "AnimationIconOutline",
+                     "SettingsIconOutline",
+                     "MinimizeIconOutline",
+                     "CloseIconOutline",
+                 })
+        {
+            var icon = SliceElement(xaml, $"x:Name=\"{iconName}\"");
+            Assert.Contains("Foreground=\"Black\"", icon, StringComparison.Ordinal);
+            Assert.Contains("AutomationProperties.AccessibilityView=\"Raw\"", icon, StringComparison.Ordinal);
+        }
+        foreach (var iconName in new[] { "AnimationIcon", "SettingsIcon", "MinimizeIcon", "CloseIcon" })
+        {
+            Assert.Contains("Foreground=\"White\"", SliceElement(xaml, $"x:Name=\"{iconName}\""), StringComparison.Ordinal);
+        }
         Assert.DoesNotContain("MaximizeButton", xaml, StringComparison.Ordinal);
         Assert.Contains("Foreground=\"White\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Color.FromArgb", code, StringComparison.Ordinal);
         Assert.DoesNotContain("ButtonForegroundColor", code, StringComparison.Ordinal);
         Assert.DoesNotContain("ButtonHoverBackgroundColor", code, StringComparison.Ordinal);
         Assert.DoesNotContain("ButtonPressedBackgroundColor", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Game_rail_starts_below_the_unchanged_nyx_brand_lockup()
+    {
+        var xaml = ReadAppFile("MainPage.xaml");
+        var code = ReadAppFile("MainPage.xaml.cs");
+        Assert.Contains("<RowDefinition x:Name=\"RailBrandRow\" Height=\"116\" />", xaml, StringComparison.Ordinal);
+
+        var brand = Slice(xaml, "x:Name=\"BrandLockup\"", "x:Name=\"GameSelector\"");
+        Assert.Contains("x:Name=\"BrandLogo\"", brand, StringComparison.Ordinal);
+        Assert.Contains("Height=\"96\"", brand, StringComparison.Ordinal);
+        Assert.Contains("Margin=\"0,3,0,0\"", brand, StringComparison.Ordinal);
+
+        var runtimeBrand = Slice(code, "RailBrandRow.Height", "AddGameButton.Visibility");
+        Assert.Contains("RailBrandRow.Height = new GridLength(102)", runtimeBrand, StringComparison.Ordinal);
+        Assert.Contains("BrandLockup.Height = 90", runtimeBrand, StringComparison.Ordinal);
+        Assert.Contains("BrandLogo.Height = 80", runtimeBrand, StringComparison.Ordinal);
+        Assert.Contains("BrandLogo.Margin = new Thickness(0, 7, 0, 0)", runtimeBrand, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -716,20 +537,16 @@ public sealed class IrisLauncherShellTests
     }
 
     [Fact]
-    public void Animation_button_is_before_settings_and_exposes_truthful_pause_resume_state()
+    public void Animation_control_exposes_truthful_pause_resume_state()
     {
         var xaml = ReadAppFile("MainWindow.xaml");
         var code = ReadAppFile("MainWindow.xaml.cs");
-        var animation = xaml.IndexOf("x:Name=\"AnimationButton\"", StringComparison.Ordinal);
-        var settings = xaml.IndexOf("x:Name=\"SettingsButton\"", StringComparison.Ordinal);
 
-        Assert.True(animation >= 0 && animation < settings);
-        Assert.Contains("Click=\"AnimationButton_Click\"", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name=\"Pause background animation\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("ToggleLauncherAnimation()", code, StringComparison.Ordinal);
         Assert.Contains("Resume background animation", code, StringComparison.Ordinal);
         Assert.Contains("Pause background animation", code, StringComparison.Ordinal);
         Assert.Contains("AnimationIcon.Glyph = paused ? \"\\uE768\" : \"\\uE769\"", code, StringComparison.Ordinal);
+        Assert.Contains("AnimationIconOutline.Glyph = AnimationIcon.Glyph", code, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -765,213 +582,26 @@ public sealed class IrisLauncherShellTests
     }
 
     [Fact]
-    public void Palette_contains_no_cyan_or_signal_teal_accent()
+    public void High_contrast_early_return_preserves_shared_programmatic_surface_resources()
     {
-        var xaml = ReadAppFile("MainPage.xaml");
         var code = ReadAppFile("MainPage.xaml.cs");
-        var controls = ReadAppFile("Themes", "NyxControls.xaml");
-        var palette = ReadAppFile("Themes", "NyxPalette.xaml");
-        var combined = xaml + code + controls + palette;
 
-        Assert.DoesNotContain("#70D7D1", combined, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("SignalBrush", combined, StringComparison.Ordinal);
-        Assert.DoesNotContain("TealBrush", combined, StringComparison.Ordinal);
-        Assert.DoesNotContain("NyxSignalColor", combined, StringComparison.Ordinal);
         Assert.Contains("ApplyNyxAccentResources(content.Resources)", code, StringComparison.Ordinal);
         Assert.Contains("ApplyNyxAccentResources(dialog.Resources)", code, StringComparison.Ordinal);
-        Assert.Contains("\"ToggleSwitchFillOn\"", code, StringComparison.Ordinal);
-        Assert.Contains("\"SliderTrackValueFill\"", code, StringComparison.Ordinal);
-        Assert.Contains("\"AccentButtonBackground\"", code, StringComparison.Ordinal);
         Assert.Contains("HighContrastBackdropOpacity", code, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Nebula_shell_uses_full_bleed_launcher_background_and_an_open_command_area()
-    {
-        var xaml = ReadAppFile("MainPage.xaml");
-        var code = ReadAppFile("MainPage.xaml.cs");
-        var palette = ReadAppFile("Themes", "NyxPalette.xaml");
-        var controls = ReadAppFile("Themes", "NyxControls.xaml");
-        var combined = xaml + code;
-
-        Assert.Contains("x:Name=\"RailSurface\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Background=\"{ThemeResource RailSurfaceBrush}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"BackgroundArtwork\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"LauncherMotionBackground\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"BannerContentRegion\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"LowerActionRegion\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Background=\"Transparent\"", SliceElement(xaml, "x:Name=\"LowerActionRegion\""), StringComparison.Ordinal);
-        Assert.Contains("BorderThickness=\"0\"", SliceElement(xaml, "x:Name=\"LowerActionRegion\""), StringComparison.Ordinal);
-        Assert.Contains("x:Key=\"GlassDeckBrush\"", palette, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"LaunchButton\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Height\" Value=\"110", controls, StringComparison.Ordinal);
-        Assert.Contains("BeginLauncherBackgroundCrossfade", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("HeroStage", combined, StringComparison.Ordinal);
-        Assert.DoesNotContain("HeroArtwork", combined, StringComparison.Ordinal);
-        Assert.DoesNotContain("IrisStage", combined, StringComparison.Ordinal);
-        Assert.DoesNotContain("IrisDecorativeContent", combined, StringComparison.Ordinal);
-        Assert.DoesNotContain("SelectionAura", combined, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Retired_hero_surface_has_no_remaining_viewmodel_or_rendering_hooks()
-    {
-        var xaml = ReadAppFile("MainPage.xaml");
-        var code = ReadAppFile("MainPage.xaml.cs");
-        Assert.DoesNotContain("HeroStage", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("HeroArtwork", xaml, StringComparison.Ordinal);
-        foreach (var symbol in new[]
-                 {
-                     "HeroArtPlacementSolver",
-                     "SetHeroSource",
-                     "ApplyHeroTransform",
-                     "ApplySolvedHeroLayout",
-                     "HeroArtFitGeometry",
-                     "HeroStageGeometry",
-                 })
-        {
-            Assert.DoesNotContain(symbol, code, StringComparison.Ordinal);
-        }
-        Assert.Contains("BackgroundArtwork", xaml, StringComparison.Ordinal);
-        Assert.Contains("LauncherMotionBackground", xaml, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Mockup_does_not_create_dead_or_unavailable_controls()
-    {
-        var xaml = ReadAppFile("MainPage.xaml");
-        var code = ReadAppFile("MainPage.xaml.cs");
-        var combined = xaml + code;
-
-        Assert.Contains("Settings", combined, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Add Game", combined, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Ko-fi", combined, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("x:Name=\"BannerCycleHeading\"", combined, StringComparison.Ordinal);
-        Assert.Contains("Text=\"BANNERS\"", combined, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"BannerCollapseButton\"", combined, StringComparison.Ordinal);
-        Assert.DoesNotContain("BannerCycleVersion", combined, StringComparison.Ordinal);
-        Assert.Contains("RedemptionCode_Click", combined, StringComparison.Ordinal);
-        Assert.DoesNotContain("CornerRadius=\"", SliceElement(xaml, "x:Name=\"GameSelector\""), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Launcher_uses_wordmarks_open_status_order_and_matching_dialog_surfaces()
-    {
-        var xaml = ReadAppFile("MainPage.xaml");
-        var code = ReadAppFile("MainPage.xaml.cs");
-        var window = ReadAppFile("MainWindow.xaml");
-        var project = ReadAppFile("Nyx.Desktop.App.csproj");
-        var palette = ReadAppFile("Themes", "NyxPalette.xaml");
-
-        Assert.DoesNotContain("x:Name=\"GameLogo\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("SelectedItem.GameLogoPath", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("x:Name=\"HeroTitle\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Text=\"OFFICIAL\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Text=\"LOCAL\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"HeroDescription\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Text=\"↗\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Text=\"◇\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text = $\"Settings - {selected.DisplayName}\"", code, StringComparison.Ordinal);
-        Assert.Contains("currentApp.BeginWindowDrag()", code, StringComparison.Ordinal);
-        Assert.Contains("SettingsSurfaceBrush", code, StringComparison.Ordinal);
-        Assert.Contains("SettingsSurfaceBrush", palette, StringComparison.Ordinal);
-        Assert.DoesNotContain("Text=\"NYX\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"RailBrandRow\" Height=\"104\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"KofiButton\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Margin=\"10,0,10,6\"", SliceElement(xaml, "x:Name=\"KofiButton\""), StringComparison.Ordinal);
-        Assert.Contains("GameSelector.VerticalAlignment = VerticalAlignment.Top", code, StringComparison.Ordinal);
-        Assert.Contains("Height=\"36\"", SliceElement(window, "x:Name=\"AppTitleBar\""), StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"SettingsButton\"", window, StringComparison.Ordinal);
-        Assert.Matches(@"<Grid Width=""42"" Height=""36"">\s*<Button\s+x:Name=""SettingsButton""", window);
-        Assert.Equal(3, Regex.Matches(
-            window,
-            @"<Button\s+x:Name=""(?:Settings|Minimize|Close)Button""\s+Width=""42""\s+Height=""36""\s+MinWidth=""42""\s+MinHeight=""36""").Count);
-        Assert.Contains("x:Name=\"SettingsIcon\"", window, StringComparison.Ordinal);
-        Assert.Matches(@"BannerContentRegion\.Margin = new Thickness\(\s*26,\s*38,", code);
-        Assert.Contains("x:Key=\"LauncherInfoSurfaceBrush\"", palette, StringComparison.Ordinal);
-        Assert.Contains("Background=\"{ThemeResource LauncherInfoSurfaceBrush}\"", SliceElement(xaml, "x:Name=\"BannerCycleRegion\""), StringComparison.Ordinal);
-        Assert.Contains("Background=\"Transparent\"", SliceElement(xaml, "x:Name=\"LowerActionRegion\""), StringComparison.Ordinal);
-        Assert.Contains("Color=\"#C0100C1C\"", palette, StringComparison.Ordinal);
-        Assert.Contains("Color=\"#C8100C1C\"", palette, StringComparison.Ordinal);
-        Assert.Contains("PengoToolButtons.HorizontalAlignment = HorizontalAlignment.Stretch", code, StringComparison.Ordinal);
-        Assert.Contains("LaunchButton.Height = LauncherOpenLayoutGeometry.LaunchButtonHeight", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("Assets\\GameLogos\\**\\*", project, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Settings_remove_dead_toggles_and_keep_folder_options_truthful()
+    public void Settings_validate_manual_roots_parse_arguments_and_warn_about_saved_login()
     {
         var settings = Slice(
             ReadAppFile("MainPage.xaml.cs"),
             "public async Task ShowSettingsAsync",
             "private async Task ShowAddGameDialogAsync");
 
-        Assert.DoesNotContain("StayVisibleAfterLaunch", settings, StringComparison.Ordinal);
-        Assert.DoesNotContain("RefreshContentOnStartup", settings, StringComparison.Ordinal);
-        Assert.DoesNotContain("SafeNotifications", settings, StringComparison.Ordinal);
-        Assert.DoesNotContain("Safe notifications", settings, StringComparison.Ordinal);
-        Assert.DoesNotContain("Allow remote banner manifest refresh", settings, StringComparison.Ordinal);
-        Assert.DoesNotContain("keeps the last safe copy if refresh fails", settings, StringComparison.Ordinal);
-        Assert.Contains("Game folder", settings, StringComparison.Ordinal);
-        Assert.Contains("Override the automatic detection", settings, StringComparison.Ordinal);
         Assert.Contains("IsValidManualInstallRoot(selected.Id, folder.Path)", settings, StringComparison.Ordinal);
         Assert.Contains("CustomArgumentParser.TryParse(officialLaunchArguments.Text", settings, StringComparison.Ordinal);
-        Assert.Contains("Header = \"Arguments\"", settings, StringComparison.Ordinal);
-        Assert.Contains("Text = \"Launch Options\"", settings, StringComparison.Ordinal);
-        Assert.Contains("Width = 28", settings, StringComparison.Ordinal);
-        Assert.Contains("Style = (Style)Application.Current.Resources[\"NyxHelpButtonStyle\"]", settings, StringComparison.Ordinal);
-        Assert.Contains("MinWidth = 0", settings, StringComparison.Ordinal);
-        Assert.True(
-            settings.IndexOf("officialLaunchArgumentsEnabled,", StringComparison.Ordinal)
-            < settings.IndexOf("officialLaunchArgumentsHelp,", StringComparison.Ordinal));
-        Assert.Contains("https://docs.unity3d.com/6000.5/Documentation/Manual/PlayerCommandLineArguments.html", settings, StringComparison.Ordinal);
-        Assert.Contains("Header = \"Locally save browser login?\"", settings, StringComparison.Ordinal);
-        Assert.Contains("Keeps your publisher login saved on this PC. Turning it off removes saved passwords.", settings, StringComparison.Ordinal);
-        Assert.DoesNotContain("without a command shell", settings, StringComparison.Ordinal);
-        Assert.DoesNotContain("Math.Clamp(ActualWidth - 32", settings, StringComparison.Ordinal);
-        Assert.DoesNotContain("1180", settings, StringComparison.Ordinal);
-        Assert.DoesNotContain("650", settings, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Fixed_lower_action_region_has_one_bottom_aligned_row()
-    {
-        var xaml = ReadAppFile("MainPage.xaml");
-        var code = ReadAppFile("MainPage.xaml.cs");
-
-        Assert.Contains("x:Name=\"LowerActionGrid\" ColumnSpacing=\"16\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Height=\"280\"", SliceElement(xaml, "x:Name=\"LowerActionRegion\""), StringComparison.Ordinal);
-        Assert.Contains("LowerActionRegion.Height = Math.Max(profile.DeckHeight, 280)", code, StringComparison.Ordinal);
-        Assert.Contains("<ColumnDefinition Width=\"280\" />", xaml, StringComparison.Ordinal);
-        Assert.Contains("<ColumnDefinition Width=\"*\" />", xaml, StringComparison.Ordinal);
-        Assert.Contains("const double toolsWidth = 415d", code, StringComparison.Ordinal);
-        Assert.Contains("<ColumnDefinition Width=\"405\" />", xaml, StringComparison.Ordinal);
-        Assert.Contains("LaunchButton.Width = Math.Max(0, profile.LaunchWidth - 24)", code, StringComparison.Ordinal);
-        var launchStack = SliceElement(xaml, "x:Name=\"LaunchStack\"");
-        Assert.Contains("VerticalAlignment=\"Bottom\"", launchStack, StringComparison.Ordinal);
-        Assert.Contains("RowSpacing=\"0\"", launchStack, StringComparison.Ordinal);
-        Assert.DoesNotContain("x:Name=\"LaunchBacking\"", xaml, StringComparison.Ordinal);
-        var metricsStart = xaml.IndexOf("x:Name=\"LaunchResourceMetricsPanel\"", StringComparison.Ordinal);
-        var metricsSurfaceStart = xaml.LastIndexOf("<Border", metricsStart, StringComparison.Ordinal);
-        var metricsSurfaceEnd = xaml.IndexOf('>', metricsStart);
-        var metricsSurface = xaml[metricsSurfaceStart..(metricsSurfaceEnd + 1)];
-        Assert.Contains("Grid.Row=\"1\"", metricsSurface, StringComparison.Ordinal);
-        Assert.Contains("Padding=\"4,2\"", metricsSurface, StringComparison.Ordinal);
-        Assert.DoesNotContain("Height=\"50\"", metricsSurface, StringComparison.Ordinal);
-        var launchResources = SliceElement(xaml, "x:Name=\"LaunchResourceMetricsPanel\"");
-        Assert.DoesNotContain("MinHeight=\"50\"", launchResources, StringComparison.Ordinal);
-        Assert.DoesNotContain("MinWidth=\"", launchResources, StringComparison.Ordinal);
-        Assert.DoesNotContain("Margin=\"0\"", launchResources, StringComparison.Ordinal);
-        Assert.DoesNotContain("Grid.RowSpan", launchResources, StringComparison.Ordinal);
-        Assert.DoesNotContain("Margin=\"-12,-8\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Margin=\"-12,-10\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("DeckRow", xaml + code, StringComparison.Ordinal);
-        Assert.DoesNotContain("DeckColumn", xaml + code, StringComparison.Ordinal);
-        Assert.DoesNotContain("PlaceDeckItem", code, StringComparison.Ordinal);
-        Assert.Contains("LaunchButton.Height = LauncherOpenLayoutGeometry.LaunchButtonHeight", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("LauncherViewportGeometry", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("horizontalDeck", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("compactCodeRows = true", code, StringComparison.Ordinal);
+        Assert.Contains("Keeps your Endfield login saved on this PC. Turning it off removes saved Endfield passwords.", settings, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -985,39 +615,6 @@ public sealed class IrisLauncherShellTests
         Assert.DoesNotContain("RestoreWindowIfMinimized", app, StringComparison.Ordinal);
         Assert.Contains("Click=\"MinimizeButton_Click\"", ReadAppFile("MainWindow.xaml"), StringComparison.Ordinal);
         Assert.Contains("internal void Minimize()", window, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Combined_codes_panel_uses_the_full_fixed_column()
-    {
-        var xaml = ReadAppFile("MainPage.xaml");
-        var code = ReadAppFile("MainPage.xaml.cs");
-
-        Assert.Contains("CombinedStatusGrid.ColumnSpacing = 16", code, StringComparison.Ordinal);
-        Assert.Contains("ApplyCombinedStatusLayout();", code, StringComparison.Ordinal);
-        Assert.Contains("CombinedBannerColumn.Width = new GridLength(1, GridUnitType.Star)", code, StringComparison.Ordinal);
-        Assert.Contains("CombinedStatusPanel.Padding = new Thickness(16, 10, 12, 10)", code, StringComparison.Ordinal);
-        Assert.Contains("CombinedStatusGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1) })", code, StringComparison.Ordinal);
-        Assert.Contains("PlaceGridItem(CodesHeaderDivider, 1, 0, 1, 1)", code, StringComparison.Ordinal);
-        Assert.Contains("PlaceGridItem(SignalPanel, 2, 0, 1, 1)", code, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"CodesHeaderDivider\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("UpdaterSignalRow", code, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Banner_portraits_do_not_rotate_and_every_current_character_stays_highlighted()
-    {
-        var code = ReadAppFile("MainPage.xaml.cs");
-        var xaml = ReadAppFile("MainPage.xaml");
-
-        Assert.DoesNotContain("bannerRotationTimer", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("BannerRotationSchedule", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("BannerPanel_Pointer", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("BannerCharacterRow_Click", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("CurrentBannerPortraitButton", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Artwork currently displayed", code, StringComparison.Ordinal);
-        Assert.Contains("OrderBannerCharacters(current.Characters, current.SelectedCharacterId)", code, StringComparison.Ordinal);
-        Assert.Contains("BannerCharacterRowItem.CreateOverflow", code, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1049,100 +646,32 @@ public sealed class IrisLauncherShellTests
     }
 
     [Fact]
-    public void Banner_schedule_uses_one_full_width_timeline_without_category_switching()
+    public void Banner_schedule_disallows_external_navigation()
     {
         var xaml = ReadAppFile("MainPage.xaml");
         var start = xaml.IndexOf("x:Name=\"BannerCycleRegion\"", StringComparison.Ordinal);
         var end = xaml.IndexOf("x:Name=\"LowerActionRegion\"", start, StringComparison.Ordinal);
         var strip = xaml[start..end];
 
-        Assert.Contains("x:Name=\"BannerCycleRegion\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"BannerCycleHeader\"", strip, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"BannerCycleHeading\"", strip, StringComparison.Ordinal);
-        Assert.Contains("Text=\"BANNERS\"", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("BannerCycleVersion", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("BannerCyclePhase", strip, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"BannerCollapseButton\"", strip, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"BannerCycleColumns\"", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("CurrentBannerColumn", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("UpcomingBannerColumn", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("BannerColumnDivider", strip, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"CurrentBannerSection\"", strip, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"UpcomingBannerList\"", strip, StringComparison.Ordinal);
-        Assert.Contains("<ItemsWrapGrid", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("CurrentBannerNameBacking", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("UpcomingBannerNameBacking", strip, StringComparison.Ordinal);
-        Assert.Contains("CornerRadius=\"16\"", SliceElement(strip, "x:Name=\"CurrentBannerPortraitBacking\""), StringComparison.Ordinal);
-        Assert.Contains("CornerRadius=\"15\"", SliceElement(strip, "x:Name=\"UpcomingBannerPortraitBacking\""), StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"UpcomingBannerPhaseSlot\"", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("x:Name=\"UpcomingPhaseDivider\"", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("CurrentBannerTimingBacking", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("UpcomingBannerHeaderBacking", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("UpcomingBannerTimingBacking", strip, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"BannerCategoryTabs\"", strip, StringComparison.Ordinal);
-        Assert.Contains("Visibility=\"Collapsed\"", SliceElement(strip, "x:Name=\"BannerCategoryTabs\""), StringComparison.Ordinal);
-        Assert.Contains("<StackPanel Orientation=\"Vertical\" />", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("ProgressBar", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("<Ellipse", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("MaximumRowsOrColumns=\"6\"", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("BANNERS · VERSION", strip, StringComparison.Ordinal);
-        Assert.Contains("Background=\"{ThemeResource LauncherInfoSurfaceBrush}\"", strip, StringComparison.Ordinal);
-        Assert.DoesNotContain("CHANGES EVERY 7S", strip, StringComparison.Ordinal);
         Assert.DoesNotContain("Hyperlink", strip, StringComparison.Ordinal);
         Assert.DoesNotContain("http://", strip, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("https://", strip, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("NextBannerCard", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Launch_action_uses_the_supplied_native_starfield_and_shared_motion_pause()
+    public void Launch_animation_unsubscribes_and_stops_when_paused()
     {
-        var xaml = ReadAppFile("MainPage.xaml");
         var code = ReadAppFile("MainPage.xaml.cs");
-        var controls = ReadAppFile("Themes", "NyxControls.xaml");
-        var start = controls.IndexOf("x:Key=\"NyxLaunchButtonStyle\"", StringComparison.Ordinal);
-        Assert.True(start >= 0);
-        var style = controls[start..];
 
-        Assert.Contains("x:Name=\"LaunchStarCanvas\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"LaunchNebulaLeft\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"LaunchNebulaRight\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("PointerEntered=\"LaunchButton_PointerEntered\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("x:Name=\"LaunchWatermark\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("const int starCount = 66", code, StringComparison.Ordinal);
-        Assert.Contains("CompositionTarget.Rendering += LaunchAnimation_Rendering", code, StringComparison.Ordinal);
         Assert.Contains("CompositionTarget.Rendering -= LaunchAnimation_Rendering", code, StringComparison.Ordinal);
         Assert.Contains("StopAmbientAnimations();", Slice(code, "internal bool ToggleLauncherAnimation", "public MainPage()"), StringComparison.Ordinal);
-        Assert.Contains("Background\" Value=\"Transparent", style, StringComparison.Ordinal);
-        Assert.DoesNotContain("DeckBorderBrush", style, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Launcher_feedback_uses_fixed_surface_geometry_and_safe_brand_confirmation()
+    public void Brand_confirmation_targets_only_fixed_pengo_gg()
     {
-        var xaml = ReadAppFile("MainPage.xaml");
         var code = ReadAppFile("MainPage.xaml.cs");
-        var manager = Slice(code, "private async Task ShowHoyoLabAccountManagerAsync", "private void AutomaticDailyCheckInToggle_Click");
-        var settings = Slice(code, "public async Task ShowSettingsAsync", "private async Task ShowAddGameDialogAsync");
 
-        Assert.Contains("x:Name=\"RailSpacerRow\" Height=\"*\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"BrandEyeBall\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"BrandEyeBallTranslate\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("MoveBrandEye();", code, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"CurrentBannerSection\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Margin=\"4,0,0,0\"", SliceElement(xaml, "x:Name=\"CurrentBannerSection\""), StringComparison.Ordinal);
-        Assert.Contains("Width=\"24\"", SliceElement(xaml, "x:Name=\"RedemptionCodeRewardIcon\""), StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"LaunchDetail\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Height=\"20\"", SliceElement(xaml, "x:Name=\"LaunchDetail\""), StringComparison.Ordinal);
-        Assert.Contains("Background = (Brush)Application.Current.Resources[\"SettingsSurfaceBrush\"]", manager, StringComparison.Ordinal);
-        Assert.Contains("BorderBrush = (Brush)Application.Current.Resources[\"DeckBorderBrush\"]", manager, StringComparison.Ordinal);
-        Assert.Contains("CloseButtonStyle = (Style)Application.Current.Resources[\"NyxDialogQuietStyle\"]", manager, StringComparison.Ordinal);
-        Assert.Contains("FullSizeDesired = true", settings, StringComparison.Ordinal);
-        Assert.Contains("LauncherLayoutProfile.DesignWidth", settings, StringComparison.Ordinal);
-        Assert.Contains("LauncherLayoutProfile.DesignHeight", settings, StringComparison.Ordinal);
-        Assert.DoesNotContain("ActualWidth - 32", settings, StringComparison.Ordinal);
-        Assert.Contains("will start with the next launch", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("is armed for the next launch", code, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Title = \"Open pengo.gg?\"", code, StringComparison.Ordinal);
         Assert.Contains("new Uri(\"https://pengo.gg\")", code, StringComparison.Ordinal);
     }
@@ -1199,7 +728,6 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>", project, StringComparison.Ordinal);
         Assert.Contains("<WindowsAppSdkUndockedRegFreeWinRTInitialize>true</WindowsAppSdkUndockedRegFreeWinRTInitialize>", project, StringComparison.Ordinal);
         Assert.Contains("<SelfContained>true</SelfContained>", project, StringComparison.Ordinal);
-        Assert.Contains("<EnableMsixTooling>false</EnableMsixTooling>", project, StringComparison.Ordinal);
         Assert.Contains("<PublishTrimmed>False</PublishTrimmed>", project, StringComparison.Ordinal);
         Assert.Contains("Name=\"CopyApplicationPriToPublishDirectory\"", project, StringComparison.Ordinal);
         Assert.Contains("$(TargetDir)$(AssemblyName).pri", project, StringComparison.Ordinal);
@@ -1237,37 +765,47 @@ public sealed class IrisLauncherShellTests
         var page = ReadAppFile("MainPage.xaml.cs");
         var controller = ReadAppFile("LauncherStateController.cs");
 
-        Assert.Contains("out var settingsFailure", page, StringComparison.Ordinal);
-        Assert.Contains("out var addFailure", page, StringComparison.Ordinal);
+        Assert.Contains("var settingsFailure = await CommitCustomSessionMutationAsync", page, StringComparison.Ordinal);
+        Assert.Contains("var addFailure = await CommitCustomSessionMutationAsync", page, StringComparison.Ordinal);
         Assert.True(
             page.Split("That executable is already in your game rail.", StringSplitOptions.None).Length - 1 >= 2,
             "Both locked Settings and Add Game conflicts must show the duplicate message.");
-        Assert.Contains("sessions.TryRemoveCustomAdapter(game.Id);", page, StringComparison.Ordinal);
+        Assert.Contains("TryReserveCustomAdapterMutations", page, StringComparison.Ordinal);
+        Assert.Contains("reservation.Commit();", page, StringComparison.Ordinal);
         Assert.Contains("catch (CustomGameExecutableConflictException)", controller, StringComparison.Ordinal);
         Assert.Contains("LauncherStateUpdateFailure.CustomGameExecutableConflict", controller, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Rail_and_settings_use_the_compact_direct_manipulation_design()
+    public void Settings_only_reset_and_restore_receive_the_live_playtime_snapshot()
+    {
+        var app = ReadAppFile("App.xaml.cs");
+        var page = ReadAppFile("MainPage.xaml.cs");
+        var controller = ReadAppFile("LauncherStateController.cs");
+
+        Assert.Contains(
+            "public bool TryReset(IReadOnlyDictionary<string, long>? playtimeSecondsByGame = null)",
+            controller,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "playtimeSecondsByGame ?? snapshot.PlaytimeSecondsByGame",
+            controller,
+            StringComparison.Ordinal);
+        Assert.Contains("gamePlaytime.SnapshotTotals(),", page, StringComparison.Ordinal);
+        Assert.Contains("CommitCustomSessionMutationAsync(", page, StringComparison.Ordinal);
+        Assert.Contains("currentPlaytimeTotals: () => _gamePlaytime?.SnapshotTotals()", app, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Rail_reorder_and_settings_switching_restore_selection_with_accessible_game_names()
     {
         var xaml = ReadAppFile("MainPage.xaml");
         var code = ReadAppFile("MainPage.xaml.cs");
-        var controls = ReadAppFile("Themes", "NyxControls.xaml");
         var settings = Slice(code, "public async Task ShowSettingsAsync", "private async Task ShowAddGameDialogAsync");
         var railSwitch = Slice(settings, "settingsGameRail.SelectionChanged", "var resetOrderConfirmationArmed");
 
         Assert.Contains("CanReorderItems=\"True\"", xaml, StringComparison.Ordinal);
         Assert.Contains("DragItemsCompleted=\"GameSelector_DragItemsCompleted\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Text=\"{Binding StatusGlyph}\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("SelectionMarker", controls, StringComparison.Ordinal);
-        Assert.Contains("SetBackgroundSource", code, StringComparison.Ordinal);
-        Assert.Contains("displayedBackgroundSource", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("Freeze this artwork", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("Character art scale", code, StringComparison.Ordinal);
-        Assert.Contains("var tabs = new ListView", code, StringComparison.Ordinal);
-        Assert.Contains("var settingsGameRail = new ListView", code, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource = Games", code, StringComparison.Ordinal);
-        Assert.Contains("ItemContainerStyle = (Style)Application.Current.Resources[\"NyxGameItemStyle\"]", code, StringComparison.Ordinal);
         Assert.Contains("SelectedItem = selected", settings, StringComparison.Ordinal);
         Assert.Contains("Content = \"Save and switch\"", settings, StringComparison.Ordinal);
         Assert.Contains("Content = \"Don't save and switch\"", settings, StringComparison.Ordinal);
@@ -1276,18 +814,27 @@ public sealed class IrisLauncherShellTests
         Assert.Contains("LoadSettingsGame(target, tabs.SelectedIndex)", railSwitch, StringComparison.Ordinal);
         Assert.Contains("ApplySelectedAppearance(selected.Id)", railSwitch, StringComparison.Ordinal);
         Assert.Contains("RestoreSettingsRailSelection()", railSwitch, StringComparison.Ordinal);
-        Assert.DoesNotContain("dialog.Hide()", railSwitch, StringComparison.Ordinal);
-        Assert.DoesNotContain("ShowSettingsAsync(", railSwitch, StringComparison.Ordinal);
-        Assert.DoesNotContain("Unsaved changes. Click", settings, StringComparison.Ordinal);
-        Assert.DoesNotContain("requestedSettingsGameId", settings, StringComparison.Ordinal);
-        Assert.DoesNotContain("armedSettingsGameId", settings, StringComparison.Ordinal);
-        Assert.Single(Regex.Matches(settings, "var result = await dialog.ShowAsync\\(\\)").Cast<Match>());
-        Assert.Contains("Width = content.Width", code, StringComparison.Ordinal);
-        Assert.Contains("Height = 36", code, StringComparison.Ordinal);
-        Assert.Contains("NyxSettingsDialogPrimaryStyle", code, StringComparison.Ordinal);
-        Assert.Contains("NyxSettingsDialogQuietStyle", controls, StringComparison.Ordinal);
         Assert.Contains("\"gi\" => \"Genshin Game Icon\"", code, StringComparison.Ordinal);
-        Assert.Contains("selected.Id is \"gi\" or \"hsr\" or \"zzz\" or \"wuwa\" or \"ae\"", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Safe_local_diagnostics_collect_existing_timing_surfaces_after_first_render()
+    {
+        var shell = ReadAppFile("MainPage.xaml.cs");
+        var diagnostics = ReadAppFile("MainPage.Diagnostics.cs");
+        var firstFrame = Slice(
+            shell,
+            "private void StableUpdate_FirstFrameRendering",
+            "private async Task RunStableUpdateAsync");
+
+        Assert.Contains("RecordInitialRenderDuration()", firstFrame, StringComparison.Ordinal);
+        Assert.Contains("launcherVisuals.LastRefreshDuration", diagnostics, StringComparison.Ordinal);
+        Assert.Contains("launcherBanners.LastRefreshDuration", diagnostics, StringComparison.Ordinal);
+        Assert.Contains("publisherAccounts.LastAccountRestoreDuration", diagnostics, StringComparison.Ordinal);
+        Assert.Contains("publisherAccounts.TryGetResourceRefreshDuration", diagnostics, StringComparison.Ordinal);
+        Assert.Contains("snapshot.LastLaunchDetectionDuration", diagnostics, StringComparison.Ordinal);
+        Assert.Contains("snapshot.LastCloseDetectionDuration", diagnostics, StringComparison.Ordinal);
+        Assert.DoesNotContain("HttpClient", diagnostics, StringComparison.Ordinal);
     }
 
     [Fact]

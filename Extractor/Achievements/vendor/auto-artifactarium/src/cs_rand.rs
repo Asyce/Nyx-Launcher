@@ -1,9 +1,27 @@
+use zeroize::Zeroize;
+
 pub struct Random {
     m_big: i32,
     m_seed: i32,
     inext: i32,
     inextp: i32,
     seed_array: [i32; 56],
+}
+
+impl Zeroize for Random {
+    fn zeroize(&mut self) {
+        self.m_big.zeroize();
+        self.m_seed.zeroize();
+        self.inext.zeroize();
+        self.inextp.zeroize();
+        self.seed_array.zeroize();
+    }
+}
+
+impl Drop for Random {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
 }
 
 /// "it's almost a direct translation of the c# source 😭" -thelosttree
@@ -98,5 +116,25 @@ impl Random {
 
     pub fn next_safe_uint64(&mut self) -> u64 {
         (self.next_double() * (u64::MAX as f64)) as u64
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Random;
+    use zeroize::Zeroize;
+
+    #[test]
+    fn explicit_zeroize_wipes_live_state() {
+        let mut random = Random::seeded(123);
+        let _ = random.next_safe_uint64();
+
+        random.zeroize();
+
+        assert_eq!(random.m_big, 0);
+        assert_eq!(random.m_seed, 0);
+        assert_eq!(random.inext, 0);
+        assert_eq!(random.inextp, 0);
+        assert!(random.seed_array.iter().all(|value| *value == 0));
     }
 }

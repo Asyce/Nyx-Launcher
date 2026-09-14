@@ -51,22 +51,4 @@ You can also double-click `Desktop\Start Nyx.cmd`. The wrapper calls only the fi
 
 On every run, Nyx checks the official HoYo, Kuro, and GRYPHLINK launcher sources for the current game backgrounds. Verified files are cached locally so the last good background still works offline. Banners and redemption codes refresh automatically from the Pengo feed.
 
-## Package configuration check
-
-This separate read-only gate explains whether the repository contains one explicit, internally consistent x64 MSIX configuration that could be tested later by a separate build/sign/install process:
-
-```powershell
-& .\Desktop\scripts\test-package-readiness.ps1
-```
-
-Exit code `0` means only that the bounded configuration is ready for that later test. It does **not** prove that a certificate is available, a package can be built or signed, dependencies can be delivered, or the result is installable. Exit code `3` means the configuration is not ready and prints only safe blocker names. Today, the real project intentionally returns `3`: its publisher is still a placeholder, no signing identity is selected, its profiles only publish loose files, and no distribution channel is chosen.
-
-Before Nyx can become an installer, the owner must choose one route:
-
-- private sideload for a small trusted group;
-- signed website distribution;
-- Microsoft Store distribution.
-
-That choice determines the real publisher identity, signing method, certificate handling, dependency delivery, and install/update flow. The gate accepts only a local non-reparse repository tree, bounded XML, one unconditional channel and signing selection, and one explicit signed x64 MSIX-generation profile. It never creates a certificate, proves a thumbprint is available, signs, packages, installs, registers, or publishes anything.
-
 Nyx itself remains normal-user software. Only a sealed, revalidated direct launch of Genshin, HSR, or ZZZ can ask Windows for administrator approval when that exact game requires it. Official launchers and arbitrary paths can never use this boundary.

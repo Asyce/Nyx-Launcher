@@ -136,11 +136,25 @@ public sealed record GameSessionSnapshot(
     public bool WasObservedRunning => WasBootstrapObserved || WasRuntimeObserved;
 
     public bool ResumeResetPending => RequestedResumeGeneration > AppliedResumeGeneration;
+
+    /// <summary>The latest exact runtime-process observation, independent of bootstrap state.</summary>
+    public ExactProcessPresence CurrentRuntimeEvidence { get; init; } = ExactProcessPresence.Uncertain;
+
+    /// <summary>Monotonic timestamp captured when the coordinator applied the latest adapter evidence.</summary>
+    public long? LastExactObservationTimestamp { get; init; }
+
+    /// <summary>True only while the current runtime session followed an accepted Nyx launch.</summary>
+    public bool CurrentSessionLaunchedByNyx { get; init; }
+
+    public TimeSpan? LastLaunchDetectionDuration { get; init; }
+
+    public TimeSpan? LastCloseDetectionDuration { get; init; }
 }
 
 public enum GameLaunchDispatchStatus
 {
     Accepted,
+    AlreadyRunning,
     Failed,
     NeedsReview,
 }
@@ -148,6 +162,8 @@ public enum GameLaunchDispatchStatus
 public readonly record struct GameLaunchDispatchResult(GameLaunchDispatchStatus Status)
 {
     public static GameLaunchDispatchResult Accepted { get; } = new(GameLaunchDispatchStatus.Accepted);
+
+    public static GameLaunchDispatchResult AlreadyRunning { get; } = new(GameLaunchDispatchStatus.AlreadyRunning);
 
     public static GameLaunchDispatchResult Failed { get; } = new(GameLaunchDispatchStatus.Failed);
 

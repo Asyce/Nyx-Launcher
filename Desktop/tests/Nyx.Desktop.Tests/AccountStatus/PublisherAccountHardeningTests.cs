@@ -227,7 +227,7 @@ public sealed class PublisherAccountHardeningTests
             "new Uri(\"https://game.skport.com/endfield/game-data?header=0\")",
             contracts,
             StringComparison.Ordinal);
-        Assert.Contains("\"Sanity\", true, false", contracts, StringComparison.Ordinal);
+        Assert.Equal("Sanity", PublisherAccountCatalog.Get("ae").ResourceName);
     }
 
     [Theory]
@@ -2277,10 +2277,10 @@ public sealed class PublisherAccountHardeningTests
     [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "gi", "https://account.hoyoverse.com/single-page?origin=account", "GET", PublisherWebResourceContext.Document)]
     [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "gi", "https://account.hoyoverse.com/passport/assets/main.js", "GET", PublisherWebResourceContext.Script)]
     [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/login-platform/index.html?app_id=c9oqaq3s3gu8", "GET", PublisherWebResourceContext.Document)]
-    [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/login-platform/chunk-common.8caf3da0.js", "GET", PublisherWebResourceContext.Script)]
-    [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/login-platform/web.8caf3da0.css", "GET", PublisherWebResourceContext.Stylesheet)]
-    [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/login-platform/password-login-web.8caf3da0.js", "GET", PublisherWebResourceContext.Script)]
-    [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/login-platform/password-login-web.8caf3da0.css", "GET", PublisherWebResourceContext.Stylesheet)]
+    [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/login-platform/chunk-common.151489f2.js", "GET", PublisherWebResourceContext.Script)]
+    [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/login-platform/web.151489f2.css", "GET", PublisherWebResourceContext.Stylesheet)]
+    [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/login-platform/password-login-web.151489f2.js", "GET", PublisherWebResourceContext.Script)]
+    [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/login-platform/password-login-web.151489f2.css", "GET", PublisherWebResourceContext.Stylesheet)]
     [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://webstatic.hoyoverse.com/admin/mi18n/hkrpg_global/m02091416191721/m02091416191721-en-us.json", "GET", PublisherWebResourceContext.XmlHttpRequest)]
     [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://webstatic.hoyoverse.com/admin/mi18n/bh3_global/20190812_5d51512fdef47/20190812_5d51512fdef47-en-us.json", "GET", PublisherWebResourceContext.XmlHttpRequest)]
     [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://webstatic.hoyoverse.com/admin/mi18n/bbs_oversea/m07281525151831/m07281525151831-en-us.json", "GET", PublisherWebResourceContext.XmlHttpRequest)]
@@ -2326,9 +2326,9 @@ public sealed class PublisherAccountHardeningTests
     [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/passport/index.html", "GET", PublisherWebResourceContext.Document)]
     [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/single-page/index.html", "GET", PublisherWebResourceContext.Document)]
     [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/ue/login-platform", "GET", PublisherWebResourceContext.Document)]
-    [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/login-platform/private.8caf3da1.js", "GET", PublisherWebResourceContext.Script)]
-    [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/login-platform/web.8caf3da0.js?extra=1", "GET", PublisherWebResourceContext.Script)]
-    [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/login-platform/password-login-web.8caf3da1.js", "GET", PublisherWebResourceContext.Script)]
+    [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/login-platform/private.151489f2.js", "GET", PublisherWebResourceContext.Script)]
+    [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/login-platform/web.151489f2.js?extra=1", "GET", PublisherWebResourceContext.Script)]
+    [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://account.hoyolab.com/login-platform/password-login-web.151489g2.js", "GET", PublisherWebResourceContext.Script)]
     [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://webstatic.hoyoverse.com/admin/mi18n/hkrpg_global/m02091416191721/other-en-us.json", "GET", PublisherWebResourceContext.XmlHttpRequest)]
     [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://webstatic.hoyoverse.com/admin/mi18n/hkrpg_global/m02091416191721/m02091416191721-fr-fr.json", "GET", PublisherWebResourceContext.XmlHttpRequest)]
     [InlineData("HoYoLAB", PublisherSessionPurpose.Connect, "hsr", "https://webstatic.hoyoverse.com/admin/mi18n/hkrpg_global/m02091416191721/m02091416191721-en-us.json?extra=1", "GET", PublisherWebResourceContext.XmlHttpRequest)]
@@ -3845,17 +3845,26 @@ public sealed class PublisherAccountHardeningTests
         Assert.Contains("core.Reload()", browser, StringComparison.Ordinal);
         Assert.Contains("AddWebResourceRequestedFilter", browser, StringComparison.Ordinal);
         Assert.Contains("Core_WebResourceRequested", browser, StringComparison.Ordinal);
-        Assert.Contains("purpose != PublisherSessionPurpose.Connect", browser, StringComparison.Ordinal);
+        Assert.Contains("purpose == PublisherSessionPurpose.Connect", browser, StringComparison.Ordinal);
         Assert.Contains("purpose == PublisherSessionPurpose.CheckIn", browser, StringComparison.Ordinal);
         Assert.Contains("GetCheckInWebResourceFilterPatterns(gameId)", browser, StringComparison.Ordinal);
         Assert.DoesNotContain("SensitiveRequestBodyStream", browser, StringComparison.Ordinal);
         Assert.DoesNotContain("var requestContent = args.Request.Content", browser, StringComparison.Ordinal);
         var requestFilter = Slice(
             browser,
-            "private void Core_WebResourceRequested",
+            "private async void Core_WebResourceRequested",
             "private bool TryAuthorizeWebResourceRequest");
-        Assert.DoesNotContain("PublisherSessionPurpose.Connect", requestFilter, StringComparison.Ordinal);
-        Assert.DoesNotContain("GetDeferral", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("PublisherSessionPurpose.Connect", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("args.GetDeferral()", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("content.CloneStream()", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("content.Seek(position)", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("PublisherAccountCatalog.MaximumConnectRequestBodyBytes", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("args.Request.Headers.GetHeader(\"Content-Type\")", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("TryAuthorizeWebResourceRequest(args, requestBody, contentType)", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("CryptographicOperations.ZeroMemory(requestBody)", requestFilter, StringComparison.Ordinal);
+        Assert.Contains("TryBlockWebResourceRequest(sender, args)", requestFilter, StringComparison.Ordinal);
+        Assert.DoesNotContain("Console", requestFilter, StringComparison.Ordinal);
+        Assert.DoesNotContain("Trace", requestFilter, StringComparison.Ordinal);
         Assert.DoesNotContain("IsConnectProfileMutationRequest", browser, StringComparison.Ordinal);
         var connectProfileBoundary = browser.IndexOf(
             "profileMutationJournal!.MarkMayHaveChanged();",
@@ -3866,7 +3875,7 @@ public sealed class PublisherAccountHardeningTests
             "TryGetBoundedString",
             ReadCoreAccountFile("PublisherAccountContracts.cs"),
             StringComparison.Ordinal);
-        Assert.Contains("claimWriteAuthority.Arm", browser, StringComparison.Ordinal);
+        Assert.DoesNotContain("claimWriteAuthority", browser, StringComparison.Ordinal);
         Assert.DoesNotContain("PublisherLoginTriggerOutcome", browser, StringComparison.Ordinal);
         Assert.Contains("items.find(item => !item.querySelector(receivedSelector))", browser, StringComparison.Ordinal);
         var achievementScript = Slice(
@@ -3968,7 +3977,7 @@ public sealed class PublisherAccountHardeningTests
     }
 
     [Fact]
-    public void Daily_resolves_and_saves_exact_role_before_any_claim_authority_is_armed()
+    public void Daily_resolves_and_saves_exact_role_before_clicking_claim()
     {
         var service = ReadAppFile("PublisherAccountService.cs");
         var browser = ReadAppFile("PublisherSessionWindow.xaml.cs");
@@ -3987,7 +3996,7 @@ public sealed class PublisherAccountHardeningTests
         Assert.Contains("TryLoadRoleRecord(entry.GameId, operation)", resolver, StringComparison.Ordinal);
         Assert.Contains("PublisherDailyRolePolicy.Resolve(", resolver, StringComparison.Ordinal);
         Assert.Contains(
-            "TryDeleteProtectedGameState(entry.GameId, entry.Provider, operation)",
+            "TryDeleteProtectedGameState(",
             resolver,
             StringComparison.Ordinal);
         Assert.Contains("await rolePicker(resolution.Choices", resolver, StringComparison.Ordinal);
@@ -3999,9 +4008,8 @@ public sealed class PublisherAccountHardeningTests
 
         var preClaimProof = checkIn.IndexOf("var before = await CaptureCheckInProofAsync", StringComparison.Ordinal);
         var exactPage = checkIn.IndexOf("PublisherAccountCatalog.IsExactCheckInUri", StringComparison.Ordinal);
-        var arm = checkIn.IndexOf("claimWriteAuthority.Arm(entry.GameId)", StringComparison.Ordinal);
         var click = checkIn.IndexOf("BuildExactClaimScript(entry.GameId)", StringComparison.Ordinal);
-        Assert.True(preClaimProof >= 0 && preClaimProof < exactPage && exactPage < arm && arm < click);
+        Assert.True(preClaimProof >= 0 && preClaimProof < exactPage && exactPage < click);
         Assert.Contains("expectedBinding", checkIn, StringComparison.Ordinal);
         Assert.Contains("allowAccountWideStatus", checkIn, StringComparison.Ordinal);
         Assert.Contains("expectedBinding is not null || !allowAccountWideStatus", checkIn, StringComparison.Ordinal);
@@ -4046,7 +4054,7 @@ public sealed class PublisherAccountHardeningTests
     }
 
     [Fact]
-    public void Private_browser_password_storage_defaults_on_and_opt_out_removes_only_saved_passwords()
+    public void Hoyo_browser_password_storage_is_forced_off_and_cleanup_removes_only_saved_passwords()
     {
         var browser = ReadAppFile("PublisherSessionWindow.xaml.cs");
         var browserMarkup = ReadAppFile("PublisherSessionWindow.xaml");
@@ -4067,6 +4075,18 @@ public sealed class PublisherAccountHardeningTests
             app,
             StringComparison.Ordinal);
         Assert.Contains("AppWindow.Resize(new SizeInt32(1280, 720))", browser, StringComparison.Ordinal);
+        var browserConstructor = Slice(
+            browser,
+            "public PublisherSessionWindow(",
+            "public async Task InitializeAsync");
+        Assert.Contains(
+            "this.passwordSavingEnabled = provider == \"SKPORT\" && passwordSavingEnabled;",
+            browserConstructor,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "passwordNavigationGate = new(this.passwordSavingEnabled);",
+            browserConstructor,
+            StringComparison.Ordinal);
         Assert.Contains("core.Settings.IsGeneralAutofillEnabled = false;", browser, StringComparison.Ordinal);
         Assert.Contains(
             "core.Settings.IsPasswordAutosaveEnabled = passwordSavingEnabled;",
@@ -4094,10 +4114,8 @@ public sealed class PublisherAccountHardeningTests
             "CoreWebView2BrowsingDataKinds.Cookies",
             browser,
             StringComparison.Ordinal);
-        Assert.Contains("ApplyPasswordSavingPreference(enabled: false);", service, StringComparison.Ordinal);
-        Assert.True(
-            service.IndexOf("ApplyPasswordSavingPreference(enabled: false);", StringComparison.Ordinal)
-            < service.IndexOf("ClearSavedPasswordsAsync(\"HoYoLAB\"", StringComparison.Ordinal));
+        Assert.Contains("public Task<bool> ClearSavedHoyoLabPasswordsAsync", service, StringComparison.Ordinal);
+        Assert.Contains("public Task<bool> ClearSavedSkportPasswordsAsync", service, StringComparison.Ordinal);
         Assert.Contains(
             "Future publisher windows retry the exact",
             service,
@@ -4116,7 +4134,7 @@ public sealed class PublisherAccountHardeningTests
             StringComparison.Ordinal);
         Assert.Contains("Directory.Delete(profile, recursive);", service, StringComparison.Ordinal);
         Assert.Contains(
-            "Header = \"Locally save browser login?\"",
+            "Header = \"Locally save Endfield login?\"",
             settings,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -4132,11 +4150,11 @@ public sealed class PublisherAccountHardeningTests
             settings,
             StringComparison.Ordinal);
         Assert.Contains(
-            "&& !await app.PublisherAccounts.ClearSavedPasswordsAsync()",
+            "&& !await app.PublisherAccounts.ClearSavedSkportPasswordsAsync()",
             settings,
             StringComparison.Ordinal);
         Assert.Contains(
-            "Disconnecting the publisher account also deletes its private profile.",
+            "Disconnecting that account also deletes its private profile.",
             settings,
             StringComparison.Ordinal);
         Assert.DoesNotContain(
@@ -4144,7 +4162,7 @@ public sealed class PublisherAccountHardeningTests
             browserMarkup,
             StringComparison.Ordinal);
         Assert.Contains(
-            "Keeps your publisher login saved on this PC. Turning it off removes saved passwords.",
+            "Keeps your Endfield login saved on this PC. Turning it off removes saved Endfield passwords.",
             settings,
             StringComparison.Ordinal);
         Assert.DoesNotContain(
@@ -4162,6 +4180,26 @@ public sealed class PublisherAccountHardeningTests
             "dto.Preferences?.PublisherPasswordSavingEnabled ?? true",
             migrations,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Startup_hoyo_password_cleanup_precedes_revocation_recovery_in_one_flow()
+    {
+        var app = ReadAppFile("App.xaml.cs");
+        var recovery = Slice(
+            app,
+            "private async Task RecoverPendingPublisherRevocationsAsync()",
+            "private bool TryPersistPublisherCleanupPending(");
+        var passwordCleanup = recovery.IndexOf(
+            "await accounts.ClearSavedHoyoLabPasswordsAsync()",
+            StringComparison.Ordinal);
+        var revocationLoop = recovery.IndexOf(
+            "foreach (var provider in new[] { \"HoYoLAB\", \"SKPORT\" })",
+            StringComparison.Ordinal);
+
+        Assert.True(passwordCleanup >= 0 && passwordCleanup < revocationLoop);
+        Assert.Equal(1, CountOccurrences(app, "_ = RecoverPendingPublisherRevocationsAsync();"));
+        Assert.Equal(1, CountOccurrences(app, "ClearSavedHoyoLabPasswordsAsync"));
     }
 
     [Fact]
@@ -4283,7 +4321,7 @@ public sealed class PublisherAccountHardeningTests
             "TrySetCanceledConnectState(entry.Provider, cancellationWrite);",
             StringComparison.Ordinal);
         var quarantine = teardownCatch.IndexOf(
-            "QuarantineProvider(entry.Provider, operation);",
+            "QuarantineProvider(entry.Provider, operation, exception);",
             StringComparison.Ordinal);
         var projectCancellation = teardownCatch.IndexOf(
             "PublisherTeardownCancellationPolicy.ThrowIfCanceled(cancellationToken, exception);",
@@ -4549,6 +4587,12 @@ public sealed class PublisherAccountHardeningTests
             StringComparison.Ordinal);
         Assert.Contains("finally", disposal, StringComparison.Ordinal);
         Assert.Contains("DetachBrowserProcessExitHandler();", disposal, StringComparison.Ordinal);
+        var gate = disposal.IndexOf("await passwordNavigationGate.DisposeAsync();", StringComparison.Ordinal);
+        var lifetime = disposal.IndexOf("lifetime.Dispose();", StringComparison.Ordinal);
+        Assert.True(waitForExit < gate && gate < lifetime);
+        Assert.Equal(
+            1,
+            disposal.Split("passwordNavigationGate.DisposeAsync", StringSplitOptions.None).Length - 1);
         Assert.Contains(
             "throw new PublisherSessionTeardownException(teardownFailure);",
             disposal,
@@ -4645,7 +4689,9 @@ public sealed class PublisherAccountHardeningTests
             "private void CloseBrowserOnce()",
             "private sealed class PendingResourceCapture"), StringComparison.Ordinal);
 
-        Assert.Contains("Click=\"CloseButton_Click\"", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Click=\"CloseButton_Click\"", markup, StringComparison.Ordinal);
+        Assert.DoesNotContain("private void CloseButton_Click", browser, StringComparison.Ordinal);
+        Assert.Contains("ExtendsContentIntoTitleBar = true;", browser, StringComparison.Ordinal);
         Assert.Contains("Click=\"DoneButton_Click\"", markup, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"RetryButton\"", markup, StringComparison.Ordinal);
         Assert.Contains("Click=\"RetryButton_Click\"", markup, StringComparison.Ordinal);
@@ -4690,7 +4736,15 @@ public sealed class PublisherAccountHardeningTests
         Assert.Contains("args.Cancel = true", app, StringComparison.Ordinal);
         Assert.Contains("DisposeWuWaAccountStatusAsync(_wuwaAccountStatus)", app, StringComparison.Ordinal);
         Assert.Contains("DisposePublisherAccountsAsync(_publisherAccounts)", app, StringComparison.Ordinal);
-        Assert.Contains("await Task.WhenAll(wuwaAccountShutdown, publisherAccountShutdown)", app, StringComparison.Ordinal);
+        var shutdown = Slice(app, "private async Task ShutDownAccountsAndCloseAsync", "private void Window_Closed");
+        var page = shutdown.IndexOf("await DisposeMainPageAsync(mainWindow)", StringComparison.Ordinal);
+        var wuwaStart = shutdown.IndexOf("DisposeWuWaAccountStatusAsync(_wuwaAccountStatus)", StringComparison.Ordinal);
+        var publisherStart = shutdown.IndexOf("DisposePublisherAccountsAsync(_publisherAccounts)", StringComparison.Ordinal);
+        var providers = shutdown.IndexOf("await Task.WhenAll(", StringComparison.Ordinal);
+        Assert.True(page >= 0 && page < wuwaStart && page < publisherStart && publisherStart < providers);
+        Assert.Contains("wuwaAccountShutdown", shutdown, StringComparison.Ordinal);
+        Assert.Contains("publisherAccountShutdown", shutdown, StringComparison.Ordinal);
+        Assert.Contains("_stableUpdateTask", shutdown, StringComparison.Ordinal);
         Assert.Contains("_accountShutdownComplete = true", app, StringComparison.Ordinal);
         Assert.DoesNotContain("publisherAccounts.DisposeAsync().AsTask().GetAwaiter().GetResult()", app, StringComparison.Ordinal);
         Assert.DoesNotContain("accountStatus.DisposeAsync().AsTask().GetAwaiter().GetResult()", app, StringComparison.Ordinal);
@@ -4790,7 +4844,7 @@ public sealed class PublisherAccountHardeningTests
             browser,
             "private static string BuildResourceFetchScript",
             "private static string BuildHsrAchievementExportScript");
-        var signer = Slice(script, "// HSR_DS_SIGNER_START", "// HSR_DS_SIGNER_END");
+        var signer = HoyoLabHsrRequestScript.Signer;
 
         Assert.Contains(
             "const HSR_DS_SALT = '6s25p5ox5y14umn1p61aqyyvbvvl3lrt';",
@@ -4833,7 +4887,9 @@ public sealed class PublisherAccountHardeningTests
             "await request(noteUrl, false, noteHeaders);",
             script,
             StringComparison.Ordinal);
-        Assert.Equal(2, CountOccurrences(script, "hsrNoteHeaders()"));
+        Assert.Contains("? HoyoLabHsrRequestScript.Signer", script, StringComparison.Ordinal);
+        Assert.Equal(1, CountOccurrences(script, "hsrNoteHeaders()"));
+        Assert.Equal(1, CountOccurrences(signer, "hsrNoteHeaders()"));
     }
 
     [Fact]
@@ -4845,7 +4901,7 @@ public sealed class PublisherAccountHardeningTests
             "private static string BuildResourceFetchScript",
             "private static string BuildHsrAchievementExportScript");
         var policy = Slice(script, "var hsrSignerScript", "return $$");
-        var signer = Slice(script, "// HSR_DS_SIGNER_START", "// HSR_DS_SIGNER_END");
+        var signer = HoyoLabHsrRequestScript.Signer;
         var discovery = Slice(script, "async function discover", "async function requestNote");
 
         Assert.Equal(2, CountOccurrences(policy, "gameId == \"hsr\""));
@@ -5045,6 +5101,51 @@ public sealed class PublisherAccountHardeningTests
     }
 
     [Fact]
+    public void Restored_account_access_reinitializes_slots_only_after_cleanup_is_complete()
+    {
+        var service = ReadAppFile("PublisherAccountService.cs");
+        var apply = Slice(service, "private void ApplyProviderConsentSnapshot(", "private void ClearProviderState(");
+        var pendingGuard = apply.IndexOf("enabled = enabled && !cleanupPending && !revocations.IsPending(provider)", StringComparison.Ordinal);
+        var initialize = apply.IndexOf("enabled = EnsureHoyoSlotManagerInitialized()", StringComparison.Ordinal);
+        var enable = apply.IndexOf("consent.Set(provider, enabled)", StringComparison.Ordinal);
+
+        Assert.Contains("if (enabled && provider == \"HoYoLAB\")", apply, StringComparison.Ordinal);
+        Assert.True(pendingGuard >= 0 && pendingGuard < initialize && initialize < enable);
+        Assert.DoesNotContain("revocations.Clear", apply, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryPersistPublisherCleanupPending", apply, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Account_quarantine_records_only_safe_failure_details_without_changing_cleanup()
+    {
+        var service = ReadAppFile("PublisherAccountService.cs");
+        var quarantine = Slice(service, "private void QuarantineProvider(", "private bool TryDeleteProtectedGameState(");
+        var app = ReadAppFile("App.xaml.cs");
+        var formatter = Slice(app, "private static string FormatSafeExceptionChain", "private void RecordAccountFailure");
+        var record = Slice(app, "private void RecordAccountFailure", "internal static void SetLaunchStage");
+
+        Assert.Contains("[CallerMemberName] string caller", quarantine, StringComparison.Ordinal);
+        Assert.Contains("recordAccountFailure?.Invoke(provider, caller, failure)", quarantine, StringComparison.Ordinal);
+        Assert.Contains("catch (Exception)", quarantine, StringComparison.Ordinal);
+        Assert.True(quarantine.IndexOf("hoyoQuarantined = true", StringComparison.Ordinal)
+            < quarantine.IndexOf("recordAccountFailure?.Invoke", StringComparison.Ordinal));
+        Assert.True(quarantine.IndexOf("recordAccountFailure?.Invoke", StringComparison.Ordinal)
+            < quarantine.IndexOf("PublisherQuarantineCleanupStore.TryClean", StringComparison.Ordinal));
+        Assert.Contains("recordAccountFailure: RecordAccountFailure", app, StringComparison.Ordinal);
+        Assert.Contains("last-account-failure.txt", record, StringComparison.Ordinal);
+        Assert.Contains("FormatSafeExceptionChain(exception)", record, StringComparison.Ordinal);
+        Assert.Contains("if (folder is null) return", record, StringComparison.Ordinal);
+        Assert.Contains("catch (Exception)", record, StringComparison.Ordinal);
+        Assert.Contains("exceptionCount < 5", formatter, StringComparison.Ordinal);
+        Assert.Contains("current = current.InnerException, exceptionCount++", formatter, StringComparison.Ordinal);
+        Assert.Contains("fNeedFileInfo: false", formatter, StringComparison.Ordinal);
+        Assert.Contains("frames.Take(8)", formatter, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Message", formatter + record, StringComparison.Ordinal);
+        Assert.DoesNotContain(".ToString()", formatter + record, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Data", formatter + record, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Resource_service_preserves_a_fixed_result_across_browser_teardown_quarantine()
     {
         var service = ReadAppFile("PublisherAccountService.cs");
@@ -5060,17 +5161,17 @@ public sealed class PublisherAccountHardeningTests
             read,
             StringComparison.Ordinal);
         var cleanup = refresh.IndexOf(
-            "TryDeleteProtectedGameState(entry.GameId, entry.Provider, operation)",
+            "TryDeleteProtectedGameState(",
             diagnostic,
             StringComparison.Ordinal);
         var catchBlock = refresh.IndexOf(
             "catch (Exception exception) when (exception is not OperationCanceledException)",
             StringComparison.Ordinal);
         var teardownCatch = refresh.IndexOf(
-            "catch (PublisherSessionTeardownException)",
+            "catch (PublisherSessionTeardownException exception)",
             StringComparison.Ordinal);
         var quarantine = refresh.IndexOf(
-            "QuarantineProvider(entry.Provider, operation);",
+            "QuarantineProvider(entry.Provider, operation, exception);",
             teardownCatch,
             StringComparison.Ordinal);
         var fixedFailure = refresh.IndexOf(
@@ -5150,7 +5251,7 @@ public sealed class PublisherAccountHardeningTests
             "private async Task<PublisherResourceSnapshot?> RefreshResourceCoreAsync",
             "public Task<DailyCheckInResult> CheckInAsync");
         var teardown = refresh.IndexOf(
-            "catch (PublisherSessionTeardownException)",
+            "catch (PublisherSessionTeardownException exception)",
             StringComparison.Ordinal);
         var nextCatch = refresh.IndexOf(
             "catch (OperationCanceledException)",
@@ -5342,7 +5443,7 @@ public sealed class PublisherAccountHardeningTests
         var disconnect = Slice(
             service,
             "private async Task<PublisherConnectionState> DisconnectCoreAsync",
-            "private void CommitDeletedProfile");
+            "private PublisherConnectionState CommitDeletedProfile");
         Assert.Contains("roleBindings.DeleteProvider(entry.Provider)", disconnect, StringComparison.Ordinal);
         Assert.Contains("resourceSnapshots.DeleteProvider(entry.Provider)", disconnect, StringComparison.Ordinal);
         Assert.Contains("DeleteProfileDirectoryAsync(", disconnect, StringComparison.Ordinal);
@@ -5406,20 +5507,20 @@ public sealed class PublisherAccountHardeningTests
             service,
             "private async Task<PublisherResourceSnapshot?> RefreshResourceCoreAsync",
             "public Task<DailyCheckInResult> CheckInAsync");
-        Assert.Equal(2, CountOccurrences(refresh, "if (!TryDeleteProtectedGameState(entry.GameId, entry.Provider, operation))"));
+        Assert.Equal(2, CountOccurrences(refresh, "if (!TryDeleteProtectedGameState("));
 
         var daily = Slice(
             service,
             "private async Task<PublisherDailyRoleResolution> ResolveDailyRoleAsync",
             "private async Task<PublisherSessionProof> ProbeConnectionCoreAsync");
-        Assert.Contains("if (!TryDeleteProtectedGameState(entry.GameId, entry.Provider, operation))", daily, StringComparison.Ordinal);
+        Assert.Contains("if (!TryDeleteProtectedGameState(", daily, StringComparison.Ordinal);
         Assert.Contains("PublisherDailyRoleResolutionState.NeedsReview", daily, StringComparison.Ordinal);
 
         var interrupted = Slice(
             service,
-            "private void CommitInterruptedProfileChange(",
+            "private PublisherConnectionState CommitInterruptedProfileChange(",
             "private Task DeleteProfileDirectoryAsync(");
-        Assert.Contains("if (!TryDeleteProtectedProviderState(provider)) return;", interrupted, StringComparison.Ordinal);
+        Assert.Contains("!TryDeleteProtectedProviderState(provider, operation)", interrupted, StringComparison.Ordinal);
 
         var helpers = Slice(
             service,
@@ -5477,6 +5578,82 @@ public sealed class PublisherAccountHardeningTests
         Assert.Contains("contract.Regions", script, StringComparison.Ordinal);
         Assert.DoesNotContain("endsWith(", script, StringComparison.Ordinal);
         Assert.DoesNotContain("includes(", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Genshin_build_refresh_checks_slot_role_and_consent_before_capture_and_before_save()
+    {
+        var service = ReadAppFile("PublisherAccountService.GenshinBuilds.cs");
+        var before = service[..service.IndexOf("await window.ReadGenshinBuildsAsync", StringComparison.Ordinal)];
+        var publish = Slice(service, "lock (sync)", "Updated?.Invoke");
+
+        Assert.Contains("GenshinBuildsAvailable => true", service, StringComparison.Ordinal);
+        Assert.Contains("!GenshinBuildsAvailable", before, StringComparison.Ordinal);
+        Assert.Contains("!CanUseGameBundle(\"gi\", operation)", before, StringComparison.Ordinal);
+        Assert.Contains("operation.HoyoContext?.SlotId != expectedSlotId", before, StringComparison.Ordinal);
+        Assert.Contains("before?.Consents.Builds != true", before, StringComparison.Ordinal);
+        Assert.Contains("before.SelectedRole != expectedBinding", before, StringComparison.Ordinal);
+        Assert.Contains("TryLoadRoleRecord(\"gi\", operation)?.Binding != expectedBinding", before, StringComparison.Ordinal);
+        Assert.Contains("!CanPublish(\"HoYoLAB\", operation)", publish, StringComparison.Ordinal);
+        Assert.Contains("operation.HoyoContext?.SlotId != expectedSlotId", publish, StringComparison.Ordinal);
+        Assert.Contains("current?.Consents.Builds != true", publish, StringComparison.Ordinal);
+        Assert.Contains("current.SelectedRole != expectedBinding", publish, StringComparison.Ordinal);
+        Assert.Contains("TryLoadRoleRecord(\"gi\", operation)?.Binding != expectedBinding", publish, StringComparison.Ordinal);
+        Assert.Contains("TryRecordGenshinBuilds(expectedBinding, result.Snapshot, observedAt, token)", publish, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryRecordGenshinBuilds", before, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryDelete", service, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Genshin_build_browser_capture_is_bounded_cancelable_and_always_releases_its_script()
+    {
+        var browser = ReadAppFile("PublisherSessionWindow.GenshinBuilds.cs");
+        Assert.Contains("purpose != PublisherSessionPurpose.Resource || authorizedGameId != \"gi\"", browser, StringComparison.Ordinal);
+        Assert.Contains("IsValidRoleBinding(\"gi\", expectedBinding)", browser, StringComparison.Ordinal);
+        Assert.Contains("CreateLinkedTokenSource(cancellationToken, lifetime.Token)", browser, StringComparison.Ordinal);
+        Assert.Contains("HoyoLabGenshinBuildCapture.TimeoutSeconds + 2", browser, StringComparison.Ordinal);
+        Assert.Contains("WaitAsync(TimeSpan.FromSeconds(2), linked.Token)", browser, StringComparison.Ordinal);
+        Assert.Contains("ParseResult(result, expectedBinding)", browser, StringComparison.Ordinal);
+        var cleanup = browser[browser.LastIndexOf("finally", StringComparison.Ordinal)..];
+        Assert.Contains("await AbortResourceFetchAsync(controllerKey)", cleanup, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Star_rail_build_refresh_checks_slot_role_generation_and_consent_before_capture_and_before_save()
+    {
+        var service = ReadAppFile("PublisherAccountService.HsrBuilds.cs");
+        var before = service[..service.IndexOf("await window.ReadHsrBuildsAsync", StringComparison.Ordinal)];
+        var publish = Slice(service, "lock (sync)", "Updated?.Invoke");
+
+        Assert.Contains("HsrBuildsAvailable => true", service, StringComparison.Ordinal);
+        Assert.Contains("!HsrBuildsAvailable", before, StringComparison.Ordinal);
+        Assert.Contains("!CanUseGameBundle(\"hsr\", operation)", before, StringComparison.Ordinal);
+        Assert.Contains("operation.HoyoContext?.SlotId != expectedSlotId", before, StringComparison.Ordinal);
+        Assert.Contains("before?.Consents.Builds != true", before, StringComparison.Ordinal);
+        Assert.Contains("before.SelectedRole != expectedBinding", before, StringComparison.Ordinal);
+        Assert.Contains("TryLoadRoleRecord(\"hsr\", operation)?.Binding != expectedBinding", before, StringComparison.Ordinal);
+        Assert.Contains("!CanPublish(\"HoYoLAB\", operation)", publish, StringComparison.Ordinal);
+        Assert.Contains("operation.HoyoContext?.SlotId != expectedSlotId", publish, StringComparison.Ordinal);
+        Assert.Contains("current?.Consents.Builds != true", publish, StringComparison.Ordinal);
+        Assert.Contains("current.SelectedRole != expectedBinding", publish, StringComparison.Ordinal);
+        Assert.Contains("TryLoadRoleRecord(\"hsr\", operation)?.Binding != expectedBinding", publish, StringComparison.Ordinal);
+        Assert.Contains("TryRecordHsrBuilds(expectedBinding, result.Snapshot, observedAt, token)", publish, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryRecordHsrBuilds", before, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryDelete", service, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Star_rail_build_browser_capture_is_bounded_cancelable_and_always_releases_its_script()
+    {
+        var browser = ReadAppFile("PublisherSessionWindow.HsrBuilds.cs");
+        Assert.Contains("purpose != PublisherSessionPurpose.Resource || authorizedGameId != \"hsr\"", browser, StringComparison.Ordinal);
+        Assert.Contains("IsValidRoleBinding(\"hsr\", expectedBinding)", browser, StringComparison.Ordinal);
+        Assert.Contains("CreateLinkedTokenSource(cancellationToken, lifetime.Token)", browser, StringComparison.Ordinal);
+        Assert.Contains("HoyoLabHsrBuildCapture.TimeoutSeconds + 2", browser, StringComparison.Ordinal);
+        Assert.Contains("WaitAsync(TimeSpan.FromSeconds(2), linked.Token)", browser, StringComparison.Ordinal);
+        Assert.Contains("ParseResult(result, expectedBinding)", browser, StringComparison.Ordinal);
+        var cleanup = browser[browser.LastIndexOf("finally", StringComparison.Ordinal)..];
+        Assert.Contains("await AbortResourceFetchAsync(controllerKey)", cleanup, StringComparison.Ordinal);
     }
 
     private static PublisherResourceReadResult DailyRoleRead(

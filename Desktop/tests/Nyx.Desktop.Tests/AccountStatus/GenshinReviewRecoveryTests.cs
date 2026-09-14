@@ -288,7 +288,8 @@ public sealed class GenshinReviewRecoveryTests
             "resolution.StoredBindingWasProvenMissing",
             resolver,
             StringComparison.Ordinal);
-        Assert.Contains("TryDeleteProtectedGameState(entry.GameId, entry.Provider, operation)", resolver, StringComparison.Ordinal);
+        Assert.Contains("TryDeleteProtectedGameState(", resolver, StringComparison.Ordinal);
+        Assert.Contains("storedBinding,", resolver, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -371,7 +372,8 @@ public sealed class GenshinReviewRecoveryTests
             "RemoveResourceIfCurrent(entry.GameId, entry.Provider, operation);",
             cleanup,
             StringComparison.Ordinal);
-        Assert.Contains("TryDeleteProtectedGameState(entry.GameId, entry.Provider, operation)", cleanup, StringComparison.Ordinal);
+        Assert.Contains("TryDeleteProtectedGameState(", cleanup, StringComparison.Ordinal);
+        Assert.Contains("storedBinding,", cleanup, StringComparison.Ordinal);
         Assert.Contains("SetResourceStateIfCurrent(", cleanup, StringComparison.Ordinal);
         Assert.Contains("PublisherResourceState.SelectionRequired", cleanup, StringComparison.Ordinal);
         Assert.Contains("PublisherResourceState.NotStarted", cleanup, StringComparison.Ordinal);

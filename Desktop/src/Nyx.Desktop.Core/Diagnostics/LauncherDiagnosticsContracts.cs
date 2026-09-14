@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Nyx.Desktop.Core.Features;
+using Nyx.Desktop.Core.Games;
 
 namespace Nyx.Desktop.Core.Diagnostics;
 
@@ -42,6 +43,11 @@ public sealed record LauncherDiagnosticGame(
     };
 }
 
+public sealed record LauncherDiagnosticTiming(
+    string Operation,
+    string? GameId,
+    int Milliseconds);
+
 public sealed record LauncherDiagnosticsSnapshot
 {
     public LauncherDiagnosticsSnapshot(
@@ -51,7 +57,8 @@ public sealed record LauncherDiagnosticsSnapshot
         string? manifestRevision = null,
         string? manifestHealth = null,
         LauncherCacheTotals? cache = null,
-        string? lastErrorCode = null)
+        string? lastErrorCode = null,
+        IEnumerable<LauncherDiagnosticTiming>? timings = null)
     {
         LauncherVersion = LauncherDiagnosticsSanitizer.Token(launcherVersion, "unknown-version");
         FeatureFlags = featureFlags ?? LauncherFeatureFlags.Defaults();
@@ -66,6 +73,11 @@ public sealed record LauncherDiagnosticsSnapshot
         ManifestHealth = LauncherDiagnosticsSanitizer.Token(manifestHealth, "unknown");
         Cache = cache ?? new LauncherCacheTotals(0, 0);
         LastErrorCode = LauncherDiagnosticsSanitizer.ErrorCode(lastErrorCode);
+        Timings = new ReadOnlyCollection<LauncherDiagnosticTiming>((timings ?? [])
+            .Select(LauncherDiagnosticsSanitizer.Timing)
+            .Where(static timing => timing is not null)
+            .Cast<LauncherDiagnosticTiming>()
+            .ToArray());
     }
 
     public string LauncherVersion { get; }
@@ -75,6 +87,7 @@ public sealed record LauncherDiagnosticsSnapshot
     public string ManifestHealth { get; }
     public LauncherCacheTotals Cache { get; }
     public string? LastErrorCode { get; }
+    public IReadOnlyList<LauncherDiagnosticTiming> Timings { get; }
 }
 
 public static class LauncherDiagnosticsSanitizer
@@ -85,6 +98,24 @@ public static class LauncherDiagnosticsSanitizer
         "launch-not-admitted", "not-found", "invalid", "uncertain", "network-failed", "cache-cleared",
         "not-configured", "failed", "future-version", "malformed", "unsupported",
     };
+    private static readonly HashSet<string> SafeTimingOperations = new(StringComparer.Ordinal)
+    {
+        "render", "background", "banner", "account-restore", "account-refresh", "launch", "close",
+    };
+
+    internal static LauncherDiagnosticTiming? Timing(LauncherDiagnosticTiming? timing)
+    {
+        if (timing is null) return null;
+        var operation = Token(timing.Operation);
+        if (!SafeTimingOperations.Contains(operation)
+            || (timing.GameId is not null && !GameCatalog.TryGet(timing.GameId, out _)))
+            return null;
+        return timing with
+        {
+            Operation = operation,
+            Milliseconds = Math.Clamp(timing.Milliseconds, 0, 600_000),
+        };
+    }
 
     public static string? ErrorCode(string? value)
     {
@@ -136,6 +167,14 @@ public static class LauncherDiagnosticsText
         foreach (var game in snapshot.Games.OrderBy(static game => game.GameId, StringComparer.Ordinal))
         {
             lines.Add($"game:{game.GameId} discovery={game.Discovery.ToString().ToLowerInvariant()} session={game.SessionState} export={game.ExportState}{(game.ErrorCode is null ? string.Empty : $" error={game.ErrorCode}")}");
+        }
+
+        foreach (var timing in snapshot.Timings
+            .OrderBy(static timing => timing.Operation, StringComparer.Ordinal)
+            .ThenBy(static timing => timing.GameId ?? string.Empty, StringComparer.Ordinal)
+            .ThenBy(static timing => timing.Milliseconds))
+        {
+            lines.Add($"timing:{timing.Operation}{(timing.GameId is null ? string.Empty : $" game={timing.GameId}")} milliseconds={timing.Milliseconds}");
         }
 
         if (snapshot.LastErrorCode is not null) lines.Add($"last-error: {snapshot.LastErrorCode}");

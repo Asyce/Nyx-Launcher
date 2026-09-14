@@ -25,15 +25,23 @@ fn dependency_commits_and_realtime_only_backend_are_pinned() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let manifest = read(root.join("Cargo.toml"));
     let capture = read(root.join("vendor/pktmon-realtime/src/lib.rs"));
+    let artifactarium_manifest = read(root.join("vendor/auto-artifactarium/Cargo.toml"));
+    let reliquary_manifest = read(root.join("vendor/auto-reliquary/Cargo.toml"));
     let artifactarium = read(root.join("vendor/auto-artifactarium/UPSTREAM.md"));
     let reliquary = read(root.join("vendor/auto-reliquary/UPSTREAM.md"));
     let kcp = read(root.join("vendor/mhy-kcp/UPSTREAM.md"));
+    let rand_mt = read(root.join("vendor/rand_mt/UPSTREAM.md"));
     assert!(manifest.contains("path = \"vendor/auto-artifactarium\""));
     assert!(manifest.contains("path = \"vendor/auto-reliquary\""));
     assert!(manifest.contains("[patch.\"https://github.com/hashblen/mhy-kcp\"]"));
+    assert!(manifest.contains("rand_mt = { path = \"vendor/rand_mt\" }"));
+    assert!(artifactarium_manifest.contains("rand_mt = \"=4.2.2\""));
+    assert!(reliquary_manifest.contains("rand_mt = \"=4.2.2\""));
     assert!(artifactarium.contains("04421c4f8a7ed7e7b65bb5e6e59231d4e98405cf"));
     assert!(reliquary.contains("bc23b48cb3b1b994a5d4405cefea42eb0e1d3735"));
     assert!(kcp.contains("1acf4ba5938ff91f7f2d2a31e16bf1f8d2db9c8f"));
+    assert!(rand_mt.contains("49e018c6ded60e5252609887c12eb3ca2592e9248c5894a7db3975c8a7a1e2df"));
+    assert!(rand_mt.contains("8d9c44fa58903d8fd86295c50513ec520d6c7678"));
     assert_eq!(
         hash(root.join("vendor/mhy-kcp/src/error.rs")),
         "1adfe0acf36dec662342553bbad445cd7b73bd6ec2887c8df1bd62378c883882"
@@ -49,6 +57,97 @@ fn dependency_commits_and_realtime_only_backend_are_pinned() {
     assert!(!capture.contains("mod legacy"));
     assert!(!capture.contains("LegacyBackend"));
     assert!(!capture.contains("EtlCapture"));
+}
+
+#[test]
+fn packaged_notices_cover_the_locked_dependency_graph() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let lock = read(root.join("Cargo.lock"));
+    let notices = read(root.join("THIRD_PARTY_NOTICES.md")).replace("\r\n", "\n");
+
+    let lock_hash = hash(root.join("Cargo.lock"));
+    assert!(notices.contains(&lock_hash));
+    assert!(notices.contains("| `subtle` | `2.6.1` | BSD-3-Clause |"));
+    assert!(notices.contains("| `unicode-ident` | `1.0.24` | MIT AND Unicode-3.0 |"));
+    assert!(notices.contains("Copyright (c) 2015 Andrew Gallant"));
+    assert!(notices.contains("Copyright (c) 2018 Carl Lerche"));
+    assert!(notices.contains("Copyright © 1991-2023 Unicode, Inc."));
+    assert!(notices.contains("Copyright (c) 2016-2024 Isis Agora Lovecruft"));
+    assert!(notices.contains("`202292262c82845c1d1c02695a86123e09f7eb4ef08826bcc187b16f5f9185f3`"));
+    assert!(notices.contains("`6c51d31f2009cda50d5112c2870e4a4d37696f2d5b29fa601b5ef186f4a5d11c`"));
+    for required_notice in [
+        "1e2b7ade3fb228130408b9990cae6a7618eb314c75aa0b164bfe485d9d9756ee",
+        "3290ae0fbc9ddb77d2239121d710f0bb9d31b3b4744e6d97fe01e652b4c1870b",
+        "377c2e7c53250cc5905c0b0532d35973392af16ffb9596a41d99d202cf3617c9",
+        "74db5baf44a41b1000312c673544b3374e4198af5605c7f9080a402cec42cfa3",
+        "90eb64f0279b0d9432accfa6023ff803bc4965212383697eee27a0f426d5f8d5",
+    ] {
+        assert!(notices.contains(&format!("### `{required_notice}`")));
+    }
+    assert!(notices.contains("| `regex-syntax` | `0.8.11` | src/unicode_tables/LICENSE-UNICODE | `74db5baf44a41b1000312c673544b3374e4198af5605c7f9080a402cec42cfa3` |"));
+    assert!(notices.contains("| `tracing-core` | `0.1.36` | src/spin/LICENSE | `58545fed1565e42d687aecec6897d35c6d37ccb71479a137c0deb2203e125c79` |"));
+
+    let mut license_block_count = 0;
+    for block in notices.split("\n### `").skip(1) {
+        let (expected_hash, body) = block.split_once("`\n").unwrap();
+        assert_eq!(expected_hash.len(), 64);
+        assert!(expected_hash.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        let (_, fenced) = body.split_once("```text\n").unwrap();
+        let (license_text, _) = fenced.split_once("```\n").unwrap();
+        assert_eq!(format!("{:x}", Sha256::digest(license_text)), expected_hash);
+        license_block_count += 1;
+    }
+    assert!(license_block_count > 50);
+
+    let mut dependency_count = 0;
+    for package in lock.split("[[package]]").skip(1) {
+        let name = package
+            .lines()
+            .find_map(|line| {
+                line.strip_prefix("name = \"")
+                    .and_then(|line| line.strip_suffix('"'))
+            })
+            .unwrap();
+        if name == "pengo-achievements-live" {
+            continue;
+        }
+        let version = package
+            .lines()
+            .find_map(|line| {
+                line.strip_prefix("version = \"")
+                    .and_then(|line| line.strip_suffix('"'))
+            })
+            .unwrap();
+        assert!(
+            notices.contains(&format!("| `{name}` | `{version}` |")),
+            "missing locked dependency notice for {name} {version}"
+        );
+        dependency_count += 1;
+    }
+    assert!(dependency_count > 100);
+
+    let inventory = notices
+        .split_once("## Locked Rust dependency inventory")
+        .unwrap()
+        .1
+        .split_once("## Additional required notices and copyright files")
+        .unwrap()
+        .0;
+    let package_rows = inventory
+        .lines()
+        .filter(|line| line.starts_with("| `") && line.contains(" | `"))
+        .count();
+    assert_eq!(package_rows, dependency_count);
+    for line in notices.lines().filter(|line| line.starts_with("| `")) {
+        for value in line.split('`').skip(1).step_by(2) {
+            if value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                assert!(
+                    notices.contains(&format!("### `{value}`")),
+                    "missing exact license-text block {value}"
+                );
+            }
+        }
+    }
 }
 
 #[test]

@@ -182,7 +182,8 @@ public sealed class PublisherRoleBindingStoreTests
                 "HoYoLAB",
                 revocations,
                 bindings,
-                snapshots));
+                snapshots,
+                deleteHoyoGameBundle: static () => true));
             Assert.True(revocations.IsPending("HoYoLAB"));
 
             boundary.ReparsePath = null;
@@ -190,7 +191,8 @@ public sealed class PublisherRoleBindingStoreTests
                 "HoYoLAB",
                 revocations,
                 bindings,
-                snapshots));
+                snapshots,
+                deleteHoyoGameBundle: static () => true));
             Assert.False(revocations.IsPending("HoYoLAB"));
             Assert.Null(bindings.TryLoad("gi"));
         }
@@ -373,6 +375,9 @@ public sealed class PublisherRoleBindingStoreTests
 
         public FileStream CreateNewWriteThrough(string path) =>
             inner.CreateNewWriteThrough(path);
+
+        public void MoveNew(string source, string destination) =>
+            inner.MoveNew(source, destination);
 
         public void MoveOverwrite(string source, string destination)
         {

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use base64::prelude::*;
 use rand_mt::Mt64;
 use tracing::{info, instrument};
+use zeroize::Zeroizing;
 
 #[instrument(skip_all)]
 pub fn decrypt_command(key: &[u8], encrypted: &mut [u8]) {
@@ -11,12 +12,16 @@ pub fn decrypt_command(key: &[u8], encrypted: &mut [u8]) {
     }
 }
 
-pub fn lookup_initial_key(initial_keys: &HashMap<u32, Vec<u8>>, bytes: &[u8]) -> Option<Vec<u8>> {
+pub fn lookup_initial_key(
+    initial_keys: &HashMap<u32, Zeroizing<Vec<u8>>>,
+    bytes: &[u8],
+) -> Option<Zeroizing<Vec<u8>>> {
     let version = u32::from_be_bytes(bytes.get(..4)?.try_into().ok()?) ^ 0x9D74C714;
 
     // attempt to fetch from user provided initial keys, otherwise use our own baked-in ones
-    let key = initial_keys.get(&version)
-        .map(|k| k.to_vec())
+    let key = initial_keys
+        .get(&version)
+        .cloned()
         .filter(|key| !key.is_empty())
         .or_else(|| {
             let b64 = match version {
@@ -36,7 +41,11 @@ pub fn lookup_initial_key(initial_keys: &HashMap<u32, Vec<u8>>, bytes: &[u8]) ->
                 3766413383 => "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",
                 _ => return None,
             };
-            BASE64_STANDARD.decode(b64).ok().filter(|key| !key.is_empty())
+            BASE64_STANDARD
+                .decode(b64)
+                .ok()
+                .filter(|key| !key.is_empty())
+                .map(Zeroizing::new)
         })?;
 
     info!(version, "found initial decryption key");
@@ -44,15 +53,30 @@ pub fn lookup_initial_key(initial_keys: &HashMap<u32, Vec<u8>>, bytes: &[u8]) ->
     Some(key)
 }
 
-pub fn new_key_from_seed(seed: u64) -> Vec<u8> {
+pub fn new_key_from_seed(seed: u64) -> Zeroizing<Vec<u8>> {
     // mersenne twister generator
     let mut gen = Mt64::new(seed);
 
-    let mut key = Vec::with_capacity(512);
-    for _ in 0..512 {
-        for b in gen.next_u64().to_be_bytes() {
-            key.push(b);
-        }
+    let mut key = Zeroizing::new(vec![0; 4096]);
+    for chunk in key.chunks_exact_mut(8) {
+        chunk.copy_from_slice(&gen.next_u64().to_be_bytes());
     }
     key
+}
+
+#[cfg(test)]
+mod tests {
+    use sha2::{Digest, Sha256};
+
+    use super::new_key_from_seed;
+
+    #[test]
+    fn generated_key_matches_fixed_public_seed_digest() {
+        let key = new_key_from_seed(0x0123_4567_89ab_cdef);
+        assert_eq!(key.len(), 4096);
+        assert_eq!(
+            format!("{:x}", Sha256::digest(&*key)),
+            "1dbe232680054e93c57d5bb87ba54f1d77931c4ca4abbe85385f62297117e839"
+        );
+    }
 }

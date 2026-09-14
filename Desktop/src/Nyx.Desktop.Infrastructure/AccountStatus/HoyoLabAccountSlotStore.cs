@@ -322,6 +322,20 @@ public sealed class HoyoLabAccountSlotStore
         () => TryRemoveSlotCore(slotId),
         false);
 
+    public bool IsSlotRemoved(string slotId) => SerializeMutation(() =>
+    {
+        if (!HoyoLabAccountSlotRules.IsValidSlotId(slotId)
+            || !ValidateExistingComponents(indexPath))
+            return false;
+        if (files.EntryExists(indexPath))
+        {
+            var index = TryLoadCore();
+            if (index is null || index.Slots.Any(slot => slot.Id == slotId)) return false;
+        }
+        var container = Path.Combine(publisherProfilesRoot, "Accounts", "HoYoLAB", slotId);
+        return ValidateExistingComponents(container) && !files.EntryExists(container);
+    }, false);
+
     private bool TryRemoveSlotCore(string slotId)
     {
         if (!HoyoLabAccountSlotRules.IsValidSlotId(slotId)) return false;
@@ -643,7 +657,9 @@ public sealed class HoyoLabAccountSlotStore
 
     private string LegacyProfilePath() => Path.Combine(publisherProfilesRoot, "HoYoLAB");
 
-    private string ProtectedStateRoot(string slotId) => Path.GetFullPath(Path.Combine(
+    private string ProtectedStateRoot(string slotId) => ProtectedStateRootFor(publisherProfilesRoot, slotId);
+
+    internal static string ProtectedStateRootFor(string publisherProfilesRoot, string slotId) => Path.GetFullPath(Path.Combine(
         publisherProfilesRoot,
         "Accounts",
         "HoYoLAB",

@@ -19,6 +19,7 @@ public sealed class LauncherRecoveryService : ILauncherRecoveryService
     private readonly Func<string, CancellationToken, ValueTask<bool>>? repair;
     private readonly Func<CancellationToken, ValueTask<bool>>? retryContent;
     private readonly Func<string, CancellationToken, ValueTask<bool>>? retryExport;
+    private readonly Func<IReadOnlyDictionary<string, long>>? currentPlaytimeTotals;
 
     public LauncherRecoveryService(
         LauncherStateStore stateStore,
@@ -26,7 +27,8 @@ public sealed class LauncherRecoveryService : ILauncherRecoveryService
         Func<CancellationToken, ValueTask<bool>>? rediscoverInstalls = null,
         Func<string, CancellationToken, ValueTask<bool>>? repairCustomPath = null,
         Func<CancellationToken, ValueTask<bool>>? retryContent = null,
-        Func<string, CancellationToken, ValueTask<bool>>? retryExport = null)
+        Func<string, CancellationToken, ValueTask<bool>>? retryExport = null,
+        Func<IReadOnlyDictionary<string, long>>? currentPlaytimeTotals = null)
     {
         this.stateStore = stateStore ?? throw new ArgumentNullException(nameof(stateStore));
         this.cache = cache ?? throw new ArgumentNullException(nameof(cache));
@@ -34,6 +36,7 @@ public sealed class LauncherRecoveryService : ILauncherRecoveryService
         repair = repairCustomPath;
         this.retryContent = retryContent;
         this.retryExport = retryExport;
+        this.currentPlaytimeTotals = currentPlaytimeTotals;
     }
 
     public async ValueTask<LauncherRecoveryResult> RediscoverInstallsAsync(CancellationToken cancellationToken = default) =>
@@ -92,7 +95,7 @@ public sealed class LauncherRecoveryService : ILauncherRecoveryService
     public ValueTask<LauncherRecoveryResult> RestoreLastKnownGoodSettingsAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var result = stateStore.RestoreLastKnownGood();
+        var result = stateStore.RestoreLastKnownGood(currentPlaytimeTotals?.Invoke());
         return ValueTask.FromResult(result.IsUsable
             ? Succeeded(LauncherRecoveryAction.RestoreLastKnownGoodSettings)
             : Failed(LauncherRecoveryAction.RestoreLastKnownGoodSettings, result.Status is LauncherStateReadStatus.FutureVersion ? "future-version" : "invalid"));

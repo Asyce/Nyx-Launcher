@@ -1,6 +1,8 @@
 pub mod capture;
 pub mod cli;
 pub mod decoder;
+#[cfg(test)]
+mod gear_observer;
 pub mod launcher;
 pub mod launcher_app;
 pub mod npcap;
@@ -35,8 +37,8 @@ impl Game {
 
     pub const fn catalog_version(self) -> &'static str {
         match self {
-            Self::Gi => "gi-6.7",
-            Self::Hsr => "hsr-4.4",
+            Self::Gi => GI_CATALOG_VERSION,
+            Self::Hsr => HSR_CATALOG_VERSION,
         }
     }
 
@@ -334,12 +336,11 @@ mod tests {
 
     #[test]
     fn embedded_catalog_counts_are_pinned() {
-        assert_eq!(GI_IDS.len(), 1759);
-        assert_eq!(HSR_IDS.len(), 1869);
+        assert_eq!(GI_IDS.len(), 1844);
+        assert_eq!(HSR_IDS.len(), 1921);
         assert!(GI_IDS.windows(2).all(|pair| pair[0] < pair[1]));
         assert!(HSR_IDS.windows(2).all(|pair| pair[0] < pair[1]));
-        let database =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Database/Achievements");
+        let contracts = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../contracts");
         let normalize =
             |bytes: Vec<u8>| {
                 assert!(!bytes.iter().enumerate().any(|(index, byte)| {
@@ -350,15 +351,16 @@ mod tests {
                     .filter(|byte| *byte != b'\r')
                     .collect::<Vec<_>>()
             };
-        let gi = normalize(std::fs::read(database.join("gi/catalog.json")).unwrap());
-        let hsr = normalize(std::fs::read(database.join("hsr/catalog.json")).unwrap());
+        let gi = normalize(std::fs::read(contracts.join("achievements-gi-catalog.json")).unwrap());
+        let hsr =
+            normalize(std::fs::read(contracts.join("achievements-hsr-catalog.json")).unwrap());
         assert_eq!(
             format!("{:x}", Sha256::digest(&gi)),
-            "5608dd41a26a06639c6455d65de7abdd2a7e5e997f55c6ed93dec6d08dc673b5"
+            "34b5f76579e435249e456ff4eba6a767f8562275f24270ee6111d0f46bfd268e"
         );
         assert_eq!(
             format!("{:x}", Sha256::digest(&hsr)),
-            "1686a1deb2a03e758e1047684acc9e760d5c793b2e2717bb4d1bc9eeb7c60502"
+            "827c248889146ef686dcca52e445615a2c9db9b025c4bddfc739b44498662149"
         );
         let gi_value: serde_json::Value = serde_json::from_slice(&gi).unwrap();
         let hsr_value: serde_json::Value = serde_json::from_slice(&hsr).unwrap();
@@ -369,6 +371,42 @@ mod tests {
         assert_eq!(
             format!("hsr-{}", hsr_value["catalogVersion"].as_str().unwrap()),
             Game::Hsr.catalog_version()
+        );
+    }
+
+    #[test]
+    fn gi_7_0_completed_id_is_accepted() {
+        assert!(GI_IDS.contains(&81700));
+        assert_eq!(
+            validate_complete_snapshot(
+                Game::Gi,
+                &[AchievementRecord {
+                    id: 81700,
+                    status: 2,
+                }],
+                GI_IDS,
+                HSR_IDS,
+            )
+            .unwrap(),
+            vec![81700]
+        );
+    }
+
+    #[test]
+    fn hsr_4_5_completed_id_is_accepted() {
+        assert!(HSR_IDS.contains(&4035501));
+        assert_eq!(
+            validate_complete_snapshot(
+                Game::Hsr,
+                &[AchievementRecord {
+                    id: 4035501,
+                    status: 2,
+                }],
+                HSR_IDS,
+                GI_IDS,
+            )
+            .unwrap(),
+            vec![4035501]
         );
     }
 }

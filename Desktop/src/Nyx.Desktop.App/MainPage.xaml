@@ -70,7 +70,7 @@
                 PointerExited="RailSurface_PointerExited">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition x:Name="RailBrandRow" Height="104" />
+                        <RowDefinition x:Name="RailBrandRow" Height="116" />
                         <RowDefinition x:Name="RailContentRow" Height="Auto" />
                         <RowDefinition x:Name="RailAddRow" Height="Auto" />
                         <RowDefinition x:Name="RailSpacerRow" Height="*" />
@@ -215,15 +215,12 @@
                 Grid.RowSpan="2"
                 Grid.Column="1"
                 Grid.ColumnSpan="2"
-                Width="704"
                 Margin="26,38,18,292"
                 HorizontalAlignment="Left"
-                VerticalAlignment="Stretch">
-                <StackPanel x:Name="ContentPanel" MaxWidth="704" Spacing="0">
+                VerticalAlignment="Top">
+                <Grid x:Name="ContentPanel" MaxWidth="848">
                     <Border
                         x:Name="BannerCycleRegion"
-                        Width="704"
-                        Height="390"
                         Padding="0"
                         AutomationProperties.Name="Current and next character banners"
                         Background="{ThemeResource LauncherInfoSurfaceBrush}"
@@ -277,7 +274,14 @@
                                     IsHitTestVisible="False" />
                             </StackPanel>
 
-                            <Grid Grid.Row="1">
+                            <ScrollViewer
+                                x:Name="BannerCycleScrollViewer"
+                                Grid.Row="1"
+                                MaxHeight="330"
+                                AutomationProperties.Name="Current and upcoming banner details"
+                                HorizontalScrollMode="Disabled"
+                                VerticalScrollBarVisibility="Auto"
+                                VerticalScrollMode="Auto">
                                 <Grid
                                     x:Name="BannerCycleColumns"
                                     Margin="14,0,14,10"
@@ -315,110 +319,123 @@
                                             ItemsSource="{x:Bind BannerCharacterRows, Mode=OneWay}">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>
-                                                    <ItemsWrapGrid
-                                                        ItemHeight="34"
-                                                        ItemWidth="128"
-                                                        MaximumRowsOrColumns="5"
-                                                        Orientation="Horizontal" />
+                                                    <StackPanel Orientation="Vertical" Spacing="3" />
                                                 </ItemsPanelTemplate>
                                             </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                     <Grid
-                                                         Width="128"
-                                                         Height="34"
-                                                         Margin="0,0,0,2"
-                                                         HorizontalAlignment="Stretch"
-                                                         ColumnSpacing="4"
-                                                         Opacity="{Binding RowOpacity}">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="34" />
-                                                             <ColumnDefinition Width="*" />
-                                                         </Grid.ColumnDefinitions>
-                                                        <Border
-                                                            x:Name="CurrentBannerPortraitBacking"
-                                                            Width="32"
-                                                            Height="32"
-                                                            Background="{ThemeResource QuietSurfaceBrush}"
-                                                            BorderBrush="{ThemeResource IrisBrush}"
-                                                            BorderThickness="{Binding ActiveBorderThickness}"
-                                                            CornerRadius="16"
-                                                            IsHitTestVisible="False"
-                                                            Visibility="{Binding PrimaryVisibility}" />
-                                                        <Border
-                                                            x:Name="CurrentBannerPortrait"
-                                                            Width="28"
-                                                            Height="28"
-                                                            CornerRadius="14"
-                                                            IsHitTestVisible="False"
-                                                            AutomationProperties.Name="{Binding Name}"
-                                                            Visibility="{Binding PrimaryVisibility}">
-                                                            <Image
-                                                                Source="{Binding PortraitSource}"
-                                                                Stretch="UniformToFill" />
-                                                        </Border>
-                                                         <TextBlock
-                                                             x:Name="CurrentBannerNameLabel"
-                                                             Grid.Column="1"
-                                                             Margin="2,0"
-                                                            VerticalAlignment="Center"
-                                                            FontFamily="{StaticResource NyxBodyFont}"
-                                                             FontSize="{Binding DisplayFontSize}"
-                                                            Foreground="{ThemeResource MoonBrush}"
-                                                             IsHitTestVisible="False"
-                                                            MaxLines="1"
-                                                            Text="{Binding Name}"
-                                                             TextTrimming="CharacterEllipsis"
-                                                             TextWrapping="NoWrap"
-                                                             ToolTipService.ToolTip="{Binding Name}"
-                                                             Visibility="{Binding PrimaryVisibility}" />
-                                                        <Button
-                                                            x:Name="CurrentBannerNameButton"
-                                                            Grid.Column="1"
-                                                            Margin="0"
-                                                            Padding="0"
-                                                            HorizontalAlignment="Stretch"
-                                                            VerticalAlignment="Stretch"
-                                                            AutomationProperties.Name="{Binding CharacterLinkAccessibilityName}"
-                                                             Background="Transparent"
-                                                             BorderThickness="0"
-                                                              Click="CharacterLink_Click"
-                                                              CommandParameter="{Binding CharacterUrl}"
-                                                              IsEnabled="{Binding CanOpen}"
-                                                              Style="{StaticResource NyxCodeCopyButtonStyle}"
-                                                              Tag="{Binding Name}"
-                                                              ToolTipService.ToolTip="{Binding Name}"
-                                                              Visibility="{Binding PrimaryVisibility}" />
-                                                        <ItemsControl
-                                                            x:Name="CurrentBannerOverflowPortraits"
-                                                            Grid.ColumnSpan="2"
-                                                            HorizontalAlignment="Left"
-                                                            ItemsSource="{Binding OverflowPortraits}"
-                                                            Visibility="{Binding OverflowVisibility}">
-                                                            <ItemsControl.ItemsPanel>
-                                                                <ItemsPanelTemplate>
-                                                                    <StackPanel Orientation="Horizontal" Spacing="6" />
-                                                                </ItemsPanelTemplate>
-                                                            </ItemsControl.ItemsPanel>
-                                                            <ItemsControl.ItemTemplate>
-                                                                <DataTemplate>
+                                                    <ItemsControl
+                                                        HorizontalContentAlignment="Left"
+                                                        ItemsSource="{Binding}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <StackPanel Orientation="Horizontal" Spacing="12" />
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Grid
+                                                                    MaxWidth="400"
+                                                                    MinHeight="38"
+                                                                    Margin="0,0,0,2"
+                                                                    HorizontalAlignment="Left"
+                                                                    ColumnSpacing="4"
+                                                                    Opacity="{Binding RowOpacity}">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="38" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                    </Grid.ColumnDefinitions>
                                                                     <Border
-                                                                        Width="30"
-                                                                        Height="30"
+                                                                        x:Name="CurrentBannerPortraitBacking"
+                                                                        Width="38"
+                                                                        Height="38"
                                                                         Background="{ThemeResource QuietSurfaceBrush}"
                                                                         BorderBrush="{ThemeResource IrisBrush}"
-                                                                        BorderThickness="2"
-                                                                        CornerRadius="15"
+                                                                        BorderThickness="{Binding ActiveBorderThickness}"
+                                                                        CornerRadius="19"
+                                                                        IsHitTestVisible="False"
+                                                                        Visibility="{Binding PrimaryVisibility}" />
+                                                                    <Border
+                                                                        x:Name="CurrentBannerPortrait"
+                                                                        Width="34"
+                                                                        Height="34"
+                                                                        CornerRadius="17"
+                                                                        IsHitTestVisible="False"
                                                                         AutomationProperties.Name="{Binding Name}"
-                                                                        ToolTipService.ToolTip="{Binding Name}">
+                                                                        Visibility="{Binding PrimaryVisibility}">
                                                                         <Image
                                                                             Source="{Binding PortraitSource}"
                                                                             Stretch="UniformToFill" />
                                                                     </Border>
-                                                                </DataTemplate>
-                                                            </ItemsControl.ItemTemplate>
-                                                        </ItemsControl>
-                                                    </Grid>
+                                                                    <Viewbox
+                                                                        Grid.Column="1"
+                                                                        MaxWidth="354"
+                                                                        Margin="2,0"
+                                                                        HorizontalAlignment="Left"
+                                                                        VerticalAlignment="Center"
+                                                                        IsHitTestVisible="False"
+                                                                        Stretch="Uniform"
+                                                                        StretchDirection="DownOnly"
+                                                                        Visibility="{Binding PrimaryVisibility}">
+                                                                        <TextBlock
+                                                                            x:Name="CurrentBannerNameLabel"
+                                                                            FontFamily="{StaticResource NyxBodyFont}"
+                                                                            FontSize="15"
+                                                                            Foreground="{ThemeResource MoonBrush}"
+                                                                            Text="{Binding Name}"
+                                                                            TextWrapping="NoWrap"
+                                                                            ToolTipService.ToolTip="{Binding Name}" />
+                                                                    </Viewbox>
+                                                                    <Button
+                                                                        x:Name="CurrentBannerNameButton"
+                                                                        Grid.Column="1"
+                                                                        Margin="0"
+                                                                        Padding="0"
+                                                                        HorizontalAlignment="Stretch"
+                                                                        VerticalAlignment="Stretch"
+                                                                        AutomationProperties.Name="{Binding CharacterLinkAccessibilityName}"
+                                                                        Background="Transparent"
+                                                                        BorderThickness="0"
+                                                                        Click="CharacterLink_Click"
+                                                                        CommandParameter="{Binding CharacterUrl}"
+                                                                        IsEnabled="{Binding CanOpen}"
+                                                                        Style="{StaticResource NyxCodeCopyButtonStyle}"
+                                                                        Tag="{Binding Name}"
+                                                                        ToolTipService.ToolTip="{Binding Name}"
+                                                                        Visibility="{Binding PrimaryVisibility}" />
+                                                                    <ItemsControl
+                                                                        x:Name="CurrentBannerOverflowPortraits"
+                                                                        Grid.ColumnSpan="2"
+                                                                        HorizontalAlignment="Left"
+                                                                        ItemsSource="{Binding OverflowPortraits}"
+                                                                        Visibility="{Binding OverflowVisibility}">
+                                                                        <ItemsControl.ItemsPanel>
+                                                                            <ItemsPanelTemplate>
+                                                                                <StackPanel Orientation="Horizontal" Spacing="6" />
+                                                                            </ItemsPanelTemplate>
+                                                                        </ItemsControl.ItemsPanel>
+                                                                        <ItemsControl.ItemTemplate>
+                                                                            <DataTemplate>
+                                                                                <Border
+                                                                                    Width="30"
+                                                                                    Height="30"
+                                                                                    Background="{ThemeResource QuietSurfaceBrush}"
+                                                                                    BorderBrush="{ThemeResource IrisBrush}"
+                                                                                    BorderThickness="2"
+                                                                                    CornerRadius="15"
+                                                                                    AutomationProperties.Name="{Binding Name}"
+                                                                                    ToolTipService.ToolTip="{Binding Name}">
+                                                                                    <Image
+                                                                                        Source="{Binding PortraitSource}"
+                                                                                        Stretch="UniformToFill" />
+                                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                                                </Grid>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
@@ -445,7 +462,7 @@
                                                 RowSpacing="1">
                                                 <Grid.RowDefinitions>
                                                     <RowDefinition Height="Auto" />
-                                                    <RowDefinition Height="*" />
+                                                    <RowDefinition Height="Auto" />
                                                 </Grid.RowDefinitions>
                                                 <TextBlock
                                                     x:Name="UpcomingBannerTiming"
@@ -455,223 +472,140 @@
                                                     FontWeight="Bold"
                                                     Foreground="{ThemeResource IrisBrush}"
                                                     Text="{Binding Timing}" />
-                                                <ItemsControl
-                                                    Grid.Row="1"
-                                                    HorizontalContentAlignment="Stretch"
-                                                    ItemsSource="{Binding Characters}">
-                                                    <ItemsControl.ItemsPanel>
-                                                        <ItemsPanelTemplate>
-                                                            <ItemsWrapGrid
-                                                                ItemHeight="32"
-                                                                ItemWidth="{Binding ItemWidth}"
-                                                                MaximumRowsOrColumns="5"
-                                                                Orientation="Horizontal" />
-                                                        </ItemsPanelTemplate>
-                                                    </ItemsControl.ItemsPanel>
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <Grid
-                                                                Height="32"
-                                                                Margin="0,0,0,1"
-                                                                HorizontalAlignment="Stretch"
-                                                                ColumnSpacing="4">
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="32" />
-                                                                    <ColumnDefinition Width="*" />
-                                                                </Grid.ColumnDefinitions>
-                                                                <Border
-                                                                    x:Name="UpcomingBannerPortraitBacking"
-                                                                    Width="30"
-                                                                    Height="30"
-                                                                    Background="{ThemeResource QuietSurfaceBrush}"
-                                                                    BorderBrush="{ThemeResource IrisBrush}"
-                                                                    BorderThickness="2"
-                                                                    CornerRadius="15"
-                                                                    IsHitTestVisible="False"
-                                                                    Visibility="{Binding PrimaryVisibility}" />
-                                                                <Border
-                                                                    x:Name="UpcomingBannerPortrait"
-                                                                    Width="26"
-                                                                    Height="26"
-                                                                    CornerRadius="13"
-                                                                    IsHitTestVisible="False"
-                                                                    AutomationProperties.Name="{Binding Name}"
-                                                                    Visibility="{Binding PrimaryVisibility}">
-                                                                    <Image
-                                                                        Source="{Binding PortraitSource}"
-                                                                        Stretch="UniformToFill" />
-                                                                </Border>
-                                                                <TextBlock
-                                                                    x:Name="UpcomingBannerNameLabel"
-                                                                    Grid.Column="1"
-                                                                    Margin="2,0"
-                                                                    VerticalAlignment="Center"
-                                                                    FontFamily="{StaticResource NyxBodyFont}"
-                                                                    FontSize="{Binding DisplayFontSize}"
-                                                                    Foreground="{ThemeResource MoonBrush}"
-                                                                    IsHitTestVisible="False"
-                                                                     MaxLines="1"
-                                                                     Text="{Binding Name}"
-                                                                     TextTrimming="CharacterEllipsis"
-                                                                     TextWrapping="NoWrap"
-                                                                     ToolTipService.ToolTip="{Binding Name}"
-                                                                     Visibility="{Binding PrimaryVisibility}" />
-                                                                <Button
-                                                                    x:Name="UpcomingBannerNameButton"
-                                                                    Grid.Column="1"
-                                                                    Margin="0"
-                                                                    Padding="0"
-                                                                    HorizontalAlignment="Stretch"
-                                                                    VerticalAlignment="Stretch"
-                                                                    AutomationProperties.Name="{Binding AccessibilityName}"
-                                                                    Background="Transparent"
-                                                                    BorderThickness="0"
-                                                                     Click="CharacterLink_Click"
-                                                                     CommandParameter="{Binding CharacterUrl}"
-                                                                     IsEnabled="{Binding CanOpen}"
-                                                                     Style="{StaticResource NyxCodeCopyButtonStyle}"
-                                                                     Tag="{Binding Name}"
-                                                                     ToolTipService.ToolTip="{Binding Name}"
-                                                                     Visibility="{Binding PrimaryVisibility}" />
+                                                    <ItemsControl
+                                                        Grid.Row="1"
+                                                        HorizontalContentAlignment="Left"
+                                                        ItemsSource="{Binding CharacterRows}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <StackPanel Orientation="Vertical" Spacing="3" />
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
                                                                 <ItemsControl
-                                                                    x:Name="UpcomingBannerOverflowPortraits"
-                                                                    Grid.ColumnSpan="2"
-                                                                    HorizontalAlignment="Left"
-                                                                    ItemsSource="{Binding OverflowPortraits}"
-                                                                    Visibility="{Binding OverflowVisibility}">
+                                                                    HorizontalContentAlignment="Left"
+                                                                    ItemsSource="{Binding}">
                                                                     <ItemsControl.ItemsPanel>
                                                                         <ItemsPanelTemplate>
-                                                                            <StackPanel Orientation="Horizontal" Spacing="5" />
+                                                                            <StackPanel Orientation="Horizontal" Spacing="12" />
                                                                         </ItemsPanelTemplate>
                                                                     </ItemsControl.ItemsPanel>
                                                                     <ItemsControl.ItemTemplate>
                                                                         <DataTemplate>
-                                                                            <Border
-                                                                                Width="28"
-                                                                                Height="28"
-                                                                                Background="{ThemeResource QuietSurfaceBrush}"
-                                                                                BorderBrush="{ThemeResource IrisBrush}"
-                                                                                BorderThickness="2"
-                                                                                CornerRadius="14"
-                                                                                AutomationProperties.Name="{Binding Name}"
-                                                                                ToolTipService.ToolTip="{Binding Name}">
-                                                                                <Image
-                                                                                    Source="{Binding PortraitSource}"
-                                                                                    Stretch="UniformToFill" />
-                                                                            </Border>
+                                                                            <Grid
+                                                                                MaxWidth="400"
+                                                                                MinHeight="38"
+                                                                                Margin="0,0,0,2"
+                                                                                HorizontalAlignment="Left"
+                                                                                ColumnSpacing="4">
+                                                                                <Grid.ColumnDefinitions>
+                                                                                    <ColumnDefinition Width="38" />
+                                                                                    <ColumnDefinition Width="*" />
+                                                                                </Grid.ColumnDefinitions>
+                                                                                <Border
+                                                                                    x:Name="UpcomingBannerPortraitBacking"
+                                                                                    Width="38"
+                                                                                    Height="38"
+                                                                                    Background="{ThemeResource QuietSurfaceBrush}"
+                                                                                    BorderBrush="{ThemeResource IrisBrush}"
+                                                                                    BorderThickness="2"
+                                                                                    CornerRadius="19"
+                                                                                    IsHitTestVisible="False"
+                                                                                    Visibility="{Binding PrimaryVisibility}" />
+                                                                                <Border
+                                                                                    x:Name="UpcomingBannerPortrait"
+                                                                                    Width="34"
+                                                                                    Height="34"
+                                                                                    CornerRadius="17"
+                                                                                    IsHitTestVisible="False"
+                                                                                    AutomationProperties.Name="{Binding Name}"
+                                                                                    Visibility="{Binding PrimaryVisibility}">
+                                                                                    <Image
+                                                                                        Source="{Binding PortraitSource}"
+                                                                                        Stretch="UniformToFill" />
+                                                                                </Border>
+                                                                                <Viewbox
+                                                                                    Grid.Column="1"
+                                                                                    MaxWidth="354"
+                                                                                    Margin="2,0"
+                                                                                    HorizontalAlignment="Left"
+                                                                                    VerticalAlignment="Center"
+                                                                                    IsHitTestVisible="False"
+                                                                                    Stretch="Uniform"
+                                                                                    StretchDirection="DownOnly"
+                                                                                    Visibility="{Binding PrimaryVisibility}">
+                                                                                    <TextBlock
+                                                                                        x:Name="UpcomingBannerNameLabel"
+                                                                                        FontFamily="{StaticResource NyxBodyFont}"
+                                                                                        FontSize="15"
+                                                                                        Foreground="{ThemeResource MoonBrush}"
+                                                                                        Text="{Binding Name}"
+                                                                                        TextWrapping="NoWrap"
+                                                                                        ToolTipService.ToolTip="{Binding Name}" />
+                                                                                </Viewbox>
+                                                                                <Button
+                                                                                    x:Name="UpcomingBannerNameButton"
+                                                                                    Grid.Column="1"
+                                                                                    Margin="0"
+                                                                                    Padding="0"
+                                                                                    HorizontalAlignment="Stretch"
+                                                                                    VerticalAlignment="Stretch"
+                                                                                    AutomationProperties.Name="{Binding AccessibilityName}"
+                                                                                    Background="Transparent"
+                                                                                    BorderThickness="0"
+                                                                                    Click="CharacterLink_Click"
+                                                                                    CommandParameter="{Binding CharacterUrl}"
+                                                                                    IsEnabled="{Binding CanOpen}"
+                                                                                    Style="{StaticResource NyxCodeCopyButtonStyle}"
+                                                                                    Tag="{Binding Name}"
+                                                                                    ToolTipService.ToolTip="{Binding Name}"
+                                                                                    Visibility="{Binding PrimaryVisibility}" />
+                                                                                <ItemsControl
+                                                                                    x:Name="UpcomingBannerOverflowPortraits"
+                                                                                    Grid.ColumnSpan="2"
+                                                                                    HorizontalAlignment="Left"
+                                                                                    ItemsSource="{Binding OverflowPortraits}"
+                                                                                    Visibility="{Binding OverflowVisibility}">
+                                                                                    <ItemsControl.ItemsPanel>
+                                                                                        <ItemsPanelTemplate>
+                                                                                            <StackPanel Orientation="Horizontal" Spacing="5" />
+                                                                                        </ItemsPanelTemplate>
+                                                                                    </ItemsControl.ItemsPanel>
+                                                                                    <ItemsControl.ItemTemplate>
+                                                                                        <DataTemplate>
+                                                                                            <Border
+                                                                                                Width="28"
+                                                                                                Height="28"
+                                                                                                Background="{ThemeResource QuietSurfaceBrush}"
+                                                                                                BorderBrush="{ThemeResource IrisBrush}"
+                                                                                                BorderThickness="2"
+                                                                                                CornerRadius="14"
+                                                                                                AutomationProperties.Name="{Binding Name}"
+                                                                                                ToolTipService.ToolTip="{Binding Name}">
+                                                                                                <Image
+                                                                                                    Source="{Binding PortraitSource}"
+                                                                                                    Stretch="UniformToFill" />
+                                                                                            </Border>
+                                                                                        </DataTemplate>
+                                                                                    </ItemsControl.ItemTemplate>
+                                                                                </ItemsControl>
+                                                                            </Grid>
                                                                         </DataTemplate>
                                                                     </ItemsControl.ItemTemplate>
                                                                 </ItemsControl>
-                                                            </Grid>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
                                                 </ItemsControl>
                                             </Grid>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <ItemsControl
-                                    x:Name="BannerCollectionList"
-                                    Margin="0,2,0,0"
-                                    AutomationProperties.Name="Banner character collection"
-                                    ItemsSource="{x:Bind BannerCollectionRows, Mode=OneWay}"
-                                    Visibility="Collapsed">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <ItemsWrapGrid Orientation="Vertical" MaximumRowsOrColumns="5" />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid Width="196" Margin="0,0,8,8" ColumnSpacing="10">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="46" />
-                                                    <ColumnDefinition Width="*" />
-                                                </Grid.ColumnDefinitions>
-                                                <Border
-                                                    Width="44"
-                                                    Height="44"
-                                                    Background="{ThemeResource QuietSurfaceBrush}"
-                                                    BorderBrush="{ThemeResource HairlineBrush}"
-                                                    BorderThickness="1"
-                                                    CornerRadius="22">
-                                                    <Image
-                                                        Width="44"
-                                                        Height="44"
-                                                        Source="{Binding PortraitSource}"
-                                                        Stretch="UniformToFill" />
-                                                </Border>
-                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
-                                                    <Button
-                                                        Margin="0"
-                                                        Padding="0"
-                                                        HorizontalAlignment="Left"
-                                                        AutomationProperties.Name="{Binding AccessibilityName}"
-                                                        Background="Transparent"
-                                                        BorderThickness="0"
-                                                        Click="CharacterLink_Click"
-                                                        CommandParameter="{Binding CharacterUrl}"
-                                                        IsEnabled="{Binding CanOpen}"
-                                                        Tag="{Binding Name}">
-                                                        <TextBlock
-                                                            FontFamily="{StaticResource NyxBodyFont}"
-                                                            FontSize="15"
-                                                            Foreground="{ThemeResource MoonBrush}"
-                                                            Text="{Binding Name}" />
-                                                    </Button>
-                                                    <TextBlock
-                                                        FontFamily="{StaticResource NyxDataFont}"
-                                                        FontSize="10"
-                                                        Foreground="{ThemeResource MistBrush}"
-                                                        Text="{Binding Availability}" />
-                                                </StackPanel>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                                <StackPanel
-                                    x:Name="BannerCategoryTabs"
-                                    Margin="0,2,0,0"
-                                    Orientation="Horizontal"
-                                    Spacing="6"
-                                    Visibility="Collapsed">
-                                    <Button
-                                        x:Name="CurrentBannerCategoryButton"
-                                        Height="30"
-                                        MinHeight="30"
-                                        Padding="12,0"
-                                        AutomationProperties.Name="Show current banners"
-                                        Click="BannerCategoryButton_Click"
-                                        CommandParameter="current"
-                                        Content="CURRENT"
-                                        Style="{StaticResource NyxOfficialLauncherStyle}" />
-                                    <Button
-                                        x:Name="UpcomingBannerCategoryButton"
-                                        Height="30"
-                                        MinHeight="30"
-                                        Padding="12,0"
-                                        AutomationProperties.Name="Show upcoming banners"
-                                        Click="BannerCategoryButton_Click"
-                                        CommandParameter="upcoming"
-                                        Content="UPCOMING"
-                                        Style="{StaticResource NyxOfficialLauncherStyle}" />
-                                    <Button
-                                        x:Name="CollabBannerCategoryButton"
-                                        Height="30"
-                                        MinHeight="30"
-                                        Padding="12,0"
-                                        AutomationProperties.Name="Show Fate collaboration banners"
-                                        Click="BannerCategoryButton_Click"
-                                        CommandParameter="collab"
-                                        Content="FATE COLLAB"
-                                        Style="{StaticResource NyxOfficialLauncherStyle}" />
-                                </StackPanel>
                                 </Grid>
-                            </Grid>
+                            </ScrollViewer>
                         </Grid>
                     </Border>
-                </StackPanel>
+                </Grid>
             </Grid>
 
             <Border
@@ -679,7 +613,7 @@
                 Grid.RowSpan="2"
                 Grid.Column="1"
                 Grid.ColumnSpan="2"
-                Height="280"
+                Height="304"
                 Margin="0"
                 Padding="26,10"
                 HorizontalAlignment="Stretch"
@@ -1230,6 +1164,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <Grid Grid.Row="0" Grid.ColumnSpan="4" ColumnSpacing="7">
                                 <Grid.ColumnDefinitions>
@@ -1297,6 +1232,20 @@
                                 TextTrimming="CharacterEllipsis"
                                 AutomationProperties.Name="HoYoLAB character identity"
                                 AutomationProperties.LiveSetting="Polite" />
+                            <Button
+                                x:Name="HoyoLabSyncButton"
+                                Grid.Row="2"
+                                Grid.ColumnSpan="4"
+                                HorizontalAlignment="Left"
+                                MinHeight="28"
+                                Padding="8,0"
+                                FontFamily="{StaticResource NyxBodyFont}"
+                                FontSize="10"
+                                Style="{StaticResource NyxOfficialLauncherStyle}"
+                                AutomationProperties.Name="Selected game sync, deletion status and My HoYo"
+                                Click="HoyoLabSyncButton_Click"
+                                Content="Sync &amp; My HoYo"
+                                Visibility="Collapsed" />
                         </Grid>
 
                         <Grid
@@ -1308,7 +1257,6 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
 
                         <StackPanel x:Name="OnLaunchPanel" Grid.Row="0" Margin="12,0" Spacing="2">
@@ -1541,6 +1489,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <Button
                             x:Name="PrimaryGameStatusButton"
@@ -1571,9 +1520,28 @@
                             TextTrimming="CharacterEllipsis"
                             Visibility="Collapsed"
                             AutomationProperties.LiveSetting="Polite" />
+                        <Button
+                            x:Name="PreInstallNoticeButton"
+                            Grid.Row="1"
+                            MinHeight="28"
+                            Margin="12,2,12,2"
+                            Padding="4,2"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center"
+                            AutomationProperties.LiveSetting="Polite"
+                            AutomationProperties.Name="Pre-install notice"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Click="OpenUpdaterButton_Click"
+                            Content=""
+                            FontWeight="Bold"
+                            Foreground="{ThemeResource PreInstallNoticeBrush}"
+                            IsTabStop="True"
+                            Style="{StaticResource NyxQuietActionStyle}"
+                            Visibility="Collapsed" />
                         <Border
                             x:Name="LaunchResourceMetricsPanel"
-                            Grid.Row="1"
+                            Grid.Row="2"
                             Padding="4,2"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
@@ -1698,7 +1666,7 @@
                         </Border>
                          <Button
                              x:Name="LaunchButton"
-                             Grid.Row="2"
+                             Grid.Row="3"
                              Width="381"
                              Margin="12,0,12,0"
                             HorizontalAlignment="Stretch"
@@ -1818,14 +1786,19 @@
                          </Button>
                          <Grid
                              x:Name="LaunchUtilityButtons"
-                             Grid.Row="3"
+                             Grid.Row="4"
                              Margin="12,0,12,0"
                              HorizontalAlignment="Stretch"
-                             ColumnSpacing="8">
+                             ColumnSpacing="8"
+                             RowSpacing="2">
                              <Grid.ColumnDefinitions>
                                  <ColumnDefinition Width="*" />
                                  <ColumnDefinition Width="*" />
                              </Grid.ColumnDefinitions>
+                             <Grid.RowDefinitions>
+                                 <RowDefinition Height="Auto" />
+                                 <RowDefinition Height="Auto" />
+                             </Grid.RowDefinitions>
                              <Button
                                  x:Name="StableOpenUpdaterButton"
                                  Grid.Column="0"
@@ -1846,8 +1819,62 @@
                                  AutomationProperties.Name="Open the selected game's screenshot folder"
                                  Click="OpenScreenshotFolderButton_Click"
                                  Content="Screenshots"
-                                 IsEnabled="False"
-                                 Style="{StaticResource NyxOfficialLauncherStyle}" />
+                                  IsEnabled="False"
+                                  Style="{StaticResource NyxOfficialLauncherStyle}" />
+                             <Button
+                                 x:Name="OfficialToolsButton"
+                                 Grid.Row="1"
+                                 Grid.Column="0"
+                                 Height="28"
+                                 MinHeight="28"
+                                 HorizontalAlignment="Stretch"
+                                 HorizontalContentAlignment="Center"
+                                 AutomationProperties.Name="Official Tools for the selected game"
+                                 Content="Official Tools"
+                                 IsTabStop="True"
+                                 Style="{StaticResource NyxOfficialLauncherStyle}"
+                                 ToolTipService.ToolTip="Open an official tool for the selected game"
+                                 Visibility="Collapsed">
+                                 <Button.Flyout>
+                                     <MenuFlyout x:Name="OfficialToolsMenuFlyout" />
+                                 </Button.Flyout>
+                             </Button>
+                             <Border
+                                 x:Name="LaunchPlayTimeDisplay"
+                                 Grid.Row="1"
+                                 Grid.Column="1"
+                                 Height="28"
+                                 Padding="4,2"
+                                 HorizontalAlignment="Stretch"
+                                 VerticalAlignment="Center"
+                                 Background="{ThemeResource LauncherUiBackdropBrush}"
+                                 BorderBrush="{ThemeResource DeckBorderBrush}"
+                                 BorderThickness="1">
+                                 <Grid>
+                                     <TextBlock
+                                         x:Name="LaunchPlayTimeOutlineText"
+                                         AutomationProperties.AccessibilityView="Raw"
+                                         FontFamily="{StaticResource NyxDataFont}"
+                                         FontSize="11.5"
+                                         Foreground="Black"
+                                         HorizontalAlignment="Center"
+                                         IsHitTestVisible="False"
+                                         Text="Play Time: 0m"
+                                         TextWrapping="NoWrap"
+                                         VerticalAlignment="Center" />
+                                     <TextBlock
+                                         x:Name="LaunchPlayTimeText"
+                                         AutomationProperties.Name="Play Time: 0m. Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded."
+                                         FontFamily="{StaticResource NyxDataFont}"
+                                         FontSize="10"
+                                         Foreground="{ThemeResource MoonBrush}"
+                                         HorizontalAlignment="Center"
+                                         Text="Play Time: 0m"
+                                         TextWrapping="NoWrap"
+                                         VerticalAlignment="Center"
+                                         ToolTipService.ToolTip="Counted only after Nyx launched this game on this PC while Nyx remained open; earlier, outside-Nyx, and other-device time is excluded." />
+                                 </Grid>
+                             </Border>
                          </Grid>
                     </Grid>
                 </Grid>

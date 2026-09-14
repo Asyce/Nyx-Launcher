@@ -8,7 +8,7 @@ namespace Nyx.Desktop.Core.State;
 /// <summary>Versioned, user-owned launcher state. The record contains no process or UI state.</summary>
 public sealed record LauncherState
 {
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 7;
 
     public int Version { get; init; } = CurrentVersion;
     public string SelectedGameId { get; init; } = "gi";
@@ -20,6 +20,9 @@ public sealed record LauncherState
         new ReadOnlyDictionary<string, GameAppearanceState>(new Dictionary<string, GameAppearanceState>(StringComparer.Ordinal));
     public ExportArmingState Export { get; init; } = new();
     public LauncherGlobalPreferences Preferences { get; init; } = new();
+    /// <summary>Nonnegative, saturating playtime totals in whole seconds, keyed by game ID.</summary>
+    public IReadOnlyDictionary<string, long> PlaytimeSecondsByGame { get; init; } =
+        new ReadOnlyDictionary<string, long>(new Dictionary<string, long>(StringComparer.Ordinal));
 
     public static LauncherState Defaults() => new()
     {
@@ -49,17 +52,6 @@ public sealed record GameAppearanceState
 {
     public string? IconPath { get; init; }
     public string? BackgroundPath { get; init; }
-    public bool AutomaticArt { get; init; } = true;
-    public int ArtScale { get; init; } = 100;
-    public int ArtX { get; init; }
-    public int ArtY { get; init; }
-    public string? ArtVariant { get; init; }
-    public string ArtFit { get; init; } = "cover";
-    public bool ArtPinned { get; init; }
-    public string? PinnedArtFile { get; init; }
-
-    public GameAppearanceState Normalize()
-        => this with { ArtScale = Math.Clamp(ArtScale, 25, 500) };
 }
 
 public sealed record ExportArmingState

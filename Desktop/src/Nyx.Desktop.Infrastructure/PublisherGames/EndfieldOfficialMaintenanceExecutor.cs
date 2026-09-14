@@ -178,7 +178,8 @@ public sealed class EndfieldOfficialMaintenanceExecutor
         && request.RequiresFullInstallRevalidation
         && request.RequiresProtectedExecutableBinding
         && !request.AllowsDirectUpdate
-        && !request.AllowsDirectGameLaunch;
+        && !request.AllowsDirectGameLaunch
+        && !request.PreInstallAvailable;
 
     private static bool RequestsMatch(
         OfficialMaintenanceHandoffRequest first,
@@ -188,6 +189,7 @@ public sealed class EndfieldOfficialMaintenanceExecutor
         && string.Equals(first.Target.LauncherPath, fresh.Target.LauncherPath, StringComparison.OrdinalIgnoreCase)
         && string.Equals(first.Target.LauncherVersion, fresh.Target.LauncherVersion, StringComparison.Ordinal)
         && string.Equals(first.Instructions, fresh.Instructions, StringComparison.Ordinal)
+        && first.PreInstallAvailable == fresh.PreInstallAvailable
         && first.Arguments.SequenceEqual(fresh.Arguments, StringComparer.Ordinal);
 
     private static bool IsBoundaryFailure(Exception exception) =>

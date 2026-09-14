@@ -8,15 +8,45 @@ $upstreamRoot = Join-Path $repoRoot '.verification-build\upstream-genshin-fps-v3
 $outputRoot = Join-Path $repoRoot '.verification-build\genshin120-native-helper'
 $releaseRoot = Join-Path $outputRoot 'release'
 $objectRoot = Join-Path $outputRoot 'obj'
-$dumpbin = 'C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC\14.29.30133\bin\Hostx64\x64\dumpbin.exe'
 
 function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
 
+$vsWhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+Assert-True (Test-Path -LiteralPath $vsWhere -PathType Leaf) "vswhere.exe was not found: $vsWhere"
+$vsInstallPath = & $vsWhere -latest -products '*' -requires 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' -property installationPath
+$vsWhereExitCode = $LASTEXITCODE
+$vsInstallPath = ([string]$vsInstallPath).Trim()
+Assert-True ($vsWhereExitCode -eq 0 -and -not [String]::IsNullOrWhiteSpace($vsInstallPath)) 'No Visual Studio installation with the required C++ tools was found.'
+$vsInstallPath = [IO.Path]::GetFullPath($vsInstallPath)
+Assert-True (Test-Path -LiteralPath $vsInstallPath -PathType Container) "Visual Studio installation was not found: $vsInstallPath"
+$msvcRoot = Join-Path $vsInstallPath 'VC\Tools\MSVC'
+$dumpbinCandidates = @(
+    Get-ChildItem -LiteralPath $msvcRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^\d+(?:\.\d+){1,3}$' } |
+        ForEach-Object {
+            $candidate = Join-Path $_.FullName 'bin\Hostx64\x64\dumpbin.exe'
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                [pscustomobject]@{
+                    Version = [version]$_.Name
+                    Name = $_.Name
+                    Path = [IO.Path]::GetFullPath($candidate)
+                }
+            }
+        }
+)
+Assert-True ($dumpbinCandidates.Count -gt 0) "No x64 MSVC dumpbin.exe was found under: $msvcRoot"
+$dumpbin = ($dumpbinCandidates | Sort-Object -Property @{Expression='Version';Descending=$true}, @{Expression='Name';Descending=$false} | Select-Object -First 1).Path
+Assert-True (Test-Path -LiteralPath $dumpbin -PathType Leaf) "dumpbin.exe was not found: $dumpbin"
+
 Assert-True (Test-Path -LiteralPath $upstreamRoot) 'Pinned upstream checkout is missing.'
-Assert-True ((git -C $upstreamRoot rev-parse HEAD) -eq '2b85d61dd06f6e11ad86fdd6bd90339f9abc58eb') 'Pinned upstream commit changed.'
-Assert-True (-not (git -C $upstreamRoot status --short)) 'Pinned upstream checkout is dirty.'
+$upstreamCommit = @(git -c core.longpaths=true -C $upstreamRoot rev-parse --verify 'HEAD^{commit}')
+$upstreamCommitExitCode = $LASTEXITCODE
+Assert-True ($upstreamCommitExitCode -eq 0 -and $upstreamCommit.Count -eq 1 -and $upstreamCommit[0] -eq '2b85d61dd06f6e11ad86fdd6bd90339f9abc58eb') 'Pinned upstream commit changed or is unreadable.'
+$upstreamStatus = @(git -c core.longpaths=true -C $upstreamRoot status --short)
+$upstreamStatusExitCode = $LASTEXITCODE
+Assert-True ($upstreamStatusExitCode -eq 0 -and $upstreamStatus.Count -eq 0) 'Pinned upstream checkout is dirty or Git status failed.'
 $upstreamHashes = @{
     'UnlockerStub\dllmain.cpp' = 'BE87F293E333BB7B931CADB4C3AEE15663190505B978C734400F0CA6755DF614'
     'UnlockerStub\Utils.cpp' = 'DB43539D87883686612CBC56E12C4D5E1CA4FCE981F56A234BC4B305095E2E7D'

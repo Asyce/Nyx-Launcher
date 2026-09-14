@@ -1,0 +1,14 @@
+{
+  "format": "nyx-hoyolab-sync-v1",
+  "displayCode": "NYX-HOYO-AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH",
+  "canonicalCode": "NYXHOYOAAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH",
+  "syncId": "a295b9a2d46ecbdb935fa7961cea87951060e1c973d9289f",
+  "token": "520ebcb203323a013f383f2992b37119ae7b864a1abb91a638315f39d63bb79e",
+  "salt": "nyx-hoyolab-sync-key:v1:a295b9a2d46ecbdb935fa7961cea87951060e1c973d9289f",
+  "keyHex": "eac31765764996c9cf93064eeac4d78caae1becae321dff64a3f304ac33fb230",
+  "aad": "nyx-hoyolab-sync-v1|hoyolab|hsr|a295b9a2d46ecbdb935fa7961cea87951060e1c973d9289f",
+  "iv": "AAECAwQFBgcICQoL",
+  "plaintext": "{\"schemaVersion\":2,\"gameId\":\"hsr\",\"roles\":[{\"binding\":{\"roleId\":\"123456789\",\"server\":\"prod_official_eur\"},\"nickname\":\"Test Trailblazer\",\"region\":\"Europe\",\"observations\":{\"resources\":\"2026-08-30T00:00:00Z\",\"inventory\":null,\"builds\":null,\"achievements\":\"2026-08-30T00:00:00Z\",\"exploration\":null,\"endgame\":null,\"events\":null,\"currency\":null},\"resource\":{\"name\":\"Trailblaze Power\",\"current\":120,\"maximum\":300,\"observedAt\":\"2026-08-30T00:00:00Z\",\"recoverySeconds\":3600,\"reserve\":42},\"completedAchievementIds\":[4010101,4010301]}],\"selectedRole\":{\"roleId\":\"123456789\",\"server\":\"prod_official_eur\"},\"consents\":{\"resources\":true,\"inventory\":false,\"builds\":false,\"achievements\":true,\"exploration\":false,\"endgame\":false,\"events\":false,\"currency\":false},\"capabilityTombstones\":[],\"roleTombstones\":[]}",
+  "tagHex": "39e391503fb19b59a8b8d51670c33248",
+  "ciphertext": "FqIMPqw/OKA4OGLA3kyVV6oO7sv06FGD0EFY3SeorYTTOa7VUd20/WgaZgHD4fJB6mFeab8dVIhkJDt+5JTmlaxwYWIqpRrJiVhapEkzooqHCyecIz/Auw56B39ssxUq75SVt17OyC7hriqbcND0c0EqLeLa866VnGTVdF84aafPDtToRoTKsh7kMp7blG2Oar0IVoHDJJH5+WONy9xSw/J3e2l7ZJLTkKLjBajk/dxAKc5aklDCYQDlFqMYn4WtAOPmdaiEfxHb+OHUU/Z7sfANhx5xai12w83eJORehLJUFP5IUjwptGGMOl0GIGZvedD0jwiTUkUM+Ym2RanNtYu+PYqR2UjsShYEoJDR+eWbroZSM7rgSJwKgFmBuzLfp6X2MkJWYs/uNLKqSfpx51ApDTHiSxM3O5f3FZJRHt8BqdgHiaNAn6TgxH2RKJy+ARFewTAa7kBkeMpOjYO6tvbQNhbPxFCEU3pLd/JHZifbc1QM0UBN1alMqnPbI9qM1Jv2uC9LQQakHfxhVSyv6+7fhIGST+mrFE0RGehomszwtFYds+AWMSRTKP5xYqAiedBOA+ziepefLgfDkmd7eEBVFebYIPCjS8lCQzI97IodXHszdR5des1th8K5RMm3f+RLNR4WUmJfWui4xBrohMfcHjh0aju4NWH5iDjMq57CUgYYV7NBoP563gKwsgZNaHNzbz6ybm5PBkqEzmvaDpo4dQm3DYLtUocEXIBIfViCcCG73Ng+XWOxQok4pD1JWrAFv/sZhwmzHHINFb2yPswfV9oAFPPj8VUoVJctEGv3896jickTB66iZOVrdKJxCKJEUeeCS+ZV54vM/Z5rpR49vpBcsW2mUUYq9RYEfaNXqE/cKF5w/VzLeTnksrmRVd6mSZs1BmPgGoeGokLctgBiF2lKIhhuu47m5IbN70gQj3Ex/IGaLwzEedUcV2qXVIjwKU4TRy3S/sGy0r2F7OPG1XJX4Ev+KleFwVhr7B1wuOGBrBt0lQp2VjD0eA0AYrWu6dN93wTzkfvKiAPjtOCJ4GI545FQP7GbWai41RZwwzJI"
+}

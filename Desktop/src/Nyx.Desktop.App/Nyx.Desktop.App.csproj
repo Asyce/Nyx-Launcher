@@ -15,16 +15,17 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <WindowsAppSdkUndockedRegFreeWinRTInitialize>true</WindowsAppSdkUndockedRegFreeWinRTInitialize>
     <SelfContained>true</SelfContained>
-    <EnableMsixTooling>false</EnableMsixTooling>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AchievementHelperSha256 Condition="'$(AchievementHelperSha256)' == ''">0000000000000000000000000000000000000000000000000000000000000000</AchievementHelperSha256>
     <Genshin120HelperSha256 Condition="'$(Genshin120HelperSha256)' == ''">0000000000000000000000000000000000000000000000000000000000000000</Genshin120HelperSha256>
+    <NyxReleaseChannel Condition="'$(NyxReleaseChannel)' == ''">development</NyxReleaseChannel>
   </PropertyGroup>
 
   <ItemGroup>
     <AssemblyMetadata Include="PengoAchievementHelperSha256" Value="$(AchievementHelperSha256)" />
     <AssemblyMetadata Include="PengoGenshin120HelperSha256" Value="$(Genshin120HelperSha256)" />
+    <AssemblyMetadata Include="PengoReleaseChannel" Value="$(NyxReleaseChannel)" />
     <Using Include="Nyx.Desktop.Infrastructure.Exports" />
   </ItemGroup>
 
@@ -35,30 +36,11 @@
 
   <ItemGroup>
     <Content Include="Assets\Catalog\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Assets\Currency\**\*" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\Iris\**\*" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\Fonts\Manrope-Variable.ttf" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\Fonts\Manrope-OFL.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\Content\**\*" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="..\..\..\Database\GameData\gi\assets\items\UI_ItemIcon_201.webp">
-      <Link>Assets\Currency\gi.webp</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\..\Database\GameData\hsr\assets\items\900001.webp">
-      <Link>Assets\Currency\hsr.webp</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\..\Database\GameData\zzz\assets\items\IconCurrency.webp">
-      <Link>Assets\Currency\zzz.webp</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\..\Database\GameData\ww\assets\items\UIResources\Common\Image\IconA\T_IconA_zcpq_UI.webp">
-      <Link>Assets\Currency\wuwa.webp</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\..\Database\EndfieldWiki\endfield\material-icons\Oroberyl.png">
-      <Link>Assets\Currency\ae.png</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <Content Include="..\..\..\Site\assets\icon\kofi-logo.png">
       <Link>Assets\Brand\kofi-logo.png</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -79,7 +61,11 @@
       <Link>Assets\Content\launcher-banners-v1.json</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\..\..\Database\Achievements\hsr\catalog.json">
+    <Content Include="..\..\..\Site\src\data\generated\launcher-banners-v2.json">
+      <Link>Assets\Content\launcher-banners-v2.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\..\contracts\achievements-hsr-catalog.json">
       <Link>Assets\Content\Achievements\hsr\catalog.json</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -87,6 +73,10 @@
              Condition="'$(AchievementHelperSource)' != '' AND Exists('$(AchievementHelperSource)')"
              CopyToOutputDirectory="PreserveNewest">
       <Link>Assets\Tools\pengo-achievements-launcher.exe</Link>
+    </Content>
+    <Content Include="..\..\..\Extractor\Achievements\THIRD_PARTY_NOTICES.md"
+             CopyToOutputDirectory="PreserveNewest">
+      <Link>Assets\ThirdParty\pengo-achievements\THIRD_PARTY_NOTICES.md</Link>
     </Content>
     <Content Include="$(Genshin120HelperSource)"
              Condition="'$(Genshin120HelperSource)' != '' AND Exists('$(Genshin120HelperSource)')"
@@ -141,43 +131,17 @@
   </Target>
 
   <ItemGroup>
-    <Content Include="Assets\SplashScreen.scale-200.png" />
-    <Content Include="Assets\LockScreenLogo.scale-200.png" />
-    <Content Include="Assets\Square150x150Logo.scale-200.png" />
-    <Content Include="Assets\Square44x44Logo.scale-200.png" />
-    <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
-    <Content Include="Assets\Square44x44Logo.targetsize-48_altform-lightunplated.png" />
-    <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="Assets\Wide310x150Logo.scale-200.png" />
   </ItemGroup>
 
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 
-  <!--
-    Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
-    Tools extension to be activated for this project even if the Windows App SDK Nuget
-    package has not yet been restored.
-  -->
-  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
-    <ProjectCapability Include="Msix" />
-  </ItemGroup>
-
   <ItemGroup>
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2270" />
-    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.2.1" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2526" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.3.6" />
   </ItemGroup>
-
-  <!--
-    Defining the "HasPackageAndPublishMenuAddedByProject" property here allows the Solution
-    Explorer "Package and Publish" context menu entry to be enabled for this project even if
-    the Windows App SDK Nuget package has not yet been restored.
-  -->
-  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
-    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
-  </PropertyGroup>
 
   <!-- Publish Properties -->
   <PropertyGroup>

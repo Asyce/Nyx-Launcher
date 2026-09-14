@@ -125,6 +125,27 @@ public sealed class HoyoLabAchievementExportTests
     }
 
     [Fact]
+    public void Achievement_list_readiness_requires_a_successful_bounded_envelope()
+    {
+        Assert.True(HoyoLabHsrAchievementResultParser.IsSuccessfulListEnvelope(
+            JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                retcode = 0,
+                data = new { achievement_list = Array.Empty<object>() },
+            })));
+        Assert.False(HoyoLabHsrAchievementResultParser.IsSuccessfulListEnvelope(
+            JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                retcode = -100,
+                data = new { achievement_list = Array.Empty<object>() },
+            })));
+        Assert.False(HoyoLabHsrAchievementResultParser.IsSuccessfulListEnvelope(
+            JsonSerializer.SerializeToUtf8Bytes(new { retcode = 0, data = new { } })));
+        Assert.False(HoyoLabHsrAchievementResultParser.IsSuccessfulListEnvelope(
+            new byte[PublisherAccountCatalog.MaximumResourceResponseBytes + 1]));
+    }
+
+    [Fact]
     public async Task Writer_creates_atomic_pengo_v1_file_without_account_data()
     {
         using var temp = new TemporaryDirectory();
@@ -180,10 +201,17 @@ public sealed class HoyoLabAchievementExportTests
 
         Assert.Equal("hsr", catalog.GameId);
         Assert.Equal(AchievementCatalogVersions.StarRail, catalog.ExportVersion);
-        Assert.Equal(1869, catalog.AchievementIds.Count);
+        Assert.Equal(1921, catalog.AchievementIds.Count);
         Assert.Contains(4010101, catalog.AchievementIds);
+        Assert.Contains(4035501, catalog.AchievementIds);
         Assert.Contains(4055301, catalog.AchievementIds);
         Assert.Contains(4093621, catalog.AchievementIds);
+
+        var result = HoyoLabHsrAchievementResultParser.Parse(
+            ScriptResult("""{"state":"ok","ids":[4035501],"region":"prod_official_eur","uid":"123456789"}"""),
+            catalog.AchievementIds);
+
+        Assert.Equal([4035501L], result.AchievementIds);
     }
 
     [Theory]
@@ -203,7 +231,9 @@ public sealed class HoyoLabAchievementExportTests
         else if (failureKind == "stale")
             await File.WriteAllTextAsync(catalogPath, Catalog("4.3", 4010101));
         else if (failureKind == "unknown-id")
-            await File.WriteAllTextAsync(catalogPath, Catalog("4.4", 4010101));
+            await File.WriteAllTextAsync(
+                catalogPath,
+                Catalog(AchievementCatalogVersions.StarRail["hsr-".Length..], 4010101));
 
         var writer = new PengoAchievementExportWriter(
             new PengoAchievementCatalogReader(catalogPath),
@@ -472,6 +502,19 @@ public sealed class HoyoLabAchievementExportTests
             new Uri("https://sg-act-public-api.hoyolab.com/common/badge/v1/login/account"),
             "POST",
             PublisherWebResourceContext.Fetch));
+        Assert.True(PublisherAccountCatalog.IsAllowedWebResourceRequest(
+            "HoYoLAB",
+            PublisherSessionPurpose.Connect,
+            "hsr",
+            new Uri("https://sg-act-public-api.hoyolab.com/common/badge/v1/login/account"),
+            "POST",
+            PublisherWebResourceContext.Fetch));
+        Assert.True(AllowedConnectApi(
+            "https://api-account-os.hoyolab.com/binding/api/getUserGameRolesByLtoken?game_biz=hkrpg_global&region=prod_official_eur"));
+        Assert.True(AllowedConnectApi(
+            "https://sg-public-api.hoyolab.com/common/badge/v1/login/info?game_biz=hkrpg_global&lang=en-us&ts=1785700000000"));
+        Assert.True(AllowedConnectApi(
+            "https://sg-act-public-api.hoyolab.com/event/rpgcultivate/achievement/list?game_biz=hkrpg_global&badge_region=prod_official_eur&badge_uid=123456789&show_hide=false&need_all=true"));
         Assert.True(AllowedApi(
             "https://sg-public-api.hoyolab.com/common/badge/v1/login/info?game_biz=hkrpg_global&lang=en-us&ts=1785700000000"));
         Assert.True(AllowedApi(
@@ -502,6 +545,29 @@ public sealed class HoyoLabAchievementExportTests
             new Uri("https://sg-act-public-api.hoyolab.com/event/rpgcultivate/achievement/list?game_biz=hkrpg_global&badge_region=prod_official_asia&badge_uid=987654321&show_hide=false&need_all=true"),
             "GET",
             role));
+    }
+
+    [Theory]
+    [InlineData("https://sg-act-public-api.hoyolab.com/event/rpgcultivate/achievement/list?game_biz=hkrpg_global&badge_region=prod_official_eur&badge_uid=123456789&show_hide=false&need_all=true")]
+    [InlineData("https://sg-act-public-api.hoyolab.com/event/rpgcultivate/achievement/list?game=hkrpg&game_biz=hkrpg_global&badge_region=prod_official_eur&badge_uid=123456789&show_hide=false&need_all=false&page_size=20&page_num=1")]
+    [InlineData("https://sg-public-api.hoyolab.com/event/rpgcultivate/achievement/list?game=hkrpg&game_biz=hkrpg_global&badge_region=prod_official_eur&badge_uid=123456789&show_hide=false&need_all=false&page_size=20&page_num=100&t=1785700000000&noSessionRetry=true")]
+    public void Achievement_page_list_readiness_accepts_only_reviewed_request_shapes(string raw)
+    {
+        Assert.True(PublisherAccountCatalog.IsExactHsrAchievementPageListRequest(
+            new Uri(raw),
+            "GET"));
+    }
+
+    [Theory]
+    [InlineData("https://sg-act-public-api.hoyolab.com/event/rpgcultivate/achievement/list?game_biz=hkrpg_global&badge_region=prod_official_eur&badge_uid=123456789&show_hide=false&need_all=false&page_size=50&page_num=1")]
+    [InlineData("https://sg-act-public-api.hoyolab.com/event/rpgcultivate/achievement/list?game_biz=hkrpg_global&badge_region=prod_official_eur&badge_uid=123456789&show_hide=false&need_all=false&page_size=20&page_num=0")]
+    [InlineData("https://sg-act-public-api.hoyolab.com/event/rpgcultivate/achievement/list?game_biz=hkrpg_global&badge_region=prod_official_eur&badge_uid=123456789&show_hide=false&need_all=false&page_size=20&page_num=101")]
+    [InlineData("https://sg-act-public-api.hoyolab.com/event/rpgcultivate/achievement/list?game_biz=hkrpg_global&badge_region=prod_official_eur&badge_uid=123456789&show_hide=false&need_all=false&page_size=20&page_num=1&unexpected=true")]
+    public void Achievement_page_list_readiness_rejects_wrong_queries(string raw)
+    {
+        Assert.False(PublisherAccountCatalog.IsExactHsrAchievementPageListRequest(
+            new Uri(raw),
+            "GET"));
     }
 
     [Theory]
@@ -550,6 +616,7 @@ public sealed class HoyoLabAchievementExportTests
     public void Unreviewed_hsr_api_shapes_are_denied(string raw)
     {
         Assert.False(AllowedApi(raw));
+        Assert.False(AllowedConnectApi(raw));
     }
 
     [Fact]
@@ -558,20 +625,27 @@ public sealed class HoyoLabAchievementExportTests
         var retired = new Uri(
             "https://api-account-os.hoyolab.com/binding/api/getUserGameRolesByCookieToken?game_biz=hkrpg_global&region=prod_official_eur");
 
-        Assert.False(PublisherAccountCatalog.IsAllowedWebResourceRequest(
-            "HoYoLAB",
+        foreach (var purpose in new[]
+        {
             PublisherSessionPurpose.Achievements,
-            "hsr",
-            retired,
-            "GET",
-            PublisherWebResourceContext.Fetch));
-        Assert.False(PublisherAccountCatalog.IsAllowedWebResourceRequest(
-            "HoYoLAB",
-            PublisherSessionPurpose.Achievements,
-            "hsr",
-            retired,
-            "OPTIONS",
-            PublisherWebResourceContext.Other));
+            PublisherSessionPurpose.Connect,
+        })
+        {
+            Assert.False(PublisherAccountCatalog.IsAllowedWebResourceRequest(
+                "HoYoLAB",
+                purpose,
+                "hsr",
+                retired,
+                "GET",
+                PublisherWebResourceContext.Fetch));
+            Assert.False(PublisherAccountCatalog.IsAllowedWebResourceRequest(
+                "HoYoLAB",
+                purpose,
+                "hsr",
+                retired,
+                "OPTIONS",
+                PublisherWebResourceContext.Other));
+        }
     }
 
     [Theory]
@@ -601,19 +675,42 @@ public sealed class HoyoLabAchievementExportTests
     [Fact]
     public void Achievement_session_denies_unreviewed_writes()
     {
-        Assert.False(PublisherAccountCatalog.IsAllowedWebResourceRequest(
-            "HoYoLAB",
+        foreach (var purpose in new[]
+        {
             PublisherSessionPurpose.Achievements,
-            "hsr",
-            new Uri("https://sg-act-public-api.hoyolab.com/common/badge/v1/login/account"),
-            "DELETE",
-            PublisherWebResourceContext.Fetch));
+            PublisherSessionPurpose.Connect,
+        })
+        {
+            Assert.False(PublisherAccountCatalog.IsAllowedWebResourceRequest(
+                "HoYoLAB",
+                purpose,
+                "hsr",
+                new Uri("https://sg-act-public-api.hoyolab.com/common/badge/v1/login/account"),
+                "DELETE",
+                PublisherWebResourceContext.Fetch));
+            Assert.False(PublisherAccountCatalog.IsAllowedWebResourceRequest(
+                "HoYoLAB",
+                purpose,
+                "hsr",
+                new Uri("https://sg-act-public-api.hoyolab.com/event/rpgcultivate/achievement/list?game_biz=hkrpg_global&badge_region=prod_official_eur&badge_uid=123456789&show_hide=false&need_all=true"),
+                "POST",
+                PublisherWebResourceContext.Fetch));
+        }
     }
 
     private static bool AllowedApi(string raw) =>
         PublisherAccountCatalog.IsAllowedWebResourceRequest(
             "HoYoLAB",
             PublisherSessionPurpose.Achievements,
+            "hsr",
+            new Uri(raw),
+            "GET",
+            PublisherWebResourceContext.Fetch);
+
+    private static bool AllowedConnectApi(string raw) =>
+        PublisherAccountCatalog.IsAllowedWebResourceRequest(
+            "HoYoLAB",
+            PublisherSessionPurpose.Connect,
             "hsr",
             new Uri(raw),
             "GET",

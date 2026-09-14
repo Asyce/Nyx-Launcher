@@ -207,9 +207,11 @@ public sealed class HoyoGameSessionAdapter : IGameSessionAdapter
             if (!TryCaptureLaunchArguments(out var launchArguments))
                 return GameLaunchDispatchResult.NeedsReview;
 
-            return launch(inspection.CanonicalRoot!, launchArguments).Status switch
+            var result = launch(inspection.CanonicalRoot!, launchArguments);
+            return result.Status switch
             {
-                HoyoGameLaunchStatus.Running => GameLaunchDispatchResult.Accepted,
+                HoyoGameLaunchStatus.Running when result.StartedByThisCall => GameLaunchDispatchResult.Accepted,
+                HoyoGameLaunchStatus.Running => GameLaunchDispatchResult.AlreadyRunning,
                 HoyoGameLaunchStatus.LaunchFailed => GameLaunchDispatchResult.Failed,
                 _ => GameLaunchDispatchResult.NeedsReview,
             };

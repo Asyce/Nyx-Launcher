@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text;
 
 namespace Nyx.Desktop.Tests.Packaging;
 
@@ -7,7 +6,6 @@ public sealed class DesktopStartReadinessTests
 {
     private static readonly string DesktopRoot = FindDesktopRoot();
     private static readonly string StartScript = Path.Combine(DesktopRoot, "scripts", "start-nyx.ps1");
-    private static readonly string GateScript = Path.Combine(DesktopRoot, "scripts", "test-package-readiness.ps1");
 
     [Fact]
     public void Start_wrapper_is_fixed_visible_and_does_not_forward_command_text()
@@ -20,6 +18,29 @@ public sealed class DesktopStartReadinessTests
         Assert.DoesNotContain("runas", wrapper, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("-WindowStyle", wrapper, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("http", wrapper, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Development_package_keeps_achievement_notice_linked_and_required()
+    {
+        var project = File.ReadAllText(Path.Combine(
+            DesktopRoot, "src", "Nyx.Desktop.App", "Nyx.Desktop.App.csproj"));
+        var packageScript = File.ReadAllText(Path.Combine(
+            DesktopRoot, "packaging", "build-development-package.ps1"));
+
+        Assert.Contains(
+            "<Content Include=\"..\\..\\..\\Extractor\\Achievements\\THIRD_PARTY_NOTICES.md\"",
+            project,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "<Link>Assets\\ThirdParty\\pengo-achievements\\THIRD_PARTY_NOTICES.md</Link>",
+            project,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "$packagedAchievementNotice = Join-Path $publishRoot 'Assets\\ThirdParty\\pengo-achievements\\THIRD_PARTY_NOTICES.md'",
+            packageScript,
+            StringComparison.Ordinal);
+        Assert.Contains("$packagedAchievementNotice,", packageScript, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -36,17 +57,19 @@ public sealed class DesktopStartReadinessTests
         Assert.Contains("Test-UnpackagedOutput", script);
         Assert.Contains("Nyx.Desktop.App.pri", script);
         Assert.Contains("pengo-achievements-launcher.exe", script);
+        Assert.Matches(@"if \(-not \$CheckOnly\)\s*\{\s*\$requiredOutputPaths \+= \$achievementHelperOutput\s*\}", script);
         Assert.Contains("verify_release.py", script);
         Assert.Contains("-p:AchievementHelperSource=$builtAchievementHelper", script);
         Assert.Contains("-p:AchievementHelperSha256=$achievementHelperSha256", script);
         Assert.Contains("verify-release.ps1", script);
         Assert.Contains("https://github.com/34736384/genshin-fps-unlock.git", script);
+        Assert.Contains("& $git.Source -c core.longpaths=true clone --quiet --depth 1 --branch v3.5.0 https://github.com/34736384/genshin-fps-unlock.git", script, StringComparison.Ordinal);
         Assert.Contains("2b85d61dd06f6e11ad86fdd6bd90339f9abc58eb", script);
         Assert.Contains("-p:Genshin120HelperSource=$genshin120Helper", script);
         Assert.Contains("-p:Genshin120HelperSha256=$genshin120HelperSha256", script);
-        Assert.Contains("if ($isAdministrator)", script);
+        Assert.Contains("if ($isAdministrator -and -not $CheckOnly)", script);
         Assert.True(
-            script.IndexOf("if ($isAdministrator)", StringComparison.Ordinal) <
+            script.IndexOf("if ($isAdministrator -and -not $CheckOnly)", StringComparison.Ordinal) <
             script.IndexOf("& $dotnet.Source restore", StringComparison.Ordinal),
             "Elevation must be refused before optional restore.");
         Assert.Contains("if ($CheckOnly -and $Restore)", script);
@@ -71,7 +94,8 @@ public sealed class DesktopStartReadinessTests
         var result = RunPowerShell(StartScript, "-CheckOnly");
 
         Assert.Equal(0, result.ExitCode);
-        Assert.Contains("Nyx developer start is ready", result.Output);
+        Assert.Contains("Nyx app preflight passed", result.Output);
+        Assert.Contains("A real start will build and verify its achievement helper before launching", result.Output);
         Assert.DoesNotContain("Starting Nyx", result.Output);
         Assert.DoesNotContain("Restoring", result.Output);
     }
@@ -141,8 +165,8 @@ public sealed class DesktopStartReadinessTests
     public void Fixture_accepts_the_direct_WinUI_component_package()
     {
         using var fixture = StartFixture.Create("winui component fixture");
-        fixture.WriteMinimumProject("10.0.100", "Microsoft.WindowsAppSDK.WinUI", "2.2.1");
-        fixture.WriteRunAssets("Microsoft.WindowsAppSDK.WinUI", "2.2.1");
+        fixture.WriteMinimumProject("10.0.100", "Microsoft.WindowsAppSDK.WinUI", "2.3.6");
+        fixture.WriteRunAssets("Microsoft.WindowsAppSDK.WinUI", "2.3.6");
 
         var result = RunPowerShell(fixture.StartScript, "-CheckOnly");
 
@@ -162,315 +186,6 @@ public sealed class DesktopStartReadinessTests
         Assert.Equal(12, result.ExitCode);
         Assert.Contains("app project XML is invalid", result.Output);
         Assert.DoesNotContain(fixture.Root, result.Output, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void Real_package_gate_fails_closed_with_sanitized_categories()
-    {
-        var result = RunPowerShell(GateScript);
-
-        Assert.Equal(3, result.ExitCode);
-        Assert.Contains("NYX_PACKAGE_CONFIGURATION=NOT_READY", result.Output);
-        Assert.Contains("BLOCKER=PublisherPlaceholder", result.Output);
-        Assert.Contains("BLOCKER=SigningIdentityMissing", result.Output);
-        Assert.Contains("BLOCKER=InstallablePackageProfileMissing", result.Output);
-        Assert.Contains("BLOCKER=DistributionChannelUnresolved", result.Output);
-        Assert.DoesNotContain(DesktopRoot, result.Output, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(Environment.UserName, result.Output, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void Synthetic_complete_package_fixture_is_ready()
-    {
-        using var fixture = PackageFixture.Create();
-        fixture.WriteProject(signing: true, channel: "website");
-        fixture.WriteManifest("CN=PENGO Software");
-        fixture.WriteProfile("MSIX.pubxml", generatePackage: true, protocol: "FileSystem");
-
-        var result = RunPowerShell(GateScript, "-DesktopRoot", fixture.Root);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal("NYX_PACKAGE_CONFIGURATION=READY", result.Output.Trim());
-    }
-
-    [Theory]
-    [InlineData(40)]
-    [InlineData(64)]
-    public void Package_gate_accepts_only_supported_thumbprint_lengths(int length)
-    {
-        using var fixture = PackageFixture.Create();
-        fixture.WriteRawProject(
-            $"<PackageCertificateThumbprint>{new string('A', length)}</PackageCertificateThumbprint>" +
-            PackageFixture.ValidChannel);
-        fixture.WriteManifest("CN=PENGO Test");
-        fixture.WriteProfile("fixture.pubxml", generatePackage: true, protocol: "FileSystem");
-
-        var result = RunPowerShell(GateScript, "-DesktopRoot", fixture.Root);
-
-        Assert.Equal(0, result.ExitCode);
-        Assert.Equal("NYX_PACKAGE_CONFIGURATION=READY", result.Output.Trim());
-    }
-
-    [Theory]
-    [InlineData(39)]
-    [InlineData(41)]
-    [InlineData(63)]
-    [InlineData(65)]
-    public void Package_gate_rejects_unsupported_thumbprint_lengths(int length)
-    {
-        using var fixture = PackageFixture.Create();
-        fixture.WriteRawProject(
-            $"<PackageCertificateThumbprint>{new string('A', length)}</PackageCertificateThumbprint>" +
-            PackageFixture.ValidChannel);
-        fixture.WriteManifest("CN=PENGO Test");
-        fixture.WriteProfile("fixture.pubxml", generatePackage: true, protocol: "FileSystem");
-
-        var result = RunPowerShell(GateScript, "-DesktopRoot", fixture.Root);
-
-        Assert.Equal(3, result.ExitCode);
-        Assert.Contains("BLOCKER=SigningIdentityInvalid", result.Output);
-        Assert.DoesNotContain(fixture.Root, result.Output, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Theory]
-    [InlineData("relative")]
-    [InlineData("unc")]
-    [InlineData("device")]
-    [InlineData("missing")]
-    [InlineData("malformed")]
-    [InlineData("oversized")]
-    public void Package_gate_rejects_unsafe_roots_without_path_disclosure(string caseName)
-    {
-        var root = caseName switch
-        {
-            "relative" => "relative\\fixture",
-            "unc" => "\\\\server.invalid\\private",
-            "device" => "\\\\?\\C:\\private",
-            "missing" => Path.Combine(Path.GetTempPath(), "NyxMissingRoot", Guid.NewGuid().ToString("N")),
-            "malformed" => "C:\\bad|root",
-            "oversized" => "C:\\" + new string('a', 600),
-            _ => throw new ArgumentOutOfRangeException(nameof(caseName)),
-        };
-
-        var result = RunPowerShell(GateScript, "-DesktopRoot", root);
-
-        AssertRootInvalid(result, root);
-    }
-
-    [Fact]
-    public void Package_gate_rejects_reparse_root_without_reading_target()
-    {
-        using var fixture = PackageFixture.Create();
-        fixture.WriteReadyInputs();
-        var link = fixture.Root + "-link";
-        Directory.CreateSymbolicLink(link, fixture.Root);
-        try
-        {
-            var result = RunPowerShell(GateScript, "-DesktopRoot", link);
-            AssertRootInvalid(result, link);
-        }
-        finally
-        {
-            Directory.Delete(link);
-        }
-    }
-
-    [Fact]
-    public void Package_gate_stops_at_reparse_parent_before_touching_child_root()
-    {
-        using var fixture = PackageFixture.Create();
-        fixture.WriteReadyInputs();
-        var linkContainer = Path.Combine(Path.GetTempPath(), "NyxReparseParent", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(linkContainer);
-        var parentLink = Path.Combine(linkContainer, "linked-parent");
-        var fixtureParent = Directory.GetParent(fixture.Root)!.FullName;
-        Directory.CreateSymbolicLink(parentLink, fixtureParent);
-        var rootThroughLink = Path.Combine(parentLink, Path.GetFileName(fixture.Root));
-        try
-        {
-            var result = RunPowerShell(GateScript, "-DesktopRoot", rootThroughLink);
-            AssertRootInvalid(result, rootThroughLink);
-        }
-        finally
-        {
-            Directory.Delete(parentLink);
-            Directory.Delete(linkContainer);
-        }
-    }
-
-    [Fact]
-    public void Package_gate_stops_at_reparse_app_root_before_touching_target()
-    {
-        using var fixture = PackageFixture.Create();
-        fixture.WriteReadyInputs();
-        fixture.ReplaceAppRootWithSymbolicLink();
-
-        var result = RunPowerShell(GateScript, "-DesktopRoot", fixture.Root);
-
-        AssertRootInvalid(result, fixture.Root);
-    }
-
-    [Fact]
-    public void Package_gate_rejects_reparse_project_before_xml_read()
-    {
-        using var fixture = PackageFixture.Create();
-        fixture.WriteReadyInputs();
-        fixture.ReplaceProjectWithSymbolicLink();
-
-        var result = RunPowerShell(GateScript, "-DesktopRoot", fixture.Root);
-
-        AssertRootInvalid(result, fixture.Root);
-    }
-
-    [Theory]
-    [InlineData("duplicate-channel")]
-    [InlineData("conditional-channel")]
-    [InlineData("duplicate-signing")]
-    [InlineData("conditional-signing")]
-    [InlineData("missing-key-file")]
-    [InlineData("empty-key-file")]
-    [InlineData("oversized-key-file")]
-    [InlineData("package-type-none")]
-    public void Package_gate_rejects_ambiguous_or_unsafe_project_properties(string caseName)
-    {
-        using var fixture = PackageFixture.Create();
-        fixture.WriteManifest("CN=PENGO Test");
-        fixture.WriteProfile("fixture.pubxml", generatePackage: true, protocol: "FileSystem");
-        if (caseName == "empty-key-file")
-        {
-            fixture.WriteSigningKey("empty.pfx", 0);
-        }
-        else if (caseName == "oversized-key-file")
-        {
-            fixture.WriteSigningKey("oversized.pfx", 1_048_577);
-        }
-
-        fixture.WriteRawProject(caseName switch
-        {
-            "duplicate-channel" => PackageFixture.ValidSigning +
-                "<NyxDistributionChannel>store</NyxDistributionChannel><NyxDistributionChannel>website</NyxDistributionChannel>",
-            "conditional-channel" => PackageFixture.ValidSigning +
-                "<NyxDistributionChannel Condition=\"'$(Configuration)'=='Release'\">store</NyxDistributionChannel>",
-            "duplicate-signing" => PackageFixture.ValidSigning +
-                "<PackageCertificateThumbprint>1111111111111111111111111111111111111111</PackageCertificateThumbprint>" +
-                PackageFixture.ValidChannel,
-            "conditional-signing" =>
-                "<PackageCertificateThumbprint Condition=\"'$(Configuration)'=='Release'\">0123456789ABCDEF0123456789ABCDEF01234567</PackageCertificateThumbprint>" +
-                PackageFixture.ValidChannel,
-            "missing-key-file" => "<PackageCertificateKeyFile>missing.pfx</PackageCertificateKeyFile>" + PackageFixture.ValidChannel,
-            "empty-key-file" => "<PackageCertificateKeyFile>empty.pfx</PackageCertificateKeyFile>" + PackageFixture.ValidChannel,
-            "oversized-key-file" => "<PackageCertificateKeyFile>oversized.pfx</PackageCertificateKeyFile>" + PackageFixture.ValidChannel,
-            "package-type-none" => PackageFixture.ValidSigning + PackageFixture.ValidChannel +
-                "<WindowsPackageType>None</WindowsPackageType>",
-            _ => throw new ArgumentOutOfRangeException(nameof(caseName)),
-        });
-
-        var result = RunPowerShell(GateScript, "-DesktopRoot", fixture.Root);
-
-        Assert.Equal(3, result.ExitCode);
-        Assert.Contains("NYX_PACKAGE_CONFIGURATION=NOT_READY", result.Output);
-        Assert.DoesNotContain(fixture.Root, result.Output, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Theory]
-    [InlineData("true-then-false")]
-    [InlineData("conditional-generate")]
-    [InlineData("duplicate-signing")]
-    [InlineData("conditional-signing")]
-    [InlineData("package-type-none")]
-    [InlineData("wrong-runtime")]
-    public void Package_gate_rejects_ambiguous_or_non_msix_profiles(string caseName)
-    {
-        using var fixture = PackageFixture.Create();
-        fixture.WriteProject(signing: true, channel: "private-sideload");
-        fixture.WriteManifest("CN=PENGO Test");
-        fixture.WriteRawProfile("fixture.pubxml", caseName switch
-        {
-            "true-then-false" => PackageFixture.ValidX64ProfileProperties +
-                "<GenerateAppxPackageOnBuild>false</GenerateAppxPackageOnBuild>",
-            "conditional-generate" => PackageFixture.ValidX64BaseProperties +
-                "<GenerateAppxPackageOnBuild Condition=\"'$(Configuration)'=='Release'\">true</GenerateAppxPackageOnBuild>" +
-                PackageFixture.ValidProfileSigning,
-            "duplicate-signing" => PackageFixture.ValidX64ProfileProperties +
-                "<AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>",
-            "conditional-signing" => PackageFixture.ValidX64BaseProperties +
-                "<GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>" +
-                "<AppxPackageSigningEnabled Condition=\"'$(Configuration)'=='Release'\">true</AppxPackageSigningEnabled>",
-            "package-type-none" => PackageFixture.ValidX64ProfileProperties +
-                "<WindowsPackageType>None</WindowsPackageType>",
-            "wrong-runtime" => PackageFixture.ValidX64ProfileProperties.Replace("win-x64", "win-x86", StringComparison.Ordinal),
-            _ => throw new ArgumentOutOfRangeException(nameof(caseName)),
-        });
-
-        var result = RunPowerShell(GateScript, "-DesktopRoot", fixture.Root);
-
-        Assert.Equal(3, result.ExitCode);
-        Assert.Contains("BLOCKER=InstallablePackageProfileMissing", result.Output);
-        Assert.DoesNotContain(fixture.Root, result.Output, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Theory]
-    [InlineData("placeholder")]
-    [InlineData("signing")]
-    [InlineData("profile")]
-    [InlineData("channel")]
-    [InlineData("malformed-manifest")]
-    [InlineData("missing-project")]
-    public void Package_gate_rejects_each_incomplete_fixture(string caseName)
-    {
-        using var fixture = PackageFixture.Create();
-        if (caseName != "missing-project")
-        {
-            fixture.WriteProject(signing: caseName != "signing", channel: caseName == "channel" ? null : "private-sideload");
-        }
-
-        if (caseName == "malformed-manifest")
-        {
-            fixture.WriteRawManifest("<Package><Identity");
-        }
-        else
-        {
-            fixture.WriteManifest(caseName == "placeholder" ? "CN=AppPublisher" : "CN=PENGO Test");
-        }
-
-        fixture.WriteProfile(
-            "fixture.pubxml",
-            generatePackage: caseName != "profile",
-            protocol: caseName == "profile" ? "WebDeploy" : "FileSystem");
-
-        var result = RunPowerShell(GateScript, "-DesktopRoot", fixture.Root);
-
-        Assert.Equal(3, result.ExitCode);
-        Assert.Contains("NYX_PACKAGE_CONFIGURATION=NOT_READY", result.Output);
-        Assert.DoesNotContain(fixture.Root, result.Output, StringComparison.OrdinalIgnoreCase);
-        if (caseName == "profile")
-        {
-            Assert.Contains("BLOCKER=InstallablePackageProfileMissing", result.Output);
-        }
-    }
-
-    [Fact]
-    public void Package_gate_rejects_invalid_publisher_and_missing_profiles()
-    {
-        using var fixture = PackageFixture.Create();
-        fixture.WriteProject(signing: true, channel: "store");
-        fixture.WriteManifest("not-a-distinguished-name");
-
-        var result = RunPowerShell(GateScript, "-DesktopRoot", fixture.Root);
-
-        Assert.Equal(3, result.ExitCode);
-        Assert.Contains("BLOCKER=PublisherInvalid", result.Output);
-        Assert.Contains("BLOCKER=PublishProfileMissing", result.Output);
-        Assert.Contains("BLOCKER=InstallablePackageProfileMissing", result.Output);
-    }
-
-    private static void AssertRootInvalid(CommandResult result, string untrustedPath)
-    {
-        Assert.Equal(3, result.ExitCode);
-        var lines = result.Output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-        Assert.Equal(["NYX_PACKAGE_CONFIGURATION=NOT_READY", "BLOCKER=RootInvalid"], lines);
-        Assert.DoesNotContain(untrustedPath, result.Output, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(Environment.UserName, result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     private static CommandResult RunPowerShell(string script, params string[] arguments)
@@ -525,7 +240,7 @@ public sealed class DesktopStartReadinessTests
         private StartFixture(string root)
         {
             Root = root;
-            var scripts = Path.Combine(root, "scripts");
+            var scripts = Path.Combine(root, "Desktop", "scripts");
             Directory.CreateDirectory(scripts);
             StartScript = Path.Combine(scripts, "start-nyx.ps1");
             File.Copy(DesktopStartReadinessTests.StartScript, StartScript);
@@ -546,18 +261,17 @@ public sealed class DesktopStartReadinessTests
             string packageVersion = "2.2.0")
         {
             WriteGlobalJson(sdk);
-            var appRoot = Path.Combine(Root, "src", "Nyx.Desktop.App");
+            var appRoot = Path.Combine(Root, "Desktop", "src", "Nyx.Desktop.App");
             Directory.CreateDirectory(appRoot);
             File.WriteAllText(Path.Combine(appRoot, "Nyx.Desktop.App.csproj"),
                 $"<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0-windows10.0.22621.0</TargetFramework><OutputType>WinExe</OutputType><WindowsPackageType>None</WindowsPackageType><WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained><PublishTrimmed>false</PublishTrimmed></PropertyGroup><ItemGroup><PackageReference Include=\"{packageName}\" Version=\"{packageVersion}\" /></ItemGroup></Project>");
-            File.WriteAllText(Path.Combine(appRoot, "Package.appxmanifest"), "<Package />");
         }
 
         public void WriteRunAssets(
             string packageName = "Microsoft.WindowsAppSDK",
             string packageVersion = "2.2.0")
         {
-            var objectRoot = Path.Combine(Root, "src", "Nyx.Desktop.App", "obj");
+            var objectRoot = Path.Combine(Root, "Desktop", "src", "Nyx.Desktop.App", "obj");
             Directory.CreateDirectory(objectRoot);
             File.WriteAllText(
                 Path.Combine(objectRoot, "project.assets.json"),
@@ -567,104 +281,11 @@ public sealed class DesktopStartReadinessTests
         public void WriteOversizedProject(string sdk)
         {
             WriteMinimumProject(sdk);
-            var project = Path.Combine(Root, "src", "Nyx.Desktop.App", "Nyx.Desktop.App.csproj");
+            var project = Path.Combine(Root, "Desktop", "src", "Nyx.Desktop.App", "Nyx.Desktop.App.csproj");
             File.WriteAllText(project, "<Project><!--" + new string('x', 1_048_576) + "--></Project>");
         }
 
         public void Dispose() => Directory.Delete(Root, recursive: true);
     }
 
-    private sealed class PackageFixture : IDisposable
-    {
-        public const string ValidSigning =
-            "<PackageCertificateThumbprint>0123456789ABCDEF0123456789ABCDEF01234567</PackageCertificateThumbprint>";
-        public const string ValidChannel = "<NyxDistributionChannel>private-sideload</NyxDistributionChannel>";
-        public const string ValidX64BaseProperties =
-            "<Platform>x64</Platform><RuntimeIdentifier>win-x64</RuntimeIdentifier>";
-        public const string ValidProfileSigning = "<AppxPackageSigningEnabled>true</AppxPackageSigningEnabled>";
-        public const string ValidX64ProfileProperties = ValidX64BaseProperties +
-            "<GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>" + ValidProfileSigning;
-
-        private PackageFixture(string root)
-        {
-            Root = root;
-            AppRoot = Path.Combine(root, "src", "Nyx.Desktop.App");
-            Directory.CreateDirectory(AppRoot);
-        }
-
-        public string Root { get; }
-        private string AppRoot { get; }
-
-        public static PackageFixture Create() =>
-            new(Path.Combine(Path.GetTempPath(), "NyxPackageGate", Guid.NewGuid().ToString("N")));
-
-        public void WriteProject(bool signing, string? channel)
-        {
-            var properties = new StringBuilder();
-            if (signing)
-            {
-                properties.Append("<PackageCertificateThumbprint>0123456789ABCDEF0123456789ABCDEF01234567</PackageCertificateThumbprint>");
-            }
-            if (channel is not null)
-            {
-                properties.Append($"<NyxDistributionChannel>{channel}</NyxDistributionChannel>");
-            }
-            File.WriteAllText(Path.Combine(AppRoot, "Nyx.Desktop.App.csproj"), $"<Project><PropertyGroup>{properties}</PropertyGroup></Project>");
-        }
-
-        public void WriteRawProject(string properties) =>
-            File.WriteAllText(Path.Combine(AppRoot, "Nyx.Desktop.App.csproj"), $"<Project><PropertyGroup>{properties}</PropertyGroup></Project>");
-
-        public void WriteManifest(string publisher) =>
-            WriteRawManifest($"<Package xmlns=\"http://schemas.microsoft.com/appx/manifest/foundation/windows10\"><Identity Name=\"Test\" Publisher=\"{publisher}\" Version=\"1.0.0.0\" /></Package>");
-
-        public void WriteRawManifest(string xml) =>
-            File.WriteAllText(Path.Combine(AppRoot, "Package.appxmanifest"), xml);
-
-        public void WriteProfile(string name, bool generatePackage, string protocol)
-        {
-            var properties = $"<PublishProtocol>{protocol}</PublishProtocol>" + ValidX64BaseProperties +
-                $"<GenerateAppxPackageOnBuild>{generatePackage.ToString().ToLowerInvariant()}</GenerateAppxPackageOnBuild>" +
-                ValidProfileSigning;
-            WriteRawProfile(name, properties);
-        }
-
-        public void WriteRawProfile(string name, string properties)
-        {
-            var profiles = Path.Combine(AppRoot, "Properties", "PublishProfiles");
-            Directory.CreateDirectory(profiles);
-            File.WriteAllText(Path.Combine(profiles, name), $"<Project><PropertyGroup>{properties}</PropertyGroup></Project>");
-        }
-
-        public void WriteReadyInputs()
-        {
-            WriteProject(signing: true, channel: "website");
-            WriteManifest("CN=PENGO Test");
-            WriteProfile("fixture.pubxml", generatePackage: true, protocol: "FileSystem");
-        }
-
-        public void ReplaceProjectWithSymbolicLink()
-        {
-            var project = Path.Combine(AppRoot, "Nyx.Desktop.App.csproj");
-            var target = Path.Combine(AppRoot, "project-target.xml");
-            File.Move(project, target);
-            File.CreateSymbolicLink(project, target);
-        }
-
-        public void ReplaceAppRootWithSymbolicLink()
-        {
-            var target = Path.Combine(Root, "linked-app-target");
-            Directory.Move(AppRoot, target);
-            Directory.CreateDirectory(Path.Combine(Root, "src"));
-            Directory.CreateSymbolicLink(AppRoot, target);
-        }
-
-        public void WriteSigningKey(string name, int size)
-        {
-            using var stream = new FileStream(Path.Combine(AppRoot, name), FileMode.CreateNew, FileAccess.Write, FileShare.None);
-            stream.SetLength(size);
-        }
-
-        public void Dispose() => Directory.Delete(Root, recursive: true);
-    }
 }

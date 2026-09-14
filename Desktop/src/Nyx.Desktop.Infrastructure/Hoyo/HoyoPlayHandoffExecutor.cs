@@ -14,12 +14,18 @@ namespace Nyx.Desktop.Infrastructure.Hoyo;
 /// It never updates files itself and has no hidden, shell, elevation, or generic
 /// argument/path capability.
 /// </summary>
-public sealed class HoyoPlayHandoffExecutor
+public sealed class HoyoPlayHandoffExecutor : IAsyncDisposable
 {
     private readonly HoyoPlayGlobalValidator validator;
     private readonly IStrictRunningProcessInspector processInspector;
     private readonly IHoyoPlayProcessStarter processStarter;
     private readonly OfficialLauncherFamilyAdmission familyAdmission;
+    private readonly bool ownsFamilyAdmission;
+    private readonly object admissionSync = new();
+    private Task? disposal;
+    private TaskCompletionSource? operationsDrained;
+    private int activeOperations;
+    private bool admissionClosed;
 
     [SupportedOSPlatform("windows")]
     public HoyoPlayHandoffExecutor()
@@ -27,7 +33,8 @@ public sealed class HoyoPlayHandoffExecutor
             new HoyoPlayGlobalValidator(),
             new WindowsRunningProcessInspector(),
             new WindowsHoyoPlayProcessStarter(),
-            new OfficialLauncherFamilyAdmission())
+            new OfficialLauncherFamilyAdmission(),
+            ownsFamilyAdmission: true)
     {
     }
 
@@ -35,7 +42,12 @@ public sealed class HoyoPlayHandoffExecutor
         HoyoPlayGlobalValidator validator,
         IStrictRunningProcessInspector processInspector,
         IHoyoPlayProcessStarter processStarter)
-        : this(validator, processInspector, processStarter, new OfficialLauncherFamilyAdmission())
+        : this(
+            validator,
+            processInspector,
+            processStarter,
+            new OfficialLauncherFamilyAdmission(),
+            ownsFamilyAdmission: true)
     {
     }
 
@@ -44,14 +56,96 @@ public sealed class HoyoPlayHandoffExecutor
         IStrictRunningProcessInspector processInspector,
         IHoyoPlayProcessStarter processStarter,
         OfficialLauncherFamilyAdmission familyAdmission)
+        : this(validator, processInspector, processStarter, familyAdmission, ownsFamilyAdmission: false)
+    {
+    }
+
+    private HoyoPlayHandoffExecutor(
+        HoyoPlayGlobalValidator validator,
+        IStrictRunningProcessInspector processInspector,
+        IHoyoPlayProcessStarter processStarter,
+        OfficialLauncherFamilyAdmission familyAdmission,
+        bool ownsFamilyAdmission)
     {
         this.validator = validator ?? throw new ArgumentNullException(nameof(validator));
         this.processInspector = processInspector ?? throw new ArgumentNullException(nameof(processInspector));
         this.processStarter = processStarter ?? throw new ArgumentNullException(nameof(processStarter));
         this.familyAdmission = familyAdmission ?? throw new ArgumentNullException(nameof(familyAdmission));
+        this.ownsFamilyAdmission = ownsFamilyAdmission;
     }
 
     public HoyoPlayOpenResult Check(string gameId, string? root)
+    {
+        EnterOperation();
+        try
+        {
+            return CheckCore(gameId, root);
+        }
+        finally
+        {
+            ReleaseOperation();
+        }
+    }
+
+    public HoyoPlayOpenResult Open(string gameId, string? root)
+    {
+        EnterOperation();
+        try
+        {
+            using var admission = familyAdmission.TryEnter();
+            if (admission is null)
+            {
+                return new(HoyoPlayOpenStatus.Busy);
+            }
+
+            return OpenAdmitted(gameId, root, CancellationToken.None);
+        }
+        finally
+        {
+            ReleaseOperation();
+        }
+    }
+
+    public async Task<HoyoPlayOpenResult> OpenOrObserveCurrentAsync(
+        string gameId,
+        string? root,
+        CancellationToken cancellationToken = default)
+    {
+        EnterOperation();
+        try
+        {
+            var admission = familyAdmission.TryEnter();
+            if (admission is null)
+            {
+                using var observationAdmission = await familyAdmission
+                    .EnterAsync(cancellationToken)
+                    .ConfigureAwait(false);
+                return CheckCore(gameId, root);
+            }
+
+            using (admission)
+            {
+                return await Task.Run(
+                    () => OpenAdmitted(gameId, root, cancellationToken),
+                    cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            ReleaseOperation();
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        lock (admissionSync)
+        {
+            disposal ??= DisposeCoreAsync();
+            return new(disposal);
+        }
+    }
+
+    private HoyoPlayOpenResult CheckCore(string gameId, string? root)
     {
         HoyoPlayValidationResult validation;
         try
@@ -103,39 +197,6 @@ public sealed class HoyoPlayHandoffExecutor
         };
     }
 
-    public HoyoPlayOpenResult Open(string gameId, string? root)
-    {
-        using var admission = familyAdmission.TryEnter();
-        if (admission is null)
-        {
-            return new(HoyoPlayOpenStatus.Busy);
-        }
-
-        return OpenAdmitted(gameId, root, CancellationToken.None);
-    }
-
-    public async Task<HoyoPlayOpenResult> OpenOrObserveCurrentAsync(
-        string gameId,
-        string? root,
-        CancellationToken cancellationToken = default)
-    {
-        var admission = familyAdmission.TryEnter();
-        if (admission is null)
-        {
-            using var observationAdmission = await familyAdmission
-                .EnterAsync(cancellationToken)
-                .ConfigureAwait(false);
-            return Check(gameId, root);
-        }
-
-        using (admission)
-        {
-            return await Task.Run(
-                () => OpenAdmitted(gameId, root, cancellationToken),
-                cancellationToken).ConfigureAwait(false);
-        }
-    }
-
     private HoyoPlayOpenResult OpenAdmitted(
         string gameId,
         string? root,
@@ -143,14 +204,14 @@ public sealed class HoyoPlayHandoffExecutor
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var first = Check(gameId, root);
+        var first = CheckCore(gameId, root);
         if (first.Status is not HoyoPlayOpenStatus.Ready || first.Request is null)
         {
             return first;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        var fresh = Check(gameId, root);
+        var fresh = CheckCore(gameId, root);
         if (fresh.Status is not HoyoPlayOpenStatus.Ready
             || fresh.Request is null
             || !RequestsMatch(first.Request, fresh.Request))
@@ -194,6 +255,48 @@ public sealed class HoyoPlayHandoffExecutor
             or NotSupportedException
             or InvalidOperationException
             or Win32Exception;
+
+    private void EnterOperation()
+    {
+        lock (admissionSync)
+        {
+            ObjectDisposedException.ThrowIf(admissionClosed, this);
+            activeOperations++;
+        }
+    }
+
+    private void ReleaseOperation()
+    {
+        TaskCompletionSource? drained = null;
+        lock (admissionSync)
+        {
+            activeOperations--;
+            if (admissionClosed && activeOperations == 0)
+            {
+                drained = operationsDrained;
+            }
+        }
+
+        drained?.TrySetResult();
+    }
+
+    private async Task DisposeCoreAsync()
+    {
+        Task drain;
+        lock (admissionSync)
+        {
+            admissionClosed = true;
+            drain = activeOperations == 0
+                ? Task.CompletedTask
+                : (operationsDrained ??= new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+        }
+
+        await drain.ConfigureAwait(false);
+        if (ownsFamilyAdmission)
+        {
+            await familyAdmission.DisposeAsync().ConfigureAwait(false);
+        }
+    }
 }
 
 internal sealed class WindowsHoyoPlayProcessStarter : IHoyoPlayProcessStarter

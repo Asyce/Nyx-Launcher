@@ -30,6 +30,65 @@ public sealed class PengoWebToolsUiTests
     }
 
     [Fact]
+    public void Official_tools_are_an_accessible_current_game_menu_with_click_time_revalidation()
+    {
+        var xaml = ReadAppFile("MainPage.xaml");
+        var code = ReadAppFile("MainPage.xaml.cs");
+        var app = ReadAppFile("App.xaml.cs");
+        var parser = ReadInfrastructureFile("Content", "LauncherBannersParser.cs");
+        var launch = Slice(xaml, "x:Name=\"LaunchStack\"", "</Page>");
+        var button = Slice(launch, "x:Name=\"OfficialToolsButton\"", "</Button>");
+        var render = Slice(code, "private void RenderOfficialTools", "private async void OfficialTool_Click");
+        var handler = Slice(code, "private async void OfficialTool_Click", "private void RenderExportTools");
+        var exportRender = Slice(code, "private void RenderExportTools", "private static string FormatExportStatus");
+
+        Assert.Single(Regex.Matches(xaml, "x:Name=\"OfficialToolsButton\"").Cast<Match>());
+        Assert.Single(Regex.Matches(xaml, "x:Name=\"OfficialToolsMenuFlyout\"").Cast<Match>());
+        Assert.Contains("Grid.Row=\"1\"", button, StringComparison.Ordinal);
+        Assert.Contains("Grid.Column=\"0\"", button, StringComparison.Ordinal);
+        Assert.True(
+            launch.IndexOf("x:Name=\"LaunchUtilityButtons\"", StringComparison.Ordinal)
+            < launch.IndexOf("x:Name=\"StableOpenUpdaterButton\"", StringComparison.Ordinal)
+            && launch.IndexOf("x:Name=\"StableOpenUpdaterButton\"", StringComparison.Ordinal)
+            < launch.IndexOf("x:Name=\"OfficialToolsButton\"", StringComparison.Ordinal));
+        Assert.Contains("HorizontalAlignment=\"Stretch\"", button, StringComparison.Ordinal);
+        Assert.Contains("Height=\"28\"", button, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"Official Tools for the selected game\"", button, StringComparison.Ordinal);
+        Assert.Contains("IsTabStop=\"True\"", button, StringComparison.Ordinal);
+        Assert.Contains("ToolTipService.ToolTip=", button, StringComparison.Ordinal);
+        Assert.Contains("Style=\"{StaticResource NyxOfficialLauncherStyle}\"", button, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"Collapsed\"", button, StringComparison.Ordinal);
+        Assert.Contains("<MenuFlyout x:Name=\"OfficialToolsMenuFlyout\" />", button, StringComparison.Ordinal);
+
+        Assert.Contains("OfficialToolsMenuFlyout.Items.Clear()", render, StringComparison.Ordinal);
+        Assert.Contains("OfficialToolsButton.Visibility = Visibility.Collapsed", render, StringComparison.Ordinal);
+        Assert.Contains("selected.IsCustom || selected.Id == \"wuwa\"", render, StringComparison.Ordinal);
+        Assert.Contains("launcherBanners.OfficialToolsFor(selected.Id)", render, StringComparison.Ordinal);
+        Assert.Contains("Tag = tool", render, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.SetName(item", render, StringComparison.Ordinal);
+        Assert.Contains("if (OfficialToolsMenuFlyout.Items.Count == 0) return;", render, StringComparison.Ordinal);
+        Assert.Contains("OfficialToolsButton.Visibility = Visibility.Visible", render, StringComparison.Ordinal);
+        Assert.True(
+            exportRender.IndexOf("RenderOfficialTools(selected);", StringComparison.Ordinal)
+            < exportRender.IndexOf("if (selected.IsCustom) return;", StringComparison.Ordinal));
+
+        Assert.Contains("GameLauncherItem { IsCustom: false } selected", handler, StringComparison.Ordinal);
+        Assert.Contains("selected.Id == \"wuwa\"", handler, StringComparison.Ordinal);
+        Assert.Contains("string.Equals(selected.Id, requested.Game, StringComparison.Ordinal)", handler, StringComparison.Ordinal);
+        Assert.Contains("launcherBanners.OfficialToolsFor(selected.Id).SingleOrDefault", handler, StringComparison.Ordinal);
+        Assert.Contains("string.Equals(tool.Id, requested.Id, StringComparison.Ordinal)", handler, StringComparison.Ordinal);
+        Assert.Contains("string.Equals(tool.Label, requested.Label, StringComparison.Ordinal)", handler, StringComparison.Ordinal);
+        Assert.Contains("string.Equals(tool.Url.OriginalString, requested.Url.OriginalString, StringComparison.Ordinal)", handler, StringComparison.Ordinal);
+        Assert.Matches(
+            @"if \(!LauncherBannersManifestParser\.IsApprovedOfficialTool\(current\.Game, current\.Id, current\.Label, current\.Url\)\) return;\s*await OpenFixedDestinationAsync\(current\.Url, current\.Label\);",
+            handler);
+        Assert.DoesNotContain("ContentDialog", handler, StringComparison.Ordinal);
+        Assert.DoesNotContain("LaunchUriAsync", handler, StringComparison.Ordinal);
+        Assert.Contains("public static bool IsApprovedOfficialTool", parser, StringComparison.Ordinal);
+        Assert.Contains("toolsEndpoint: new Uri(LauncherBannersTransport.ProductionToolsEndpoint)", app, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Elevated_capture_failure_is_honest_for_both_supported_games()
     {
         var code = ReadAppFile("MainPage.xaml.cs");
@@ -67,23 +126,26 @@ public sealed class PengoWebToolsUiTests
     }
 
     [Fact]
-    public void Feature_flags_gate_each_lane_while_planned_provider_controls_stay_visible()
+    public void Catalog_offers_export_controls_while_feature_flags_gate_provider_availability()
     {
         var code = ReadAppFile("MainPage.xaml.cs");
         var render = Slice(code, "private void RenderExportTools", "private static string FormatExportStatus");
 
         Assert.Contains("ExportProviderCatalog.GetEnabled", render, StringComparison.Ordinal);
-        Assert.Contains("ExportProviderCatalog.Get(selected.Id)", render, StringComparison.Ordinal);
-        Assert.Contains("var pullsSupported = catalogCapability.Supports(ExportKind.Pulls)", render, StringComparison.Ordinal);
-        Assert.Contains("var achievementsSupported = catalogCapability.Supports(ExportKind.Achievements)", render, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExportProviderCatalog.Get(selected.Id)", render, StringComparison.Ordinal);
         Assert.Contains("armed.AchievementSource", render, StringComparison.Ordinal);
         Assert.Contains("achievementSource);", render, StringComparison.Ordinal);
         Assert.Contains("NyxToolsPanel.Visibility = Visibility.Collapsed", render, StringComparison.Ordinal);
         Assert.Contains("ApplySavedPanelVisibility(selected)", render, StringComparison.Ordinal);
+        Assert.True(
+            render.IndexOf("if (selected.IsCustom) return;", StringComparison.Ordinal)
+            < render.IndexOf("GameCatalog.GetRequired(selected.Id)", StringComparison.Ordinal));
+        Assert.Contains("var pullsOffered = definition.SupportsPulls", render, StringComparison.Ordinal);
+        Assert.Contains("var achievementsOffered = definition.SupportsAchievements", render, StringComparison.Ordinal);
         Assert.Contains("PullExportToggle.Visibility = pullsOffered", render, StringComparison.Ordinal);
         Assert.Contains("AchievementExportPanel.Visibility = achievementsOffered", render, StringComparison.Ordinal);
-        Assert.Contains("selected.Id is \"gi\" or \"hsr\" or \"zzz\" or \"wuwa\"", render, StringComparison.Ordinal);
-        Assert.Contains("selected.Id is \"gi\" or \"hsr\" or \"zzz\"", render, StringComparison.Ordinal);
+        Assert.DoesNotContain("var pullsOffered = selected.Id", render, StringComparison.Ordinal);
+        Assert.DoesNotContain("var achievementsOffered = selected.Id", render, StringComparison.Ordinal);
         Assert.Contains("No supported export tools for this game.", render, StringComparison.Ordinal);
         Assert.Contains("Export tools for this game are not ready yet.", render, StringComparison.Ordinal);
         Assert.Contains("PullExportToggle.IsEnabled = pullsAvailable", render, StringComparison.Ordinal);
@@ -95,6 +157,31 @@ public sealed class PengoWebToolsUiTests
     }
 
     [Fact]
+    public void Endfield_pull_export_uses_the_existing_status_cancel_and_one_use_preview_flow()
+    {
+        var code = ReadAppFile("MainPage.xaml.cs");
+        var app = ReadAppFile("App.xaml.cs");
+        var buildIdentity = ReadAppFile("StableUpdateBuildIdentity.cs");
+        var help = Slice(code, "private async void PullExportHelpButton_Click", "private async Task ShowExportHelpAsync");
+        var tracking = Slice(code, "private async Task TrackExportJobAsync", "private async Task ObserveNativeAchievementHandoffAsync");
+        var delivery = Slice(code, "private async Task DeliverExportAsync", "private void SetAchievementHandoffIfLatest");
+        var status = Slice(code, "private static string FormatExportStatus", "private static string FormatAchievementFailure");
+
+        Assert.Contains("Open the official Pull History screen once", help, StringComparison.Ordinal);
+        Assert.Contains("gameId == \"ae\"", tracking, StringComparison.Ordinal);
+        Assert.Contains("pulls: true", tracking, StringComparison.Ordinal);
+        Assert.Contains("StartEndfieldPullAsync", delivery, StringComparison.Ordinal);
+        Assert.Contains("LaunchUriAsync(bridge.BrowserUri)", delivery, StringComparison.Ordinal);
+        Assert.Contains("Path.GetFileName(path)", status, StringComparison.Ordinal);
+        Assert.Contains("pulls saved as", status, StringComparison.Ordinal);
+        Assert.DoesNotContain("u8_token", code, StringComparison.Ordinal);
+        Assert.Contains("StableUpdateBuildIdentity.PengoSiteOrigin", code, StringComparison.Ordinal);
+        Assert.Contains("StableUpdateBuildIdentity.PengoSiteOrigin", app, StringComparison.Ordinal);
+        Assert.Contains("Channel == \"development\"", buildIdentity, StringComparison.Ordinal);
+        Assert.Contains("http://127.0.0.1:5173", buildIdentity, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Startup_resource_refresh_prioritizes_the_selected_game_and_preloads_the_others()
     {
         var code = ReadAppFile("MainPage.xaml.cs");
@@ -103,14 +190,19 @@ public sealed class PengoWebToolsUiTests
             "private async Task RefreshPublisherResourcesOnStartupAsync",
             "private async Task RefreshPublisherResourceAfterCheckInAsync");
 
-        Assert.Contains("new[] { selectedId, \"gi\", \"hsr\", \"zzz\" }", startup, StringComparison.Ordinal);
+        Assert.Contains("selectedId is \"gi\" or \"hsr\" or \"zzz\" ? selectedId : null", startup, StringComparison.Ordinal);
+        Assert.Contains(".Distinct(StringComparer.Ordinal)", startup, StringComparison.Ordinal);
+        var selectedFirst = startup.IndexOf("? selectedId : null,", StringComparison.Ordinal);
+        Assert.True(selectedFirst >= 0);
+        Assert.True(startup.IndexOf("\"gi\",", selectedFirst + 1, StringComparison.Ordinal) > selectedFirst);
         Assert.Contains("RefreshWuWaAccountStatusAsync", startup, StringComparison.Ordinal);
         Assert.Single(
             Regex.Matches(startup, "RefreshPublisherResourceAutomaticallyAsync", RegexOptions.CultureInvariant)
                 .Cast<Match>());
         Assert.Contains("foreach", startup, StringComparison.Ordinal);
         Assert.Contains("selected: gameId == selectedId", startup, StringComparison.Ordinal);
-        Assert.Contains("force: true", startup, StringComparison.Ordinal);
+        Assert.DoesNotContain("force:", startup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Task.WhenAll", startup, StringComparison.Ordinal);
         Assert.Contains("if (gameId == skipGameId) continue;", startup, StringComparison.Ordinal);
     }
 
@@ -222,23 +314,188 @@ public sealed class PengoWebToolsUiTests
     }
 
     [Fact]
-    public void Window_close_awaits_export_and_account_cleanup_before_final_close()
+    public void Window_close_drains_page_before_starting_export_and_account_cleanup()
     {
         var app = ReadAppFile("App.xaml.cs");
         var shutdown = Slice(app, "private async Task ShutDownAccountsAndCloseAsync", "private void Window_Closed");
+        var page = shutdown.IndexOf("await DisposeMainPageAsync(mainWindow)", StringComparison.Ordinal);
+        var taskStarts = new[]
+        {
+            shutdown.IndexOf("DisposeLauncherBannersAsync(_launcherBanners)", StringComparison.Ordinal),
+            shutdown.IndexOf("DisposePublisherStatusAsync(_hoyoPublisherStatus)", StringComparison.Ordinal),
+            shutdown.IndexOf("DisposeWuWaAccountStatusAsync(_wuwaAccountStatus)", StringComparison.Ordinal),
+            shutdown.IndexOf("DisposePublisherAccountsAsync(_publisherAccounts)", StringComparison.Ordinal),
+            shutdown.IndexOf("CloseExportsForLauncherAsync(_exports)", StringComparison.Ordinal),
+        };
+        var discovery = shutdown.IndexOf("await AwaitEndfieldSiblingDiscoveryAsync()", StringComparison.Ordinal);
+        var refresh = shutdown.IndexOf("await DisposeRefreshAsync(_sessionRefresh)", StringComparison.Ordinal);
+        var sessions = shutdown.IndexOf("await DisposeSessionsAsync(_sessions)", StringComparison.Ordinal);
+        var background = shutdown.IndexOf("await Task.WhenAll(", StringComparison.Ordinal);
+        var handoffs = shutdown.IndexOf("await DisposeAchievementHandoffsAsync", StringComparison.Ordinal);
+        var exports = shutdown.IndexOf("await DisposeExportCoordinatorAsync", StringComparison.Ordinal);
+        var pulls = shutdown.IndexOf("_pullExports?.Dispose()", StringComparison.Ordinal);
+        var genshin = shutdown.IndexOf("await DisposeGenshin120FpsStarterAsync", StringComparison.Ordinal);
+        var hoyo = shutdown.IndexOf("await DisposeHoyoPlayExecutorAsync", StringComparison.Ordinal);
+        var unregister = shutdown.IndexOf("_currentInstance?.UnregisterKey()", StringComparison.Ordinal);
+        var close = shutdown.IndexOf("_window?.Close()", StringComparison.Ordinal);
 
-        Assert.Contains("DisposeExportsAsync(_exports, _pullExports)", shutdown, StringComparison.Ordinal);
-        Assert.Contains("await Task.WhenAll(wuwaAccountShutdown, publisherAccountShutdown)", shutdown, StringComparison.Ordinal);
-        Assert.Contains("await exportShutdown", shutdown, StringComparison.Ordinal);
-        Assert.Contains("_achievementExportHandoffs.WaitForActiveAsync()", shutdown, StringComparison.Ordinal);
-        Assert.Contains("await achievementHandoffShutdown", shutdown, StringComparison.Ordinal);
-        Assert.True(shutdown.IndexOf("await Task.WhenAll", StringComparison.Ordinal)
-            < shutdown.IndexOf("_window?.Close()", StringComparison.Ordinal));
-        Assert.True(shutdown.IndexOf("await exportShutdown", StringComparison.Ordinal)
-            < shutdown.IndexOf("_window?.Close()", StringComparison.Ordinal));
-        Assert.True(shutdown.IndexOf("await achievementHandoffShutdown", StringComparison.Ordinal)
-            < shutdown.IndexOf("_window?.Close()", StringComparison.Ordinal));
-        Assert.DoesNotContain("_ = DisposeExportsAsync", app, StringComparison.Ordinal);
+        Assert.True(page >= 0 && page < discovery);
+        Assert.All(taskStarts, start => Assert.True(start > page && start < discovery));
+        Assert.True(
+            discovery >= 0
+            && discovery < refresh
+            && refresh < sessions
+            && sessions < background
+            && background < handoffs
+            && handoffs < exports
+            && exports < pulls
+            && pulls < genshin
+            && genshin < hoyo
+            && hoyo < unregister
+            && unregister < close);
+        foreach (var call in new[]
+        {
+            "DisposeMainPageAsync",
+            "DisposeLauncherBannersAsync",
+            "DisposePublisherStatusAsync",
+            "DisposeWuWaAccountStatusAsync",
+            "DisposePublisherAccountsAsync",
+            "CloseExportsForLauncherAsync",
+            "DisposeRefreshAsync",
+            "DisposeSessionsAsync",
+            "DisposeAchievementHandoffsAsync",
+            "DisposeExportCoordinatorAsync",
+            "_pullExports?.Dispose()",
+            "DisposeGenshin120FpsStarterAsync",
+            "DisposeHoyoPlayExecutorAsync",
+        })
+        {
+            Assert.Single(Regex.Matches(shutdown, Regex.Escape(call)).Cast<Match>());
+        }
+    }
+
+    [Fact]
+    public void Page_close_drains_export_registration_and_visual_preload_before_its_cache()
+    {
+        var page = ReadAppFile("MainPage.xaml.cs");
+        var window = ReadAppFile("MainWindow.xaml.cs");
+        var shutdown = Slice(page, "internal Task ShutDownAsync()", "private HoyoMaintenanceUiSnapshot DiscoverHoyoMaintenance");
+        var closeAdmission = shutdown.IndexOf("CloseExportRegistrationAdmission()", StringComparison.Ordinal);
+        var terminate = shutdown.IndexOf("sessionUiLifetime.Terminate()", StringComparison.Ordinal);
+        var drain = shutdown.IndexOf("await registrations", StringComparison.Ordinal);
+        var preload = shutdown.IndexOf("await launcherVisualPreloadTask", StringComparison.Ordinal);
+        var cache = shutdown.IndexOf("await launcherVisuals.DisposeAsync()", StringComparison.Ordinal);
+
+        Assert.True(closeAdmission >= 0 && closeAdmission < terminate && terminate < drain && drain < preload && preload < cache);
+        Assert.Contains("page.ShutDownAsync()", window, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Export_registration_release_is_protected_before_any_render_can_throw()
+    {
+        var code = ReadAppFile("MainPage.xaml.cs");
+        var launch = Slice(code, "private async void LaunchButton_Click", "private async Task ChooseGameFolderAsync");
+        var immediate = Slice(code, "private async Task StartHoyoLabAchievementExportAsync", "private string GetAchievementSource");
+        var shutdown = Slice(code, "private async Task ShutDownCoreAsync", "private HoyoMaintenanceUiSnapshot DiscoverHoyoMaintenance");
+
+        Assert.Matches(
+            @"if \(!TryEnterExportRegistration\(\)\)\s*\{\s*gameActionsInFlight\.Remove\(gameId\);\s*return;\s*\}\s*try\s*\{\s*RenderExportTools",
+            launch);
+        Assert.Matches(
+            @"if \(!TryEnterExportRegistration\(\)\)\s*\{\s*reservation\.Dispose\(\);\s*return;\s*\}\s*try\s*\{\s*RenderSelection",
+            immediate);
+        foreach (var workflow in new[] { launch, immediate })
+        {
+            Assert.Single(Regex.Matches(workflow, "ReleaseExportRegistration\\(\\)").Cast<Match>());
+            Assert.Matches(
+                @"finally\s*\{\s*ReleaseExportRegistration\(\);\s*\}",
+                workflow);
+        }
+        Assert.Contains("await registrations", shutdown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Accepted_launch_stays_registered_until_export_close_can_start()
+    {
+        var app = ReadAppFile("App.xaml.cs");
+        var page = ReadAppFile("MainPage.xaml.cs");
+        var launch = Slice(page, "private async void LaunchButton_Click", "private async Task ChooseGameFolderAsync");
+        var shutdown = Slice(app, "private async Task ShutDownAccountsAndCloseAsync", "private void Window_Closed");
+        var admitted = launch.IndexOf("TryEnterExportRegistration()", StringComparison.Ordinal);
+        var launchSettled = launch.IndexOf("await exports.RunForLaunchAsync", StringComparison.Ordinal);
+        var handoffRegistered = launch.IndexOf("AchievementExportHandoffs.TrackAsync", StringComparison.Ordinal);
+        var released = launch.LastIndexOf("ReleaseExportRegistration()", StringComparison.Ordinal);
+        var pageDrained = shutdown.IndexOf("await DisposeMainPageAsync(mainWindow)", StringComparison.Ordinal);
+        var exportCloseStarted = shutdown.IndexOf("CloseExportsForLauncherAsync(_exports)", StringComparison.Ordinal);
+
+        Assert.True(admitted >= 0 && admitted < launchSettled && launchSettled < handoffRegistered && handoffRegistered < released);
+        Assert.True(pageDrained >= 0 && pageDrained < exportCloseStarted);
+    }
+
+    [Fact]
+    public void Activation_during_shutdown_cannot_show_or_refresh_the_page()
+    {
+        var app = ReadAppFile("App.xaml.cs");
+        var closing = Slice(app, "private void AppWindow_Closing", "private async Task ShutDownAccountsAndCloseAsync");
+        var instanceActivation = Slice(app, "private void CurrentInstance_Activated", "private void StartEndfieldSiblingDiscovery");
+        var windowActivation = Slice(app, "private void Window_Activated", "private void LauncherState_Changed");
+        var refresh = Slice(app, "private async Task RefreshAfterActivationAsync", "private static async Task DisposeRefreshAsync");
+        var shutdownFlag = closing.IndexOf("_accountShutdownStarted = true", StringComparison.Ordinal);
+        var instanceDetach = closing.IndexOf("_currentInstance.Activated -= CurrentInstance_Activated", StringComparison.Ordinal);
+        var windowDetach = closing.IndexOf("_window.Activated -= Window_Activated", StringComparison.Ordinal);
+        var hide = closing.IndexOf("sender.Hide()", StringComparison.Ordinal);
+
+        Assert.True(shutdownFlag >= 0 && shutdownFlag < instanceDetach && shutdownFlag < windowDetach);
+        Assert.True(instanceDetach < hide && windowDetach < hide);
+        Assert.Equal(2, Regex.Matches(instanceActivation, "_accountShutdownStarted").Count);
+        Assert.True(
+            instanceActivation.LastIndexOf("_accountShutdownStarted", StringComparison.Ordinal)
+            < instanceActivation.IndexOf("window.Activate()", StringComparison.Ordinal));
+        Assert.True(
+            windowActivation.IndexOf("!_accountShutdownStarted", StringComparison.Ordinal)
+            < windowActivation.IndexOf("RefreshAfterActivationAsync()", StringComparison.Ordinal));
+        Assert.True(
+            refresh.IndexOf("if (_accountShutdownStarted) return", StringComparison.Ordinal)
+            < refresh.IndexOf("WindowReactivated?.Invoke", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Window_closed_only_detaches_handlers_and_runs_synchronous_abnormal_fallbacks()
+    {
+        var app = ReadAppFile("App.xaml.cs");
+        var closed = Slice(app, "private void Window_Closed", "private async Task RefreshAfterActivationAsync");
+
+        Assert.Contains("-= CurrentInstance_Activated", closed, StringComparison.Ordinal);
+        Assert.Contains("-= LauncherState_Changed", closed, StringComparison.Ordinal);
+        Assert.Contains("SessionUiLifetime.Terminate()", closed, StringComparison.Ordinal);
+        Assert.Contains("CancelEndfieldSiblingDiscovery()", closed, StringComparison.Ordinal);
+        Assert.Contains("_sessionRefresh?.Stop()", closed, StringComparison.Ordinal);
+        Assert.Contains("_sessions?.Shutdown()", closed, StringComparison.Ordinal);
+        Assert.DoesNotContain("_ =", closed, StringComparison.Ordinal);
+        Assert.DoesNotContain("DisposeAsync", closed, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Export_tracking_captures_completion_before_publishing_or_handoff_registration()
+    {
+        var code = ReadAppFile("MainPage.xaml.cs");
+        var launch = Slice(code, "private async void LaunchButton_Click", "private async Task ChooseGameFolderAsync");
+        var immediate = Slice(code, "private async Task StartHoyoLabAchievementExportAsync", "private string GetAchievementSource");
+
+        foreach (var workflow in new[] { launch, immediate })
+        {
+            var completion = workflow.IndexOf("WaitForCompletionAsync", StringComparison.Ordinal);
+            var remember = workflow.IndexOf("ExportUiJobRetention.RememberLatest", StringComparison.Ordinal);
+            var track = workflow.IndexOf("TrackExportJobAsync", remember, StringComparison.Ordinal);
+            Assert.True(completion >= 0 && completion < remember && remember < track);
+        }
+
+        Assert.True(
+            launch.IndexOf("TryEnterExportRegistration()", StringComparison.Ordinal)
+            < launch.IndexOf("await exports.RunForLaunchAsync", StringComparison.Ordinal));
+        Assert.True(
+            launch.IndexOf("AchievementExportHandoffs.TrackAsync", StringComparison.Ordinal)
+            < launch.IndexOf("ReleaseExportRegistration()", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -265,8 +522,6 @@ public sealed class PengoWebToolsUiTests
         var launcher = ReadAppFile("WindowsAchievementExportHandoffLauncher.cs");
 
         Assert.Contains("IsLauncherIndependentAchievementJob(jobId)", owner, StringComparison.Ordinal);
-        Assert.Contains("active.GetOrAdd(", owner, StringComparison.Ordinal);
-        Assert.Contains("LazyThreadSafetyMode.ExecutionAndPublication", owner, StringComparison.Ordinal);
         Assert.Contains("WaitForCompletionAsync", owner, StringComparison.Ordinal);
         Assert.Contains("AchievementImportBridge", owner, StringComparison.Ordinal);
         Assert.Contains("exports.Cancel(jobId)", owner, StringComparison.Ordinal);
@@ -310,7 +565,7 @@ public sealed class PengoWebToolsUiTests
             "private async Task TrackExportJobAsync",
             "private void SessionRefresh_Refreshed");
 
-        Assert.Contains("snapshot.Achievements.State is ExportTaskState.Succeeded", tracker, StringComparison.Ordinal);
+        Assert.Contains("final.Achievements.State is ExportTaskState.Succeeded", tracker, StringComparison.Ordinal);
         Assert.Contains("IsHandoffCurrent: true", tracker, StringComparison.Ordinal);
         Assert.Contains("OutputPath: { Length: > 0 } outputPath", tracker, StringComparison.Ordinal);
         Assert.Contains("achievementImportBridge.StartAsync", tracker, StringComparison.Ordinal);
@@ -335,7 +590,7 @@ public sealed class PengoWebToolsUiTests
             "private void CancelExportButton_Click");
 
         Assert.DoesNotContain("LaunchFileAsync", code, StringComparison.Ordinal);
-        Assert.Contains("snapshot.Pulls.State is ExportTaskState.Succeeded", tracker, StringComparison.Ordinal);
+        Assert.Contains("final.Pulls.State is ExportTaskState.Succeeded", tracker, StringComparison.Ordinal);
         Assert.Contains("await TryOpenExportsFolderAsync()", tracker, StringComparison.Ordinal);
         Assert.Contains("WindowsDocumentsDirectory.Get(), \"Pengo Exports\"", directFolderAction, StringComparison.Ordinal);
         Assert.DoesNotContain("Photos", code, StringComparison.OrdinalIgnoreCase);
@@ -371,10 +626,22 @@ public sealed class PengoWebToolsUiTests
         Assert.Contains("await mainInstance.RedirectActivationToAsync", launch, StringComparison.Ordinal);
         Assert.Contains("Exit();", launch, StringComparison.Ordinal);
         Assert.Contains("_currentInstance.Activated += CurrentInstance_Activated", launch, StringComparison.Ordinal);
-        Assert.Contains("window.DispatcherQueue.TryEnqueue(window.Activate)", launch, StringComparison.Ordinal);
+        Assert.Contains("window.DispatcherQueue.TryEnqueue(() =>", launch, StringComparison.Ordinal);
+        Assert.Contains("if (!_accountShutdownStarted) window.Activate()", launch, StringComparison.Ordinal);
+        Assert.DoesNotContain("TryEnqueue(window.Activate)", launch, StringComparison.Ordinal);
         Assert.True(
             launch.IndexOf("return;", launch.IndexOf("if (!mainInstance.IsCurrent)", StringComparison.Ordinal), StringComparison.Ordinal)
             < launch.IndexOf("var stateStore = new LauncherStateStore()", StringComparison.Ordinal));
+
+        var shutdown = Slice(app, "private async Task ShutDownAccountsAndCloseAsync", "private void Window_Closed");
+        var unregister = shutdown.IndexOf("_currentInstance?.UnregisterKey()", StringComparison.Ordinal);
+        var close = shutdown.IndexOf("_window?.Close()", StringComparison.Ordinal);
+        var unregisterFailure = shutdown.IndexOf("catch (Exception)", unregister, StringComparison.Ordinal);
+
+        Assert.True(unregister >= 0 && unregisterFailure > unregister && unregisterFailure < close);
+        Assert.True(shutdown.IndexOf("await Task.WhenAll", StringComparison.Ordinal) < unregister);
+        Assert.True(shutdown.IndexOf("await DisposeExportCoordinatorAsync", StringComparison.Ordinal) < unregister);
+        Assert.True(shutdown.IndexOf("await DisposeAchievementHandoffsAsync", StringComparison.Ordinal) < unregister);
     }
 
     [Fact]

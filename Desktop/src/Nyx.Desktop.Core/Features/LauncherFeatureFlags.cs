@@ -10,8 +10,6 @@ namespace Nyx.Desktop.Core.Features;
 /// </summary>
 public enum LauncherFeatureFlag
 {
-    RemoteBannerManifest,
-    AutomaticArt,
     GiPulls,
     GiAchievements,
     HsrPulls,
@@ -29,8 +27,6 @@ public enum LauncherFeatureFlag
 
 public sealed record LauncherFeatureFlags
 {
-    public bool RemoteBannerManifest { get; init; } = true;
-    public bool AutomaticArt { get; init; } = true;
     public bool GiPulls { get; init; } = true;
     public bool GiAchievements { get; init; } = true;
     public bool HsrPulls { get; init; } = true;
@@ -44,7 +40,7 @@ public sealed record LauncherFeatureFlags
     public bool SkportAccountAccess { get; init; }
     public bool HoyoLabAccountCleanupPending { get; init; }
     public bool SkportAccountCleanupPending { get; init; }
-    public bool EndfieldPulls { get; init; }
+    public bool EndfieldPulls { get; init; } = true;
     public bool EndfieldAchievements { get; init; }
 
     [JsonIgnore]
@@ -55,8 +51,6 @@ public sealed record LauncherFeatureFlags
 
     public bool IsEnabled(LauncherFeatureFlag flag) => flag switch
     {
-        LauncherFeatureFlag.RemoteBannerManifest => RemoteBannerManifest,
-        LauncherFeatureFlag.AutomaticArt => AutomaticArt,
         LauncherFeatureFlag.GiPulls => GiPulls,
         LauncherFeatureFlag.GiAchievements => GiAchievements,
         LauncherFeatureFlag.HsrPulls => HsrPulls,

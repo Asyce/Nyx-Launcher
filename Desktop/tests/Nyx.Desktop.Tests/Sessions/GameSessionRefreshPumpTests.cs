@@ -53,6 +53,103 @@ public sealed class GameSessionRefreshPumpTests
         Assert.Equal(0, adapter.LaunchCount);
     }
 
+    [Theory]
+    [InlineData(4, SystemSuspendResumeEvent.Suspend)]
+    [InlineData(0x12, SystemSuspendResumeEvent.AutomaticResume)]
+    [InlineData(7, SystemSuspendResumeEvent.Ignore)]
+    [InlineData(0x6, SystemSuspendResumeEvent.Ignore)]
+    public void Native_power_events_are_classified_exactly(
+        uint eventType,
+        SystemSuspendResumeEvent expected) =>
+        Assert.Equal(expected, GameSessionRefreshPump.ClassifyPowerBroadcast(eventType));
+
+    [Fact]
+    public async Task Suspend_ignores_publications_and_resume_discards_a_queued_stale_snapshot()
+    {
+        var adapter = new BlockingObservationAdapter("gi");
+        await using var coordinator = CreateCoordinator(CreateAdapters(adapter));
+        await using var pump = new GameSessionRefreshPump(coordinator, TimeSpan.FromHours(1));
+        var publications = new List<GameSessionsRefreshedEventArgs>();
+        pump.Refreshed += (_, args) => publications.Add(args);
+
+        var stale = Task.Run(async () => await pump.RefreshNowAsync());
+        await adapter.ObservationEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.True(pump.RequestSystemSuspend());
+        Assert.True(pump.RequestSystemResume());
+        adapter.ReleaseObservation.TrySetResult();
+        await stale.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.Empty(publications);
+
+        await pump.RefreshNowAsync();
+
+        var resumed = Assert.Single(publications);
+        Assert.True(resumed.ResetsAfterSystemResume);
+        Assert.All(
+            resumed.Snapshots.Values,
+            snapshot => Assert.False(snapshot.CurrentSessionLaunchedByNyx));
+    }
+
+    [Fact]
+    public async Task Duplicate_automatic_resume_cannot_reset_a_new_accepted_launch()
+    {
+        var adapter = new SequenceAdapter("gi", GameSessionEvidence.ReadyAndAbsent);
+        await using var coordinator = CreateCoordinator(CreateAdapters(adapter));
+        await using var pump = new GameSessionRefreshPump(coordinator, TimeSpan.FromHours(1));
+
+        Assert.True(pump.RequestSystemSuspend());
+        Assert.True(pump.RequestSystemResume());
+        await pump.RefreshNowAsync();
+        var launch = await coordinator.RequestLaunchAsync("gi");
+        Assert.Equal(GameLaunchRequestOutcome.Accepted, launch.Outcome);
+        Assert.True(launch.Snapshot.CurrentSessionLaunchedByNyx);
+
+        Assert.False(pump.RequestSystemResume());
+        var afterDuplicate = coordinator.GetSnapshot("gi");
+        Assert.True(afterDuplicate.CurrentSessionLaunchedByNyx);
+        Assert.Equal(1, afterDuplicate.RequestedResumeGeneration);
+        Assert.Equal(1, afterDuplicate.AppliedResumeGeneration);
+    }
+
+    [Fact]
+    public async Task Failed_resume_reset_stays_suspended_and_never_publishes_ordinary_snapshots()
+    {
+        await using var coordinator = new GameSessionCoordinator(
+            CreateAdapters(new SequenceAdapter("gi", GameSessionEvidence.ReadyAndAbsent)),
+            TimeProvider.System,
+            startupTimeout: TimeSpan.FromSeconds(10),
+            adapterCallTimeout: TimeSpan.FromSeconds(2),
+            absenceConfirmationInterval: TimeSpan.FromSeconds(1),
+            hooks: new ThrowingResumeHooks());
+        await using var pump = new GameSessionRefreshPump(coordinator, TimeSpan.FromHours(1));
+        var publications = 0;
+        pump.Refreshed += (_, _) => publications++;
+
+        Assert.True(pump.RequestSystemSuspend());
+        Assert.False(pump.RequestSystemResume());
+        await pump.RefreshNowAsync();
+
+        Assert.Equal(0, publications);
+    }
+
+    [Fact]
+    public async Task Exclusive_publication_lease_blocks_refresh_until_released()
+    {
+        var adapter = new ControlledAdapter("gi");
+        await using var coordinator = CreateCoordinator(CreateAdapters(adapter));
+        await using var pump = new GameSessionRefreshPump(coordinator, TimeSpan.FromHours(1));
+        using var lease = await pump.TryAcquireExclusivePublicationAsync();
+        Assert.NotNull(lease);
+
+        var refresh = pump.RefreshNowAsync().AsTask();
+        await Task.Delay(40);
+        Assert.False(adapter.FirstObservationEntered.Task.IsCompleted);
+
+        lease.Dispose();
+        await adapter.FirstObservationEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        adapter.ReleaseFirstObservation.TrySetResult();
+        await refresh.WaitAsync(TimeSpan.FromSeconds(1));
+    }
+
     [Fact]
     public async Task Stop_and_coordinator_shutdown_cancel_observation_and_reject_new_work()
     {
@@ -193,6 +290,30 @@ public sealed class GameSessionRefreshPumpTests
         Assert.All(disposals, task => Assert.True(task.IsCompletedSuccessfully));
     }
 
+    [Fact]
+    public async Task Dispose_waits_for_refresh_gate_release_rejects_later_work_and_is_repeatable()
+    {
+        var adapter = new BlockingObservationAdapter("gi");
+        await using var coordinator = CreateCoordinator(CreateAdapters(adapter));
+        var pump = new GameSessionRefreshPump(coordinator, TimeSpan.FromHours(1));
+
+        var refresh = Task.Run(async () => await pump.RefreshNowAsync());
+        await adapter.ObservationEntered.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+        var disposal = pump.DisposeAsync().AsTask();
+        await Task.Delay(40);
+        Assert.False(disposal.IsCompleted);
+
+        adapter.ReleaseObservation.TrySetResult();
+        await refresh.WaitAsync(TimeSpan.FromSeconds(1));
+        await disposal.WaitAsync(TimeSpan.FromSeconds(1));
+
+        var later = await pump.RefreshNowAsync();
+        await pump.DisposeAsync();
+
+        Assert.Contains("gi", later.Keys);
+    }
+
     private static IReadOnlyList<IGameSessionAdapter> CreateAdapters(IGameSessionAdapter selected) =>
         GameCatalog.All.Select(game => game.Id == selected.GameId
             ? selected
@@ -285,6 +406,23 @@ public sealed class GameSessionRefreshPumpTests
         }
     }
 
+    private sealed class BlockingObservationAdapter(string gameId) : SequenceAdapter(gameId)
+    {
+        public TaskCompletionSource ObservationEntered { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource ReleaseObservation { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override ValueTask<GameSessionEvidence> ObserveSessionAsync(
+            CancellationToken cancellationToken)
+        {
+            ObservationEntered.TrySetResult();
+            ReleaseObservation.Task.GetAwaiter().GetResult();
+            return ValueTask.FromResult(GameSessionEvidence.ReadyAndAbsent);
+        }
+    }
+
     private sealed class CancelableAdapter(string gameId) : SequenceAdapter(gameId)
     {
         private int observeCount;
@@ -311,5 +449,21 @@ public sealed class GameSessionRefreshPumpTests
         public override DateTimeOffset GetUtcNow() => now;
 
         public void Advance(TimeSpan duration) => now += duration;
+    }
+
+    private sealed class ThrowingResumeHooks : IGameSessionCoordinatorHooks
+    {
+        public ValueTask BeforeDispatchAdmissionAsync() => ValueTask.CompletedTask;
+
+        public void DispatchAdmissionCommitted(string gameId)
+        {
+        }
+
+        public void BeforeResumeAdmission(string gameId) =>
+            throw new InvalidOperationException("resume test failure");
+
+        public void ResumeResetApplied(string gameId, long generation)
+        {
+        }
     }
 }

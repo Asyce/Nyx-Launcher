@@ -30,7 +30,8 @@ public sealed record HoyoGameLaunchResult(
     HoyoGameLaunchStatus Status,
     LaunchSpecification? Specification = null,
     HoyoInspectionReason InspectionReason = HoyoInspectionReason.None,
-    HoyoGameLaunchFailureReason FailureReason = HoyoGameLaunchFailureReason.None);
+    HoyoGameLaunchFailureReason FailureReason = HoyoGameLaunchFailureReason.None,
+    bool StartedByThisCall = false);
 
 public interface IHoyoGameLaunchIdentityValidator
 {
@@ -126,7 +127,7 @@ public sealed class HoyoGameLaunchService
         try
         {
             processStarter.Start(freshResult.Specification);
-            return freshResult with { Status = HoyoGameLaunchStatus.Running };
+            return freshResult with { Status = HoyoGameLaunchStatus.Running, StartedByThisCall = true };
         }
         catch (Exception exception) when (IsBoundaryFailure(exception))
         {
@@ -168,7 +169,7 @@ public sealed class HoyoGameLaunchService
         {
             elevatedProcessStarter!.StartValidatedHoyoGame(
                 new ValidatedHoyoGameElevationRequest(gameId, freshResult.Specification));
-            return freshResult with { Status = HoyoGameLaunchStatus.Running };
+            return freshResult with { Status = HoyoGameLaunchStatus.Running, StartedByThisCall = true };
         }
         catch (Exception exception) when (IsBoundaryFailure(exception))
         {
@@ -242,7 +243,10 @@ public sealed class HoyoGameLaunchService
         return running switch
         {
             RunningProcessStatus.NotRunning => new(HoyoGameLaunchStatus.Ready, specification),
-            RunningProcessStatus.Running => new(HoyoGameLaunchStatus.Running, specification),
+            RunningProcessStatus.Running => new(
+                HoyoGameLaunchStatus.Running,
+                specification,
+                StartedByThisCall: false),
             _ => new(HoyoGameLaunchStatus.NeedsReview, specification),
         };
     }

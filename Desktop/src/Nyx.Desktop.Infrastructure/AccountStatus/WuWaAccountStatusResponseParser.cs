@@ -4,11 +4,9 @@ using Nyx.Desktop.Core.AccountStatus;
 
 namespace Nyx.Desktop.Infrastructure.AccountStatus;
 
-internal sealed record WuWaPlayerIdentity(string PlayerId, string Region);
-
 internal sealed class WuWaAccountStatusResponseParser
 {
-    internal bool TryParsePlayerInfo(ReadOnlyMemory<byte> utf8, out WuWaPlayerIdentity? identity)
+    internal bool TryParsePlayerInfo(ReadOnlyMemory<byte> utf8, out WuWaAccountIdentity? identity)
     {
         identity = null;
         try
@@ -16,7 +14,7 @@ internal sealed class WuWaAccountStatusResponseParser
             using var document = Parse(utf8);
             if (!TryGetSuccessfulData(document.RootElement, out var data)
                 || data.ValueKind is not JsonValueKind.Object) return false;
-            var identities = new List<WuWaPlayerIdentity>();
+            var identities = new List<(string PlayerId, string Region)>();
             foreach (var regionProperty in data.EnumerateObject())
             {
                 if (!IsSafeIdentifier(regionProperty.Name, 64)
@@ -34,7 +32,7 @@ internal sealed class WuWaAccountStatusResponseParser
             }
             var distinct = identities.Distinct().ToArray();
             if (distinct.Length != 1) return false;
-            identity = distinct[0];
+            identity = new(distinct[0].PlayerId, distinct[0].Region);
             return true;
         }
         catch (JsonException)
@@ -177,14 +175,14 @@ internal sealed class WuWaAccountStatusResponseParser
     private static void CollectRoleIds(
         JsonElement element,
         string region,
-        List<WuWaPlayerIdentity> identities,
+        List<(string PlayerId, string Region)> identities,
         int depth)
     {
         if (depth > 12) return;
         if (element.ValueKind is JsonValueKind.Object)
         {
             if (TryReadIdentifier(element, "roleId", 128, out var roleId))
-                identities.Add(new(roleId!, region!));
+                identities.Add((roleId!, region));
             foreach (var property in element.EnumerateObject())
                 CollectRoleIds(property.Value, region, identities, depth + 1);
         }

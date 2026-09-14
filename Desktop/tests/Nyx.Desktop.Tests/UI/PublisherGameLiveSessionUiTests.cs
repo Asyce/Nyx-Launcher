@@ -26,7 +26,7 @@ public sealed class PublisherGameLiveSessionUiTests
     {
         var page = ReadAppFile("MainPage.xaml.cs");
         var start = page.IndexOf("private async Task ChooseGameFolderAsync", StringComparison.Ordinal);
-        var end = page.IndexOf("private async void OpenUpdaterButton_Click", start, StringComparison.Ordinal);
+        var end = page.IndexOf("private bool IsValidManualInstallRoot", start, StringComparison.Ordinal);
         var picker = page[start..end];
 
         Assert.Contains("new FolderPicker", picker, StringComparison.Ordinal);

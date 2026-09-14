@@ -14,22 +14,12 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <Image Width="34" Height="34" Source="ms-appx:///Assets/Iris/nyx-logo.png" Stretch="Uniform" />
             <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" Orientation="Horizontal" Spacing="8">
                 <TextBlock FontFamily="{StaticResource NyxDisplayFont}" FontSize="15" FontWeight="SemiBold" Foreground="#FFF8F5FF" Text="NYX" />
                 <TextBlock x:Name="WindowHeading" FontFamily="{StaticResource NyxBodyFont}" FontSize="14" Foreground="#FFC9C1D9" Text="Publisher connection" />
             </StackPanel>
-            <Button
-                Grid.Column="2"
-                Width="34"
-                Height="30"
-                AutomationProperties.Name="Close publisher connection"
-                Click="CloseButton_Click"
-                Content="&#xE8BB;"
-                FontFamily="Segoe Fluent Icons"
-                Style="{StaticResource NyxQuietActionStyle}" />
         </Grid>
 
         <WebView2 x:Name="Browser" Grid.Row="1" DefaultBackgroundColor="#0B0815" />

@@ -40,6 +40,26 @@ public sealed record PublisherVisibleConnectPresentation(
 
 public static class PublisherVisibleConnectFlow
 {
+    public static bool IsCurrentHsrAchievementRequest(
+        string? currentToken,
+        string? currentUri,
+        string? responseToken,
+        string? responseUri) =>
+        !string.IsNullOrEmpty(currentToken)
+        && !string.IsNullOrEmpty(currentUri)
+        && string.Equals(currentToken, responseToken, StringComparison.Ordinal)
+        && string.Equals(currentUri, responseUri, StringComparison.Ordinal);
+
+    public static bool ShouldAutoComplete(
+        bool isHsrAchievementConnect,
+        bool baselineEstablished,
+        bool wasAuthenticated,
+        bool authenticated,
+        bool achievementPageReady) =>
+        isHsrAchievementConnect
+            ? authenticated && achievementPageReady
+            : baselineEstablished && !wasAuthenticated && authenticated;
+
     public static async Task<PublisherConnectionState> CompleteAsync(
         PublisherVisibleConnectCompletion completion,
         Func<CancellationToken, Task<PublisherSessionProof>> probe,

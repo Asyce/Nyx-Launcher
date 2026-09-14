@@ -61,7 +61,6 @@ public sealed partial class MainWindow : Window
         {
             presenter.IsResizable = false;
             presenter.IsMaximizable = false;
-            presenter.SetBorderAndTitleBar(false, false);
         }
         ConfigureFixedClientSize();
 
@@ -145,6 +144,7 @@ public sealed partial class MainWindow : Window
     {
         var text = paused ? ResumeAnimationText : PauseAnimationText;
         AnimationIcon.Glyph = paused ? "\uE768" : "\uE769";
+        AnimationIconOutline.Glyph = AnimationIcon.Glyph;
         AutomationProperties.SetName(AnimationIcon, $"{text} icon");
         AutomationProperties.SetName(AnimationButton, text);
         ToolTipService.SetToolTip(AnimationButton, new ToolTip { Content = text });
@@ -165,6 +165,11 @@ public sealed partial class MainWindow : Window
         if (AppWindow.Presenter is OverlappedPresenter presenter)
             presenter.Minimize();
     }
+
+    internal Task ShutDownAsync() =>
+        RootFrame.Content is MainPage page
+            ? page.ShutDownAsync()
+            : Task.CompletedTask;
 
     internal void BeginDrag()
     {

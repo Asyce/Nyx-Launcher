@@ -90,6 +90,27 @@ public sealed class WuWaAccountStatusUiTests
     }
 
     [Fact]
+    public void Wuwa_identity_reuses_the_shared_account_line_without_inventing_a_name()
+    {
+        var root = FindRepositoryRoot();
+        var code = File.ReadAllText(Path.Combine(root, "Desktop", "src", "Nyx.Desktop.App", "MainPage.xaml.cs"));
+        var start = code.IndexOf("private void RenderWuWaAccountIdentity", StringComparison.Ordinal);
+        var end = code.IndexOf("private void RenderPublisherAccountStatus", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+        var render = code[start..end];
+
+        Assert.Contains("wuwaAccountStatus.Current?.Identity", render, StringComparison.Ordinal);
+        Assert.Contains("identity?.DisplayText", render, StringComparison.Ordinal);
+        Assert.Contains("AccountAndToolsIdentityText.Text = identityText", render, StringComparison.Ordinal);
+        Assert.Contains("accountSectionExpanded", render, StringComparison.Ordinal);
+        Assert.Contains("UID and region", render, StringComparison.Ordinal);
+        Assert.DoesNotContain("Nickname", render, StringComparison.Ordinal);
+        Assert.DoesNotContain("DisplayName", render, StringComparison.Ordinal);
+        Assert.Contains("RenderWuWaAccountIdentity();", code, StringComparison.Ordinal);
+        Assert.Contains("RenderWuWaAccountStatus();", code, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Window_close_awaits_account_status_disposal_without_blocking_the_UI_thread()
     {
         var root = FindRepositoryRoot();
@@ -98,12 +119,15 @@ public sealed class WuWaAccountStatusUiTests
         var closeEnd = app.IndexOf("private async Task RefreshAfterActivationAsync", closeStart, StringComparison.Ordinal);
         var close = app[closeStart..closeEnd];
         var disposeStart = app.IndexOf("private static async Task DisposeWuWaAccountStatusAsync", StringComparison.Ordinal);
-        var disposeEnd = app.IndexOf("private static async Task DisposeExportsAsync", disposeStart, StringComparison.Ordinal);
+        var disposeEnd = app.IndexOf("private static async Task DisposePublisherAccountsAsync", disposeStart, StringComparison.Ordinal);
         var dispose = app[disposeStart..disposeEnd];
 
         Assert.Contains("args.Cancel = true", close, StringComparison.Ordinal);
         Assert.Contains("DisposeWuWaAccountStatusAsync(_wuwaAccountStatus)", close, StringComparison.Ordinal);
-        Assert.Contains("await Task.WhenAll(wuwaAccountShutdown, publisherAccountShutdown)", close, StringComparison.Ordinal);
+        Assert.Contains("await Task.WhenAll(", close, StringComparison.Ordinal);
+        Assert.Contains("wuwaAccountShutdown", close, StringComparison.Ordinal);
+        Assert.Contains("publisherAccountShutdown", close, StringComparison.Ordinal);
+        Assert.Contains("_stableUpdateTask", close, StringComparison.Ordinal);
         Assert.Contains("_accountShutdownComplete = true", close, StringComparison.Ordinal);
         Assert.Contains("await accountStatus.DisposeAsync()", dispose, StringComparison.Ordinal);
         Assert.DoesNotContain("GetAwaiter().GetResult()", dispose, StringComparison.Ordinal);
@@ -187,7 +211,7 @@ public sealed class WuWaAccountStatusUiTests
         var root = FindRepositoryRoot();
         var code = File.ReadAllText(Path.Combine(root, "Desktop", "src", "Nyx.Desktop.App", "MainPage.xaml.cs"));
         var start = code.IndexOf("private void RenderLocalAccountTimeTick", StringComparison.Ordinal);
-        var end = code.IndexOf("private void BannerCategoryButton_Click", start, StringComparison.Ordinal);
+        var end = code.IndexOf("private async void CharacterLink_Click", start, StringComparison.Ordinal);
         Assert.True(start >= 0 && end > start);
         var tick = code[start..end];
         Assert.Contains("RenderPublisherAccountStatus(selected.Id)", tick, StringComparison.Ordinal);

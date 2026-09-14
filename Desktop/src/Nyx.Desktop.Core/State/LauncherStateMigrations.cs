@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Nyx.Desktop.Core.Exports;
@@ -144,14 +145,6 @@ public static class LauncherStateMigrations
                 {
                     IconPath = NullIfWhiteSpace(pair.Value?.IconPath),
                     BackgroundPath = NullIfWhiteSpace(pair.Value?.BackgroundPath),
-                    AutomaticArt = pair.Value?.AutomaticArt ?? true,
-                    ArtScale = Math.Clamp(pair.Value?.ArtScale ?? 100, 25, 500),
-                    ArtX = pair.Value?.ArtX ?? 0,
-                    ArtY = pair.Value?.ArtY ?? 0,
-                    ArtVariant = NullIfWhiteSpace(pair.Value?.ArtVariant),
-                    ArtFit = NormalizeArtFit(pair.Value?.ArtFit),
-                    ArtPinned = pair.Value?.ArtPinned ?? false,
-                    PinnedArtFile = NormalizePinnedArtFile(pair.Value?.PinnedArtFile),
                 };
             }
         }
@@ -210,7 +203,7 @@ public static class LauncherStateMigrations
             {
                 IsArmed = dto.Export?.IsArmed ?? false,
                 Games = new ReadOnlyDictionary<string, ExportGameArming>(gameArming),
-                // Export destinations are fixed under the Windows Downloads known
+                // Export destinations are fixed under the Windows Documents known
                 // folder. Older custom paths are intentionally not trusted.
                 OutputDirectory = null,
                 OutputPaths = new ReadOnlyDictionary<string, string>(
@@ -236,6 +229,9 @@ public static class LauncherStateMigrations
                     dto.Preferences?.FeatureFlags,
                     dto.Version ?? 0),
             },
+            PlaytimeSecondsByGame = (dto.Version ?? 0) >= 7
+                ? NormalizePlaytimeSeconds(dto.PlaytimeSecondsByGame, customs)
+                : EmptyPlaytimeSeconds(),
         };
     }
 
@@ -263,14 +259,6 @@ public static class LauncherStateMigrations
             {
                 IconPath = pair.Value.IconPath,
                 BackgroundPath = pair.Value.BackgroundPath,
-                AutomaticArt = pair.Value.AutomaticArt,
-                ArtScale = pair.Value.ArtScale,
-                ArtX = pair.Value.ArtX,
-                ArtY = pair.Value.ArtY,
-                ArtVariant = pair.Value.ArtVariant,
-                ArtFit = NormalizeArtFit(pair.Value.ArtFit),
-                ArtPinned = pair.Value.ArtPinned,
-                PinnedArtFile = pair.Value.PinnedArtFile,
             }, StringComparer.Ordinal),
         Export = new ExportDto
         {
@@ -328,8 +316,6 @@ public static class LauncherStateMigrations
                 ? null
                 : new FeatureFlagsDto
                 {
-                    RemoteBannerManifest = state.Preferences.FeatureFlags.RemoteBannerManifest,
-                    AutomaticArt = state.Preferences.FeatureFlags.AutomaticArt,
                     GiPulls = state.Preferences.FeatureFlags.GiPulls,
                     GiAchievements = state.Preferences.FeatureFlags.GiAchievements,
                     HsrPulls = state.Preferences.FeatureFlags.HsrPulls,
@@ -347,38 +333,144 @@ public static class LauncherStateMigrations
                     EndfieldAchievements = state.Preferences.FeatureFlags.EndfieldAchievements,
                 },
         },
+        PlaytimeSecondsByGame = state.PlaytimeSecondsByGame?.ToDictionary(
+            static pair => pair.Key,
+            static pair => JsonSerializer.SerializeToElement(pair.Value, JsonOptions),
+            StringComparer.Ordinal),
     };
+
+    private static IReadOnlyDictionary<string, long> NormalizePlaytimeSeconds(
+        Dictionary<string, JsonElement>? values,
+        IReadOnlyList<CustomGameDefinition> customGames)
+    {
+        var allowedIds = GameCatalog.All
+            .Select(static game => game.Id)
+            .Concat(customGames.Select(static game => game.Id))
+            .ToHashSet(StringComparer.Ordinal);
+        var normalized = new Dictionary<string, long>(StringComparer.Ordinal);
+        foreach (var pair in values ?? [])
+        {
+            if (!allowedIds.Contains(pair.Key)
+                || !TryNormalizePlaytimeSeconds(pair.Value, out var seconds))
+            {
+                continue;
+            }
+
+            normalized[pair.Key] = seconds;
+        }
+
+        return new ReadOnlyDictionary<string, long>(normalized);
+    }
+
+    private static IReadOnlyDictionary<string, long> EmptyPlaytimeSeconds() =>
+        new ReadOnlyDictionary<string, long>(
+            new Dictionary<string, long>(StringComparer.Ordinal));
+
+    private static bool TryNormalizePlaytimeSeconds(JsonElement value, out long seconds)
+    {
+        seconds = 0;
+        if (value.ValueKind is not JsonValueKind.Number)
+        {
+            return false;
+        }
+
+        if (value.TryGetInt64(out var integer))
+        {
+            seconds = Math.Max(0, integer);
+            return true;
+        }
+
+        if (value.TryGetDecimal(out var decimalValue))
+        {
+            if (decimal.Truncate(decimalValue) != decimalValue)
+            {
+                return false;
+            }
+
+            seconds = decimalValue <= 0
+                ? 0
+                : decimalValue >= long.MaxValue
+                    ? long.MaxValue
+                    : (long)decimalValue;
+            return true;
+        }
+
+        var raw = value.GetRawText();
+        if (raw.Length == 0)
+        {
+            return false;
+        }
+
+        var negative = raw[0] == '-';
+        var digits = negative ? raw[1..] : raw;
+        if (digits.Length == 0 || digits.Any(static character => character is < '0' or > '9'))
+        {
+            return false;
+        }
+
+        if (negative)
+        {
+            return true;
+        }
+
+        var normalized = digits.TrimStart('0');
+        if (normalized.Length == 0)
+        {
+            return true;
+        }
+
+        if (normalized.Length > 19)
+        {
+            seconds = long.MaxValue;
+            return true;
+        }
+
+        if (!ulong.TryParse(
+            normalized,
+            NumberStyles.None,
+            CultureInfo.InvariantCulture,
+            out var unsigned))
+        {
+            return false;
+        }
+
+        seconds = unsigned >= long.MaxValue ? long.MaxValue : (long)unsigned;
+        return true;
+    }
 
     private static LauncherFeatureFlags NormalizeFeatureFlags(FeatureFlagsDto? dto, int sourceVersion)
     {
         var normalized = dto is null
             ? LauncherFeatureFlags.Defaults()
             : new LauncherFeatureFlags
-        {
-            RemoteBannerManifest = dto.RemoteBannerManifest ?? true,
-            AutomaticArt = dto.AutomaticArt ?? true,
-            GiPulls = dto.GiPulls ?? true,
-            GiAchievements = dto.GiAchievements ?? true,
-            HsrPulls = dto.HsrPulls ?? true,
-            HsrAchievements = dto.HsrAchievements ?? true,
-            ZzzPulls = dto.ZzzPulls ?? true,
-            ZzzAchievements = dto.ZzzAchievements ?? false,
-            WuWaPulls = dto.WuWaPulls ?? true,
-            WuWaAchievements = dto.WuWaAchievements ?? false,
-            WuWaAccountStatus = dto.WuWaAccountStatus ?? false,
-            HoyoLabAccountAccess = dto.HoyoLabAccountAccess ?? false,
-            SkportAccountAccess = dto.SkportAccountAccess ?? false,
-            HoyoLabAccountCleanupPending = dto.HoyoLabAccountCleanupPending ?? false,
-            SkportAccountCleanupPending = dto.SkportAccountCleanupPending ?? false,
-            EndfieldPulls = dto.EndfieldPulls ?? false,
-            EndfieldAchievements = dto.EndfieldAchievements ?? false,
-        };
+            {
+                GiPulls = dto.GiPulls ?? true,
+                GiAchievements = dto.GiAchievements ?? true,
+                HsrPulls = dto.HsrPulls ?? true,
+                HsrAchievements = dto.HsrAchievements ?? true,
+                ZzzPulls = dto.ZzzPulls ?? true,
+                ZzzAchievements = dto.ZzzAchievements ?? false,
+                WuWaPulls = dto.WuWaPulls ?? true,
+                WuWaAchievements = dto.WuWaAchievements ?? false,
+                WuWaAccountStatus = dto.WuWaAccountStatus ?? false,
+                HoyoLabAccountAccess = dto.HoyoLabAccountAccess ?? false,
+                SkportAccountAccess = dto.SkportAccountAccess ?? false,
+                HoyoLabAccountCleanupPending = dto.HoyoLabAccountCleanupPending ?? false,
+                SkportAccountCleanupPending = dto.SkportAccountCleanupPending ?? false,
+                EndfieldPulls = dto.EndfieldPulls ?? true,
+                EndfieldAchievements = dto.EndfieldAchievements ?? false,
+            };
 
         // Version 4 activates the two pull lanes only after their desktop
         // writers, Pengo round trips, and routing gates are proven. Version 4+
         // keeps any later explicit user choice unchanged.
-        return sourceVersion < 4
-            ? normalized with { ZzzPulls = true, WuWaPulls = true }
+        if (sourceVersion < 4)
+            normalized = normalized with { ZzzPulls = true, WuWaPulls = true };
+
+        // Version 5 activates Endfield pulls only after the receiver is live.
+        // Achievements remain unavailable; version 5+ preserves later choices.
+        return sourceVersion < 5
+            ? normalized with { EndfieldPulls = true, EndfieldAchievements = false }
             : normalized;
     }
 
@@ -394,13 +486,6 @@ public static class LauncherStateMigrations
 
         return element.GetBoolean();
     }
-
-    private static string NormalizeArtFit(string? value) => value?.Trim().ToLowerInvariant() switch
-    {
-        "contain" => "contain",
-        "fill" => "fill",
-        _ => "cover",
-    };
 
     private static string? NormalizeLocalRoot(string? value)
     {
@@ -568,20 +653,6 @@ public static class LauncherStateMigrations
         return new ReadOnlyDictionary<string, LauncherPanelVisibility>(normalized);
     }
 
-    private static string? NormalizePinnedArtFile(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value) || Path.IsPathRooted(value) || value.Length > 180) return null;
-        var parts = value.Replace('\\', '/').Split('/');
-        if (parts.Length != 2 || parts[0].Length == 0 || parts[0].Any(character => !char.IsAsciiLetterOrDigit(character) && character != '-')) return null;
-        var extension = Path.GetExtension(parts[1]);
-        var hash = Path.GetFileNameWithoutExtension(parts[1]);
-        return hash.Length == 64
-            && hash.All(Uri.IsHexDigit)
-            && extension is ".webp" or ".png"
-                ? $"{parts[0]}/{hash.ToLowerInvariant()}{extension}"
-                : null;
-    }
-
     private sealed class StateDto
     {
         [JsonPropertyName("version")] public int? Version { get; set; }
@@ -592,6 +663,7 @@ public static class LauncherStateMigrations
         [JsonPropertyName("appearance")] public Dictionary<string, AppearanceDto?>? Appearance { get; set; }
         [JsonPropertyName("export")] public ExportDto? Export { get; set; }
         [JsonPropertyName("preferences")] public PreferencesDto? Preferences { get; set; }
+        [JsonPropertyName("playtimeSecondsByGame")] public Dictionary<string, JsonElement>? PlaytimeSecondsByGame { get; set; }
     }
 
     private sealed class CustomGameDto
@@ -611,13 +683,23 @@ public static class LauncherStateMigrations
     {
         public string? IconPath { get; set; }
         public string? BackgroundPath { get; set; }
+        // Read-only legacy fields: old primary and backup state must still load,
+        // but current state never carries retired character splash/pin data.
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public bool? AutomaticArt { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? ArtScale { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? ArtX { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? ArtY { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? ArtVariant { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? ArtFit { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public bool? ArtPinned { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? PinnedArtFile { get; set; }
     }
 
@@ -663,10 +745,13 @@ public static class LauncherStateMigrations
 
     private sealed class FeatureFlagsDto
     {
+        // Read-only legacy fields: accepted for old state files, omitted on write.
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public bool? RemoteBannerManifest { get; set; }
         // Read and ignore the retired setting so older state files remain valid.
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public bool? OfficialNews { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public bool? AutomaticArt { get; set; }
         public bool? GiPulls { get; set; }
         public bool? GiAchievements { get; set; }

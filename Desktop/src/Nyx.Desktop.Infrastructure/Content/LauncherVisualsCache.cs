@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -14,14 +15,14 @@ public sealed record LauncherVisualSelection(
     string? Character,
     IReadOnlyList<string> Files);
 
-public sealed class LauncherVisualsCache
+public sealed class LauncherVisualsCache : IAsyncDisposable
 {
     public static readonly Uri DefaultManifestUri = new("https://assets.pengo.gg/launcher-visuals-v1.json");
     private static readonly Uri HoyoVisualsUri = new("https://sg-hyp-api.hoyoverse.com/hyp/hyp-connect/api/getAllGameBasicInfo?launcher_id=VYTpXlbWo8&language=en-us");
     private static readonly Uri WuwaIndexUri = new("https://prod-alicdn-gamestarter.kurogame.com/launcher/launcher/50004_obOHXFrFanqsaIEOmuKroCcbZkQRBC7c/G153/index.json");
     private static readonly Uri EndfieldVisualUri = new("https://launcher.gryphline.com/api/proxy/web/batch_proxy");
-    private const string EndfieldVideoHost = "gl-utils-public.hg-cdn.com";
-    private const string EndfieldVideoPathPrefix = "/hg-utils/prod/eppcsuwqpaueijqk/YDUTE5gscDZ229CW/";
+    private const string EndfieldAssetHost = "gl-utils-public.hg-cdn.com";
+    private const string EndfieldAssetPathPrefix = "/hg-utils/prod/eppcsuwqpaueijqk/YDUTE5gscDZ229CW/";
     private const string EndfieldRequestJson = "{\"proxy_reqs\":[{\"kind\":\"get_main_bg_image\",\"get_main_bg_image_req\":{\"appcode\":\"YDUTE5gscDZ229CW\",\"language\":\"en-us\",\"channel\":\"6\",\"sub_channel\":\"6\",\"platform\":\"Windows\",\"source\":\"launcher\"}}]}";
     private const int MaximumManifestBytes = 128 * 1024;
     private const int MaximumStateBytes = 16 * 1024;
@@ -50,14 +51,31 @@ public sealed class LauncherVisualsCache
     private readonly string dataRoot;
     private readonly string root;
     private readonly HttpClient http;
+    private readonly bool ownsHttp;
     private readonly Uri manifestUri;
+    private readonly object admissionSync = new();
+    private Task? disposal;
+    private TaskCompletionSource? operationsDrained;
+    private int activeOperations;
+    private bool admissionClosed;
+    private long lastRefreshDurationTicks = -1;
     public string? LastFailure { get; private set; }
+
+    public TimeSpan? LastRefreshDuration
+    {
+        get
+        {
+            var ticks = Volatile.Read(ref lastRefreshDurationTicks);
+            return ticks < 0 ? null : TimeSpan.FromTicks(ticks);
+        }
+    }
 
     public LauncherVisualsCache(string dataDirectory, HttpClient? http = null, Uri? manifestUri = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(dataDirectory);
         dataRoot = Path.GetFullPath(dataDirectory);
         root = Path.Combine(dataRoot, "ContentCache", "LauncherVisuals");
+        ownsHttp = http is null;
         this.http = http ?? new HttpClient(new HttpClientHandler
         {
             AllowAutoRedirect = false,
@@ -74,25 +92,36 @@ public sealed class LauncherVisualsCache
         string gameId,
         CancellationToken cancellationToken = default)
     {
-        if (!Games.Contains(gameId)) return null;
-        LastFailure = null;
+        EnterOperation();
+        var started = Stopwatch.GetTimestamp();
         try
         {
-            if (gameId == "gi")
-                return await RefreshGenshinAsync(
-                    ReadOfficialHoyoAssetsAsync(cancellationToken),
-                    ReadManifestFallbackAsync(cancellationToken),
-                    cancellationToken);
-            if (gameId == "ae") return await RefreshOfficialEndfieldAsync(cancellationToken);
-            var asset = gameId == "wuwa"
-                ? await ReadOfficialWuwaAssetAsync(cancellationToken)
-                : (await ReadOfficialHoyoAssetsAsync(cancellationToken))[gameId];
-            return await AcquireOfficialVideoSelectionAsync(gameId, asset, cancellationToken);
+            if (!Games.Contains(gameId)) return null;
+            LastFailure = null;
+            try
+            {
+                if (gameId is "gi" or "hsr")
+                    return await RefreshCompatibleHoyoAsync(
+                        gameId,
+                        ReadOfficialHoyoAssetsAsync(cancellationToken),
+                        ReadManifestFallbackAsync(cancellationToken),
+                        cancellationToken);
+                if (gameId == "ae") return await RefreshOfficialEndfieldAsync(cancellationToken);
+                var asset = gameId == "wuwa"
+                    ? await ReadOfficialWuwaAssetAsync(cancellationToken)
+                    : (await ReadOfficialHoyoAssetsAsync(cancellationToken))[gameId];
+                return await AcquireOfficialVisualSelectionAsync(gameId, asset, cancellationToken);
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
+            {
+                LastFailure = exception.GetType().Name + ": " + exception.Message;
+                return await RefreshManifestFallbackAsync(gameId, cancellationToken);
+            }
         }
-        catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
+        finally
         {
-            LastFailure = exception.GetType().Name + ": " + exception.Message;
-            return await RefreshManifestFallbackAsync(gameId, cancellationToken);
+            Volatile.Write(ref lastRefreshDurationTicks, Stopwatch.GetElapsedTime(started).Ticks);
+            ReleaseOperation();
         }
     }
 
@@ -100,73 +129,134 @@ public sealed class LauncherVisualsCache
         Action<LauncherVisualSelection>? selectionReady = null,
         CancellationToken cancellationToken = default)
     {
-        LastFailure = null;
-        var hoyoAssets = ReadOfficialHoyoAssetsAsync(cancellationToken);
-        Task<Manifest?>? fallbackManifest = null;
-        var fallbackGate = new object();
-        var tasks = GameOrder.Select(gameId => NotifyAsync(RefreshOneAsync(gameId))).ToArray();
-        var selections = await Task.WhenAll(tasks);
-        return selections.Where(static selection => selection is not null)
-            .ToDictionary(static selection => selection!.GameId, static selection => selection!, StringComparer.Ordinal);
-
-        async Task<LauncherVisualSelection?> RefreshOneAsync(string gameId)
+        EnterOperation();
+        var started = Stopwatch.GetTimestamp();
+        try
         {
-            try
+            LastFailure = null;
+            var hoyoAssets = ReadOfficialHoyoAssetsAsync(cancellationToken);
+            Task<Manifest?>? fallbackManifest = null;
+            var fallbackGate = new object();
+            var tasks = GameOrder.Select(gameId => NotifyAsync(RefreshOneAsync(gameId))).ToArray();
+            var selections = await Task.WhenAll(tasks);
+            return selections.Where(static selection => selection is not null)
+                .ToDictionary(static selection => selection!.GameId, static selection => selection!, StringComparer.Ordinal);
+
+            async Task<LauncherVisualSelection?> RefreshOneAsync(string gameId)
             {
-                if (gameId == "gi")
+                try
                 {
+                    if (gameId is "gi" or "hsr")
+                    {
+                        Task<Manifest?> pending;
+                        lock (fallbackGate)
+                        {
+                            pending = fallbackManifest ??= ReadManifestFallbackAsync(cancellationToken);
+                        }
+                        return await RefreshCompatibleHoyoAsync(gameId, hoyoAssets, pending, cancellationToken);
+                    }
+                    if (gameId == "ae") return await RefreshOfficialEndfieldAsync(cancellationToken);
+                    var asset = gameId == "wuwa"
+                        ? await ReadOfficialWuwaAssetAsync(cancellationToken)
+                        : (await hoyoAssets)[gameId];
+                    return await AcquireOfficialVisualSelectionAsync(gameId, asset, cancellationToken);
+                }
+                catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
+                {
+                    LastFailure = exception.GetType().Name + ": " + exception.Message;
                     Task<Manifest?> pending;
                     lock (fallbackGate)
                     {
                         pending = fallbackManifest ??= ReadManifestFallbackAsync(cancellationToken);
                     }
-                    return await RefreshGenshinAsync(hoyoAssets, pending, cancellationToken);
-                }
-                if (gameId == "ae") return await RefreshOfficialEndfieldAsync(cancellationToken);
-                var asset = gameId == "wuwa"
-                    ? await ReadOfficialWuwaAssetAsync(cancellationToken)
-                    : (await hoyoAssets)[gameId];
-                return await AcquireOfficialVideoSelectionAsync(gameId, asset, cancellationToken);
-            }
-            catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
-            {
-                LastFailure = exception.GetType().Name + ": " + exception.Message;
-                Task<Manifest?> pending;
-                lock (fallbackGate)
-                {
-                    pending = fallbackManifest ??= ReadManifestFallbackAsync(cancellationToken);
-                }
-                var manifest = await pending;
-                if (manifest?.Games.TryGetValue(gameId, out var entry) == true)
-                {
-                    try { return await AcquireSelectionAsync(gameId, manifest.Revision, entry, cancellationToken); }
-                    catch (Exception fallbackException) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(fallbackException))
+                    var manifest = await pending;
+                    if (manifest?.Games.TryGetValue(gameId, out var entry) == true)
                     {
-                        LastFailure = fallbackException.GetType().Name + ": " + fallbackException.Message;
+                        try { return await AcquireSelectionAsync(gameId, manifest.Revision, entry, cancellationToken); }
+                        catch (Exception fallbackException) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(fallbackException))
+                        {
+                            LastFailure = fallbackException.GetType().Name + ": " + fallbackException.Message;
+                        }
                     }
+                    return TryLoadLastGood(gameId);
                 }
-                return TryLoadLastGood(gameId);
+            }
+
+            async Task<LauncherVisualSelection?> NotifyAsync(Task<LauncherVisualSelection?> pending)
+            {
+                var selection = await pending;
+                cancellationToken.ThrowIfCancellationRequested();
+                if (selection is not null) selectionReady?.Invoke(selection);
+                return selection;
             }
         }
-
-        async Task<LauncherVisualSelection?> NotifyAsync(Task<LauncherVisualSelection?> pending)
+        finally
         {
-            var selection = await pending;
-            cancellationToken.ThrowIfCancellationRequested();
-            if (selection is not null) selectionReady?.Invoke(selection);
-            return selection;
+            Volatile.Write(ref lastRefreshDurationTicks, Stopwatch.GetElapsedTime(started).Ticks);
+            ReleaseOperation();
         }
     }
 
-    private async Task<LauncherVisualSelection?> RefreshGenshinAsync(
-        Task<IReadOnlyDictionary<string, OfficialVideo>> officialAssets,
+    public ValueTask DisposeAsync()
+    {
+        lock (admissionSync)
+        {
+            disposal ??= DisposeCoreAsync();
+            return new(disposal);
+        }
+    }
+
+    private void EnterOperation()
+    {
+        lock (admissionSync)
+        {
+            ObjectDisposedException.ThrowIf(admissionClosed, this);
+            activeOperations++;
+        }
+    }
+
+    private void ReleaseOperation()
+    {
+        TaskCompletionSource? drained = null;
+        lock (admissionSync)
+        {
+            activeOperations--;
+            if (admissionClosed && activeOperations == 0)
+            {
+                drained = operationsDrained;
+            }
+        }
+
+        drained?.TrySetResult();
+    }
+
+    private async Task DisposeCoreAsync()
+    {
+        Task drain;
+        lock (admissionSync)
+        {
+            admissionClosed = true;
+            drain = activeOperations == 0
+                ? Task.CompletedTask
+                : (operationsDrained ??= new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+        }
+
+        await drain.ConfigureAwait(false);
+        if (ownsHttp) http.Dispose();
+    }
+
+    // These official WebMs can use RGB VP9 profiles the native player cannot decode.
+    // Reuse Pengo's publish-time H.264 conversion; no codec installation is needed.
+    private async Task<LauncherVisualSelection?> RefreshCompatibleHoyoAsync(
+        string gameId,
+        Task<IReadOnlyDictionary<string, OfficialVisual>> officialAssets,
         Task<Manifest?> fallbackManifest,
         CancellationToken cancellationToken)
     {
         OfficialImage? fallback = null;
         try
         {
-            fallback = (await officialAssets)["gi"].Fallback;
+            fallback = (await officialAssets)[gameId].Image;
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
         {
@@ -174,12 +264,12 @@ public sealed class LauncherVisualsCache
         }
 
         var manifest = await fallbackManifest;
-        if (manifest?.Games.TryGetValue("gi", out var entry) == true
+        if (manifest?.Games.TryGetValue(gameId, out var entry) == true
             && entry is { Kind: "video", Assets: [{ MediaType: "video/mp4" }] })
         {
             try
             {
-                return await AcquireSelectionAsync("gi", manifest.Revision, entry, cancellationToken, fallback);
+                return await AcquireSelectionAsync(gameId, manifest.Revision, entry, cancellationToken, fallback);
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
             {
@@ -191,14 +281,14 @@ public sealed class LauncherVisualsCache
         {
             try
             {
-                return await AcquireOfficialImageSelectionAsync("gi", fallback, cancellationToken);
+                return await AcquireOfficialImageSelectionAsync(gameId, fallback, cancellationToken);
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
             {
                 LastFailure = exception.GetType().Name + ": " + exception.Message;
             }
         }
-        return TryLoadLastGood("gi");
+        return TryLoadLastGood(gameId);
     }
 
     private async Task<LauncherVisualSelection?> RefreshManifestFallbackAsync(
@@ -228,7 +318,7 @@ public sealed class LauncherVisualsCache
         }
     }
 
-    private async Task<IReadOnlyDictionary<string, OfficialVideo>> ReadOfficialHoyoAssetsAsync(
+    private async Task<IReadOnlyDictionary<string, OfficialVisual>> ReadOfficialHoyoAssetsAsync(
         CancellationToken cancellationToken)
     {
         var bytes = await ReadOfficialJsonAsync(HoyoVisualsUri, "HoYo launcher", cancellationToken);
@@ -236,31 +326,32 @@ public sealed class LauncherVisualsCache
         if (dto?.Data?.GameInfoList is not { Count: > 0 and <= 32 } games)
             throw new InvalidDataException("Official HoYo launcher response is invalid.");
 
-        var result = new Dictionary<string, OfficialVideo>(StringComparer.Ordinal);
+        var result = new Dictionary<string, OfficialVisual>(StringComparer.Ordinal);
         foreach (var pair in HoyoGameIds)
         {
             var matches = games.Where(game => game?.Game?.Id == pair.Value).ToArray();
             if (matches is not [var match]
                 || match?.Backgrounds is not { Count: > 0 and <= 10 } backgrounds)
                 throw new InvalidDataException("Official HoYo launcher response is invalid.");
-            var videos = backgrounds
+            var visuals = backgrounds
                 .Select(background =>
                 {
                     var video = ParseHoyoVideo(background?.Video?.Url);
-                    return video is null
+                    var image = ParseHoyoImage(background?.Background?.Url);
+                    return video is null && image is null
                         ? null
-                        : video with { Fallback = ParseHoyoImage(background?.Background?.Url) };
+                        : new OfficialVisual(video is null ? null : video with { Fallback = image }, image);
                 })
-                .Where(static video => video is not null)
-                .Cast<OfficialVideo>()
+                .Where(static visual => visual is not null)
+                .Cast<OfficialVisual>()
                 .ToArray();
-            if (videos.Length == 0) throw new InvalidDataException("Official HoYo launcher response is invalid.");
-            result.Add(pair.Key, videos[0]);
+            if (visuals.Length == 0) throw new InvalidDataException("Official HoYo launcher response is invalid.");
+            result.Add(pair.Key, visuals[0]);
         }
         return result;
     }
 
-    private async Task<OfficialVideo> ReadOfficialWuwaAssetAsync(CancellationToken cancellationToken)
+    private async Task<OfficialVisual> ReadOfficialWuwaAssetAsync(CancellationToken cancellationToken)
     {
         var indexBytes = await ReadOfficialJsonAsync(WuwaIndexUri, "WuWa launcher", cancellationToken);
         var index = JsonSerializer.Deserialize<WuwaIndexDto>(indexBytes, ManifestJson);
@@ -271,11 +362,16 @@ public sealed class LauncherVisualsCache
             $"https://prod-alicdn-gamestarter.kurogame.com/launcher/50004_obOHXFrFanqsaIEOmuKroCcbZkQRBC7c/G153/background/{backgroundId}/en.json");
         var backgroundBytes = await ReadOfficialJsonAsync(backgroundUri, "WuWa launcher", cancellationToken);
         var background = JsonSerializer.Deserialize<WuwaBackgroundDto>(backgroundBytes, ManifestJson);
-        if (background?.FunctionSwitch != 1
-            || background.BackgroundFileType != 2
-            || !TryParseWuwaVideo(background.BackgroundFile, out var video))
+        if (background?.FunctionSwitch != 1)
             throw new InvalidDataException("Official WuWa launcher response is invalid.");
-        return video;
+        var video = background.BackgroundFileType == 2
+            && TryParseWuwaVideo(background.BackgroundFile, out var parsedVideo)
+                ? parsedVideo
+                : null;
+        var image = ParseWuwaImage(background.FirstFrameImage);
+        if (video is null && image is null)
+            throw new InvalidDataException("Official WuWa launcher response is invalid.");
+        return new(video is null ? null : video with { Fallback = image }, image);
     }
 
     private async Task<byte[]> ReadOfficialJsonAsync(
@@ -357,21 +453,44 @@ public sealed class LauncherVisualsCache
     private static bool TryParseWuwaVideo(string? rawUrl, out OfficialVideo video)
     {
         video = default!;
-        if (!Uri.TryCreate(rawUrl, UriKind.Absolute, out var url)
-            || url.Scheme != Uri.UriSchemeHttps
-            || url.Host is not ("hw-pcdownload-qcloud.aki-game.net"
+        if (!TryParseWuwaAssetUrl(rawUrl, out var url, out var file)
+            || !file.EndsWith(".mp4", StringComparison.Ordinal)) return false;
+        video = new OfficialVideo(url, "video/mp4", null);
+        return true;
+    }
+
+    private static OfficialImage? ParseWuwaImage(string? rawUrl)
+    {
+        if (!TryParseWuwaAssetUrl(rawUrl, out var url, out var file)) return null;
+        var extension = Path.GetExtension(file);
+        return extension switch
+        {
+            ".webp" => new OfficialImage(url, "image/webp"),
+            ".png" => new OfficialImage(url, "image/png"),
+            _ => null,
+        };
+    }
+
+    private static bool TryParseWuwaAssetUrl(string? rawUrl, out Uri url, out string file)
+    {
+        url = default!;
+        file = string.Empty;
+        if (!Uri.TryCreate(rawUrl, UriKind.Absolute, out var parsedUrl)
+            || parsedUrl.Scheme != Uri.UriSchemeHttps
+            || parsedUrl.Host is not ("hw-pcdownload-qcloud.aki-game.net"
                 or "hw-pcdownload-aws.aki-game.net"
                 or "hw-pcdownload-akamai.aki-game.net")
-            || !string.IsNullOrEmpty(url.UserInfo)
-            || !url.IsDefaultPort
-            || !string.IsNullOrEmpty(url.Query)
-            || !string.IsNullOrEmpty(url.Fragment)
-            || rawUrl != $"https://{url.Host}{url.AbsolutePath}") return false;
-        var parts = url.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (parts is not ["launcher", "clientUpload", var file]
-            || !file.EndsWith(".mp4", StringComparison.Ordinal)
-            || !IsAsciiToken(file[..^4], 8, 64)) return false;
-        video = new OfficialVideo(url, "video/mp4", null);
+            || !string.IsNullOrEmpty(parsedUrl.UserInfo)
+            || !parsedUrl.IsDefaultPort
+            || !string.IsNullOrEmpty(parsedUrl.Query)
+            || !string.IsNullOrEmpty(parsedUrl.Fragment)
+            || rawUrl != $"https://{parsedUrl.Host}{parsedUrl.AbsolutePath}") return false;
+        var parts = parsedUrl.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts is not ["launcher", "clientUpload", var parsedFile]) return false;
+        var extension = Path.GetExtension(parsedFile);
+        if (extension.Length == 0 || !IsAsciiToken(parsedFile[..^extension.Length], 8, 64)) return false;
+        url = parsedUrl;
+        file = parsedFile;
         return true;
     }
 
@@ -387,21 +506,44 @@ public sealed class LauncherVisualsCache
         && value.Length <= maximum
         && value.All(character => character is >= '0' and <= '9' or >= 'A' and <= 'Z' or >= 'a' and <= 'z');
 
-    private async Task<LauncherVisualSelection> AcquireOfficialVideoSelectionAsync(
+    private async Task<LauncherVisualSelection> AcquireOfficialVisualSelectionAsync(
         string gameId,
-        OfficialVideo asset,
+        OfficialVisual asset,
         CancellationToken cancellationToken)
     {
-        var files = new List<AcquiredFile>
+        AcquiredFile? video = null;
+        AcquiredFile? image = null;
+        Exception? failure = null;
+        if (asset.Video is { } animation)
         {
-            await AcquireOfficialAssetAsync(gameId, asset.Url, asset.MediaType, cancellationToken),
-        };
-        if (asset.Fallback is { } fallback)
-            files.Add(await AcquireOfficialAssetAsync(gameId, fallback.Url, fallback.MediaType, cancellationToken));
+            try { video = await AcquireOfficialAssetAsync(gameId, animation.Url, animation.MediaType, cancellationToken); }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
+            {
+                LastFailure = exception.GetType().Name + ": " + exception.Message;
+                failure = exception;
+            }
+        }
+        var fallback = asset.Video?.Fallback ?? asset.Image;
+        if (fallback is not null)
+        {
+            try { image = await AcquireOfficialAssetAsync(gameId, fallback.Url, fallback.MediaType, cancellationToken); }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested && IsExpectedFailure(exception))
+            {
+                LastFailure = exception.GetType().Name + ": " + exception.Message;
+                failure = exception;
+            }
+        }
+        if (video is null && image is null)
+            throw failure ?? new InvalidDataException("Official launcher response has no usable visual.");
+        var files = video is null
+            ? new List<AcquiredFile> { image! }
+            : image is null
+                ? [video]
+                : [video, image];
         var selection = new LauncherVisualSelection(
             gameId,
             files[0].Sha256,
-            "video",
+            video is null ? "image" : "video",
             null,
             files.Select(static file => file.Path).ToArray());
         SaveLastGood(selection, files);
@@ -424,10 +566,10 @@ public sealed class LauncherVisualsCache
     private async Task<LauncherVisualSelection> RefreshOfficialEndfieldAsync(CancellationToken cancellationToken)
     {
         var asset = await ReadOfficialEndfieldAssetAsync(cancellationToken);
-        return await AcquireOfficialVideoSelectionAsync("ae", new(asset, "video/mp4", null), cancellationToken);
+        return await AcquireOfficialVisualSelectionAsync("ae", asset, cancellationToken);
     }
 
-    private async Task<Uri> ReadOfficialEndfieldAssetAsync(CancellationToken cancellationToken)
+    private async Task<OfficialVisual> ReadOfficialEndfieldAssetAsync(CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, EndfieldVisualUri)
         {
@@ -446,18 +588,34 @@ public sealed class LauncherVisualsCache
         if (dto?.ProxyRsps is not [var item]
             || item is null
             || item.Kind != "get_main_bg_image"
-            || item.GetMainBgImageRsp?.MainBgImage?.VideoUrl is not { } rawUrl
-            || string.IsNullOrWhiteSpace(rawUrl)
+            || item.GetMainBgImageRsp?.MainBgImage is not { } background)
+            throw new InvalidDataException("Official Endfield launcher response is invalid.");
+        var videoUrl = ParseEndfieldAssetUrl(background.VideoUrl, ".mp4");
+        var imageUrl = ParseEndfieldAssetUrl(background.Url, ".webp", ".png");
+        var video = videoUrl is null ? null : new OfficialVideo(videoUrl, "video/mp4", null);
+        var image = imageUrl is null
+            ? null
+            : new OfficialImage(imageUrl, imageUrl.AbsolutePath.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)
+                ? "image/webp"
+                : "image/png");
+        if (video is null && image is null)
+            throw new InvalidDataException("Official Endfield launcher response is invalid.");
+        return new(video is null ? null : video with { Fallback = image }, image);
+    }
+
+    private static Uri? ParseEndfieldAssetUrl(string? rawUrl, params string[] extensions)
+    {
+        if (string.IsNullOrWhiteSpace(rawUrl)
             || !Uri.TryCreate(rawUrl, UriKind.Absolute, out var url)
             || url.Scheme != Uri.UriSchemeHttps
-            || !string.Equals(url.Host, EndfieldVideoHost, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(url.Host, EndfieldAssetHost, StringComparison.OrdinalIgnoreCase)
             || !string.IsNullOrEmpty(url.UserInfo)
             || !url.IsDefaultPort
             || !string.IsNullOrEmpty(url.Query)
             || !string.IsNullOrEmpty(url.Fragment)
-            || !url.AbsolutePath.StartsWith(EndfieldVideoPathPrefix, StringComparison.Ordinal)
-            || !url.AbsolutePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("Official Endfield launcher response is invalid.");
+            || !url.AbsolutePath.StartsWith(EndfieldAssetPathPrefix, StringComparison.Ordinal)
+            || !extensions.Any(extension => url.AbsolutePath.EndsWith(extension, StringComparison.OrdinalIgnoreCase)))
+            return null;
         return url;
     }
 
@@ -571,7 +729,7 @@ public sealed class LauncherVisualsCache
                 || (state.Kind == "gallery" && state.Files.Count != 3)
                 || (state.Kind == "image" && state.Files.Count != 1)
                 || (state.Kind == "video" && state.Files.Count is not (1 or 2))
-                || (gameId == "gi" && state.Kind == "video"
+                || (gameId is "gi" or "hsr" && state.Kind == "video"
                     && state.Files[0].EndsWith(".webm", StringComparison.OrdinalIgnoreCase))
                 || state.Files.Any(static name => string.IsNullOrWhiteSpace(name) || Path.GetFileName(name) != name)
                 || state.Files.Distinct(StringComparer.OrdinalIgnoreCase).Count() != state.Files.Count
@@ -631,7 +789,8 @@ public sealed class LauncherVisualsCache
             || (kind == "video" && index > 0 && extension is not (".webp" or ".png"))
             || (kind is "image" or "gallery" && extension is not (".webp" or ".png"))
             || size > (extension is ".mp4" or ".webm" ? MaximumVideoBytes : MaximumImageBytes)
-            || (gameId == "ae" && kind == "video" && (extension != ".mp4" || revision != hash))) return false;
+            || (gameId == "ae" && kind == "video" && index == 0
+                && (extension != ".mp4" || revision != hash))) return false;
 
         path = Path.Combine(GameRoot(gameId), name);
         EnsureSafeCachePath(path);
@@ -970,6 +1129,7 @@ public sealed class LauncherVisualsCache
     private sealed record Manifest(string Revision, IReadOnlyDictionary<string, Entry> Games);
     private sealed record Entry(string Kind, string? Character, IReadOnlyList<Asset> Assets);
     private sealed record Asset(Uri Url, string Sha256, long Size, string MediaType, string Extension);
+    private sealed record OfficialVisual(OfficialVideo? Video, OfficialImage? Image);
     private sealed record OfficialVideo(Uri Url, string MediaType, OfficialImage? Fallback);
     private sealed record OfficialImage(Uri Url, string MediaType);
     private sealed record AcquiredFile(string Path, long Size, string Sha256);
@@ -991,6 +1151,7 @@ public sealed class LauncherVisualsCache
         [JsonPropertyName("functionSwitch")] public int? FunctionSwitch { get; set; }
         [JsonPropertyName("backgroundFile")] public string? BackgroundFile { get; set; }
         [JsonPropertyName("backgroundFileType")] public int? BackgroundFileType { get; set; }
+        [JsonPropertyName("firstFrameImage")] public string? FirstFrameImage { get; set; }
     }
     private sealed class OfficialBatchResponseDto { public List<OfficialProxyResponseDto?>? ProxyRsps { get; set; } }
     private sealed class OfficialProxyResponseDto { public string? Kind { get; set; } public OfficialMainBackgroundResponseDto? GetMainBgImageRsp { get; set; } }

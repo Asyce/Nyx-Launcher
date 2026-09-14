@@ -35,6 +35,8 @@
     <SolidColorBrush x:Key="LaunchActionForegroundBrush" Color="#F7F3FF" />
     <SolidColorBrush x:Key="LaunchActionBorderBrush" Color="#C5A88CFF" />
     <SolidColorBrush x:Key="QuietActionForegroundBrush" Color="#DED6FF" />
+    <SolidColorBrush x:Key="PreInstallNoticeBrush" Color="#FFFF6B6B" />
+    <SolidColorBrush x:Key="PreInstallSurfaceBrush" Color="#261F0808" />
     <SolidColorBrush x:Key="HighContrastBackdropBrush" Color="{StaticResource NyxVoidColor}" />
     <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#B8A6FF" />
     <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#D0C5FF" />
@@ -77,6 +79,8 @@
             <SolidColorBrush x:Key="LaunchActionForegroundBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
             <SolidColorBrush x:Key="LaunchActionBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="QuietActionForegroundBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="PreInstallNoticeBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="PreInstallSurfaceBrush" Color="{ThemeResource SystemColorWindowColor}" />
             <SolidColorBrush x:Key="HighContrastBackdropBrush" Color="{ThemeResource SystemColorWindowColor}" />
             <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="{ThemeResource SystemColorHighlightColor}" />
             <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="{ThemeResource SystemColorHighlightColor}" />

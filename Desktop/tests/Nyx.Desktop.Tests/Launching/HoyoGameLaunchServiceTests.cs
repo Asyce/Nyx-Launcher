@@ -44,6 +44,7 @@ public sealed class HoyoGameLaunchServiceTests
         var result = fixture.Service.LaunchGame(gameId, root);
 
         Assert.Equal(HoyoGameLaunchStatus.Running, result.Status);
+        Assert.True(result.StartedByThisCall);
         Assert.Equal(2, fixture.Validator.Calls.Count);
         Assert.Equal(2, fixture.Process.Checks.Count);
         var start = Assert.Single(fixture.Starter.Starts);
@@ -81,7 +82,9 @@ public sealed class HoyoGameLaunchServiceTests
         var running = new Fixture("hsr", HsrRoot) { Running = RunningProcessStatus.Running };
         var uncertain = new Fixture("zzz", ZzzRoot) { Running = RunningProcessStatus.Uncertain };
 
-        Assert.Equal(HoyoGameLaunchStatus.Running, running.Service.LaunchGame("hsr", HsrRoot).Status);
+        var runningResult = running.Service.LaunchGame("hsr", HsrRoot);
+        Assert.Equal(HoyoGameLaunchStatus.Running, runningResult.Status);
+        Assert.False(runningResult.StartedByThisCall);
         Assert.Equal(HoyoGameLaunchStatus.NeedsReview, uncertain.Service.LaunchGame("zzz", ZzzRoot).Status);
         Assert.Empty(running.Starter.Starts);
         Assert.Empty(uncertain.Starter.Starts);
@@ -138,6 +141,7 @@ public sealed class HoyoGameLaunchServiceTests
             launchArguments: ["--region", "global"]);
 
         Assert.Equal(HoyoGameLaunchStatus.Running, result.Status);
+        Assert.True(result.StartedByThisCall);
         Assert.Equal(HoyoGameLaunchFailureReason.None, result.FailureReason);
         Assert.Single(fixture.Starter.Starts);
         var request = Assert.Single(fixture.Starter.ElevatedStarts);
@@ -244,6 +248,7 @@ public sealed class HoyoGameLaunchServiceTests
         var result = service.LaunchGame("hsr", HsrRoot);
 
         Assert.Equal(HoyoGameLaunchStatus.Running, result.Status);
+        Assert.False(result.StartedByThisCall);
         Assert.Single(starter.Starts);
         Assert.Empty(starter.ElevatedStarts);
     }
@@ -322,7 +327,26 @@ public sealed class HoyoGameLaunchServiceTests
             launchArguments: ["--name", "March 7th"]);
 
         Assert.Equal(HoyoGameLaunchStatus.Running, result.Status);
+        Assert.True(result.StartedByThisCall);
         Assert.Equal(["--name", "March 7th"], Assert.Single(fixture.Starter.Starts).Arguments);
+    }
+
+    [Fact]
+    public void Process_appearing_at_dispatch_is_reported_as_preexisting()
+    {
+        var validator = new DelegateValidator((_, _) => Ready("hsr", HsrRoot));
+        var statuses = new Queue<RunningProcessStatus>([
+            RunningProcessStatus.NotRunning,
+            RunningProcessStatus.Running]);
+        var process = new FakeProcessInspector(() => statuses.Dequeue());
+        var starter = new FakeStarter();
+        var service = new HoyoGameLaunchService(validator, process, starter);
+
+        var result = service.LaunchGame("hsr", HsrRoot);
+
+        Assert.Equal(HoyoGameLaunchStatus.Running, result.Status);
+        Assert.False(result.StartedByThisCall);
+        Assert.Empty(starter.Starts);
     }
 
     [Fact]

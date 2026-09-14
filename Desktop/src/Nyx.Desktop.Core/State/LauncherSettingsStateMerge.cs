@@ -19,8 +19,6 @@ public sealed record LauncherSettingsEdit
     public required OfficialGameLaunchOptions? OpenedOfficialLaunchOptions { get; init; }
     public required OfficialGameLaunchOptions? OfficialLaunchOptions { get; init; }
     public required bool PublisherPasswordSavingEnabled { get; init; }
-    public required bool AutomaticArt { get; init; }
-    public required bool RemoteBannerManifest { get; init; }
     public LauncherPanelVisibility? OpenedPanelVisibility { get; init; }
     public LauncherPanelVisibility? PanelVisibility { get; init; }
 }
@@ -161,17 +159,6 @@ public static class LauncherSettingsStateMerge
                     latest.Preferences.PublisherPasswordSavingEnabled,
                     opened.Preferences.PublisherPasswordSavingEnabled,
                     edit.PublisherPasswordSavingEnabled),
-                FeatureFlags = latest.Preferences.FeatureFlags with
-                {
-                    AutomaticArt = MergeValue(
-                        latest.Preferences.FeatureFlags.AutomaticArt,
-                        opened.Preferences.FeatureFlags.AutomaticArt,
-                        edit.AutomaticArt),
-                    RemoteBannerManifest = MergeValue(
-                        latest.Preferences.FeatureFlags.RemoteBannerManifest,
-                        opened.Preferences.FeatureFlags.RemoteBannerManifest,
-                        edit.RemoteBannerManifest),
-                },
             },
         };
     }
@@ -239,36 +226,28 @@ public static class LauncherSettingsStateMerge
         CustomGameDefinition latest,
         CustomGameDefinition opened,
         CustomGameDefinition edited) => latest with
-    {
-        Name = MergeValue(latest.Name, opened.Name, edited.Name),
-        ExecutablePath = MergeValue(latest.ExecutablePath, opened.ExecutablePath, edited.ExecutablePath),
-        IconPath = MergeValue(latest.IconPath, opened.IconPath, edited.IconPath),
-        BackgroundPath = MergeValue(latest.BackgroundPath, opened.BackgroundPath, edited.BackgroundPath),
-        RuntimePath = MergeValue(latest.RuntimePath, opened.RuntimePath, edited.RuntimePath),
-        RawArguments = MergeValue(latest.RawArguments, opened.RawArguments, edited.RawArguments),
-        RequestAdministrator = MergeValue(
+        {
+            Name = MergeValue(latest.Name, opened.Name, edited.Name),
+            ExecutablePath = MergeValue(latest.ExecutablePath, opened.ExecutablePath, edited.ExecutablePath),
+            IconPath = MergeValue(latest.IconPath, opened.IconPath, edited.IconPath),
+            BackgroundPath = MergeValue(latest.BackgroundPath, opened.BackgroundPath, edited.BackgroundPath),
+            RuntimePath = MergeValue(latest.RuntimePath, opened.RuntimePath, edited.RuntimePath),
+            RawArguments = MergeValue(latest.RawArguments, opened.RawArguments, edited.RawArguments),
+            RequestAdministrator = MergeValue(
             latest.RequestAdministrator,
             opened.RequestAdministrator,
             edited.RequestAdministrator),
-        CreationOrder = MergeValue(latest.CreationOrder, opened.CreationOrder, edited.CreationOrder),
-    };
+            CreationOrder = MergeValue(latest.CreationOrder, opened.CreationOrder, edited.CreationOrder),
+        };
 
     private static GameAppearanceState MergeAppearance(
         GameAppearanceState latest,
         GameAppearanceState opened,
         GameAppearanceState edited) => latest with
-    {
-        IconPath = MergeValue(latest.IconPath, opened.IconPath, edited.IconPath),
-        BackgroundPath = MergeValue(latest.BackgroundPath, opened.BackgroundPath, edited.BackgroundPath),
-        AutomaticArt = MergeValue(latest.AutomaticArt, opened.AutomaticArt, edited.AutomaticArt),
-        ArtScale = MergeValue(latest.ArtScale, opened.ArtScale, edited.ArtScale),
-        ArtX = MergeValue(latest.ArtX, opened.ArtX, edited.ArtX),
-        ArtY = MergeValue(latest.ArtY, opened.ArtY, edited.ArtY),
-        ArtVariant = MergeValue(latest.ArtVariant, opened.ArtVariant, edited.ArtVariant),
-        ArtFit = MergeValue(latest.ArtFit, opened.ArtFit, edited.ArtFit),
-        ArtPinned = MergeValue(latest.ArtPinned, opened.ArtPinned, edited.ArtPinned),
-        PinnedArtFile = MergeValue(latest.PinnedArtFile, opened.PinnedArtFile, edited.PinnedArtFile),
-    };
+        {
+            IconPath = MergeValue(latest.IconPath, opened.IconPath, edited.IconPath),
+            BackgroundPath = MergeValue(latest.BackgroundPath, opened.BackgroundPath, edited.BackgroundPath),
+        };
 
     private static T MergeValue<T>(T latest, T opened, T edited) =>
         EqualityComparer<T>.Default.Equals(opened, edited) ? latest : edited;

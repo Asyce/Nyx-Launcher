@@ -3,7 +3,9 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})$')]
-    [string] $Version = '1.0.0.0',
+    [string] $Version = '1.4.0.0',
+    [ValidateSet('development', 'stable')]
+    [string] $Channel = 'development',
     [switch] $NoRestore,
     [switch] $Force
 )
@@ -16,10 +18,6 @@ $desktopRoot = Split-Path -Parent $packagingRoot
 $repositoryRoot = Split-Path -Parent $desktopRoot
 $artifactsRoot = Join-Path $packagingRoot 'artifacts'
 $workParent = Join-Path $packagingRoot '.work'
-$artifactBase = "Nyx-Desktop-$Version-development-win-x64"
-$artifactPath = Join-Path $artifactsRoot "$artifactBase.zip"
-$manifestArtifactPath = Join-Path $artifactsRoot "$artifactBase.release.json"
-$hashPath = "$artifactPath.sha256"
 $fixedTimestamp = [DateTimeOffset]::Parse('2026-07-17T00:00:00Z')
 $genshin120UpstreamUrl = 'https://github.com/34736384/genshin-fps-unlock.git'
 $genshin120UpstreamTag = 'v3.5.0'
@@ -181,10 +179,122 @@ function New-DeterministicZip {
     finally { $stream.Dispose() }
 }
 
+$Channel = $Channel.ToLowerInvariant()
+
+function Get-StableReleaseIdentity {
+    param(
+        [Parameter(Mandatory)] [string] $RepositoryRoot,
+        [Parameter(Mandatory)] [string] $GitPath,
+        [string] $RequestedVersion
+    )
+
+    $status = @(& $GitPath -C $RepositoryRoot status --porcelain=v1 --untracked-files=all)
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect the Git worktree.' }
+    if ($status.Count -ne 0) { throw 'Stable packages require a clean Git worktree.' }
+
+    $commit = (& $GitPath -C $RepositoryRoot rev-parse --verify 'HEAD^{commit}').Trim()
+    if ($LASTEXITCODE -ne 0 -or $commit -cnotmatch '^[0-9a-f]{40}$') {
+        throw 'Unable to resolve the stable Git commit.'
+    }
+
+    $tags = @(& $GitPath -C $RepositoryRoot tag --points-at HEAD)
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect stable Git tags.' }
+    if ($tags.Count -ne 1) { throw 'Stable packages require exactly one tag at HEAD.' }
+
+    $tag = [string] $tags[0]
+    $match = [regex]::Match(
+        $tag,
+        '^v(0|[1-9][0-9]{0,4})\.(0|[1-9][0-9]{0,4})(?:\.(0|[1-9][0-9]{0,4}))?$')
+    if (-not $match.Success) {
+        throw 'The stable tag must be vMAJOR.MINOR or vMAJOR.MINOR.PATCH without leading zeros.'
+    }
+
+    $components = @(
+        [uint32] $match.Groups[1].Value,
+        [uint32] $match.Groups[2].Value,
+        [uint32] $(if ($match.Groups[3].Success) { $match.Groups[3].Value } else { 0 })
+    )
+    if (@($components | Where-Object { $_ -gt [uint16]::MaxValue }).Count -ne 0) {
+        throw 'Each stable tag component must be between 0 and 65535.'
+    }
+
+    $derivedVersion = '{0}.{1}.{2}.0' -f $components[0], $components[1], $components[2]
+    if ($PSBoundParameters.ContainsKey('RequestedVersion') -and $RequestedVersion -cne $derivedVersion) {
+        throw "The supplied version does not match stable tag $tag ($derivedVersion)."
+    }
+
+    return [pscustomobject]@{
+        Tag = $tag
+        Commit = $commit
+        Version = $derivedVersion
+    }
+}
+
+function Get-CanonicalAchievementCatalogVersions {
+    $versions = @{}
+    foreach ($game in @('gi', 'hsr')) {
+        $path = Join-Path $repositoryRoot "contracts\achievements-$game-catalog.json"
+        $catalog = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
+        foreach ($name in @('game', 'catalogVersion', 'releasedVersion')) {
+            if (@($catalog.PSObject.Properties | Where-Object Name -CEQ $name).Count -ne 1) {
+                throw "The $game achievement catalog is missing an exact $name field."
+            }
+        }
+        if ($catalog.game -cne $game -or
+            $catalog.catalogVersion -isnot [string] -or
+            $catalog.catalogVersion -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' -or
+            $catalog.releasedVersion -cne $catalog.catalogVersion) {
+            throw "The $game achievement catalog has an invalid game/catalogVersion/releasedVersion shape."
+        }
+        $versions[$game] = "$game-$($catalog.catalogVersion)"
+    }
+    return $versions
+}
+
+function Assert-AchievementCatalogAgreement {
+    param(
+        [Parameter(Mandatory)] [Collections.IDictionary] $Versions,
+        [Parameter(Mandatory)] [string] $RustTargetRoot,
+        [Parameter(Mandatory)] [string] $CSharpSource
+    )
+
+    $rustSources = @(Get-ChildItem -LiteralPath $RustTargetRoot -Filter 'catalog_ids.rs' -File -Recurse)
+    if ($rustSources.Count -ne 1 -or -not (Test-Path -LiteralPath $CSharpSource -PathType Leaf)) {
+        throw 'Generated achievement catalog version sources are missing or ambiguous.'
+    }
+    $rust = [IO.File]::ReadAllText($rustSources[0].FullName)
+    $csharp = [IO.File]::ReadAllText($CSharpSource)
+    if ($rust.IndexOf("pub const GI_CATALOG_VERSION: &str = `"$($Versions['gi'])`";", [StringComparison]::Ordinal) -lt 0 -or
+        $rust.IndexOf("pub const HSR_CATALOG_VERSION: &str = `"$($Versions['hsr'])`";", [StringComparison]::Ordinal) -lt 0 -or
+        $csharp.IndexOf("public const string Genshin = `"$($Versions['gi'])`";", [StringComparison]::Ordinal) -lt 0 -or
+        $csharp.IndexOf("public const string StarRail = `"$($Versions['hsr'])`";", [StringComparison]::Ordinal) -lt 0) {
+        throw 'Canonical, Rust, and C# achievement catalog versions disagree.'
+    }
+}
+
 Assert-SafePackagingRoot
+$achievementCatalogVersions = Get-CanonicalAchievementCatalogVersions
+$git = (Get-Command git -ErrorAction Stop).Source
+$stableIdentity = $null
+if ($Channel -eq 'stable') {
+    $identityArguments = @{
+        RepositoryRoot = $repositoryRoot
+        GitPath = $git
+    }
+    if ($PSBoundParameters.ContainsKey('Version')) {
+        $identityArguments['RequestedVersion'] = $Version
+    }
+    $stableIdentity = Get-StableReleaseIdentity @identityArguments
+    $Version = $stableIdentity.Version
+}
 foreach ($part in $Version.Split('.')) {
     if ([int]$part -gt 65535) { throw 'Each version component must be between 0 and 65535.' }
 }
+
+$artifactBase = "Nyx-Desktop-$Version-$Channel-win-x64"
+$artifactPath = Join-Path $artifactsRoot "$artifactBase.zip"
+$manifestArtifactPath = Join-Path $artifactsRoot "$artifactBase.release.json"
+$hashPath = "$artifactPath.sha256"
 
 [void] (New-Item -ItemType Directory -Path $artifactsRoot -Force)
 [void] (New-Item -ItemType Directory -Path $workParent -Force)
@@ -196,6 +306,7 @@ $workRoot = Join-Path $workParent ([guid]::NewGuid().ToString('N'))
 $publishRoot = Join-Path $workRoot 'app'
 $toolRoot = Join-Path $workRoot 'tool'
 $helperBuildRoot = Join-Path $workRoot 'achievement-helper-target'
+$csharpAchievementCatalogSource = Join-Path $workRoot 'AchievementCatalogVersions.g.cs'
 $genshin120VerificationRoot = Join-Path $workRoot 'genshin120-verification'
 $genshin120PrivateHelperRoot = Join-Path $genshin120VerificationRoot 'Desktop\tools\Nyx.Genshin120.NativeHelper'
 $genshin120PrivateUpstreamRoot = Join-Path $genshin120VerificationRoot '.verification-build\upstream-genshin-fps-v3.5.0'
@@ -204,11 +315,21 @@ $payloadRoot = Join-Path $bundleRoot 'payload'
 $temporaryArtifactPath = Join-Path $workRoot "$artifactBase.zip"
 $temporaryManifestPath = Join-Path $workRoot "$artifactBase.release.json"
 $temporaryHashPath = Join-Path $workRoot "$artifactBase.zip.sha256"
+$sourceAppManifest = Join-Path $desktopRoot 'src\Nyx.Desktop.App\app.manifest'
+$generatedAppManifest = Join-Path $workRoot 'app.manifest'
 [void] (New-Item -ItemType Directory -Path $publishRoot, $toolRoot, $payloadRoot -Force)
 
 try {
+    $sourceAppManifestText = [IO.File]::ReadAllText($sourceAppManifest)
+    $appIdentityPattern = '<assemblyIdentity version="[^"]+" name="Nyx\.Desktop\.App\.app"\s*/>'
+    if ([regex]::Matches($sourceAppManifestText, $appIdentityPattern).Count -ne 1) {
+        throw 'The source application manifest identity is missing or ambiguous.'
+    }
+    $appIdentity = "<assemblyIdentity version=`"$Version`" name=`"Nyx.Desktop.App.app`"/>"
+    $generatedAppManifestText = [regex]::Replace($sourceAppManifestText, $appIdentityPattern, $appIdentity)
+    [IO.File]::WriteAllText($generatedAppManifest, $generatedAppManifestText, [Text.UTF8Encoding]::new($false))
+
     $cargo = (Get-Command cargo -ErrorAction Stop).Source
-    $git = (Get-Command git -ErrorAction Stop).Source
     $python = (Get-Command python -ErrorAction Stop).Source
     $helperRoot = Join-Path $repositoryRoot 'Extractor\Achievements'
     $previousCargoTarget = $env:CARGO_TARGET_DIR
@@ -279,9 +400,9 @@ try {
     [void] (New-Item -ItemType Directory -Path (Split-Path -Parent $genshin120PrivateHelperRoot) -Force)
     Copy-Item -LiteralPath $genshin120SourceRoot -Destination $genshin120PrivateHelperRoot -Recurse
     [void] (New-Item -ItemType Directory -Path (Split-Path -Parent $genshin120PrivateUpstreamRoot) -Force)
-    & $git clone --quiet --depth 1 --branch $genshin120UpstreamTag $genshin120UpstreamUrl $genshin120PrivateUpstreamRoot
+    & $git -c core.longpaths=true clone --quiet --depth 1 --branch $genshin120UpstreamTag $genshin120UpstreamUrl $genshin120PrivateUpstreamRoot
     if ($LASTEXITCODE -ne 0) { throw 'Pinned Genshin FPS upstream checkout failed.' }
-    $checkedOutCommit = (& $git -C $genshin120PrivateUpstreamRoot rev-parse HEAD).Trim()
+    $checkedOutCommit = (& $git -c core.longpaths=true -C $genshin120PrivateUpstreamRoot rev-parse --verify 'HEAD^{commit}').Trim()
     if ($LASTEXITCODE -ne 0 -or $checkedOutCommit -cne $genshin120UpstreamCommit) {
         throw 'Pinned Genshin FPS upstream commit changed.'
     }
@@ -350,16 +471,23 @@ try {
         '-p:ContinuousIntegrationBuild=true',
         "-p:PathMap=$repositoryRoot=C:\_src\Nyx",
         "-p:Version=$Version",
+        "-p:NyxReleaseChannel=$Channel",
+        "-p:ApplicationManifest=$generatedAppManifest",
         "-p:AchievementHelperSource=$builtHelper",
         "-p:AchievementHelperSha256=$helperSha256",
+        "-p:AchievementCatalogVersionsSource=$csharpAchievementCatalogSource",
         "-p:Genshin120HelperSource=$genshin120Helper",
         "-p:Genshin120HelperSha256=$genshin120HelperSha256",
         "-p:Genshin120LicenseSource=$genshin120License",
         "-p:Genshin120ProvenanceSource=$genshin120Provenance",
-        "-p:PublishDir=$publishRoot\"
+        "-p:PublishDir=$publishRoot"
     ) + $restoreArgument
     & $dotnet @appArguments
     if ($LASTEXITCODE -ne 0) { throw 'Nyx app publish failed.' }
+    Assert-AchievementCatalogAgreement `
+        -Versions $achievementCatalogVersions `
+        -RustTargetRoot $helperBuildRoot `
+        -CSharpSource $csharpAchievementCatalogSource
 
     $toolProject = Join-Path $desktopRoot 'tools\Nyx.Desktop.Update\Nyx.Desktop.Update.csproj'
     $toolArguments = @(
@@ -368,7 +496,8 @@ try {
         '-r', 'win-x64',
         '--self-contained', 'true',
         '-p:PublishSingleFile=true',
-        '-p:PublishTrimmed=false',
+        '-p:PublishTrimmed=true',
+        '-p:DefineConstants=',
         '-p:DebugType=None',
         '-p:DebugSymbols=false',
         '-p:Deterministic=true',
@@ -379,16 +508,24 @@ try {
     ) + $restoreArgument
     & $dotnet @toolArguments
     if ($LASTEXITCODE -ne 0) { throw 'Nyx updater publish failed.' }
+    Assert-NoPrivateBuildStrings -Root $toolRoot -Needles @(
+        'NYX_UPDATER_DISPOSABLE_ROOT',
+        'NYX_UPDATER_DISPOSABLE_SMOKE_V1'
+    )
 
     $entryPoint = Join-Path $publishRoot 'Nyx.Desktop.App.exe'
+    $appAssembly = Join-Path $publishRoot 'Nyx.Desktop.App.dll'
     $achievementHelper = Join-Path $publishRoot 'Assets\Tools\pengo-achievements-launcher.exe'
+    $packagedAchievementNotice = Join-Path $publishRoot 'Assets\ThirdParty\pengo-achievements\THIRD_PARTY_NOTICES.md'
     $packagedGenshin120Helper = Join-Path $publishRoot 'Assets\Tools\Nyx.Genshin120.Helper.exe'
     $packagedGenshin120License = Join-Path $publishRoot 'Assets\ThirdParty\genshin-fps-unlock\LICENSE.txt'
     $packagedGenshin120Provenance = Join-Path $publishRoot 'Assets\ThirdParty\genshin-fps-unlock\PROVENANCE.md'
     $updater = Join-Path $toolRoot 'Nyx.Desktop.Update.exe'
     foreach ($required in @(
         $entryPoint,
+        $appAssembly,
         $achievementHelper,
+        $packagedAchievementNotice,
         $packagedGenshin120Helper,
         $packagedGenshin120License,
         $packagedGenshin120Provenance,
@@ -402,6 +539,27 @@ try {
         (Get-FileHash -LiteralPath $packagedGenshin120License -Algorithm SHA256).Hash.ToLowerInvariant() -cne $genshin120LicenseSha256 -or
         (Get-FileHash -LiteralPath $packagedGenshin120Provenance -Algorithm SHA256).Hash.ToLowerInvariant() -cne $genshin120ProvenanceSha256) {
         throw 'A packaged Genshin 120 FPS helper file changed after verification.'
+    }
+    $appBinaryText = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($entryPoint))
+    $embeddedAppIdentities = [regex]::Matches(
+        $appBinaryText,
+        '<assemblyIdentity version="(?<version>[^"]+)" name="Nyx\.Desktop\.App\.app">')
+    if ($embeddedAppIdentities.Count -ne 1 -or
+        $embeddedAppIdentities[0].Groups['version'].Value -cne $Version) {
+        throw 'The embedded application manifest version does not match the package version.'
+    }
+    if ($Channel -eq 'stable') {
+        $appVersionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($entryPoint)
+        $updaterVersionInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($updater)
+        $appAssemblyVersion = [Reflection.AssemblyName]::GetAssemblyName($appAssembly).Version.ToString()
+        $expectedProductVersion = "$Version+$($stableIdentity.Commit)"
+        if ($appVersionInfo.FileVersion -cne $Version -or
+            $appAssemblyVersion -cne $Version -or
+            $updaterVersionInfo.FileVersion -cne $Version -or
+            $appVersionInfo.ProductVersion -cne $expectedProductVersion -or
+            $updaterVersionInfo.ProductVersion -cne $expectedProductVersion) {
+            throw 'Stable app/updater versions or embedded commit do not match the tag-derived release.'
+        }
     }
     if (Get-ChildItem -LiteralPath (Join-Path $publishRoot 'Assets\Tools') -Filter 'Nyx.Genshin120.*.dll' -File) {
         throw 'The packaged Genshin 120 FPS helper contains a forbidden loose payload.'
@@ -429,17 +587,23 @@ try {
     }
 
     $payloadInfo = Get-Item -LiteralPath $payloadPath
+    $packageUrl = if ($Channel -eq 'stable') {
+        "https://pengo.gg/desktop/updates/stable/$payloadFile"
+    }
+    else {
+        $null
+    }
     $release = [ordered]@{
         schemaVersion = 1
         product = 'nyx-desktop'
-        channel = 'development'
+        channel = $Channel
         version = $Version
         architecture = 'win-x64'
         packageFile = $payloadFile
         packageSize = [long]$payloadInfo.Length
         packageSha256 = (Get-FileHash -LiteralPath $payloadPath -Algorithm SHA256).Hash.ToLowerInvariant()
         entryPoint = 'Nyx.Desktop.App.exe'
-        packageUrl = $null
+        packageUrl = $packageUrl
         files = $fileEntries
     }
     $releaseJson = $release | ConvertTo-Json -Depth 6
@@ -463,6 +627,11 @@ try {
     Install-GeneratedFile -Source $temporaryHashPath -Destination $hashPath
 
     Write-Output "NYX_PACKAGE=CREATED"
+    Write-Output "CHANNEL=$Channel"
+    if ($Channel -eq 'stable') {
+        Write-Output "TAG=$($stableIdentity.Tag)"
+        Write-Output "COMMIT=$($stableIdentity.Commit)"
+    }
     Write-Output "VERSION=$Version"
     Write-Output "ARTIFACT=$artifactPath"
     Write-Output "BYTES=$artifactBytes"
