@@ -40,12 +40,14 @@ public sealed partial class MainPage
                 ? "Only remembered Resin, characters and equipped builds are shared. Full-bag inventory is not included."
                 : "Only remembered Resin is shared.";
         if (gameId == HoyoLabGameBundleRules.GenshinGameId
-            && (PublisherAccountService.GenshinExplorationAvailable || PublisherAccountService.GenshinEventsAvailable))
+            && (PublisherAccountService.GenshinExplorationAvailable || PublisherAccountService.GenshinEventsAvailable
+                || PublisherAccountService.GenshinEndgameAvailable))
             sharedData = "Remembered Resin"
                 + (PublisherAccountService.GenshinBuildsAvailable ? ", characters and equipped builds" : string.Empty)
                 + (PublisherAccountService.GenshinExplorationAvailable ? ", exploration" : string.Empty)
                 + (PublisherAccountService.GenshinEventsAvailable ? ", event-calendar summaries" : string.Empty)
-                + " are shared. Full-bag inventory, housing and full endgame battle records are not included.";
+                + (PublisherAccountService.GenshinEndgameAvailable ? ", Spiral Abyss records" : string.Empty)
+                + " are shared. Full-bag inventory and housing are not included.";
         if (gameId == HoyoLabGameBundleRules.GameId && PublisherAccountService.HsrEventsAvailable)
             sharedData = "Remembered resources and achievements"
                 + (PublisherAccountService.HsrBuildsAvailable ? ", characters and equipped builds" : string.Empty)

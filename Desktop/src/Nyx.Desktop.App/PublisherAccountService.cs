@@ -253,6 +253,7 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
         if (!HoyoLabGameBundleRules.SupportsLocalCapability(gameId, capability)
             || enabled && gameId == "gi" && capability == HoyoLabGameBundleRules.Builds && !GenshinBuildsAvailable
             || enabled && gameId == "gi" && capability == HoyoLabGameBundleRules.Exploration && !GenshinExplorationAvailable
+            || enabled && gameId == "gi" && capability == HoyoLabGameBundleRules.Endgame && !GenshinEndgameAvailable
             || enabled && gameId == "gi" && capability == HoyoLabGameBundleRules.Events && !GenshinEventsAvailable
             || enabled && gameId == "hsr" && capability == HoyoLabGameBundleRules.Events && !HsrEventsAvailable
             || enabled && gameId == "hsr" && capability == HoyoLabGameBundleRules.Builds && !HsrBuildsAvailable
@@ -3285,7 +3286,8 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
                 rememberHsrBuilds: HsrBuildsAvailable,
                 rememberGenshinExploration: GenshinExplorationAvailable,
                 rememberGenshinEvents: GenshinEventsAvailable,
-                rememberHsrEvents: HsrEventsAvailable);
+                rememberHsrEvents: HsrEventsAvailable,
+                rememberGenshinEndgame: GenshinEndgameAvailable);
             return saved && CanPublish("HoYoLAB", operation);
         }
     }

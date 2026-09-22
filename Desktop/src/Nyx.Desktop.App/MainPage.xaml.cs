@@ -1561,6 +1561,8 @@ public sealed partial class MainPage : Page
         Button? refreshExploration = null;
         ToggleSwitch? rememberEvents = null;
         Button? refreshEvents = null;
+        ToggleSwitch? rememberEndgame = null;
+        Button? refreshEndgame = null;
         StackPanel? capabilityPanel = null;
         if (gameId is "hsr" or "gi")
         {
@@ -1655,6 +1657,21 @@ public sealed partial class MainPage : Page
                 refreshEvents = CreateHoyoLabManagerButton("Refresh event calendar", $"Refresh {gameName} events for the active HoYoLAB account");
                 capabilityPanel.Children.Add(rememberEvents);
                 capabilityPanel.Children.Add(refreshEvents);
+            }
+            if (gameId == "gi" && PublisherAccountService.GenshinEndgameAvailable)
+            {
+                rememberEndgame = new ToggleSwitch
+                {
+                    Header = "Remember Spiral Abyss records",
+                    IsEnabled = false,
+                    OnContent = "Remember",
+                    OffContent = "Do not remember",
+                };
+                AutomationProperties.SetName(rememberEndgame, "Remember Spiral Abyss records for the active HoYoLAB account");
+                AutomationProperties.SetHelpText(rememberEndgame, "Includes current and previous periods, chamber results, teams and skipped-floor markers available from HoYoLAB.");
+                refreshEndgame = CreateHoyoLabManagerButton("Refresh Spiral Abyss", "Refresh Spiral Abyss records for the active HoYoLAB account");
+                capabilityPanel.Children.Add(rememberEndgame);
+                capabilityPanel.Children.Add(refreshEndgame);
             }
             capabilityPanel.Children.Add(capabilityHelp);
         }
@@ -1798,6 +1815,10 @@ public sealed partial class MainPage : Page
                 rememberEvents.IsEnabled = enabled && hasActiveRole;
             if (refreshEvents is not null)
                 refreshEvents.IsEnabled = enabled && hasActiveRole && gameBundle?.Consents.Events == true;
+            if (rememberEndgame is not null)
+                rememberEndgame.IsEnabled = enabled && hasActiveRole;
+            if (refreshEndgame is not null)
+                refreshEndgame.IsEnabled = enabled && hasActiveRole && gameBundle?.Consents.Endgame == true;
         }
 
         void ApplyCapabilityConsent(HoyoLabGameBundle? snapshot)
@@ -1822,6 +1843,8 @@ public sealed partial class MainPage : Page
                     rememberExploration.IsOn = hasActiveRole && snapshot?.Consents.Exploration == true;
                 if (rememberEvents is not null)
                     rememberEvents.IsOn = hasActiveRole && snapshot?.Consents.Events == true;
+                if (rememberEndgame is not null)
+                    rememberEndgame.IsOn = hasActiveRole && snapshot?.Consents.Endgame == true;
             }
             finally
             {
@@ -2274,6 +2297,35 @@ public sealed partial class MainPage : Page
                         HoyoLabGenshinEventsReadStatus.TimedOut => "Refresh timed out. Try again; the previous copy is unchanged.",
                         HoyoLabGenshinEventsReadStatus.TooLarge => "This events copy exceeds Nyx's supported size. The previous copy is unchanged.",
                         HoyoLabGenshinEventsReadStatus.LocalStorageUnavailable => "Nyx could not save the events copy. The previous copy is unchanged.",
+                        _ => "Nyx could not complete this refresh. Check the selected HoYoLAB region and try again; the previous copy is unchanged.",
+                    };
+                }, selectedSlotId);
+            };
+        }
+
+        if (rememberEndgame is not null)
+            rememberEndgame.Toggled += (_, _) =>
+                _ = SetCapabilityConsentAsync(rememberEndgame, HoyoLabGameBundleRules.Endgame);
+        if (refreshEndgame is not null)
+        {
+            refreshEndgame.Click += async (_, _) =>
+            {
+                var activeSlotId = publisherAccounts.HoyoLabAccounts.ActiveSlotId;
+                var binding = gameBundle?.SelectedRole;
+                if (activeSlotId is null || binding is null) return;
+                await RunManagerActionAsync(async cancellationToken =>
+                {
+                    managerStatus.Text = "Refreshing Spiral Abyss from HoYoLAB…";
+                    var result = await publisherAccounts.RefreshGenshinEndgameAsync(activeSlotId, binding, cancellationToken);
+                    managerStatus.Text = result.Status switch
+                    {
+                        HoyoLabGenshinEndgameReadStatus.Completed => "Remembered both available Spiral Abyss periods. Use Sync & My HoYo to share the copy.",
+                        HoyoLabGenshinEndgameReadStatus.LoginRequired => "Sign in to HoYoLAB, then refresh again. The previous copy is unchanged.",
+                        HoyoLabGenshinEndgameReadStatus.NotEnabled => "Select an active Genshin region and turn on Remember Spiral Abyss records first.",
+                        HoyoLabGenshinEndgameReadStatus.Canceled => "Refresh canceled. No partial Abyss copy was saved.",
+                        HoyoLabGenshinEndgameReadStatus.TimedOut => "Refresh timed out. Try again; the previous copy is unchanged.",
+                        HoyoLabGenshinEndgameReadStatus.TooLarge => "This Abyss copy exceeds Nyx's supported size. The previous copy is unchanged.",
+                        HoyoLabGenshinEndgameReadStatus.LocalStorageUnavailable => "Nyx could not save the Abyss copy. The previous copy is unchanged.",
                         _ => "Nyx could not complete this refresh. Check the selected HoYoLAB region and try again; the previous copy is unchanged.",
                     };
                 }, selectedSlotId);

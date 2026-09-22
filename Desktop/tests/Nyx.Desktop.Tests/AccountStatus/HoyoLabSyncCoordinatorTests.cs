@@ -2341,6 +2341,152 @@ public sealed class HoyoLabSyncCoordinatorTests
     }
 
     [Fact]
+    public async Task Genshin_endgame_cutoff_blocks_a_newer_local_refresh_before_network_retry()
+    {
+        using var harness = new Harness(GenshinBundleWithEndgame(Older));
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(
+                DisplayCode,
+                gameId: HoyoLabGameBundleRules.GenshinGameId)).Status);
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            harness.Coordinator.QueueRoleDeletion(
+                GenshinBinding,
+                gameId: HoyoLabGameBundleRules.GenshinGameId).Status);
+        using (var pending = LoadState(harness.ManagedSlotRoot))
+            Assert.Equal(Older, Assert.Single(pending.PendingRoleDeletions).KnownEndgameAt);
+
+        SaveBundle(
+            harness.ProtectedRoot,
+            GenshinBundleWithEndgame(Newer),
+            HoyoLabGameBundleRules.GenshinGameId);
+        harness.Cloud.ClearRequests();
+
+        var result = await harness.Coordinator.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Conflict, result.Status);
+        Assert.Empty(harness.Cloud.Requests);
+        using var after = LoadState(harness.ManagedSlotRoot);
+        Assert.Equal(Older, Assert.Single(after.PendingRoleDeletions).KnownEndgameAt);
+    }
+
+    [Fact]
+    public async Task Genshin_endgame_cutoff_blocks_a_newer_remote_refresh_and_survives_retry()
+    {
+        using var harness = new Harness(GenshinBundleWithEndgame(Older));
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(
+                DisplayCode,
+                gameId: HoyoLabGameBundleRules.GenshinGameId)).Status);
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            harness.Coordinator.QueueRoleDeletion(
+                GenshinBinding,
+                gameId: HoyoLabGameBundleRules.GenshinGameId).Status);
+        using (var pending = LoadState(harness.ManagedSlotRoot))
+            Assert.Equal(Older, Assert.Single(pending.PendingRoleDeletions).KnownEndgameAt);
+
+        harness.Cloud.SeedBundle(
+            Fixture.SyncId,
+            DisplayCode,
+            GenshinBundleWithEndgame(Newer),
+            Newer,
+            HoyoLabGameBundleRules.GenshinGameId);
+        harness.Cloud.ClearRequests();
+
+        var result = await harness.Coordinator.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Conflict, result.Status);
+        Assert.Equal(["pull"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var after = LoadState(harness.ManagedSlotRoot);
+        Assert.Equal(Older, Assert.Single(after.PendingRoleDeletions).KnownEndgameAt);
+    }
+
+    [Fact]
+    public async Task Genshin_endgame_without_a_known_cutoff_still_blocks_a_newer_remote_refresh()
+    {
+        using var harness = new Harness(GenshinBundleWithEndgame(Older));
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(
+                DisplayCode,
+                gameId: HoyoLabGameBundleRules.GenshinGameId)).Status);
+
+        using (var state = LoadState(harness.ManagedSlotRoot))
+        {
+            var credential = Assert.IsType<HoyoLabSyncCredential>(state.CurrentCredential);
+            using var deletion = new HoyoLabPendingRoleDeletion(
+                credential.SyncId,
+                credential.Token,
+                credential.Key,
+                GenshinBinding,
+                "gi-endgame-no-cutoff",
+                Now,
+                null,
+                null,
+                Now,
+                HoyoLabGameBundleRules.GenshinGameId);
+            var stateStore = new HoyoLabSyncStateStore(
+                harness.ManagedSlotRoot,
+                harness.Protector,
+                harness.Files,
+                harness.Clock);
+            Assert.True(stateStore.TryEnqueuePendingRoleDeletion(deletion));
+        }
+        using (var state = LoadState(harness.ManagedSlotRoot))
+            Assert.Null(Assert.Single(state.PendingRoleDeletions).KnownEndgameAt);
+
+        SaveBundle(
+            harness.ProtectedRoot,
+            HoyoLabSyncCoordinator.RemoveRoleAt(
+                GenshinBundleWithEndgame(Older),
+                GenshinBinding,
+                Now),
+            HoyoLabGameBundleRules.GenshinGameId);
+        harness.Cloud.SeedBundle(
+            Fixture.SyncId,
+            DisplayCode,
+            GenshinBundleWithEndgame(Newer),
+            Newer,
+            HoyoLabGameBundleRules.GenshinGameId);
+        harness.Cloud.ClearRequests();
+
+        var result = await harness.Coordinator.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Conflict, result.Status);
+        Assert.Equal(["pull"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var after = LoadState(harness.ManagedSlotRoot);
+        Assert.Null(Assert.Single(after.PendingRoleDeletions).KnownEndgameAt);
+    }
+
+    [Fact]
+    public async Task Genshin_endgame_round_trip_through_the_encrypted_wire()
+    {
+        using var harness = new Harness(GenshinBundleWithEndgame(Older));
+
+        var result = await harness.Coordinator.ConnectAsync(
+            DisplayCode,
+            gameId: HoyoLabGameBundleRules.GenshinGameId);
+
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, result.Status);
+        Assert.Equal(["pull", "push"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var secrets = Secrets(DisplayCode);
+        var pushed = harness.Cloud.GetBundle(
+            Fixture.SyncId,
+            secrets,
+            HoyoLabGameBundleRules.GenshinGameId);
+        var pushedRole = Assert.Single(pushed.Roles);
+        Assert.True(pushed.Consents.Endgame);
+        Assert.Equal(Older, pushedRole.Observations.Endgame);
+        Assert.True(HoyoLabGenshinEndgameRules.ValuesEqual(
+            EndgameSnapshot(),
+            pushedRole.GenshinEndgame));
+    }
+
+
+    [Fact]
     public async Task Genshin_events_round_trip_through_the_encrypted_wire()
     {
         using var harness = new Harness(GenshinBundleWithEvents(Older));
@@ -2927,6 +3073,11 @@ public sealed class HoyoLabSyncCoordinatorTests
         new(false, false, false, false, true, false, false, false),
         [],
         []);
+
+    private static HoyoLabGameBundle GenshinBundleWithEndgame(DateTimeOffset observedAt) =>
+        HoyoLabGenshinEndgameTests.Bundle(observedAt, GenshinBinding);
+
+    private static HoyoLabGenshinEndgameSnapshot EndgameSnapshot() => HoyoLabGenshinEndgameTests.Snapshot();
 
     private static HoyoLabGameBundle GenshinBundleWithEvents(
         DateTimeOffset observedAt,
