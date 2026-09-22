@@ -1134,7 +1134,7 @@ public sealed class HoyoLiveSessionUiTests
             page.Replace("\r\n", "\n", StringComparison.Ordinal),
             "private async Task ShowHoyoLabAccountManagerAsync",
             "private void AutomaticDailyCheckInToggle_Click");
-        var controls = Slice(manager, "if (gameId is \"hsr\" or \"gi\")", "var actionButtons");
+        var controls = Slice(manager, "if (PublisherAccountService.IsHoyoLabManualSyncAvailable(gameId))", "var actionButtons");
         var buildsAt = controls.IndexOf("if ((gameId == \"gi\" && PublisherAccountService.GenshinBuildsAvailable)", StringComparison.Ordinal);
         Assert.True(buildsAt > 0);
         var existingControls = controls[..buildsAt];
@@ -1169,6 +1169,10 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Contains("GenshinEndgameAvailable => false", ReadAppFile("PublisherAccountService.GenshinEndgame.cs"), StringComparison.Ordinal);
         Assert.Contains("Remember Spiral Abyss records", endgameControls, StringComparison.Ordinal);
         Assert.Contains("Remember Star Rail challenge records", endgameControls, StringComparison.Ordinal);
+        Assert.Contains("Remember Shiyu Defense records", endgameControls, StringComparison.Ordinal);
+        Assert.Contains("ZzzManualSyncAvailable => false", ReadAppFile("PublisherAccountService.HoyoSync.cs"), StringComparison.Ordinal);
+        Assert.Contains("GetZzzGameBundleSnapshotAsync", reload, StringComparison.Ordinal);
+        Assert.Contains("SetZzzCapabilityConsentAsync", setter, StringComparison.Ordinal);
         Assert.Contains("HsrEndgameAvailable => false", ReadAppFile("PublisherAccountService.HsrEndgame.cs"), StringComparison.Ordinal);
         Assert.Contains("enabled && gameId == \"hsr\" && capability == HoyoLabGameBundleRules.Endgame && !HsrEndgameAvailable", service, StringComparison.Ordinal);
         Assert.Contains("SetCapabilityConsentAsync(rememberEndgame, HoyoLabGameBundleRules.Endgame)", manager, StringComparison.Ordinal);
@@ -1219,8 +1223,8 @@ public sealed class HoyoLiveSessionUiTests
             "src",
             "Nyx.Desktop.App",
             "PublisherAccountService.HsrBuilds.cs")), StringComparison.Ordinal);
-        Assert.Contains("var gameName = gameId == \"hsr\" ? \"Star Rail\" : \"Genshin\";", controls, StringComparison.Ordinal);
-        Assert.Contains("var resourceName = gameId == \"hsr\" ? \"resources\" : \"Resin\";", controls, StringComparison.Ordinal);
+        Assert.Contains("var gameName = gameId switch { \"hsr\" => \"Star Rail\", \"zzz\" => \"ZZZ\", _ => \"Genshin\" };", controls, StringComparison.Ordinal);
+        Assert.Contains("var resourceName = gameId switch { \"hsr\" => \"resources\", \"zzz\" => \"Battery Charge\", _ => \"Resin\" };", controls, StringComparison.Ordinal);
         Assert.Contains("Header = $\"Remember {gameName} {resourceName}\"", controls, StringComparison.Ordinal);
         Assert.Contains("Header = \"Remember Star Rail achievements\"", controls, StringComparison.Ordinal);
         Assert.Contains(

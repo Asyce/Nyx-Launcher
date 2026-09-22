@@ -1564,10 +1564,10 @@ public sealed partial class MainPage : Page
         ToggleSwitch? rememberEndgame = null;
         Button? refreshEndgame = null;
         StackPanel? capabilityPanel = null;
-        if (gameId is "hsr" or "gi")
+        if (PublisherAccountService.IsHoyoLabManualSyncAvailable(gameId))
         {
-            var gameName = gameId == "hsr" ? "Star Rail" : "Genshin";
-            var resourceName = gameId == "hsr" ? "resources" : "Resin";
+            var gameName = gameId switch { "hsr" => "Star Rail", "zzz" => "ZZZ", _ => "Genshin" };
+            var resourceName = gameId switch { "hsr" => "resources", "zzz" => "Battery Charge", _ => "Resin" };
             rememberResources = new ToggleSwitch
             {
                 Header = $"Remember {gameName} {resourceName}",
@@ -1610,7 +1610,8 @@ public sealed partial class MainPage : Page
             if (rememberAchievements is not null)
                 capabilityPanel.Children.Add(rememberAchievements);
             if ((gameId == "gi" && PublisherAccountService.GenshinBuildsAvailable)
-                || (gameId == "hsr" && PublisherAccountService.HsrBuildsAvailable))
+                || (gameId == "hsr" && PublisherAccountService.HsrBuildsAvailable)
+                || (gameId == "zzz" && PublisherAccountService.ZzzBuildsAvailable))
             {
                 rememberBuilds = new ToggleSwitch
                 {
@@ -1620,7 +1621,9 @@ public sealed partial class MainPage : Page
                     OffContent = "Do not remember",
                 };
                 AutomationProperties.SetName(rememberBuilds, $"Remember {gameName} characters and equipped builds for the active HoYoLAB account");
-                AutomationProperties.SetHelpText(rememberBuilds, gameId == "gi"
+                AutomationProperties.SetHelpText(rememberBuilds, gameId == "zzz"
+                    ? "Includes owned Agents, stats, skills, Mindscapes, awakening, skin availability and equipped gear from HoYoLAB. Full-bag inventory is not included."
+                    : gameId == "gi"
                     ? "Includes levels, talents, constellations and equipped gear from HoYoLAB. This is not a full-bag artifact export."
                     : "Includes levels, traces, eidolons, memosprites and equipped gear from HoYoLAB. This is not a full-bag relic export.");
                 refreshBuilds = CreateHoyoLabManagerButton("Refresh characters & builds", $"Refresh {gameName} characters and equipped builds for the active HoYoLAB account");
@@ -1659,22 +1662,29 @@ public sealed partial class MainPage : Page
                 capabilityPanel.Children.Add(refreshEvents);
             }
             if ((gameId == "gi" && PublisherAccountService.GenshinEndgameAvailable)
-                || (gameId == "hsr" && PublisherAccountService.HsrEndgameAvailable))
+                || (gameId == "hsr" && PublisherAccountService.HsrEndgameAvailable)
+                || (gameId == "zzz" && PublisherAccountService.ZzzEndgameAvailable))
             {
                 rememberEndgame = new ToggleSwitch
                 {
-                    Header = gameId == "gi" ? "Remember Spiral Abyss records" : "Remember Star Rail challenge records",
+                    Header = gameId switch { "gi" => "Remember Spiral Abyss records", "zzz" => "Remember Shiyu Defense records", _ => "Remember Star Rail challenge records" },
                     IsEnabled = false,
                     OnContent = "Remember",
                     OffContent = "Do not remember",
                 };
-                AutomationProperties.SetName(rememberEndgame, gameId == "gi"
+                AutomationProperties.SetName(rememberEndgame, gameId == "zzz"
+                    ? "Remember Shiyu Defense records for the active HoYoLAB account"
+                    : gameId == "gi"
                     ? "Remember Spiral Abyss records for the active HoYoLAB account"
                     : "Remember Star Rail challenge records for the active HoYoLAB account");
-                AutomationProperties.SetHelpText(rememberEndgame, gameId == "gi"
+                AutomationProperties.SetHelpText(rememberEndgame, gameId == "zzz"
+                    ? "Includes current and previous Shiyu Defense Fourth/Fifth Frontier teams and results available from HoYoLAB. Earlier frontiers and other modes are not supplied."
+                    : gameId == "gi"
                     ? "Includes current and previous periods, chamber results, teams and skipped-floor markers available from HoYoLAB."
                     : "Includes current and previous Forgotten Hall, Pure Fiction and Apocalyptic Shadow periods, all returned floors, Starward teams and quick-clear markers.");
-                refreshEndgame = gameId == "gi"
+                refreshEndgame = gameId == "zzz"
+                    ? CreateHoyoLabManagerButton("Refresh Shiyu Defense", "Refresh Shiyu Defense records for the active HoYoLAB account")
+                    : gameId == "gi"
                     ? CreateHoyoLabManagerButton("Refresh Spiral Abyss", "Refresh Spiral Abyss records for the active HoYoLAB account")
                     : CreateHoyoLabManagerButton("Refresh Star Rail challenges", "Refresh Star Rail challenge records for the active HoYoLAB account");
                 capabilityPanel.Children.Add(rememberEndgame);
@@ -1875,7 +1885,9 @@ public sealed partial class MainPage : Page
             {
                 ApplyCapabilityConsent(gameId == "hsr"
                     ? await publisherAccounts.GetHsrGameBundleSnapshotAsync(cancellationToken)
-                    : await publisherAccounts.GetGenshinGameBundleSnapshotAsync(cancellationToken));
+                    : gameId == "zzz"
+                        ? await publisherAccounts.GetZzzGameBundleSnapshotAsync(cancellationToken)
+                        : await publisherAccounts.GetGenshinGameBundleSnapshotAsync(cancellationToken));
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -2132,10 +2144,12 @@ public sealed partial class MainPage : Page
                                     capability,
                                     requested,
                                     cancellationToken)
-                                : await publisherAccounts.SetGenshinCapabilityConsentAsync(
-                                    capability,
-                                    requested,
-                                    cancellationToken);
+                                : gameId == "zzz"
+                                    ? await publisherAccounts.SetZzzCapabilityConsentAsync(capability, requested, cancellationToken)
+                                    : await publisherAccounts.SetGenshinCapabilityConsentAsync(
+                                        capability,
+                                        requested,
+                                        cancellationToken);
                             completed = true;
                             if (saved)
                             {
@@ -2201,6 +2215,22 @@ public sealed partial class MainPage : Page
                 await RunManagerActionAsync(async cancellationToken =>
                 {
                     managerStatus.Text = "Refreshing characters and equipped builds from HoYoLAB…";
+                    if (gameId == "zzz")
+                    {
+                        var zzzResult = await publisherAccounts.RefreshZzzBuildsAsync(activeSlotId, binding, cancellationToken);
+                        managerStatus.Text = zzzResult.Status switch
+                        {
+                            HoyoLabZzzBuildReadStatus.Completed => $"Remembered {zzzResult.Snapshot!.Data.GetProperty("avatars").GetArrayLength()} Agents and their equipped builds. Use Sync & My HoYo to share the copy.",
+                            HoyoLabZzzBuildReadStatus.LoginRequired => "Sign in to HoYoLAB, then refresh again. The previous copy is unchanged.",
+                            HoyoLabZzzBuildReadStatus.NotEnabled => "Select an active ZZZ region and turn on Remember characters & equipped builds first.",
+                            HoyoLabZzzBuildReadStatus.Canceled => "Refresh canceled. No partial build copy was saved.",
+                            HoyoLabZzzBuildReadStatus.TimedOut => "Refresh timed out. Try again; the previous copy is unchanged.",
+                            HoyoLabZzzBuildReadStatus.TooLarge => "This build copy exceeds Nyx's supported size. The previous copy is unchanged.",
+                            HoyoLabZzzBuildReadStatus.LocalStorageUnavailable => "Nyx could not save the build copy. The previous copy is unchanged.",
+                            _ => "Nyx could not complete this refresh. Check the selected HoYoLAB region and try again; the previous copy is unchanged.",
+                        };
+                        return;
+                    }
                     if (gameId == "hsr")
                     {
                         var hsrResult = await publisherAccounts.RefreshHsrBuildsAsync(activeSlotId, binding, cancellationToken);
@@ -2322,7 +2352,23 @@ public sealed partial class MainPage : Page
                 if (activeSlotId is null || binding is null) return;
                 await RunManagerActionAsync(async cancellationToken =>
                 {
-                    managerStatus.Text = gameId == "gi" ? "Refreshing Spiral Abyss from HoYoLAB…" : "Refreshing Star Rail challenges from HoYoLAB…";
+                    managerStatus.Text = gameId switch { "gi" => "Refreshing Spiral Abyss from HoYoLAB…", "zzz" => "Refreshing Shiyu Defense from HoYoLAB…", _ => "Refreshing Star Rail challenges from HoYoLAB…" };
+                    if (gameId == "zzz")
+                    {
+                        var zzzResult = await publisherAccounts.RefreshZzzEndgameAsync(activeSlotId, binding, cancellationToken);
+                        managerStatus.Text = zzzResult.Status switch
+                        {
+                            HoyoLabZzzEndgameReadStatus.Completed => "Remembered current and previous Shiyu Defense Fourth/Fifth Frontier records. Use Sync & My HoYo to share the copy.",
+                            HoyoLabZzzEndgameReadStatus.LoginRequired => "Sign in to HoYoLAB, then refresh again. The previous copy is unchanged.",
+                            HoyoLabZzzEndgameReadStatus.NotEnabled => "Select an active ZZZ region and turn on Remember Shiyu Defense records first.",
+                            HoyoLabZzzEndgameReadStatus.Canceled => "Refresh canceled. No partial Shiyu copy was saved.",
+                            HoyoLabZzzEndgameReadStatus.TimedOut => "Refresh timed out. Try again; the previous copy is unchanged.",
+                            HoyoLabZzzEndgameReadStatus.TooLarge => "This Shiyu copy exceeds Nyx's supported size. The previous copy is unchanged.",
+                            HoyoLabZzzEndgameReadStatus.LocalStorageUnavailable => "Nyx could not save the Shiyu copy. The previous copy is unchanged.",
+                            _ => "Nyx could not complete this refresh. Check the selected HoYoLAB region and try again; the previous copy is unchanged.",
+                        };
+                        return;
+                    }
                     if (gameId == "hsr")
                     {
                         var hsrResult = await publisherAccounts.RefreshHsrEndgameAsync(activeSlotId, binding, cancellationToken);

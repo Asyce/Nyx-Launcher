@@ -12,6 +12,43 @@ public sealed class HoyoLabGameBundleStoreTests
     private static readonly DateTimeOffset FirstObservation = Now.AddHours(-2);
     private static readonly DateTimeOffset SecondObservation = Now.AddHours(-1);
 
+    [Theory]
+    [InlineData("builds")]
+    [InlineData("endgame")]
+    public void Zzz_consent_removal_preserves_other_payload_and_blocks_stale_capture(string capability)
+    {
+        using var root = new TemporaryRoot();
+        var bundle = HoyoLabZzzBundleTests.Bundle(FirstObservation);
+        var binding = bundle.SelectedRole!;
+        var store = Store(root.Path, gameId: "zzz");
+        Assert.True(store.TrySave(bundle));
+        Assert.True(store.TrySetCapabilityConsent(capability, false));
+        var removed = Assert.IsType<HoyoLabGameBundle>(store.TryLoad());
+        Assert.Single(removed.CapabilityTombstones, row => row.Capability == capability);
+        if (capability == "builds")
+        {
+            Assert.Null(removed.Roles[0].ZzzBuilds);
+            Assert.NotNull(removed.Roles[0].ZzzEndgame);
+        }
+        else
+        {
+            Assert.Null(removed.Roles[0].ZzzEndgame);
+            Assert.NotNull(removed.Roles[0].ZzzBuilds);
+        }
+        Assert.True(store.TrySetCapabilityConsent(capability, true));
+        var before = File.ReadAllBytes(store.BundlePath);
+        var stale = capability == "builds"
+            ? store.TryRecordZzzBuilds(binding, HoyoLabZzzBundleTests.Builds(), SecondObservation)
+            : store.TryRecordZzzEndgame(binding, HoyoLabZzzBundleTests.Endgame(), SecondObservation);
+        Assert.False(stale);
+        Assert.Equal(before, File.ReadAllBytes(store.BundlePath));
+        var later = Store(root.Path, clock: new FixedTimeProvider(Now.AddSeconds(2)), gameId: "zzz");
+        Assert.True(capability == "builds"
+            ? later.TryRecordZzzBuilds(binding, HoyoLabZzzBundleTests.Builds(), Now.AddSeconds(2))
+            : later.TryRecordZzzEndgame(binding, HoyoLabZzzBundleTests.Endgame(), Now.AddSeconds(2)));
+        Assert.Empty(later.TryLoad()!.CapabilityTombstones);
+    }
+
     [Fact]
     public void Abyss_remember_off_clears_only_its_payload_and_rejects_stale_resurrection()
     {
