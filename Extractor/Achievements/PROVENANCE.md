@@ -236,3 +236,60 @@ transport heuristically finds a seed and drops direction/flow from returned
 commands. These remain blockers before any live account attribution or
 complete-bag claim. This slice changes no runtime transport, parser, exporter,
 feature flag, mapping, launcher UI, or production package behavior.
+
+## Genshin candidate synthetic item-body qualification
+
+`src/gear_observer/gi_wire.rs` is also reachable only through `cfg(test)`.
+It qualifies command `8132` (`PlayerStoreNotify`) against the candidate used by
+Irminsul `781006e82d76b29b10b21125aa3bc1b79ddf7b3c`: MIT-licensed
+[`konkers/auto-artifactarium`](https://github.com/konkers/auto-artifactarium/tree/4ba25fac64b88970143af6bc2a2ef51338e620d0)
+at `4ba25fac64b88970143af6bc2a2ef51338e620d0`. These immutable upstream raw
+SHA-256 values were checked September 22, 2026:
+
+| Source path | SHA-256 |
+| --- | --- |
+| `protos/protos.proto` | `0f0744decd88ad6ff6219e11f351acbe777cd4584bc7423460b2c1af633575fa` |
+| `src/lib.rs` | `e6fb451800c2a21fa0839d5ffd42b937f1351f0c380550d1cbb201f402ffd029` |
+| `LICENSE` | `3f4b674bf182e20916d119c86baa104fe0763dac96cdc555b186967e500eee09` |
+
+The license normalizes to the existing IceDynamix MIT notice
+`61b5493c729fd3f29a72ede2e52bf36e8122fc2b460a5cadbc9446cfda5fa9fe`.
+Only command/field shapes were adapted. No upstream capture, transport, key,
+avatar parser, GUI, file writer or minimum-item heuristic was adopted.
+
+The reader accepts a borrowed body bounded to 2 MiB and returns at most 10,000
+artifact candidates plus a count of explicitly typed other items. Each
+artifact preserves the item ID, uint64 GUID, lock flag, and all eight
+`Reliquary` fields: level, experience, promotion level, main-property ID,
+append-property IDs, starred flag, upstream `elixer_choices`, and unactivated
+property IDs. Values remain raw: no level subtraction, rarity classification,
+stat calculation, equipped location or interpretation of `elixer_choices`.
+
+Known non-artifact material, weapon and furniture details remain opaque with
+their wire type and declared length checked. Item/equip details must have
+exactly one known variant; duplicates, conflicting variants, missing details,
+and unknown item/equip/reliquary fields reject the whole body. Root fields
+other than the pinned item list are bounded and skipped without retention.
+Duplicate known scalars, groups, wrong wire types, uint32 overflow and
+out-of-bounds lengths fail closed. Repeated uint32 fields support packed,
+unpacked and mixed encoding while preserving order and duplicates. Omitted
+scalars retain protobuf defaults; that does not make a zero GUID or other
+defaulted candidate valid for export. The shared `wire.rs` helpers were moved
+from the HSR test reader without changing its parsing behavior; no dependency
+or lockfile changed.
+
+Synthetic tests cover exact body/row limits, truncation at every byte of a
+nested fixture, opaque unrelated data, detail ambiguity, repeated fields and
+duplicate instance rejection by the unchanged observer. Empty bodies and
+single-item bodies decode without assuming either is a complete bag. No
+capture, account data, packet or file export is an input or output of this
+qualification.
+
+This historical candidate is **not installed-game compatibility proof**.
+Its item body supplies no account/session, total, pagination or completion
+marker. Current command/envelope/key/session assumptions, full-bag boundaries,
+account reset/relog/update/delete behavior, equipped-location evidence and the
+mapping/count/import equation remain unqualified. The reader is not connected
+to runtime transport, the observer, a launcher task, an exporter or a feature
+flag. Existing vendored runtime parsers and public package behavior are
+unchanged. STOP 6D and Release E remain blocked on their independent evidence.

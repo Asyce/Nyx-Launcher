@@ -193,6 +193,11 @@ No live game capture is performed by the automated tests.
 Tests compile both real fixed BPF expressions against Npcap's offline filter and
 exercise synthetic Ethernet IPv4/IPv6 frames only. They never open an adapter.
 
+The `cfg(test)` gear observer includes bounded HSR and Genshin candidate body
+readers exercised with synthetic protobuf only. They are preparation for source
+qualification, with no live capture, full-bag claim or gear export. Exact pins,
+retained fields, limits and remaining evidence gates are in `PROVENANCE.md`.
+
 ## Offline Genshin artifact map
 
 The checked-in `contracts/genshin-artifact-map-7.0-v1.json` is generated from
