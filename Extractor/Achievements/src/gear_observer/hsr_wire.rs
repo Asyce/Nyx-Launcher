@@ -8,6 +8,7 @@
 //! No result contains a session seed, auth bytes, flow, or completion claim.
 
 use super::MAX_GEAR_ROWS;
+use super::wire::{WireError, length, once, require_wire, scalar, skip, tag, uint32};
 use crate::capture::MAX_FRAME_BYTES;
 use protobuf::{CodedInputStream, rt::WireType};
 
@@ -43,85 +44,6 @@ struct RelicAffix {
     affix_id: u32,
     count: u32,
     step: u32,
-}
-
-#[derive(Debug, Eq, PartialEq)]
-enum WireError {
-    UnsupportedCommand,
-    BodyTooLarge,
-    TooManyRows,
-    Malformed,
-}
-
-impl From<protobuf::Error> for WireError {
-    fn from(_: protobuf::Error) -> Self {
-        // Do not retain parser errors that might contain a decoded input value.
-        Self::Malformed
-    }
-}
-
-fn tag(input: &mut CodedInputStream<'_>) -> Result<(u32, WireType), WireError> {
-    let raw = u32::try_from(input.read_raw_varint64()?).map_err(|_| WireError::Malformed)?;
-    let field = raw >> 3;
-    if field == 0 {
-        return Err(WireError::Malformed);
-    }
-    let wire = WireType::new(raw & 7).ok_or(WireError::Malformed)?;
-    Ok((field, wire))
-}
-
-fn require_wire(actual: WireType, expected: WireType) -> Result<(), WireError> {
-    if actual != expected {
-        return Err(WireError::Malformed);
-    }
-    Ok(())
-}
-
-fn once(seen: &mut u32, field: u32) -> Result<(), WireError> {
-    // Only the explicitly matched scalar fields 1..=14 call this helper.
-    let bit = 1 << field;
-    if *seen & bit != 0 {
-        return Err(WireError::Malformed);
-    }
-    *seen |= bit;
-    Ok(())
-}
-
-fn scalar(
-    input: &mut CodedInputStream<'_>,
-    wire: WireType,
-    seen: &mut u32,
-    field: u32,
-) -> Result<u64, WireError> {
-    require_wire(wire, WireType::Varint)?;
-    once(seen, field)?;
-    Ok(input.read_uint64()?)
-}
-
-fn uint32(
-    input: &mut CodedInputStream<'_>,
-    wire: WireType,
-    seen: &mut u32,
-    field: u32,
-) -> Result<u32, WireError> {
-    u32::try_from(scalar(input, wire, seen, field)?).map_err(|_| WireError::Malformed)
-}
-
-fn length(input: &mut CodedInputStream<'_>, wire: WireType) -> Result<u32, WireError> {
-    require_wire(wire, WireType::LengthDelimited)?;
-    u32::try_from(input.read_raw_varint64()?).map_err(|_| WireError::Malformed)
-}
-
-fn skip(input: &mut CodedInputStream<'_>, wire: WireType) -> Result<(), WireError> {
-    match wire {
-        WireType::StartGroup | WireType::EndGroup => return Err(WireError::Malformed),
-        WireType::LengthDelimited => {
-            let len = length(input, wire)?;
-            input.skip_raw_bytes(len)?;
-        }
-        _ => input.skip_field(wire)?,
-    }
-    Ok(())
 }
 
 fn read_body(command: u16, body: &[u8]) -> Result<BodyObservation, WireError> {

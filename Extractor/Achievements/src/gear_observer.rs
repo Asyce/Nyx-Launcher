@@ -1,9 +1,11 @@
 //! Protocol-independent, synthetic-only gear snapshot state machine.
 //!
-//! The child wire reader qualifies synthetic command bodies only. Neither module
-//! has capture, runtime decoder, launcher, or output wiring.
+//! The child wire readers qualify synthetic command bodies only. These modules
+//! have no capture, runtime decoder, launcher, or output wiring.
 
+mod gi_wire;
 mod hsr_wire;
+mod wire;
 
 use crate::Game;
 use zeroize::Zeroizing;

@@ -159,7 +159,13 @@ public sealed class WuwaPullExportProviderTests
     [Fact]
     public async Task Provider_ReadsOnlyBoundedTailOfRealisticLargeLogAndCanArmWithoutOldUrl()
     {
-        using var fixture = new Fixture();
+        // This case verifies bounded large-file reads and fresh occurrence
+        // handling. The short expiry budget used by negative cases can elapse
+        // during a single real disk read on a loaded test machine.
+        using var fixture = new Fixture(new PullExportSafetyLimits(
+            TotalDuration: TimeSpan.FromSeconds(10),
+            CacheObservationDuration: TimeSpan.FromSeconds(5),
+            CachePollInterval: TimeSpan.FromMilliseconds(5)));
         await using (var stream = new FileStream(fixture.LogPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite))
             stream.SetLength(20L * 1024 * 1024);
         File.AppendAllText(fixture.LogPath, "ordinary log tail", Encoding.UTF8);
@@ -510,7 +516,7 @@ public sealed class WuwaPullExportProviderTests
     {
         private readonly TemporaryDirectory temp = new();
         private readonly HttpClient http;
-        public Fixture()
+        public Fixture(PullExportSafetyLimits? limits = null)
         {
             Root = temp.Combine("install");
             LogPath = Path.Combine(Root, "Wuthering Waves Game", "Client", "Saved", "Logs", "Client.log");
@@ -537,7 +543,7 @@ public sealed class WuwaPullExportProviderTests
                 Root,
                 Downloads,
                 new NoWaitWuwaPullRequestPacer(),
-                new PullExportSafetyLimits(
+                limits ?? new PullExportSafetyLimits(
                     TotalDuration: TimeSpan.FromSeconds(1),
                     CacheObservationDuration: TimeSpan.FromMilliseconds(80),
                     CachePollInterval: TimeSpan.FromMilliseconds(5)),
