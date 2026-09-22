@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -57,6 +57,12 @@
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\..\contracts\hoyolab-hsr-challenges-v1.fixture.json"
           Link="Contracts\hoyolab-hsr-challenges-v1.fixture.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\contracts\hoyolab-zzz-endgame-v1.fixture.json"
+          Link="Contracts\hoyolab-zzz-endgame-v1.fixture.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\contracts\hoyolab-zzz-builds-v1.fixture.json"
+          Link="Contracts\hoyolab-zzz-builds-v1.fixture.json"
           CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\..\contracts\pengo-achievements-v1.fixture.json"
           Link="Contracts\pengo-achievements-v1.fixture.json"
