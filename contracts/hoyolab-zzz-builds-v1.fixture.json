@@ -1,0 +1,673 @@
+{
+  "description": "Wholly synthetic ZZZ owned-Agent source and normalized wire fixture. No account response is copied.",
+  "source": {
+    "index": {
+      "stats": {
+        "avatar_num": 2
+      },
+      "avatar_list": []
+    },
+    "basic": {
+      "avatar_list": [
+        {
+          "id": 1001,
+          "level": 60,
+          "name_mi18n": "Synthetic Agent",
+          "full_name_mi18n": "Synthetic Agent One",
+          "element_type": 200,
+          "camp_name_mi18n": "Synthetic camp",
+          "avatar_profession": 1,
+          "rarity": "S",
+          "group_icon_path": "https://example.invalid/synthetic.png",
+          "hollow_icon_path": "https://example.invalid/synthetic.png",
+          "rank": 1,
+          "role_square_url": "https://example.invalid/synthetic.png",
+          "sub_element_type": 1,
+          "awaken_state": "AwakenStateActivated",
+          "is_chosen": false
+        },
+        {
+          "id": 1002,
+          "level": 20,
+          "name_mi18n": "Synthetic Agent",
+          "full_name_mi18n": "Synthetic Agent One",
+          "element_type": 200,
+          "camp_name_mi18n": "Synthetic camp",
+          "avatar_profession": 1,
+          "rarity": "S",
+          "group_icon_path": "https://example.invalid/synthetic.png",
+          "hollow_icon_path": "https://example.invalid/synthetic.png",
+          "rank": 0,
+          "role_square_url": "https://example.invalid/synthetic.png",
+          "sub_element_type": 1,
+          "awaken_state": "AwakenStateNotVisible",
+          "is_chosen": false
+        }
+      ]
+    },
+    "details": [
+      {
+        "avatar_list": [
+          {
+            "avatar_profession": 1,
+            "awaken_state": "AwakenStateActivated",
+            "camp_name_mi18n": "Synthetic camp",
+            "element_type": 200,
+            "equip": [
+              {
+                "all_hit": true,
+                "equip_suit": {
+                  "desc1": "Synthetic <color=#FFFFFF>two-piece</color> effect",
+                  "desc2": "Synthetic four-piece effect",
+                  "name": "Synthetic set",
+                  "own": 1,
+                  "suit_id": 101
+                },
+                "equipment_type": 1,
+                "icon": "https://example.invalid/synthetic.png",
+                "id": 3001,
+                "invalid_property_cnt": 0,
+                "level": 15,
+                "main_properties": [
+                  {
+                    "property_id": 111,
+                    "property_name": "Synthetic stat",
+                    "base": "12.30%",
+                    "add": 0,
+                    "level": 1,
+                    "system_id": 7,
+                    "valid": true
+                  }
+                ],
+                "name": "Synthetic disc",
+                "properties": [
+                  {
+                    "property_id": 112,
+                    "property_name": "Synthetic stat",
+                    "base": "9",
+                    "add": 0,
+                    "level": 1,
+                    "system_id": 7,
+                    "valid": true
+                  }
+                ],
+                "rarity": "S"
+              }
+            ],
+            "equip_plan_info": {
+              "cultivate_info": {
+                "is_delete": false,
+                "name": "Synthetic plan",
+                "old_plan": false,
+                "plan_id": "synthetic-plan-1"
+              },
+              "custom_info": {
+                "property_list": [
+                  {
+                    "full_name": "Synthetic full stat",
+                    "id": 111,
+                    "is_select": true,
+                    "name": "Synthetic stat",
+                    "system_id": 7
+                  }
+                ]
+              },
+              "equip_rating": "S",
+              "equip_rating_score": 86.17,
+              "game_default": {
+                "property_list": [
+                  {
+                    "full_name": "Synthetic full stat",
+                    "id": 111,
+                    "is_select": true,
+                    "name": "Synthetic stat",
+                    "system_id": 7
+                  }
+                ]
+              },
+              "plan_effective_property_list": [
+                {
+                  "full_name": "Synthetic full stat",
+                  "id": 111,
+                  "is_select": true,
+                  "name": "Synthetic stat",
+                  "system_id": 7
+                }
+              ],
+              "plan_only_special_property": false,
+              "type": 1,
+              "valid_property_cnt": 20
+            },
+            "full_name_mi18n": "Synthetic Agent One",
+            "group_icon_path": "https://example.invalid/synthetic.png",
+            "hollow_icon_path": "https://example.invalid/synthetic.png",
+            "id": 1001,
+            "level": 60,
+            "name_mi18n": "Synthetic Agent",
+            "properties": [
+              {
+                "add": "",
+                "base": "",
+                "final": "12.30%",
+                "property_id": 111,
+                "property_name": "Synthetic stat"
+              },
+              {
+                "add": "+9",
+                "base": "10",
+                "final": "19",
+                "property_id": 112,
+                "property_name": "Synthetic flat stat"
+              }
+            ],
+            "rank": 1,
+            "ranks": [
+              {
+                "desc": "Synthetic rank effect ",
+                "id": 5001,
+                "is_unlocked": true,
+                "name": "Synthetic rank",
+                "pos": 1
+              }
+            ],
+            "rarity": "S",
+            "role_square_url": "https://example.invalid/synthetic.png",
+            "role_vertical_painting_url": "https://example.invalid/synthetic.png",
+            "skill_awaken": {
+              "awaken_level": 1,
+              "awaken_max_level": 6,
+              "has_awaken_system": true,
+              "skill_awaken_items": [
+                {
+                  "awaken_level": 1,
+                  "awaken_skill_items": [
+                    {
+                      "awaken_simple_info": "Synthetic awakening summary",
+                      "skill_items": [
+                        {
+                          "text": "Synthetic awakening effect",
+                          "title": "Synthetic awakened skill"
+                        }
+                      ],
+                      "skill_type": 0
+                    }
+                  ],
+                  "level_show_name": "I"
+                }
+              ]
+            },
+            "skills": [
+              {
+                "awaken_state": "AwakenStateActivated",
+                "items": [
+                  {
+                    "awaken": true,
+                    "text": "Synthetic <IconMap:Icon_Normal> effect",
+                    "title": "Synthetic skill"
+                  }
+                ],
+                "level": 12,
+                "skill_type": 0
+              }
+            ],
+            "skin_list": [
+              {
+                "is_original": true,
+                "rarity": "S",
+                "skin_hollow_icon_path": "https://example.invalid/synthetic.png",
+                "skin_id": 100001,
+                "skin_name": "Synthetic original",
+                "skin_square_url": "https://example.invalid/synthetic.png",
+                "skin_vertical_painting_color": "#ffffff",
+                "skin_vertical_painting_url": "https://example.invalid/synthetic.png",
+                "unlocked": true
+              },
+              {
+                "is_original": false,
+                "rarity": "S",
+                "skin_hollow_icon_path": "https://example.invalid/synthetic.png",
+                "skin_id": 100002,
+                "skin_name": "Synthetic alternate",
+                "skin_square_url": "https://example.invalid/synthetic.png",
+                "skin_vertical_painting_color": "#ffffff",
+                "skin_vertical_painting_url": "https://example.invalid/synthetic.png",
+                "unlocked": false
+              }
+            ],
+            "sub_element_type": 1,
+            "us_full_name": "SYNTHETIC AGENT ONE",
+            "vertical_painting_color": "#ffffff",
+            "weapon": {
+              "icon": "https://example.invalid/synthetic.png",
+              "id": 4001,
+              "level": 60,
+              "main_properties": [
+                {
+                  "property_id": 111,
+                  "property_name": "Synthetic stat",
+                  "base": "12.30%",
+                  "add": 0,
+                  "level": 1,
+                  "system_id": 7,
+                  "valid": true
+                }
+              ],
+              "name": "Synthetic W-Engine",
+              "profession": 1,
+              "properties": [
+                {
+                  "property_id": 112,
+                  "property_name": "Synthetic stat",
+                  "base": "12.30%",
+                  "add": 0,
+                  "level": 1,
+                  "system_id": 7,
+                  "valid": true
+                }
+              ],
+              "rarity": "S",
+              "star": 2,
+              "talent_content": "Synthetic effect",
+              "talent_title": "Synthetic talent"
+            }
+          }
+        ],
+        "equip_wiki": {},
+        "weapon_wiki": {},
+        "avatar_wiki": {},
+        "strategy_wiki": {},
+        "cultivate_index": {},
+        "cultivate_equip": {},
+        "special_skill_icon": {}
+      },
+      {
+        "avatar_list": [
+          {
+            "avatar_profession": 1,
+            "awaken_state": "AwakenStateNotVisible",
+            "camp_name_mi18n": "Synthetic camp",
+            "element_type": 200,
+            "equip": [],
+            "equip_plan_info": null,
+            "full_name_mi18n": "Synthetic Agent One",
+            "group_icon_path": "https://example.invalid/synthetic.png",
+            "hollow_icon_path": "https://example.invalid/synthetic.png",
+            "id": 1002,
+            "level": 20,
+            "name_mi18n": "Synthetic Agent",
+            "properties": [
+              {
+                "add": "",
+                "base": "",
+                "final": "12.30%",
+                "property_id": 111,
+                "property_name": "Synthetic stat"
+              },
+              {
+                "add": "+9",
+                "base": "10",
+                "final": "19",
+                "property_id": 112,
+                "property_name": "Synthetic flat stat"
+              }
+            ],
+            "rank": 0,
+            "ranks": [
+              {
+                "desc": "Synthetic rank effect ",
+                "id": 5001,
+                "is_unlocked": false,
+                "name": "Synthetic rank",
+                "pos": 1
+              }
+            ],
+            "rarity": "S",
+            "role_square_url": "https://example.invalid/synthetic.png",
+            "role_vertical_painting_url": "https://example.invalid/synthetic.png",
+            "skill_awaken": {
+              "awaken_level": 0,
+              "awaken_max_level": 0,
+              "has_awaken_system": false,
+              "skill_awaken_items": []
+            },
+            "skills": [
+              {
+                "awaken_state": "AwakenStateNotVisible",
+                "items": [
+                  {
+                    "awaken": false,
+                    "text": "Synthetic <IconMap:Icon_Normal> effect",
+                    "title": "Synthetic skill"
+                  }
+                ],
+                "level": 1,
+                "skill_type": 0
+              }
+            ],
+            "skin_list": [
+              {
+                "is_original": true,
+                "rarity": "S",
+                "skin_hollow_icon_path": "https://example.invalid/synthetic.png",
+                "skin_id": 100001,
+                "skin_name": "Synthetic original",
+                "skin_square_url": "https://example.invalid/synthetic.png",
+                "skin_vertical_painting_color": "#ffffff",
+                "skin_vertical_painting_url": "https://example.invalid/synthetic.png",
+                "unlocked": true
+              },
+              {
+                "is_original": false,
+                "rarity": "S",
+                "skin_hollow_icon_path": "https://example.invalid/synthetic.png",
+                "skin_id": 100002,
+                "skin_name": "Synthetic alternate",
+                "skin_square_url": "https://example.invalid/synthetic.png",
+                "skin_vertical_painting_color": "#ffffff",
+                "skin_vertical_painting_url": "https://example.invalid/synthetic.png",
+                "unlocked": false
+              }
+            ],
+            "sub_element_type": 1,
+            "us_full_name": "SYNTHETIC AGENT ONE",
+            "vertical_painting_color": "#ffffff",
+            "weapon": null
+          }
+        ],
+        "equip_wiki": {},
+        "weapon_wiki": {},
+        "avatar_wiki": {},
+        "strategy_wiki": {},
+        "cultivate_index": {},
+        "cultivate_equip": {},
+        "special_skill_icon": {}
+      }
+    ]
+  },
+  "snapshot": {
+    "avatars": [
+      {
+        "id": 1001,
+        "name": "Synthetic Agent",
+        "fullName": "Synthetic Agent One",
+        "englishName": "SYNTHETIC AGENT ONE",
+        "camp": "Synthetic camp",
+        "level": 60,
+        "rank": 1,
+        "rarity": "S",
+        "element": 200,
+        "subElement": 1,
+        "profession": 1,
+        "awakenState": "AwakenStateActivated",
+        "stats": [
+          {
+            "id": 111,
+            "name": "Synthetic stat",
+            "base": "",
+            "added": "",
+            "final": "12.30%"
+          },
+          {
+            "id": 112,
+            "name": "Synthetic flat stat",
+            "base": "10",
+            "added": "+9",
+            "final": "19"
+          }
+        ],
+        "equipment": [
+          {
+            "id": 3001,
+            "name": "Synthetic disc",
+            "rarity": "S",
+            "level": 15,
+            "position": 1,
+            "allHit": true,
+            "invalidProperties": 0,
+            "mainStats": [
+              {
+                "id": 111,
+                "name": "Synthetic stat",
+                "base": "12.30%",
+                "added": 0,
+                "level": 1,
+                "systemId": 7,
+                "valid": true
+              }
+            ],
+            "stats": [
+              {
+                "id": 112,
+                "name": "Synthetic stat",
+                "base": "9",
+                "added": 0,
+                "level": 1,
+                "systemId": 7,
+                "valid": true
+              }
+            ],
+            "set": {
+              "id": 101,
+              "name": "Synthetic set",
+              "count": 1,
+              "twoPiece": "Synthetic <color=#FFFFFF>two-piece</color> effect",
+              "fourPiece": "Synthetic four-piece effect"
+            }
+          }
+        ],
+        "weapon": {
+          "id": 4001,
+          "name": "Synthetic W-Engine",
+          "rarity": "S",
+          "level": 60,
+          "profession": 1,
+          "stars": 2,
+          "mainStats": [
+            {
+              "id": 111,
+              "name": "Synthetic stat",
+              "base": "12.30%",
+              "added": 0,
+              "level": 1,
+              "systemId": 7,
+              "valid": true
+            }
+          ],
+          "stats": [
+            {
+              "id": 112,
+              "name": "Synthetic stat",
+              "base": "12.30%",
+              "added": 0,
+              "level": 1,
+              "systemId": 7,
+              "valid": true
+            }
+          ],
+          "effectName": "Synthetic talent",
+          "effect": "Synthetic effect"
+        },
+        "skills": [
+          {
+            "type": 0,
+            "level": 12,
+            "awakenState": "AwakenStateActivated",
+            "items": [
+              {
+                "awakened": true,
+                "title": "Synthetic skill",
+                "text": "Synthetic <IconMap:Icon_Normal> effect"
+              }
+            ]
+          }
+        ],
+        "ranks": [
+          {
+            "id": 5001,
+            "position": 1,
+            "name": "Synthetic rank",
+            "description": "Synthetic rank effect ",
+            "unlocked": true
+          }
+        ],
+        "plan": {
+          "type": 1,
+          "rating": "S",
+          "score": 86.17,
+          "validProperties": 20,
+          "onlySpecial": false,
+          "defaults": [
+            {
+              "id": 111,
+              "name": "Synthetic stat",
+              "fullName": "Synthetic full stat",
+              "systemId": 7,
+              "selected": true
+            }
+          ],
+          "custom": [
+            {
+              "id": 111,
+              "name": "Synthetic stat",
+              "fullName": "Synthetic full stat",
+              "systemId": 7,
+              "selected": true
+            }
+          ],
+          "effective": [
+            {
+              "id": 111,
+              "name": "Synthetic stat",
+              "fullName": "Synthetic full stat",
+              "systemId": 7,
+              "selected": true
+            }
+          ],
+          "cultivation": {
+            "id": "synthetic-plan-1",
+            "name": "Synthetic plan",
+            "deleted": false,
+            "old": false
+          }
+        },
+        "skins": [
+          {
+            "id": 100001,
+            "name": "Synthetic original",
+            "rarity": "S",
+            "original": true,
+            "unlocked": true
+          },
+          {
+            "id": 100002,
+            "name": "Synthetic alternate",
+            "rarity": "S",
+            "original": false,
+            "unlocked": false
+          }
+        ],
+        "awakening": {
+          "available": true,
+          "level": 1,
+          "maxLevel": 6,
+          "levels": [
+            {
+              "level": 1,
+              "name": "I",
+              "skills": [
+                {
+                  "type": 0,
+                  "summary": "Synthetic awakening summary",
+                  "items": [
+                    {
+                      "title": "Synthetic awakened skill",
+                      "text": "Synthetic awakening effect"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 1002,
+        "name": "Synthetic Agent",
+        "fullName": "Synthetic Agent One",
+        "englishName": "SYNTHETIC AGENT ONE",
+        "camp": "Synthetic camp",
+        "level": 20,
+        "rank": 0,
+        "rarity": "S",
+        "element": 200,
+        "subElement": 1,
+        "profession": 1,
+        "awakenState": "AwakenStateNotVisible",
+        "stats": [
+          {
+            "id": 111,
+            "name": "Synthetic stat",
+            "base": "",
+            "added": "",
+            "final": "12.30%"
+          },
+          {
+            "id": 112,
+            "name": "Synthetic flat stat",
+            "base": "10",
+            "added": "+9",
+            "final": "19"
+          }
+        ],
+        "equipment": [],
+        "weapon": null,
+        "skills": [
+          {
+            "type": 0,
+            "level": 1,
+            "awakenState": "AwakenStateNotVisible",
+            "items": [
+              {
+                "awakened": false,
+                "title": "Synthetic skill",
+                "text": "Synthetic <IconMap:Icon_Normal> effect"
+              }
+            ]
+          }
+        ],
+        "ranks": [
+          {
+            "id": 5001,
+            "position": 1,
+            "name": "Synthetic rank",
+            "description": "Synthetic rank effect ",
+            "unlocked": false
+          }
+        ],
+        "plan": null,
+        "skins": [
+          {
+            "id": 100001,
+            "name": "Synthetic original",
+            "rarity": "S",
+            "original": true,
+            "unlocked": true
+          },
+          {
+            "id": 100002,
+            "name": "Synthetic alternate",
+            "rarity": "S",
+            "original": false,
+            "unlocked": false
+          }
+        ],
+        "awakening": {
+          "available": false,
+          "level": 0,
+          "maxLevel": 0,
+          "levels": []
+        }
+      }
+    ]
+  }
+}

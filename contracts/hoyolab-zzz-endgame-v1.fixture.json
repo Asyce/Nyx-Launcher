@@ -1,0 +1,1251 @@
+{
+  "synthetic": true,
+  "source": [
+    {
+      "hadal_ver": "v2",
+      "hadal_info_v2": {
+        "zone_id": 99,
+        "hadal_begin_time": {
+          "year": 2030,
+          "month": 1,
+          "day": 15,
+          "hour": 4,
+          "minute": 0,
+          "second": 0
+        },
+        "hadal_end_time": {
+          "year": 2030,
+          "month": 1,
+          "day": 31,
+          "hour": 4,
+          "minute": 0,
+          "second": 0
+        },
+        "pass_fifth_floor": true,
+        "brief": {
+          "cur_period_zone_layer_count": 5,
+          "score": 60012,
+          "max_score": 150000,
+          "rank_percent": 1234,
+          "rating": "S"
+        },
+        "fitfh_layer_detail": {
+          "layer_challenge_info_list": [
+            {
+              "layer_id": 3,
+              "challenge_time": {
+                "year": 2030,
+                "month": 1,
+                "day": 16,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatar_list": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A",
+                "bangboo_rectangle_url": "https://example.invalid/buddy.png"
+              },
+              "buffer": {
+                "title": "Synthetic effect",
+                "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+              },
+              "score": 20003,
+              "max_score": 50000,
+              "rating": "S",
+              "monster_pic": "https://example.invalid/monster.png"
+            },
+            {
+              "layer_id": 4,
+              "challenge_time": {
+                "year": 2030,
+                "month": 1,
+                "day": 16,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatar_list": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A",
+                "bangboo_rectangle_url": "https://example.invalid/buddy.png"
+              },
+              "buffer": {
+                "title": "Synthetic effect",
+                "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+              },
+              "score": 20004,
+              "max_score": 50000,
+              "rating": "S",
+              "monster_pic": "https://example.invalid/monster.png"
+            },
+            {
+              "layer_id": 5,
+              "challenge_time": {
+                "year": 2030,
+                "month": 1,
+                "day": 16,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatar_list": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A",
+                "bangboo_rectangle_url": "https://example.invalid/buddy.png"
+              },
+              "buffer": {
+                "title": "Synthetic effect",
+                "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+              },
+              "score": 20005,
+              "max_score": 50000,
+              "rating": "S",
+              "monster_pic": "https://example.invalid/monster.png"
+            }
+          ]
+        },
+        "fourth_layer_detail": {
+          "buffer": {
+            "title": "Synthetic effect",
+            "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+          },
+          "challenge_time": {
+            "year": 2030,
+            "month": 1,
+            "day": 16,
+            "hour": 4,
+            "minute": 0,
+            "second": 7
+          },
+          "layer_challenge_info_list": [
+            {
+              "layer_id": 1,
+              "challenge_time": {
+                "year": 2030,
+                "month": 1,
+                "day": 16,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatar_list": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A",
+                "bangboo_rectangle_url": "https://example.invalid/buddy.png"
+              }
+            },
+            {
+              "layer_id": 2,
+              "challenge_time": {
+                "year": 2030,
+                "month": 1,
+                "day": 16,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatar_list": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A",
+                "bangboo_rectangle_url": "https://example.invalid/buddy.png"
+              }
+            }
+          ],
+          "rating": "S"
+        },
+        "begin_time": "1894680000",
+        "end_time": "1896062400"
+      },
+      "nick_name": "Synthetic only",
+      "icon": "https://example.invalid/profile.png"
+    },
+    {
+      "hadal_ver": "v2",
+      "hadal_info_v2": {
+        "zone_id": 98,
+        "hadal_begin_time": {
+          "year": 2030,
+          "month": 1,
+          "day": 1,
+          "hour": 4,
+          "minute": 0,
+          "second": 0
+        },
+        "hadal_end_time": {
+          "year": 2030,
+          "month": 1,
+          "day": 14,
+          "hour": 4,
+          "minute": 0,
+          "second": 0
+        },
+        "pass_fifth_floor": true,
+        "brief": {
+          "cur_period_zone_layer_count": 5,
+          "score": 60012,
+          "max_score": 150000,
+          "rank_percent": 1234,
+          "rating": "S"
+        },
+        "fitfh_layer_detail": {
+          "layer_challenge_info_list": [
+            {
+              "layer_id": 3,
+              "challenge_time": {
+                "year": 2030,
+                "month": 1,
+                "day": 2,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatar_list": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A",
+                "bangboo_rectangle_url": "https://example.invalid/buddy.png"
+              },
+              "buffer": {
+                "title": "Synthetic effect",
+                "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+              },
+              "score": 20003,
+              "max_score": 50000,
+              "rating": "S",
+              "monster_pic": "https://example.invalid/monster.png"
+            },
+            {
+              "layer_id": 4,
+              "challenge_time": {
+                "year": 2030,
+                "month": 1,
+                "day": 2,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatar_list": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A",
+                "bangboo_rectangle_url": "https://example.invalid/buddy.png"
+              },
+              "buffer": {
+                "title": "Synthetic effect",
+                "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+              },
+              "score": 20004,
+              "max_score": 50000,
+              "rating": "S",
+              "monster_pic": "https://example.invalid/monster.png"
+            },
+            {
+              "layer_id": 5,
+              "challenge_time": {
+                "year": 2030,
+                "month": 1,
+                "day": 2,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatar_list": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A",
+                "bangboo_rectangle_url": "https://example.invalid/buddy.png"
+              },
+              "buffer": {
+                "title": "Synthetic effect",
+                "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+              },
+              "score": 20005,
+              "max_score": 50000,
+              "rating": "S",
+              "monster_pic": "https://example.invalid/monster.png"
+            }
+          ]
+        },
+        "fourth_layer_detail": {
+          "buffer": {
+            "title": "Synthetic effect",
+            "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+          },
+          "challenge_time": {
+            "year": 2030,
+            "month": 1,
+            "day": 2,
+            "hour": 4,
+            "minute": 0,
+            "second": 7
+          },
+          "layer_challenge_info_list": [
+            {
+              "layer_id": 1,
+              "challenge_time": {
+                "year": 2030,
+                "month": 1,
+                "day": 2,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatar_list": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A",
+                "bangboo_rectangle_url": "https://example.invalid/buddy.png"
+              }
+            },
+            {
+              "layer_id": 2,
+              "challenge_time": {
+                "year": 2030,
+                "month": 1,
+                "day": 2,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatar_list": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element_type": 201,
+                  "sub_element_type": 0,
+                  "avatar_profession": 101,
+                  "role_square_url": "https://example.invalid/avatar.png"
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A",
+                "bangboo_rectangle_url": "https://example.invalid/buddy.png"
+              }
+            }
+          ],
+          "rating": "S"
+        },
+        "begin_time": "1893470400",
+        "end_time": "1894593600"
+      },
+      "nick_name": "Synthetic only",
+      "icon": "https://example.invalid/profile.png"
+    }
+  ],
+  "snapshot": {
+    "shiyu": [
+      {
+        "period": 1,
+        "zoneId": 99,
+        "start": {
+          "year": 2030,
+          "month": 1,
+          "day": 15,
+          "hour": 4,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2030,
+          "month": 1,
+          "day": 31,
+          "hour": 4,
+          "minute": 0,
+          "second": 0
+        },
+        "startEpoch": "1894680000",
+        "endEpoch": "1896062400",
+        "passedFifth": true,
+        "summary": {
+          "layerCount": 5,
+          "score": 60012,
+          "maxScore": 150000,
+          "rankPercentHundredths": 1234,
+          "rating": "S"
+        },
+        "fourth": {
+          "buff": {
+            "title": "Synthetic effect",
+            "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+          },
+          "time": {
+            "year": 2030,
+            "month": 1,
+            "day": 16,
+            "hour": 4,
+            "minute": 0,
+            "second": 7
+          },
+          "rating": "S",
+          "teams": [
+            {
+              "id": 1,
+              "time": {
+                "year": 2030,
+                "month": 1,
+                "day": 16,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatars": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A"
+              }
+            },
+            {
+              "id": 2,
+              "time": {
+                "year": 2030,
+                "month": 1,
+                "day": 16,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatars": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A"
+              }
+            }
+          ]
+        },
+        "fifth": {
+          "teams": [
+            {
+              "id": 3,
+              "time": {
+                "year": 2030,
+                "month": 1,
+                "day": 16,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatars": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A"
+              },
+              "buff": {
+                "title": "Synthetic effect",
+                "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+              },
+              "score": 20003,
+              "maxScore": 50000,
+              "rating": "S"
+            },
+            {
+              "id": 4,
+              "time": {
+                "year": 2030,
+                "month": 1,
+                "day": 16,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatars": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A"
+              },
+              "buff": {
+                "title": "Synthetic effect",
+                "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+              },
+              "score": 20004,
+              "maxScore": 50000,
+              "rating": "S"
+            },
+            {
+              "id": 5,
+              "time": {
+                "year": 2030,
+                "month": 1,
+                "day": 16,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatars": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A"
+              },
+              "buff": {
+                "title": "Synthetic effect",
+                "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+              },
+              "score": 20005,
+              "maxScore": 50000,
+              "rating": "S"
+            }
+          ]
+        }
+      },
+      {
+        "period": 2,
+        "zoneId": 98,
+        "start": {
+          "year": 2030,
+          "month": 1,
+          "day": 1,
+          "hour": 4,
+          "minute": 0,
+          "second": 0
+        },
+        "end": {
+          "year": 2030,
+          "month": 1,
+          "day": 14,
+          "hour": 4,
+          "minute": 0,
+          "second": 0
+        },
+        "startEpoch": "1893470400",
+        "endEpoch": "1894593600",
+        "passedFifth": true,
+        "summary": {
+          "layerCount": 5,
+          "score": 60012,
+          "maxScore": 150000,
+          "rankPercentHundredths": 1234,
+          "rating": "S"
+        },
+        "fourth": {
+          "buff": {
+            "title": "Synthetic effect",
+            "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+          },
+          "time": {
+            "year": 2030,
+            "month": 1,
+            "day": 2,
+            "hour": 4,
+            "minute": 0,
+            "second": 7
+          },
+          "rating": "S",
+          "teams": [
+            {
+              "id": 1,
+              "time": {
+                "year": 2030,
+                "month": 1,
+                "day": 2,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatars": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A"
+              }
+            },
+            {
+              "id": 2,
+              "time": {
+                "year": 2030,
+                "month": 1,
+                "day": 2,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatars": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A"
+              }
+            }
+          ]
+        },
+        "fifth": {
+          "teams": [
+            {
+              "id": 3,
+              "time": {
+                "year": 2030,
+                "month": 1,
+                "day": 2,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatars": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A"
+              },
+              "buff": {
+                "title": "Synthetic effect",
+                "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+              },
+              "score": 20003,
+              "maxScore": 50000,
+              "rating": "S"
+            },
+            {
+              "id": 4,
+              "time": {
+                "year": 2030,
+                "month": 1,
+                "day": 2,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatars": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A"
+              },
+              "buff": {
+                "title": "Synthetic effect",
+                "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+              },
+              "score": 20004,
+              "maxScore": 50000,
+              "rating": "S"
+            },
+            {
+              "id": 5,
+              "time": {
+                "year": 2030,
+                "month": 1,
+                "day": 2,
+                "hour": 4,
+                "minute": 0,
+                "second": 7
+              },
+              "avatars": [
+                {
+                  "id": 1001,
+                  "level": 60,
+                  "rank": 0,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1002,
+                  "level": 60,
+                  "rank": 1,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                },
+                {
+                  "id": 1003,
+                  "level": 60,
+                  "rank": 2,
+                  "rarity": "S",
+                  "element": 201,
+                  "subElement": 0,
+                  "profession": 101
+                }
+              ],
+              "buddy": {
+                "id": 2001,
+                "level": 60,
+                "rarity": "A"
+              },
+              "buff": {
+                "title": "Synthetic effect",
+                "text": "<color=#ffffff>Damage</color> after <IconMap:Icon_Normal>. "
+              },
+              "score": 20005,
+              "maxScore": 50000,
+              "rating": "S"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
