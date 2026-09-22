@@ -542,10 +542,11 @@ internal sealed class HoyoLabSyncClient : IDisposable
                 return InvalidResponse();
             if (perGame)
             {
-                if (!HasExactProperties(gameRevisions, "hsr", "gi")) return InvalidResponse();
-                foreach (var game in HoyoLabGameBundleRules.SupportedGames)
+                if (!HasExactProperties(gameRevisions, "hsr", "gi")
+                    && !HasExactProperties(gameRevisions, "hsr", "gi", "zzz")) return InvalidResponse();
+                foreach (var property in gameRevisions.EnumerateObject())
                 {
-                    var value = gameRevisions.GetProperty(game);
+                    var value = property.Value;
                     if (value.ValueKind != JsonValueKind.Null
                         && (value.ValueKind != JsonValueKind.String || !TryParseTimestamp(value.GetString(), out _)))
                         return InvalidResponse();

@@ -288,9 +288,12 @@ public sealed class HoyoLabAccountSlotServiceTests
             "private HoyoLabGameBundleStore GameBundle",
             "private bool CanDeleteAllHoyoProtectedState");
         Assert.Contains(
-            "gameId == HoyoLabGameBundleRules.GameId ? hoyoGameBundle : genshinGameBundle",
+            "HoyoLabGameBundleRules.GameId => hoyoGameBundle",
             stores,
             StringComparison.Ordinal);
+        Assert.Contains("HoyoLabGameBundleRules.GenshinGameId => genshinGameBundle", stores, StringComparison.Ordinal);
+        Assert.Contains("HoyoLabGameBundleRules.ZzzGameId => zzzGameBundle", stores, StringComparison.Ordinal);
+        Assert.Contains("throw new ArgumentException", stores, StringComparison.Ordinal);
 
         var refresh = Slice(
             "private async Task<PublisherResourceSnapshot?> RefreshResourceCoreAsync",

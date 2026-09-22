@@ -88,6 +88,115 @@ public sealed class HoyoLabSyncCoordinatorTests
     }
 
     [Fact]
+    public async Task Zzz_automatic_sync_transfers_records_only_after_separate_opt_in_and_pauses_on_cloud_deletion()
+    {
+        using var harness = new Harness(HoyoLabZzzBundleTests.Bundle(Older));
+        Assert.Equal(HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(DisplayCode, gameId: "zzz")).Status);
+        Assert.False(harness.Coordinator.GetSummary("zzz").AutomaticEnabled);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, harness.Coordinator.SetAutomaticSync(true, gameId: "zzz").Status);
+        SaveBundle(harness.ProtectedRoot, HoyoLabZzzBundleTests.Bundle(Newer), "zzz");
+        harness.Cloud.ClearRequests();
+        Assert.Equal(HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.SyncAutomaticallyAsync(true, gameId: "zzz")).Status);
+        Assert.Equal(["pull", "push"], harness.Cloud.Requests.Select(row => row.Action));
+        Assert.All(harness.Cloud.Requests, row => Assert.Equal("zzz", row.GameId));
+        using var secrets = Secrets(DisplayCode);
+        var remote = harness.Cloud.GetBundle(Fixture.SyncId, secrets, "zzz");
+        Assert.Equal(Newer, remote.Roles[0].Observations.Builds);
+        Assert.Equal(Newer, remote.Roles[0].Observations.Endgame);
+        using var state = LoadState(harness.ManagedSlotRoot);
+        Assert.Equal(Now, state.AutomaticSync.ZzzLastSyncedAt);
+        Assert.False(state.AutomaticSync.HsrEnabled);
+        Assert.False(state.AutomaticSync.GenshinEnabled);
+        harness.Cloud.ClearRequests();
+        Assert.Equal(HoyoLabManualSyncStatus.Deferred,
+            (await harness.Coordinator.SyncAutomaticallyAsync(false, gameId: "zzz")).Status);
+        Assert.Empty(harness.Cloud.Requests);
+        harness.Cloud.OnRequest = request => request.Action == "pull"
+            ? JsonResponse(HttpStatusCode.NotFound, "{}") : null;
+        Assert.Equal(HoyoLabManualSyncStatus.AutomaticSyncPaused,
+            (await harness.Coordinator.SyncAutomaticallyAsync(true, gameId: "zzz")).Status);
+        Assert.False(harness.Coordinator.GetSummary("zzz").AutomaticEnabled);
+        Assert.Single(harness.Cloud.Requests);
+        Assert.NotNull(LoadBundle(harness.ProtectedRoot, "zzz").Roles[0].ZzzBuilds);
+    }
+
+    [Fact]
+    public async Task Rotation_copies_all_three_games_and_conditions_old_deletion_on_all_three_revisions()
+    {
+        using var harness = new Harness(VectorBundle());
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        SaveBundle(harness.ProtectedRoot, GenshinBundleWithResource(Older, 80), "gi");
+        SaveBundle(harness.ProtectedRoot, HoyoLabZzzBundleTests.Bundle(Older), "zzz");
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.SyncNowAsync(gameId: "gi")).Status);
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.SyncNowAsync(gameId: "zzz")).Status);
+        harness.Cloud.ClearRequests();
+        var rotated = await harness.Coordinator.RotateAsync();
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, rotated.Status);
+        using var replacement = Secrets(rotated.RecoveryCode!);
+        foreach (var game in new[] { "hsr", "gi", "zzz" })
+        {
+            Assert.Equal(game, harness.Cloud.GetBundle(replacement.SyncId, replacement, game).GameId);
+            Assert.False(harness.Cloud.HasCopy(Fixture.SyncId, game));
+        }
+        var cleanup = Assert.Single(harness.Cloud.Requests, request => request.Action == "delete-account");
+        Assert.Equal(FormatTimestamp(Now), cleanup.Root.GetProperty("baseUpdatedAtByGame").GetProperty("zzz").GetString());
+        Assert.Equal(new[] { "hsr", "gi", "zzz" },
+            harness.Cloud.Requests.Where(row => row.Action == "push").Select(row => row.GameId));
+    }
+
+    [Fact]
+    public async Task Newer_zzz_copy_stops_old_account_deletion_after_rotation_and_on_retry()
+    {
+        using var harness = new Harness(VectorBundle());
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        harness.Cloud.SeedBundle(Fixture.SyncId, DisplayCode, HoyoLabZzzBundleTests.Bundle(Older), Now.AddMinutes(-2), "zzz");
+        harness.Cloud.OnRequest = request =>
+        {
+            if (request.Action == "status")
+                harness.Cloud.SeedBundle(Fixture.SyncId, DisplayCode, HoyoLabZzzBundleTests.Bundle(Newer), Now.AddMinutes(-1), "zzz");
+            return null;
+        };
+        var result = await harness.Coordinator.RotateAsync();
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, result.Status);
+        using var current = LoadState(harness.ManagedSlotRoot);
+        var pending = Assert.Single(current.PendingDeletions);
+        Assert.Equal(Now.AddMinutes(-2), pending.ExpectedRevisionsByGame!.Zzz);
+        Assert.NotEqual(Fixture.SyncId, current.CurrentCredential!.SyncId);
+        using var original = Secrets(DisplayCode);
+        Assert.Equal(Newer, harness.Cloud.GetBundle(Fixture.SyncId, original, "zzz").Roles[0].Observations.Builds);
+        Assert.True(harness.Cloud.HasCopy(Fixture.SyncId, "hsr"));
+        Assert.Equal(HoyoLabManualSyncStatus.Conflict, (await harness.Coordinator.RetryDeletionsAsync()).Status);
+        Assert.True(harness.Cloud.HasCopy(Fixture.SyncId, "zzz"));
+    }
+
+    [Fact]
+    public async Task Zzz_role_deletion_uses_both_known_cutoffs_and_retains_other_game_copies()
+    {
+        using var harness = new Harness(VectorBundle());
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.ConnectAsync(DisplayCode)).Status);
+        var zzz = HoyoLabZzzBundleTests.Bundle(Older);
+        SaveBundle(harness.ProtectedRoot, zzz, "zzz");
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.SyncNowAsync(gameId: "zzz")).Status);
+        var queued = harness.Coordinator.QueueRoleDeletion(zzz.SelectedRole!, gameId: "zzz");
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, queued.Status);
+        using (var current = LoadState(harness.ManagedSlotRoot))
+        {
+            var pending = Assert.Single(current.PendingRoleDeletions);
+            Assert.Equal(Older, pending.KnownBuildsAt);
+            Assert.Equal(Older, pending.KnownEndgameAt);
+        }
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, (await harness.Coordinator.RetryDeletionsAsync()).Status);
+        using var secrets = Secrets(DisplayCode);
+        var remote = harness.Cloud.GetBundle(Fixture.SyncId, secrets, "zzz");
+        Assert.Empty(remote.Roles);
+        Assert.Single(remote.RoleTombstones);
+        Assert.True(harness.Cloud.HasCopy(Fixture.SyncId, "hsr"));
+        Assert.NotEmpty(LoadBundle(harness.ProtectedRoot, "hsr").Roles);
+    }
+
+    [Fact]
     public async Task Automatic_resource_interval_survives_restart_and_full_or_manual_refresh_is_immediate()
     {
         using var harness = new Harness(BundleWithResource(Older, 80));
@@ -1175,7 +1284,7 @@ public sealed class HoyoLabSyncCoordinatorTests
         Assert.True(sawCompensation);
         Assert.True(sawOldPendingAfterPromotion);
         Assert.Equal(
-            ["pull", "pull", "status", "status", "push", "delete-account"],
+            ["pull", "pull", "pull", "status", "status", "status", "push", "delete-account"],
             harness.Cloud.Requests.Select(static item => item.Action));
         using var replacementSecrets = Secrets(result.RecoveryCode!);
         Assert.Equal(replacementSyncId, replacementSecrets.SyncId);
@@ -1274,7 +1383,7 @@ public sealed class HoyoLabSyncCoordinatorTests
             static item => item.Action == "delete-account");
         Assert.Equal(Fixture.SyncId, oldDelete.SyncId);
         var oldCondition = oldDelete.Root.GetProperty("baseUpdatedAtByGame");
-        Assert.Equal(["gi", "hsr"], oldCondition.EnumerateObject()
+        Assert.Equal(["gi", "hsr", "zzz"], oldCondition.EnumerateObject()
             .Select(static property => property.Name).Order(StringComparer.Ordinal));
         var oldHsrCondition = oldCondition.GetProperty("hsr");
         var oldGiCondition = oldCondition.GetProperty("gi");
@@ -1348,7 +1457,7 @@ public sealed class HoyoLabSyncCoordinatorTests
         Assert.Equal(replacementSyncId, state.CurrentCredential!.SyncId);
         var oldPending = Assert.Single(state.PendingDeletions);
         Assert.Equal(Fixture.SyncId, oldPending.SyncId);
-        Assert.Equal(["pull", "pull", "status", "status", "push", "delete-account"],
+        Assert.Equal(["pull", "pull", "pull", "status", "status", "status", "push", "delete-account"],
             harness.Cloud.Requests.Select(static item => item.Action));
     }
 
@@ -1381,10 +1490,10 @@ public sealed class HoyoLabSyncCoordinatorTests
         Assert.Equal(HoyoLabManualSyncStatus.Completed, rotation.Status);
         Assert.NotNull(rotation.RecoveryCode);
         Assert.Equal(
-            ["pull", "pull", "status", "status", "push", "push", "delete-account"],
+            ["pull", "pull", "pull", "status", "status", "status", "push", "push", "delete-account"],
             harness.Cloud.Requests.Select(static item => item.Action));
         Assert.Equal(
-            ["hsr", "gi", "hsr", "gi", "hsr", "gi", "hsr"],
+            ["hsr", "gi", "zzz", "hsr", "gi", "zzz", "hsr", "gi", "hsr"],
             harness.Cloud.Requests.Select(static item => item.GameId));
         using var replacementSecrets = Secrets(rotation.RecoveryCode!);
         Assert.Equal(
@@ -3761,7 +3870,8 @@ public sealed class HoyoLabSyncCoordinatorTests
                 }
                 else if (TryGetRevisionCondition(request, out var scalar))
                 {
-                    if (copies.ContainsKey((request.SyncId, HoyoLabGameBundleRules.GenshinGameId)))
+                    if (copies.ContainsKey((request.SyncId, HoyoLabGameBundleRules.GenshinGameId))
+                        || copies.ContainsKey((request.SyncId, HoyoLabGameBundleRules.ZzzGameId)))
                         return ConflictResponse(CurrentRevision(request.SyncId, HoyoLabGameBundleRules.GameId),
                             CurrentRevision(request.SyncId, HoyoLabGameBundleRules.GenshinGameId));
                     if (!MatchesRevision(request.SyncId, HoyoLabGameBundleRules.GameId, scalar))
@@ -3791,7 +3901,8 @@ public sealed class HoyoLabSyncCoordinatorTests
 
         private bool MatchesGameRevisions(string syncId, HoyoLabGameRevisions expected) =>
             MatchesRevision(syncId, HoyoLabGameBundleRules.GameId, expected.Hsr)
-            && MatchesRevision(syncId, HoyoLabGameBundleRules.GenshinGameId, expected.Genshin);
+            && MatchesRevision(syncId, HoyoLabGameBundleRules.GenshinGameId, expected.Genshin)
+            && MatchesRevision(syncId, HoyoLabGameBundleRules.ZzzGameId, expected.Zzz);
 
         private DateTimeOffset? CurrentRevision(string syncId, string gameId) =>
             copies.TryGetValue((syncId, gameId), out var copy) ? copy.UpdatedAt : null;
@@ -3823,14 +3934,16 @@ public sealed class HoyoLabSyncCoordinatorTests
             if (!request.Root.TryGetProperty("baseUpdatedAtByGame", out var value)
                 || value.ValueKind != JsonValueKind.Object)
                 return false;
-            if (value.EnumerateObject().Select(property => property.Name)
-                .Order(StringComparer.Ordinal)
-                .SequenceEqual(["gi", "hsr"], StringComparer.Ordinal) is false)
+            var fields = value.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal).ToArray();
+            if (!fields.SequenceEqual(["gi", "hsr"], StringComparer.Ordinal)
+                && !fields.SequenceEqual(["gi", "hsr", "zzz"], StringComparer.Ordinal))
                 return false;
+            DateTimeOffset? zzz = null;
             if (!TryGetGameRevision(value.GetProperty("hsr"), out var hsr)
-                || !TryGetGameRevision(value.GetProperty("gi"), out var gi))
+                || !TryGetGameRevision(value.GetProperty("gi"), out var gi)
+                || value.TryGetProperty("zzz", out var zzzValue) && !TryGetGameRevision(zzzValue, out zzz))
                 return false;
-            expected = new(hsr, gi);
+            expected = new(hsr, gi, zzz);
             return true;
         }
 
