@@ -107,7 +107,8 @@ public sealed class HoyoLabGameBundleStore
         bool rememberHsrBuilds = false,
         bool rememberGenshinExploration = false,
         bool rememberGenshinEvents = false,
-        bool rememberHsrEvents = false) => SerializeMutation(
+        bool rememberHsrEvents = false,
+        bool rememberGenshinEndgame = false) => SerializeMutation(
         () => TryMigrateFromV1Core(
             role,
             resource,
@@ -117,7 +118,8 @@ public sealed class HoyoLabGameBundleStore
             rememberHsrBuilds,
             rememberGenshinExploration,
             rememberGenshinEvents,
-            rememberHsrEvents),
+            rememberHsrEvents,
+            rememberGenshinEndgame),
         false,
         cancellationToken);
 
@@ -238,6 +240,22 @@ public sealed class HoyoLabGameBundleStore
             cancellationToken);
     }
 
+    public bool TryRecordGenshinEndgame(
+        PublisherRoleBinding binding,
+        HoyoLabGenshinEndgameSnapshot events,
+        DateTimeOffset observedAt,
+        CancellationToken cancellationToken = default)
+    {
+        if (binding is null
+            || gameId != HoyoLabGameBundleRules.GenshinGameId
+            || !HoyoLabGenshinEndgameRules.IsValid(events)
+            || !IsExactUtcSecond(observedAt))
+            return false;
+        return TryMutate(
+            bundle => RecordGenshinEndgame(bundle, binding, events, observedAt),
+            cancellationToken);
+    }
+
     public bool TryRecordHsrEvents(
         PublisherRoleBinding binding,
         HoyoLabHsrEventsSnapshot events,
@@ -275,7 +293,8 @@ public sealed class HoyoLabGameBundleStore
         bool rememberHsrBuilds,
         bool rememberGenshinExploration,
         bool rememberGenshinEvents,
-        bool rememberHsrEvents)
+        bool rememberHsrEvents,
+        bool rememberGenshinEndgame)
     {
         ArgumentNullException.ThrowIfNull(role);
         if (!PublisherRoleRecordRules.IsValid(gameId, role)
@@ -310,7 +329,7 @@ public sealed class HoyoLabGameBundleStore
                     || gameId == HoyoLabGameBundleRules.GameId && rememberHsrBuilds,
                 Achievements: gameId == HoyoLabGameBundleRules.GameId,
                 Exploration: gameId == HoyoLabGameBundleRules.GenshinGameId && rememberGenshinExploration,
-                Endgame: false,
+                Endgame: gameId == HoyoLabGameBundleRules.GenshinGameId && rememberGenshinEndgame,
                 Events: gameId == HoyoLabGameBundleRules.GenshinGameId && rememberGenshinEvents
                     || gameId == HoyoLabGameBundleRules.GameId && rememberHsrEvents,
                 Currency: false),
@@ -678,6 +697,45 @@ public sealed class HoyoLabGameBundleStore
         };
     }
 
+    private static HoyoLabGameBundle? RecordGenshinEndgame(
+        HoyoLabGameBundle bundle,
+        PublisherRoleBinding binding,
+        HoyoLabGenshinEndgameSnapshot events,
+        DateTimeOffset observedAt)
+    {
+        if (!bundle.Consents.Endgame) return null;
+        var index = FindRole(bundle, binding);
+        if (index < 0) return null;
+        var role = bundle.Roles[index];
+        var existingAt = role.Observations.Endgame;
+        if (existingAt > observedAt) return null;
+        if (existingAt == observedAt)
+            return HoyoLabGenshinEndgameRules.ValuesEqual(role.GenshinEndgame, events)
+                ? bundle
+                : null;
+        if (!CanReplaceTombstone(
+                bundle.CapabilityTombstones,
+                binding,
+                HoyoLabGameBundleRules.Endgame,
+                observedAt))
+            return null;
+        var roles = bundle.Roles.ToArray();
+        roles[index] = role with
+        {
+            Observations = role.Observations with { Endgame = observedAt },
+            GenshinEndgame = HoyoLabGenshinEndgameRules.Normalize(events),
+        };
+        return bundle with
+        {
+            Roles = roles,
+            CapabilityTombstones = RemoveOlderCapabilityTombstone(
+                bundle.CapabilityTombstones,
+                binding,
+                HoyoLabGameBundleRules.Endgame,
+                observedAt),
+        };
+    }
+
     private static HoyoLabGameBundle? RecordHsrEvents(
         HoyoLabGameBundle bundle,
         PublisherRoleBinding binding,
@@ -819,7 +877,7 @@ public sealed class HoyoLabGameBundleStore
             ? [HoyoLabGameBundleRules.Resources, HoyoLabGameBundleRules.Builds,
                 HoyoLabGameBundleRules.Achievements, HoyoLabGameBundleRules.Events]
             : [HoyoLabGameBundleRules.Resources, HoyoLabGameBundleRules.Builds,
-                HoyoLabGameBundleRules.Exploration, HoyoLabGameBundleRules.Events];
+                HoyoLabGameBundleRules.Exploration, HoyoLabGameBundleRules.Events, HoyoLabGameBundleRules.Endgame];
 
     private static int FindRole(HoyoLabGameBundle bundle, PublisherRoleBinding binding) =>
         bundle.Roles.ToList().FindIndex(role => role.Role.Binding == binding);
@@ -833,6 +891,7 @@ public sealed class HoyoLabGameBundleStore
             HoyoLabGameBundleRules.Builds => consents with { Builds = value },
             HoyoLabGameBundleRules.Exploration => consents with { Exploration = value },
             HoyoLabGameBundleRules.Events => consents with { Events = value },
+            HoyoLabGameBundleRules.Endgame => consents with { Endgame = value },
             HoyoLabGameBundleRules.Achievements => consents with { Achievements = value },
             _ => consents,
         };
@@ -857,6 +916,11 @@ public sealed class HoyoLabGameBundleStore
                 Observations = role.Observations with { Exploration = null },
                 GenshinExploration = null,
             },
+            HoyoLabGameBundleRules.Endgame => role with
+            {
+                Observations = role.Observations with { Endgame = null },
+                GenshinEndgame = null,
+            },
             HoyoLabGameBundleRules.Events => role with
             {
                 Observations = role.Observations with { Events = null },
@@ -879,6 +943,7 @@ public sealed class HoyoLabGameBundleStore
             HoyoLabGameBundleRules.Builds => role.Observations.Builds,
             HoyoLabGameBundleRules.Exploration => role.Observations.Exploration,
             HoyoLabGameBundleRules.Events => role.Observations.Events,
+            HoyoLabGameBundleRules.Endgame => role.Observations.Endgame,
             HoyoLabGameBundleRules.Achievements => role.Observations.Achievements,
             _ => null,
         };
@@ -1264,6 +1329,11 @@ public sealed class HoyoLabGameBundleStore
                     writer.WritePropertyName("genshinEvents");
                     events.Data.WriteTo(writer);
                 }
+                if (role.GenshinEndgame is { } endgame)
+                {
+                    writer.WritePropertyName("genshinEndgame");
+                    endgame.Data.WriteTo(writer);
+                }
                 if (role.HsrEvents is { } hsrEvents)
                 {
                     writer.WritePropertyName("hsrEvents");
@@ -1312,7 +1382,8 @@ public sealed class HoyoLabGameBundleStore
             {
                 AllowTrailingCommas = false,
                 CommentHandling = JsonCommentHandling.Disallow,
-                MaxDepth = 12,
+                // Bundle > role > Abyss period > floor > chamber > battle > avatar.
+                MaxDepth = 16,
             });
             var root = document.RootElement;
             if (!HasExactProperties(
@@ -1375,6 +1446,7 @@ public sealed class HoyoLabGameBundleStore
             var hasExploration = item.TryGetProperty("genshinExploration", out var explorationElement);
             var hasEvents = item.TryGetProperty("genshinEvents", out var eventsElement);
             var hasHsrEvents = item.TryGetProperty("hsrEvents", out var hsrEventsElement);
+            var hasEndgame = item.TryGetProperty("genshinEndgame", out var endgameElement);
             var fields = new List<string>
             {
                 "binding", "nickname", "region", "observations", "resource", "completedAchievementIds",
@@ -1384,6 +1456,8 @@ public sealed class HoyoLabGameBundleStore
             if (hasExploration && gameId == HoyoLabGameBundleRules.GenshinGameId) fields.Add("genshinExploration");
             if (hasEvents && gameId == HoyoLabGameBundleRules.GenshinGameId) fields.Add("genshinEvents");
             if (hasHsrEvents && gameId == HoyoLabGameBundleRules.GameId) fields.Add("hsrEvents");
+            if (hasEndgame && gameId == HoyoLabGameBundleRules.GenshinGameId) fields.Add("genshinEndgame");
+            HoyoLabGenshinEndgameSnapshot? endgame = null;
             HoyoLabGenshinBuildSnapshot? genshinBuilds = null;
             HoyoLabHsrBuildSnapshot? hsrBuilds = null;
             HoyoLabGenshinExplorationSnapshot? exploration = null;
@@ -1408,7 +1482,8 @@ public sealed class HoyoLabGameBundleStore
                  || hasEvents
                      && !TryParseGenshinEvents(eventsElement, gameId, out events)
                  || hasHsrEvents
-                     && !TryParseHsrEvents(hsrEventsElement, gameId, out hsrEvents))
+                     && !TryParseHsrEvents(hsrEventsElement, gameId, out hsrEvents)
+                 || hasEndgame && !TryParseGenshinEndgame(endgameElement, gameId, out endgame))
                 return false;
             parsed.Add(new(
                 new(binding!, nickname, region),
@@ -1419,7 +1494,8 @@ public sealed class HoyoLabGameBundleStore
                 hsrBuilds,
                 exploration,
                 events,
-                hsrEvents));
+                hsrEvents,
+                endgame));
         }
         roles = parsed.AsReadOnly();
         return true;
@@ -1571,6 +1647,19 @@ public sealed class HoyoLabGameBundleStore
         var candidate = new HoyoLabGenshinEventsSnapshot(element);
         if (!HoyoLabGenshinEventsRules.IsValid(candidate)) return false;
         events = HoyoLabGenshinEventsRules.Normalize(candidate);
+        return true;
+    }
+
+    private static bool TryParseGenshinEndgame(
+        JsonElement element,
+        string gameId,
+        out HoyoLabGenshinEndgameSnapshot? events)
+    {
+        events = null;
+        if (gameId != HoyoLabGameBundleRules.GenshinGameId) return false;
+        var candidate = new HoyoLabGenshinEndgameSnapshot(element);
+        if (!HoyoLabGenshinEndgameRules.IsValid(candidate)) return false;
+        events = HoyoLabGenshinEndgameRules.Normalize(candidate);
         return true;
     }
 

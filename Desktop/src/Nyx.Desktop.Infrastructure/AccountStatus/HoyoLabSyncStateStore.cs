@@ -741,6 +741,8 @@ public sealed class HoyoLabSyncStateStore
                         WriteNullableTimestamp(writer, "knownExplorationAt", deletion.KnownExplorationAt);
                     if (deletion.KnownEventsAt is not null)
                         WriteNullableTimestamp(writer, "knownEventsAt", deletion.KnownEventsAt);
+                    if (deletion.KnownEndgameAt is not null)
+                        WriteNullableTimestamp(writer, "knownEndgameAt", deletion.KnownEndgameAt);
                     WriteTimestamp(writer, "deletedAt", deletion.DeletedAt);
                     writer.WriteEndObject();
                 }
@@ -962,6 +964,7 @@ public sealed class HoyoLabSyncStateStore
                 var hasKnownBuildsAt = item.TryGetProperty("knownBuildsAt", out var knownBuildsAtElement);
                 var hasKnownExplorationAt = item.TryGetProperty("knownExplorationAt", out var knownExplorationAtElement);
                 var hasKnownEventsAt = item.TryGetProperty("knownEventsAt", out var knownEventsAtElement);
+                var hasKnownEndgameAt = item.TryGetProperty("knownEndgameAt", out var knownEndgameAtElement);
                 var fields = new List<string>
                 {
                     "syncId", "token", "key", "binding", "operationId", "requestedAt",
@@ -973,10 +976,12 @@ public sealed class HoyoLabSyncStateStore
                     if (hasKnownBuildsAt) fields.Add("knownBuildsAt");
                     if (hasKnownExplorationAt) fields.Add("knownExplorationAt");
                     if (hasKnownEventsAt) fields.Add("knownEventsAt");
+                    if (hasKnownEndgameAt) fields.Add("knownEndgameAt");
                 }
                 DateTimeOffset? knownBuildsAt = null;
                 DateTimeOffset? knownExplorationAt = null;
                 DateTimeOffset? knownEventsAt = null;
+                DateTimeOffset? knownEndgameAt = null;
                 if (!HasExactProperties(item, fields.ToArray())
                     || item.GetProperty("syncId").ValueKind != JsonValueKind.String
                     || item.GetProperty("syncId").GetString() is not { } syncId
@@ -1003,6 +1008,11 @@ public sealed class HoyoLabSyncStateStore
                     if (!TryParseTimestamp(knownEventsAtElement, out var parsedEventsAt)) return false;
                     knownEventsAt = parsedEventsAt;
                 }
+                if (hasKnownEndgameAt)
+                {
+                    if (!TryParseTimestamp(knownEndgameAtElement, out var parsedEndgameAt)) return false;
+                    knownEndgameAt = parsedEndgameAt;
+                }
                 var gameId = HsrScope;
                 if (schemaVersion >= 3)
                 {
@@ -1014,6 +1024,7 @@ public sealed class HoyoLabSyncStateStore
                 }
                 if (hasKnownBuildsAt && gameId is not (HsrScope or GenshinScope)) return false;
                 if (hasKnownExplorationAt && gameId != GenshinScope) return false;
+                if (hasKnownEndgameAt && gameId != GenshinScope) return false;
                 if (hasKnownEventsAt && gameId is not (HsrScope or GenshinScope)) return false;
                 var binding = item.GetProperty("binding");
                 if (!HasExactProperties(binding, "roleId", "server")
@@ -1031,7 +1042,7 @@ public sealed class HoyoLabSyncStateStore
                         return false;
                     var deletion = new HoyoLabPendingRoleDeletion(syncId, token, key, exactBinding,
                         operationId, requestedAt, knownResourcesAt, knownAchievementsAt, deletedAt, gameId,
-                        knownBuildsAt: knownBuildsAt, knownExplorationAt: knownExplorationAt, knownEventsAt: knownEventsAt);
+                        knownBuildsAt: knownBuildsAt, knownExplorationAt: knownExplorationAt, knownEventsAt: knownEventsAt, knownEndgameAt: knownEndgameAt);
                     parsed.Add(deletion);
                     parsedSecretObserver?.Invoke(deletion.Token);
                     parsedSecretObserver?.Invoke(deletion.Key);
@@ -1155,6 +1166,7 @@ public sealed class HoyoLabSyncStateStore
                 && PublisherAccountCatalog.IsValidRoleBinding(deletion.GameId, deletion.Binding)
                 && (deletion.GameId != GenshinScope || deletion.KnownAchievementsAt is null)
                 && (deletion.GameId == GenshinScope || deletion.KnownExplorationAt is null)
+                && (deletion.GameId == GenshinScope || deletion.KnownEndgameAt is null)
                 && TryNormalizeOperationId(deletion.OperationId, out _)
                 && IsValidTimestamp(deletion.RequestedAt, utcNow)
                 && IsValidObservation(deletion.KnownResourcesAt, utcNow)
@@ -1162,12 +1174,14 @@ public sealed class HoyoLabSyncStateStore
                 && IsValidObservation(deletion.KnownBuildsAt, utcNow)
                 && IsValidObservation(deletion.KnownExplorationAt, utcNow)
                 && IsValidObservation(deletion.KnownEventsAt, utcNow)
+                && IsValidObservation(deletion.KnownEndgameAt, utcNow)
                 && IsValidObservation(deletion.DeletedAt, utcNow)
                 && (deletion.KnownResourcesAt is null || deletion.DeletedAt > deletion.KnownResourcesAt)
                 && (deletion.KnownAchievementsAt is null || deletion.DeletedAt > deletion.KnownAchievementsAt)
                 && (deletion.KnownBuildsAt is null || deletion.DeletedAt > deletion.KnownBuildsAt)
                 && (deletion.KnownExplorationAt is null || deletion.DeletedAt > deletion.KnownExplorationAt)
-                && (deletion.KnownEventsAt is null || deletion.DeletedAt > deletion.KnownEventsAt);
+                && (deletion.KnownEventsAt is null || deletion.DeletedAt > deletion.KnownEventsAt)
+                && (deletion.KnownEndgameAt is null || deletion.DeletedAt > deletion.KnownEndgameAt);
         }
         catch (ObjectDisposedException)
         {
@@ -1236,6 +1250,7 @@ public sealed class HoyoLabSyncStateStore
                 && left.KnownBuildsAt == right.KnownBuildsAt
                 && left.KnownExplorationAt == right.KnownExplorationAt
                 && left.KnownEventsAt == right.KnownEventsAt
+                && left.KnownEndgameAt == right.KnownEndgameAt
                 && left.DeletedAt == right.DeletedAt
                 && left.Token.Span.SequenceEqual(right.Token.Span)
                 && left.Key.Span.SequenceEqual(right.Key.Span);
@@ -1598,7 +1613,8 @@ public sealed class HoyoLabPendingRoleDeletion : IDisposable
         string gameId = HoyoLabGameBundleRules.GameId,
         DateTimeOffset? knownBuildsAt = null,
         DateTimeOffset? knownExplorationAt = null,
-        DateTimeOffset? knownEventsAt = null)
+        DateTimeOffset? knownEventsAt = null,
+        DateTimeOffset? knownEndgameAt = null)
     {
         if (binding is null
             || binding.RoleId is null || binding.Server is null
@@ -1606,6 +1622,7 @@ public sealed class HoyoLabPendingRoleDeletion : IDisposable
             || !PublisherAccountCatalog.IsValidRoleBinding(gameId, binding)
             || gameId != HoyoLabGameBundleRules.GameId && knownAchievementsAt is not null
             || gameId != HoyoLabGameBundleRules.GenshinGameId && knownExplorationAt is not null
+            || gameId != HoyoLabGameBundleRules.GenshinGameId && knownEndgameAt is not null
             || gameId is not (HoyoLabGameBundleRules.GameId or HoyoLabGameBundleRules.GenshinGameId)
                 && knownEventsAt is not null
             || !HoyoLabSyncStateStore.TryNormalizeOperationId(operationId, out _))
@@ -1620,6 +1637,7 @@ public sealed class HoyoLabPendingRoleDeletion : IDisposable
         KnownBuildsAt = knownBuildsAt;
         KnownExplorationAt = knownExplorationAt;
         KnownEventsAt = knownEventsAt;
+        KnownEndgameAt = knownEndgameAt;
         DeletedAt = deletedAt;
     }
 
@@ -1635,12 +1653,13 @@ public sealed class HoyoLabPendingRoleDeletion : IDisposable
     public DateTimeOffset? KnownBuildsAt { get; }
     public DateTimeOffset? KnownExplorationAt { get; }
     public DateTimeOffset? KnownEventsAt { get; }
+    public DateTimeOffset? KnownEndgameAt { get; }
     public DateTimeOffset DeletedAt { get; }
     public bool IsDisposed => credential.IsDisposed;
 
     public HoyoLabPendingRoleDeletion Clone() => new(SyncId, Token, Key, Binding, OperationId,
         RequestedAt, KnownResourcesAt, KnownAchievementsAt, DeletedAt, GameId,
-        knownBuildsAt: KnownBuildsAt, knownExplorationAt: KnownExplorationAt, knownEventsAt: KnownEventsAt);
+        knownBuildsAt: KnownBuildsAt, knownExplorationAt: KnownExplorationAt, knownEventsAt: KnownEventsAt, knownEndgameAt: KnownEndgameAt);
 
     public void Dispose() => credential.Dispose();
 

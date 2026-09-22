@@ -48,7 +48,8 @@ public sealed record HoyoLabGameBundleRole(
     HoyoLabHsrBuildSnapshot? HsrBuilds = null,
     HoyoLabGenshinExplorationSnapshot? GenshinExploration = null,
     HoyoLabGenshinEventsSnapshot? GenshinEvents = null,
-    HoyoLabHsrEventsSnapshot? HsrEvents = null)
+    HoyoLabHsrEventsSnapshot? HsrEvents = null,
+    HoyoLabGenshinEndgameSnapshot? GenshinEndgame = null)
 {
     public override string ToString() => nameof(HoyoLabGameBundleRole);
 }
@@ -126,7 +127,7 @@ public static class HoyoLabGameBundleRules
             || bundle.RoleTombstones.Count > MaximumRoleTombstones
             || bundle.Consents.Inventory
             || bundle.GameId != GenshinGameId && bundle.Consents.Exploration
-            || bundle.Consents.Endgame
+            || bundle.GameId != GenshinGameId && bundle.Consents.Endgame
             || bundle.Consents.Currency)
             return false;
         if (bundle.GameId == GenshinGameId && bundle.Consents.Achievements)
@@ -203,6 +204,9 @@ public static class HoyoLabGameBundleRules
                 && (activeRole.GenshinExploration is not null
                     || activeRole.Observations.Exploration is not null))
                 return false;
+            if (tombstone.Capability == Endgame
+                && (activeRole.GenshinEndgame is not null || activeRole.Observations.Endgame is not null))
+                return false;
             if (tombstone.Capability == Events
                 && (activeRole.GenshinEvents is not null
                     || activeRole.HsrEvents is not null
@@ -230,6 +234,9 @@ public static class HoyoLabGameBundleRules
             GenshinEvents = role.GenshinEvents is null
                 ? null
                 : HoyoLabGenshinEventsRules.Normalize(role.GenshinEvents),
+            GenshinEndgame = role.GenshinEndgame is null
+                ? null
+                : HoyoLabGenshinEndgameRules.Normalize(role.GenshinEndgame),
             HsrEvents = role.HsrEvents is null
                 ? null
                 : HoyoLabHsrEventsRules.Normalize(role.HsrEvents),
@@ -247,7 +254,7 @@ public static class HoyoLabGameBundleRules
         && (capability == Resources
             || capability == Builds
             || capability == Events
-            || (gameId == GenshinGameId && capability == Exploration)
+            || (gameId == GenshinGameId && capability is Exploration or Endgame)
             || (gameId == GameId && capability == Achievements));
 
     public static string ResourceName(string gameId) => gameId switch
@@ -273,7 +280,7 @@ public static class HoyoLabGameBundleRules
             || !IsValidTimestamp(role.Observations.Exploration, utcNow)
             || !IsValidTimestamp(role.Observations.Events, utcNow)
             || role.Observations.Inventory is not null
-            || role.Observations.Endgame is not null
+            || !IsValidTimestamp(role.Observations.Endgame, utcNow)
             || role.Observations.Currency is not null)
             return false;
 
@@ -320,6 +327,13 @@ public static class HoyoLabGameBundleRules
             return false;
         }
 
+        if (role.Observations.Endgame is not null)
+        {
+            if (gameId != GenshinGameId || !consents.Endgame
+                || !HoyoLabGenshinEndgameRules.IsValid(role.GenshinEndgame)) return false;
+        }
+        else if (role.GenshinEndgame is not null) return false;
+
         if (role.Observations.Events is not null)
         {
             if (!consents.Events
@@ -358,7 +372,7 @@ public static class HoyoLabGameBundleRules
     private static bool IsValidTombstoneCapability(string gameId, string capability) =>
         gameId == GameId
             ? Capabilities.Contains(capability, StringComparer.Ordinal)
-            : capability is Resources or Builds or Exploration or Events;
+            : capability is Resources or Builds or Exploration or Endgame or Events;
 
     private static bool IsValidTimestamp(DateTimeOffset? value, DateTimeOffset utcNow) =>
         value is null || IsValidTimestamp(value.Value, utcNow);

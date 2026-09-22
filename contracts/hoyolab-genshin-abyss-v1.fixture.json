@@ -1,0 +1,527 @@
+{
+  "fixtureKind": "synthetic",
+  "source": [
+    {
+      "schedule_id": 49,
+      "start_time": "1709164800",
+      "end_time": "1709251200",
+      "total_battle_times": 1,
+      "total_win_times": 1,
+      "max_floor": "11-1",
+      "total_star": 21,
+      "is_unlock": true,
+      "is_just_skipped_floor": false,
+      "skipped_floor": "10-3",
+      "reveal_rank": [
+        {
+          "avatar_icon": "https://example.invalid/synthetic.png",
+          "avatar_id": 10000001,
+          "rarity": 5,
+          "value": 10
+        }
+      ],
+      "defeat_rank": [
+        {
+          "avatar_icon": "https://example.invalid/synthetic.png",
+          "avatar_id": 10000001,
+          "rarity": 5,
+          "value": 10
+        }
+      ],
+      "damage_rank": [
+        {
+          "avatar_icon": "https://example.invalid/synthetic.png",
+          "avatar_id": 10000001,
+          "rarity": 5,
+          "value": 10
+        }
+      ],
+      "take_damage_rank": [
+        {
+          "avatar_icon": "https://example.invalid/synthetic.png",
+          "avatar_id": 10000001,
+          "rarity": 5,
+          "value": 10
+        }
+      ],
+      "normal_skill_rank": [
+        {
+          "avatar_icon": "https://example.invalid/synthetic.png",
+          "avatar_id": 10000001,
+          "rarity": 5,
+          "value": 10
+        }
+      ],
+      "energy_skill_rank": [
+        {
+          "avatar_icon": "https://example.invalid/synthetic.png",
+          "avatar_id": 10000001,
+          "rarity": 5,
+          "value": 10
+        }
+      ],
+      "floors": [
+        {
+          "icon": "https://example.invalid/floor.png",
+          "index": 11,
+          "is_unlock": true,
+          "star": 3,
+          "max_star": 9,
+          "settle_time": "0",
+          "settle_date_time": null,
+          "ley_line_disorder": [
+            "Synthetic effect\nSecond line"
+          ],
+          "ley_line_disorder_upper": [],
+          "ley_line_disorder_lower": [],
+          "levels": [
+            {
+              "index": 1,
+              "star": 3,
+              "max_star": 3,
+              "battles": [
+                {
+                  "index": 1,
+                  "timestamp": "1709209800",
+                  "settle_date_time": {
+                    "year": 2024,
+                    "month": 2,
+                    "day": 29,
+                    "hour": 12,
+                    "minute": 30,
+                    "second": 0
+                  },
+                  "avatars": [
+                    {
+                      "id": 10000001,
+                      "icon": "https://example.invalid/synthetic.png",
+                      "level": 80,
+                      "rarity": 5
+                    }
+                  ]
+                },
+                {
+                  "index": 2,
+                  "timestamp": "1709209800",
+                  "settle_date_time": {
+                    "year": 2024,
+                    "month": 2,
+                    "day": 29,
+                    "hour": 12,
+                    "minute": 30,
+                    "second": 0
+                  },
+                  "avatars": [
+                    {
+                      "id": 10000001,
+                      "icon": "https://example.invalid/synthetic.png",
+                      "level": 80,
+                      "rarity": 5
+                    }
+                  ]
+                }
+              ],
+              "top_half_floor_monster": [
+                {
+                  "name": "Synthetic enemy",
+                  "level": 90,
+                  "icon": "https://example.invalid/synthetic.png"
+                }
+              ],
+              "bottom_half_floor_monster": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schedule_id": 48,
+      "start_time": "1709164800",
+      "end_time": "1709251200",
+      "total_battle_times": 1,
+      "total_win_times": 1,
+      "max_floor": "11-1",
+      "total_star": 21,
+      "is_unlock": true,
+      "is_just_skipped_floor": false,
+      "skipped_floor": "10-3",
+      "reveal_rank": [
+        {
+          "avatar_icon": "https://example.invalid/synthetic.png",
+          "avatar_id": 10000001,
+          "rarity": 5,
+          "value": 10
+        }
+      ],
+      "defeat_rank": [
+        {
+          "avatar_icon": "https://example.invalid/synthetic.png",
+          "avatar_id": 10000001,
+          "rarity": 5,
+          "value": 10
+        }
+      ],
+      "damage_rank": [
+        {
+          "avatar_icon": "https://example.invalid/synthetic.png",
+          "avatar_id": 10000001,
+          "rarity": 5,
+          "value": 10
+        }
+      ],
+      "take_damage_rank": [
+        {
+          "avatar_icon": "https://example.invalid/synthetic.png",
+          "avatar_id": 10000001,
+          "rarity": 5,
+          "value": 10
+        }
+      ],
+      "normal_skill_rank": [
+        {
+          "avatar_icon": "https://example.invalid/synthetic.png",
+          "avatar_id": 10000001,
+          "rarity": 5,
+          "value": 10
+        }
+      ],
+      "energy_skill_rank": [
+        {
+          "avatar_icon": "https://example.invalid/synthetic.png",
+          "avatar_id": 10000001,
+          "rarity": 5,
+          "value": 10
+        }
+      ],
+      "floors": [
+        {
+          "icon": "https://example.invalid/floor.png",
+          "index": 11,
+          "is_unlock": true,
+          "star": 3,
+          "max_star": 9,
+          "settle_time": "0",
+          "settle_date_time": null,
+          "ley_line_disorder": [
+            "Synthetic effect\nSecond line"
+          ],
+          "ley_line_disorder_upper": [],
+          "ley_line_disorder_lower": [],
+          "levels": [
+            {
+              "index": 1,
+              "star": 3,
+              "max_star": 3,
+              "battles": [
+                {
+                  "index": 1,
+                  "timestamp": "1709209800",
+                  "settle_date_time": {
+                    "year": 2024,
+                    "month": 2,
+                    "day": 29,
+                    "hour": 12,
+                    "minute": 30,
+                    "second": 0
+                  },
+                  "avatars": [
+                    {
+                      "id": 10000001,
+                      "icon": "https://example.invalid/synthetic.png",
+                      "level": 80,
+                      "rarity": 5
+                    }
+                  ]
+                },
+                {
+                  "index": 2,
+                  "timestamp": "1709209800",
+                  "settle_date_time": {
+                    "year": 2024,
+                    "month": 2,
+                    "day": 29,
+                    "hour": 12,
+                    "minute": 30,
+                    "second": 0
+                  },
+                  "avatars": [
+                    {
+                      "id": 10000001,
+                      "icon": "https://example.invalid/synthetic.png",
+                      "level": 80,
+                      "rarity": 5
+                    }
+                  ]
+                }
+              ],
+              "top_half_floor_monster": [
+                {
+                  "name": "Synthetic enemy",
+                  "level": 90,
+                  "icon": "https://example.invalid/synthetic.png"
+                }
+              ],
+              "bottom_half_floor_monster": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "snapshot": {
+    "abyss": [
+      {
+        "period": 1,
+        "id": 49,
+        "start": "1709164800",
+        "end": "1709251200",
+        "battles": 1,
+        "wins": 1,
+        "maxFloor": "11-1",
+        "stars": 21,
+        "unlocked": true,
+        "justSkipped": false,
+        "skippedFloor": "10-3",
+        "rankings": {
+          "reveal": [
+            {
+              "id": 10000001,
+              "rarity": 5,
+              "value": 10
+            }
+          ],
+          "defeat": [
+            {
+              "id": 10000001,
+              "rarity": 5,
+              "value": 10
+            }
+          ],
+          "damage": [
+            {
+              "id": 10000001,
+              "rarity": 5,
+              "value": 10
+            }
+          ],
+          "damageTaken": [
+            {
+              "id": 10000001,
+              "rarity": 5,
+              "value": 10
+            }
+          ],
+          "normalSkills": [
+            {
+              "id": 10000001,
+              "rarity": 5,
+              "value": 10
+            }
+          ],
+          "elementalBursts": [
+            {
+              "id": 10000001,
+              "rarity": 5,
+              "value": 10
+            }
+          ]
+        },
+        "floors": [
+          {
+            "index": 11,
+            "unlocked": true,
+            "stars": 3,
+            "maxStars": 9,
+            "settledAt": "0",
+            "settledTime": null,
+            "effects": [
+              "Synthetic effect\nSecond line"
+            ],
+            "upperEffects": [],
+            "lowerEffects": [],
+            "chambers": [
+              {
+                "index": 1,
+                "stars": 3,
+                "maxStars": 3,
+                "upperEnemies": [
+                  {
+                    "name": "Synthetic enemy",
+                    "level": 90
+                  }
+                ],
+                "lowerEnemies": [],
+                "battles": [
+                  {
+                    "index": 1,
+                    "timestamp": "1709209800",
+                    "settledTime": {
+                      "year": 2024,
+                      "month": 2,
+                      "day": 29,
+                      "hour": 12,
+                      "minute": 30,
+                      "second": 0
+                    },
+                    "avatars": [
+                      {
+                        "id": 10000001,
+                        "level": 80,
+                        "rarity": 5
+                      }
+                    ]
+                  },
+                  {
+                    "index": 2,
+                    "timestamp": "1709209800",
+                    "settledTime": {
+                      "year": 2024,
+                      "month": 2,
+                      "day": 29,
+                      "hour": 12,
+                      "minute": 30,
+                      "second": 0
+                    },
+                    "avatars": [
+                      {
+                        "id": 10000001,
+                        "level": 80,
+                        "rarity": 5
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "period": 2,
+        "id": 48,
+        "start": "1709164800",
+        "end": "1709251200",
+        "battles": 1,
+        "wins": 1,
+        "maxFloor": "11-1",
+        "stars": 21,
+        "unlocked": true,
+        "justSkipped": false,
+        "skippedFloor": "10-3",
+        "rankings": {
+          "reveal": [
+            {
+              "id": 10000001,
+              "rarity": 5,
+              "value": 10
+            }
+          ],
+          "defeat": [
+            {
+              "id": 10000001,
+              "rarity": 5,
+              "value": 10
+            }
+          ],
+          "damage": [
+            {
+              "id": 10000001,
+              "rarity": 5,
+              "value": 10
+            }
+          ],
+          "damageTaken": [
+            {
+              "id": 10000001,
+              "rarity": 5,
+              "value": 10
+            }
+          ],
+          "normalSkills": [
+            {
+              "id": 10000001,
+              "rarity": 5,
+              "value": 10
+            }
+          ],
+          "elementalBursts": [
+            {
+              "id": 10000001,
+              "rarity": 5,
+              "value": 10
+            }
+          ]
+        },
+        "floors": [
+          {
+            "index": 11,
+            "unlocked": true,
+            "stars": 3,
+            "maxStars": 9,
+            "settledAt": "0",
+            "settledTime": null,
+            "effects": [
+              "Synthetic effect\nSecond line"
+            ],
+            "upperEffects": [],
+            "lowerEffects": [],
+            "chambers": [
+              {
+                "index": 1,
+                "stars": 3,
+                "maxStars": 3,
+                "upperEnemies": [
+                  {
+                    "name": "Synthetic enemy",
+                    "level": 90
+                  }
+                ],
+                "lowerEnemies": [],
+                "battles": [
+                  {
+                    "index": 1,
+                    "timestamp": "1709209800",
+                    "settledTime": {
+                      "year": 2024,
+                      "month": 2,
+                      "day": 29,
+                      "hour": 12,
+                      "minute": 30,
+                      "second": 0
+                    },
+                    "avatars": [
+                      {
+                        "id": 10000001,
+                        "level": 80,
+                        "rarity": 5
+                      }
+                    ]
+                  },
+                  {
+                    "index": 2,
+                    "timestamp": "1709209800",
+                    "settledTime": {
+                      "year": 2024,
+                      "month": 2,
+                      "day": 29,
+                      "hour": 12,
+                      "minute": 30,
+                      "second": 0
+                    },
+                    "avatars": [
+                      {
+                        "id": 10000001,
+                        "level": 80,
+                        "rarity": 5
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

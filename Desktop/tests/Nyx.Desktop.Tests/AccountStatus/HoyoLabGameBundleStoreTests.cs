@@ -13,6 +13,27 @@ public sealed class HoyoLabGameBundleStoreTests
     private static readonly DateTimeOffset SecondObservation = Now.AddHours(-1);
 
     [Fact]
+    public void Abyss_remember_off_clears_only_its_payload_and_rejects_stale_resurrection()
+    {
+        using var root = new TemporaryRoot();
+        var bundle = HoyoLabGenshinEndgameTests.Bundle(FirstObservation);
+        var binding = bundle.SelectedRole!;
+        var store = Store(root.Path, gameId: "gi");
+        Assert.True(store.TrySave(bundle));
+        Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Endgame, false));
+        var removed = Assert.IsType<HoyoLabGameBundle>(store.TryLoad());
+        Assert.Null(Assert.Single(removed.Roles).GenshinEndgame);
+        Assert.Null(Assert.Single(removed.Roles).Observations.Endgame);
+        Assert.False(removed.Consents.Endgame);
+        Assert.Single(removed.CapabilityTombstones, row => row.Capability == "endgame");
+        Assert.True(store.TrySetCapabilityConsent(HoyoLabGameBundleRules.Endgame, true));
+        Assert.False(store.TryRecordGenshinEndgame(binding, HoyoLabGenshinEndgameTests.Snapshot(), SecondObservation));
+        var later = Store(root.Path, clock: new FixedTimeProvider(Now.AddSeconds(2)), gameId: "gi");
+        Assert.True(later.TryRecordGenshinEndgame(binding, HoyoLabGenshinEndgameTests.Snapshot(), Now.AddSeconds(2)));
+        Assert.Empty(later.TryLoad()!.CapabilityTombstones);
+    }
+
+    [Fact]
     public void Eight_exact_roles_round_trip_with_stable_selection_and_independent_typed_observations()
     {
         using var root = new TemporaryRoot();
@@ -1804,7 +1825,7 @@ public sealed class HoyoLabGameBundleStoreTests
         Assert.True(store.TrySelectRole(target));
         var selected = Assert.IsType<HoyoLabGameBundle>(store.TryLoad());
         Assert.Equal(target.Binding, selected.SelectedRole);
-        Assert.Equal(4, selected.CapabilityTombstones.Count(item => item.Binding == target.Binding));
+        Assert.Equal(5, selected.CapabilityTombstones.Count(item => item.Binding == target.Binding));
         Assert.Contains(selected.CapabilityTombstones, item =>
             item.Binding == target.Binding
             && item.Capability == HoyoLabGameBundleRules.Exploration
@@ -1846,7 +1867,7 @@ public sealed class HoyoLabGameBundleStoreTests
             gameId: HoyoLabGameBundleRules.GenshinGameId);
         Assert.True(laterStore.TrySelectRole(target));
         var resurrected = Assert.IsType<HoyoLabGameBundle>(laterStore.TryLoad());
-        Assert.Equal(4, resurrected.CapabilityTombstones.Count(item => item.Binding == target.Binding));
+        Assert.Equal(5, resurrected.CapabilityTombstones.Count(item => item.Binding == target.Binding));
         Assert.False(laterStore.TryRecordGenshinEvents(
             target.Binding,
             snapshot,

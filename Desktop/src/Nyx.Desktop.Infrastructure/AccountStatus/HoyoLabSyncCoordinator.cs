@@ -368,6 +368,7 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
                 role.Observations.Achievements,
                 role.Observations.Exploration,
                 role.Observations.Events,
+                role.Observations.Endgame,
             }.Max());
         if (deletionAt is null) return Result(HoyoLabManualSyncStatus.Conflict);
         using var deletion = new HoyoLabPendingRoleDeletion(
@@ -383,7 +384,8 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
             gameId,
             knownBuildsAt: role.Observations.Builds,
             knownExplorationAt: role.Observations.Exploration,
-            knownEventsAt: role.Observations.Events);
+            knownEventsAt: role.Observations.Events,
+            knownEndgameAt: role.Observations.Endgame);
         if (!Apply(
             () => currentStore!.TryEnqueuePendingRoleDeletion(deletion, cancellationToken),
             cancellationToken))
@@ -604,6 +606,7 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
                 || NewerThanKnown(role?.Observations.Builds, deletion.KnownBuildsAt)
                 || NewerThanKnown(role?.Observations.Exploration, deletion.KnownExplorationAt)
                 || NewerThanKnown(role?.Observations.Events, deletion.KnownEventsAt)
+                || NewerThanKnown(role?.Observations.Endgame, deletion.KnownEndgameAt)
                 || NewerThanKnown(role?.Observations.Achievements, deletion.KnownAchievementsAt))
                 return HoyoLabManualSyncStatus.Conflict;
             var tombstone = remote.Bundle.RoleTombstones.SingleOrDefault(item => item.Binding == deletion.Binding);
@@ -666,6 +669,7 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
                 || NewerThanKnown(role?.Observations.Builds, deletion.KnownBuildsAt)
                 || NewerThanKnown(role?.Observations.Exploration, deletion.KnownExplorationAt)
                 || NewerThanKnown(role?.Observations.Events, deletion.KnownEventsAt)
+                || NewerThanKnown(role?.Observations.Endgame, deletion.KnownEndgameAt)
                 || NewerThanKnown(role?.Observations.Achievements, deletion.KnownAchievementsAt))
                 return HoyoLabManualSyncStatus.Conflict;
             var roles = new PublisherRoleBindingStore(protectedRoot, protector, files);
