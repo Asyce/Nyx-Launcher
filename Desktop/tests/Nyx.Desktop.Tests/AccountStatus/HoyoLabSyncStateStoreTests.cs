@@ -1479,25 +1479,27 @@ public sealed class HoyoLabSyncStateStoreTests
     }
 
 
-    [Fact]
-    public void Genshin_role_endgame_cutoff_round_trips_only_when_present_and_is_part_of_equality()
+    [Theory]
+    [InlineData("gi", "os_euro")]
+    [InlineData("hsr", "prod_official_eur")]
+    public void Role_endgame_cutoff_round_trips_only_when_present_and_is_part_of_equality(string gameId, string server)
     {
         using var root = new TemporaryRoot();
         var protector = new TrackingProtector();
         var store = CreateStore(root.Path, protector);
         using var credential = Credential(1);
-        var binding = new PublisherRoleBinding("700000001", "os_euro");
+        var binding = new PublisherRoleBinding("700000001", server);
         using var deletion = new HoyoLabPendingRoleDeletion(
             credential.SyncId,
             credential.Token,
             credential.Key,
             binding,
-            "gi-endgame-cutoff",
+            "endgame-cutoff",
             Now,
             null,
             null,
             Now,
-            HoyoLabGameBundleRules.GenshinGameId,
+            gameId,
             knownEndgameAt: Now.AddMinutes(-1));
 
         using var clone = deletion.Clone();
@@ -1570,7 +1572,7 @@ public sealed class HoyoLabSyncStateStoreTests
         using var hsrCredential = Credential(2);
         Assert.Throws<ArgumentException>(() => new HoyoLabPendingRoleDeletion(
             hsrCredential.SyncId, hsrCredential.Token, hsrCredential.Key, RoleBinding(2),
-            "hsr-unsupported-endgame", Now, null, null, Now, HoyoLabGameBundleRules.GameId,
+            "unsupported-endgame", Now, null, null, Now, "zzz",
             knownEndgameAt: Now.AddMinutes(-1)));
     }
 

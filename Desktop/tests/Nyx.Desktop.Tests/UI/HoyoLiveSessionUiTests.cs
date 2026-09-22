@@ -1144,7 +1144,7 @@ public sealed class HoyoLiveSessionUiTests
         var eventsAt = controls.IndexOf("if ((gameId == \"gi\" && PublisherAccountService.GenshinEventsAvailable)", StringComparison.Ordinal);
         Assert.True(eventsAt > explorationAt);
         var explorationControls = controls[explorationAt..eventsAt];
-        var endgameAt = controls.IndexOf("if (gameId == \"gi\" && PublisherAccountService.GenshinEndgameAvailable)", StringComparison.Ordinal);
+        var endgameAt = controls.IndexOf("if ((gameId == \"gi\" && PublisherAccountService.GenshinEndgameAvailable)", StringComparison.Ordinal);
         Assert.True(endgameAt > eventsAt);
         var eventControls = controls[eventsAt..endgameAt];
         var endgameControls = controls[endgameAt..];
@@ -1167,7 +1167,10 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Single(Regex.Matches(endgameControls, "new ToggleSwitch"));
         Assert.Equal(6, Regex.Matches(controls, "new ToggleSwitch").Count);
         Assert.Contains("GenshinEndgameAvailable => false", ReadAppFile("PublisherAccountService.GenshinEndgame.cs"), StringComparison.Ordinal);
-        Assert.Contains("Header = \"Remember Spiral Abyss records\"", endgameControls, StringComparison.Ordinal);
+        Assert.Contains("Remember Spiral Abyss records", endgameControls, StringComparison.Ordinal);
+        Assert.Contains("Remember Star Rail challenge records", endgameControls, StringComparison.Ordinal);
+        Assert.Contains("HsrEndgameAvailable => false", ReadAppFile("PublisherAccountService.HsrEndgame.cs"), StringComparison.Ordinal);
+        Assert.Contains("enabled && gameId == \"hsr\" && capability == HoyoLabGameBundleRules.Endgame && !HsrEndgameAvailable", service, StringComparison.Ordinal);
         Assert.Contains("SetCapabilityConsentAsync(rememberEndgame, HoyoLabGameBundleRules.Endgame)", manager, StringComparison.Ordinal);
         Assert.Contains("enabled && gameId == \"gi\" && capability == HoyoLabGameBundleRules.Endgame && !GenshinEndgameAvailable", service, StringComparison.Ordinal);
         Assert.Single(Regex.Matches(eventControls, "rememberEvents = new ToggleSwitch"));
@@ -1384,6 +1387,7 @@ public sealed class HoyoLiveSessionUiTests
     [InlineData("GenshinExploration", "gi", "genshinGameBundle", "TryRecordGenshinExploration", "HoyoLabGenshinExplorationReadStatus")]
     [InlineData("GenshinEvents", "gi", "genshinGameBundle", "TryRecordGenshinEvents", "HoyoLabGenshinEventsReadStatus")]
     [InlineData("GenshinEndgame", "gi", "genshinGameBundle", "TryRecordGenshinEndgame", "HoyoLabGenshinEndgameReadStatus")]
+    [InlineData("HsrEndgame", "hsr", "hoyoGameBundle", "TryRecordHsrEndgame", "HoyoLabHsrEndgameReadStatus")]
     [InlineData("HsrBuilds", "hsr", "hoyoGameBundle", "TryRecordHsrBuilds", "HoyoLabHsrBuildReadStatus")]
     [InlineData("HsrEvents", "hsr", "hoyoGameBundle", "TryRecordHsrEvents", "HoyoLabHsrEventsReadStatus")]
     public void Hoyo_capability_capture_queues_full_automatic_sync_only_after_successful_record(

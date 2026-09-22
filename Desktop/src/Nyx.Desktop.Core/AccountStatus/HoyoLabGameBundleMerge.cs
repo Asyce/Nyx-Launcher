@@ -80,14 +80,12 @@ public static class HoyoLabGameBundleMerge
                     remoteRole?.GenshinExploration,
                     static (left, right) => HoyoLabGenshinExplorationRules.ValuesEqual(left, right),
                     out var explorationAt,
-                    out var genshinExploration)
-                || !TryMergeObservation(
-                    localRole?.Observations.Endgame, localRole?.GenshinEndgame,
-                    remoteRole?.Observations.Endgame, remoteRole?.GenshinEndgame,
-                    static (left, right) => HoyoLabGenshinEndgameRules.ValuesEqual(left, right),
-                    out var endgameAt, out var genshinEndgame))
+                    out var genshinExploration))
                 return Conflict();
 
+            DateTimeOffset? endgameAt;
+            HoyoLabGenshinEndgameSnapshot? genshinEndgame;
+            HoyoLabHsrEndgameSnapshot? hsrEndgame;
             DateTimeOffset? buildsAt;
             HoyoLabGenshinBuildSnapshot? genshinBuilds;
             HoyoLabHsrBuildSnapshot? hsrBuilds;
@@ -108,10 +106,16 @@ public static class HoyoLabGameBundleMerge
                         localRole?.Observations.Events, localRole?.GenshinEvents,
                         remoteRole?.Observations.Events, remoteRole?.GenshinEvents,
                         static (left, right) => HoyoLabGenshinEventsRules.ValuesEqual(left, right),
-                        out eventsAt, out genshinEvents))
+                        out eventsAt, out genshinEvents)
+                    || !TryMergeObservation(
+                        localRole?.Observations.Endgame, localRole?.GenshinEndgame,
+                        remoteRole?.Observations.Endgame, remoteRole?.GenshinEndgame,
+                        static (left, right) => HoyoLabGenshinEndgameRules.ValuesEqual(left, right),
+                        out endgameAt, out genshinEndgame))
                     return Conflict();
                 hsrBuilds = null;
                 hsrEvents = null;
+                hsrEndgame = null;
             }
             else
             {
@@ -127,10 +131,16 @@ public static class HoyoLabGameBundleMerge
                         localRole?.Observations.Events, localRole?.HsrEvents,
                         remoteRole?.Observations.Events, remoteRole?.HsrEvents,
                         static (left, right) => HoyoLabHsrEventsRules.ValuesEqual(left, right),
-                        out eventsAt, out hsrEvents))
+                        out eventsAt, out hsrEvents)
+                    || !TryMergeObservation(
+                        localRole?.Observations.Endgame, localRole?.HsrEndgame,
+                        remoteRole?.Observations.Endgame, remoteRole?.HsrEndgame,
+                        static (left, right) => HoyoLabHsrEndgameRules.ValuesEqual(left, right),
+                        out endgameAt, out hsrEndgame))
                     return Conflict();
                 genshinBuilds = null;
                 genshinEvents = null;
+                genshinEndgame = null;
             }
 
             var newestRoleObservation = Latest(endgameAt, Latest(eventsAt, Latest(Latest(resourcesAt, achievementsAt), Latest(buildsAt, explorationAt))));
@@ -151,10 +161,7 @@ public static class HoyoLabGameBundleMerge
                     binding,
                     HoyoLabGameBundleRules.Exploration,
                     ref explorationAt,
-                    ref genshinExploration)
-                || !ApplyCapabilityTombstone(
-                    capabilityTombstones, binding, HoyoLabGameBundleRules.Endgame,
-                    ref endgameAt, ref genshinEndgame))
+                    ref genshinExploration))
                 return Conflict();
 
             if (local.GameId == HoyoLabGameBundleRules.GenshinGameId)
@@ -167,7 +174,10 @@ public static class HoyoLabGameBundleMerge
                         ref genshinBuilds)
                     || !ApplyCapabilityTombstone(
                         capabilityTombstones, binding, HoyoLabGameBundleRules.Events,
-                        ref eventsAt, ref genshinEvents))
+                        ref eventsAt, ref genshinEvents)
+                    || !ApplyCapabilityTombstone(
+                        capabilityTombstones, binding, HoyoLabGameBundleRules.Endgame,
+                        ref endgameAt, ref genshinEndgame))
                     return Conflict();
             }
             else if (!ApplyCapabilityTombstone(
@@ -178,7 +188,10 @@ public static class HoyoLabGameBundleMerge
                          ref hsrBuilds)
                      || !ApplyCapabilityTombstone(
                          capabilityTombstones, binding, HoyoLabGameBundleRules.Events,
-                         ref eventsAt, ref hsrEvents))
+                         ref eventsAt, ref hsrEvents)
+                    || !ApplyCapabilityTombstone(
+                        capabilityTombstones, binding, HoyoLabGameBundleRules.Endgame,
+                        ref endgameAt, ref hsrEndgame))
                 return Conflict();
 
             if (roleTombstones.TryGetValue(binding, out var roleTombstone))
@@ -211,7 +224,8 @@ public static class HoyoLabGameBundleMerge
                 genshinExploration,
                 genshinEvents,
                 hsrEvents,
-                genshinEndgame));
+                genshinEndgame,
+                hsrEndgame));
         }
 
         var orderedCapabilityTombstones = capabilityTombstones.Values
@@ -364,7 +378,8 @@ public static class HoyoLabGameBundleMerge
         && HoyoLabGenshinExplorationRules.ValuesEqual(left.GenshinExploration, right.GenshinExploration)
         && HoyoLabGenshinEventsRules.ValuesEqual(left.GenshinEvents, right.GenshinEvents)
         && HoyoLabHsrEventsRules.ValuesEqual(left.HsrEvents, right.HsrEvents)
-        && HoyoLabGenshinEndgameRules.ValuesEqual(left.GenshinEndgame, right.GenshinEndgame);
+        && HoyoLabGenshinEndgameRules.ValuesEqual(left.GenshinEndgame, right.GenshinEndgame)
+        && HoyoLabHsrEndgameRules.ValuesEqual(left.HsrEndgame, right.HsrEndgame);
 
     private static HoyoLabGameBundleMergeResult Conflict() =>
         new(HoyoLabGameBundleMergeOutcome.Conflict, null);

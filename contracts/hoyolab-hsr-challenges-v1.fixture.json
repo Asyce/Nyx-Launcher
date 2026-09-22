@@ -1,0 +1,3209 @@
+{
+  "note": "Wholly synthetic API and normalized examples; no account export.",
+  "source": [
+    {
+      "kind": "forgotten-hall",
+      "endpoint": "challenge",
+      "period": 1,
+      "data": {
+        "groups": [
+          {
+            "schedule_id": 49,
+            "begin_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end_time": {
+              "year": 2024,
+              "month": 3,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "Running",
+            "name_mi18n": "Synthetic period 1",
+            "upper_boss": null,
+            "lower_boss": null,
+            "tierce_boss": null
+          },
+          {
+            "schedule_id": 48,
+            "begin_time": {
+              "year": 2024,
+              "month": 1,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "End",
+            "name_mi18n": "Synthetic period 2",
+            "upper_boss": null,
+            "lower_boss": null,
+            "tierce_boss": null
+          }
+        ],
+        "star_num": 6,
+        "max_floor": "Synthetic floor",
+        "battle_num": 1,
+        "has_data": true,
+        "all_floor_detail": [
+          {
+            "name": "Synthetic Starward floor",
+            "star_num": 4,
+            "node_1": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1010,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1011,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1012,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1013,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ]
+            },
+            "node_2": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1020,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1021,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1022,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1023,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ]
+            },
+            "maze_id": 102,
+            "is_fast": false,
+            "node_3": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1030,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1031,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1032,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1033,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ]
+            },
+            "extra_star_num": 1,
+            "is_tierce": true,
+            "round_num": 2,
+            "is_chaos": true
+          },
+          {
+            "name": "Synthetic quick clear",
+            "star_num": 3,
+            "node_1": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": []
+            },
+            "node_2": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": []
+            },
+            "maze_id": 101,
+            "is_fast": true,
+            "node_3": null,
+            "extra_star_num": 0,
+            "is_tierce": false,
+            "round_num": 0,
+            "is_chaos": true
+          }
+        ],
+        "max_floor_id": 102,
+        "extra_star_num": 1,
+        "schedule_id": 49,
+        "begin_time": {
+          "year": 2024,
+          "month": 2,
+          "day": 1,
+          "hour": 12,
+          "minute": 30
+        },
+        "end_time": {
+          "year": 2024,
+          "month": 3,
+          "day": 1,
+          "hour": 12,
+          "minute": 30
+        },
+        "max_floor_detail": null
+      }
+    },
+    {
+      "kind": "forgotten-hall",
+      "endpoint": "challenge",
+      "period": 2,
+      "data": {
+        "groups": [
+          {
+            "schedule_id": 49,
+            "begin_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end_time": {
+              "year": 2024,
+              "month": 3,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "Running",
+            "name_mi18n": "Synthetic period 1",
+            "upper_boss": null,
+            "lower_boss": null,
+            "tierce_boss": null
+          },
+          {
+            "schedule_id": 48,
+            "begin_time": {
+              "year": 2024,
+              "month": 1,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "End",
+            "name_mi18n": "Synthetic period 2",
+            "upper_boss": null,
+            "lower_boss": null,
+            "tierce_boss": null
+          }
+        ],
+        "star_num": 6,
+        "max_floor": "Synthetic floor",
+        "battle_num": 1,
+        "has_data": true,
+        "all_floor_detail": [
+          {
+            "name": "Synthetic Starward floor",
+            "star_num": 4,
+            "node_1": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1010,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1011,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1012,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1013,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ]
+            },
+            "node_2": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1020,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1021,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1022,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1023,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ]
+            },
+            "maze_id": 202,
+            "is_fast": false,
+            "node_3": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1030,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1031,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1032,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1033,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ]
+            },
+            "extra_star_num": 1,
+            "is_tierce": true,
+            "round_num": 2,
+            "is_chaos": true
+          },
+          {
+            "name": "Synthetic quick clear",
+            "star_num": 3,
+            "node_1": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": []
+            },
+            "node_2": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": []
+            },
+            "maze_id": 201,
+            "is_fast": true,
+            "node_3": null,
+            "extra_star_num": 0,
+            "is_tierce": false,
+            "round_num": 0,
+            "is_chaos": true
+          }
+        ],
+        "max_floor_id": 202,
+        "extra_star_num": 1,
+        "schedule_id": 48,
+        "begin_time": {
+          "year": 2024,
+          "month": 1,
+          "day": 1,
+          "hour": 12,
+          "minute": 30
+        },
+        "end_time": {
+          "year": 2024,
+          "month": 2,
+          "day": 1,
+          "hour": 12,
+          "minute": 30
+        },
+        "max_floor_detail": null
+      }
+    },
+    {
+      "kind": "pure-fiction",
+      "endpoint": "challenge_story",
+      "period": 1,
+      "data": {
+        "groups": [
+          {
+            "schedule_id": 49,
+            "begin_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end_time": {
+              "year": 2024,
+              "month": 3,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "New",
+            "name_mi18n": "Synthetic period 1",
+            "upper_boss": null,
+            "lower_boss": null,
+            "tierce_boss": null
+          },
+          {
+            "schedule_id": 48,
+            "begin_time": {
+              "year": 2024,
+              "month": 1,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "End",
+            "name_mi18n": "Synthetic period 2",
+            "upper_boss": null,
+            "lower_boss": null,
+            "tierce_boss": null
+          }
+        ],
+        "star_num": 6,
+        "max_floor": "Synthetic floor",
+        "battle_num": 1,
+        "has_data": true,
+        "all_floor_detail": [
+          {
+            "name": "Synthetic Starward floor",
+            "star_num": 4,
+            "node_1": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1010,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1011,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1012,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1013,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ],
+              "score": "4001",
+              "buff": {
+                "id": 5001,
+                "name_mi18n": "Synthetic buff",
+                "desc_mi18n": "Synthetic buff description",
+                "icon": "https://example.invalid/buff.png",
+                "simple_desc_mi18m": "Synthetic short description"
+              }
+            },
+            "node_2": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1020,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1021,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1022,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1023,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ],
+              "score": "4002",
+              "buff": {
+                "id": 5002,
+                "name_mi18n": "Synthetic buff",
+                "desc_mi18n": "Synthetic buff description",
+                "icon": "https://example.invalid/buff.png",
+                "simple_desc_mi18m": "Synthetic short description"
+              }
+            },
+            "maze_id": 102,
+            "is_fast": false,
+            "node_3": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1030,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1031,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1032,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1033,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ],
+              "score": "4003",
+              "buff": {
+                "id": 5003,
+                "name_mi18n": "Synthetic buff",
+                "desc_mi18n": "Synthetic buff description",
+                "icon": "https://example.invalid/buff.png",
+                "simple_desc_mi18m": "Synthetic short description"
+              }
+            },
+            "extra_star_num": 1,
+            "is_tierce": true,
+            "round_num": 2
+          },
+          {
+            "name": "Synthetic quick clear",
+            "star_num": 3,
+            "node_1": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [],
+              "score": "0",
+              "buff": null
+            },
+            "node_2": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [],
+              "score": "0",
+              "buff": null
+            },
+            "maze_id": 101,
+            "is_fast": true,
+            "node_3": null,
+            "extra_star_num": 0,
+            "is_tierce": false,
+            "round_num": 0
+          }
+        ],
+        "max_floor_id": 102,
+        "extra_star_num": 1
+      }
+    },
+    {
+      "kind": "pure-fiction",
+      "endpoint": "challenge_story",
+      "period": 2,
+      "data": {
+        "groups": [
+          {
+            "schedule_id": 49,
+            "begin_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end_time": {
+              "year": 2024,
+              "month": 3,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "New",
+            "name_mi18n": "Synthetic period 1",
+            "upper_boss": null,
+            "lower_boss": null,
+            "tierce_boss": null
+          },
+          {
+            "schedule_id": 48,
+            "begin_time": {
+              "year": 2024,
+              "month": 1,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "End",
+            "name_mi18n": "Synthetic period 2",
+            "upper_boss": null,
+            "lower_boss": null,
+            "tierce_boss": null
+          }
+        ],
+        "star_num": 6,
+        "max_floor": "Synthetic floor",
+        "battle_num": 1,
+        "has_data": true,
+        "all_floor_detail": [
+          {
+            "name": "Synthetic Starward floor",
+            "star_num": 4,
+            "node_1": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1010,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1011,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1012,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1013,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ],
+              "score": "4001",
+              "buff": {
+                "id": 5001,
+                "name_mi18n": "Synthetic buff",
+                "desc_mi18n": "Synthetic buff description",
+                "icon": "https://example.invalid/buff.png",
+                "simple_desc_mi18m": "Synthetic short description"
+              }
+            },
+            "node_2": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1020,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1021,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1022,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1023,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ],
+              "score": "4002",
+              "buff": {
+                "id": 5002,
+                "name_mi18n": "Synthetic buff",
+                "desc_mi18n": "Synthetic buff description",
+                "icon": "https://example.invalid/buff.png",
+                "simple_desc_mi18m": "Synthetic short description"
+              }
+            },
+            "maze_id": 202,
+            "is_fast": false,
+            "node_3": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1030,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1031,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1032,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1033,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ],
+              "score": "4003",
+              "buff": {
+                "id": 5003,
+                "name_mi18n": "Synthetic buff",
+                "desc_mi18n": "Synthetic buff description",
+                "icon": "https://example.invalid/buff.png",
+                "simple_desc_mi18m": "Synthetic short description"
+              }
+            },
+            "extra_star_num": 1,
+            "is_tierce": true,
+            "round_num": 2
+          },
+          {
+            "name": "Synthetic quick clear",
+            "star_num": 3,
+            "node_1": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [],
+              "score": "0",
+              "buff": null
+            },
+            "node_2": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [],
+              "score": "0",
+              "buff": null
+            },
+            "maze_id": 201,
+            "is_fast": true,
+            "node_3": null,
+            "extra_star_num": 0,
+            "is_tierce": false,
+            "round_num": 0
+          }
+        ],
+        "max_floor_id": 202,
+        "extra_star_num": 1
+      }
+    },
+    {
+      "kind": "apocalyptic-shadow",
+      "endpoint": "challenge_boss",
+      "period": 1,
+      "data": {
+        "groups": [
+          {
+            "schedule_id": 49,
+            "begin_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end_time": {
+              "year": 2024,
+              "month": 3,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "Running",
+            "name_mi18n": "Synthetic period 1",
+            "upper_boss": {
+              "id": 7001,
+              "name_mi18n": "Synthetic boss 1",
+              "icon": "https://example.invalid/boss.png"
+            },
+            "lower_boss": {
+              "id": 7002,
+              "name_mi18n": "Synthetic boss 2",
+              "icon": "https://example.invalid/boss.png"
+            },
+            "tierce_boss": {
+              "id": 7003,
+              "name_mi18n": "Synthetic boss 3",
+              "icon": "https://example.invalid/boss.png"
+            }
+          },
+          {
+            "schedule_id": 48,
+            "begin_time": {
+              "year": 2024,
+              "month": 1,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "End",
+            "name_mi18n": "Synthetic period 2",
+            "upper_boss": {
+              "id": 7001,
+              "name_mi18n": "Synthetic boss 1",
+              "icon": "https://example.invalid/boss.png"
+            },
+            "lower_boss": {
+              "id": 7002,
+              "name_mi18n": "Synthetic boss 2",
+              "icon": "https://example.invalid/boss.png"
+            },
+            "tierce_boss": {
+              "id": 7003,
+              "name_mi18n": "Synthetic boss 3",
+              "icon": "https://example.invalid/boss.png"
+            }
+          }
+        ],
+        "star_num": 6,
+        "max_floor": "Synthetic floor",
+        "battle_num": 1,
+        "has_data": true,
+        "all_floor_detail": [
+          {
+            "name": "Synthetic Starward floor",
+            "star_num": "4",
+            "node_1": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1010,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1011,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1012,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1013,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ],
+              "score": "4001",
+              "buff": {
+                "id": 5001,
+                "name_mi18n": "Synthetic buff",
+                "desc_mi18n": "Synthetic buff description",
+                "icon": "https://example.invalid/buff.png"
+              },
+              "boss_defeated": true
+            },
+            "node_2": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1020,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1021,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1022,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1023,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ],
+              "score": "4002",
+              "buff": {
+                "id": 5002,
+                "name_mi18n": "Synthetic buff",
+                "desc_mi18n": "Synthetic buff description",
+                "icon": "https://example.invalid/buff.png"
+              },
+              "boss_defeated": true
+            },
+            "maze_id": 102,
+            "is_fast": false,
+            "node_3": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1030,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1031,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1032,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1033,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ],
+              "score": "4003",
+              "buff": {
+                "id": 5003,
+                "name_mi18n": "Synthetic buff",
+                "desc_mi18n": "Synthetic buff description",
+                "icon": "https://example.invalid/buff.png"
+              },
+              "boss_defeated": true
+            },
+            "extra_star_num": "1",
+            "is_tierce": true,
+            "last_update_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 29,
+              "hour": 12,
+              "minute": 30
+            }
+          },
+          {
+            "name": "Synthetic quick clear",
+            "star_num": "3",
+            "node_1": {
+              "challenge_time": null,
+              "avatars": [],
+              "score": "0",
+              "buff": null,
+              "boss_defeated": false
+            },
+            "node_2": {
+              "challenge_time": null,
+              "avatars": [],
+              "score": "0",
+              "buff": null,
+              "boss_defeated": false
+            },
+            "maze_id": 101,
+            "is_fast": true,
+            "node_3": null,
+            "extra_star_num": "0",
+            "is_tierce": false,
+            "last_update_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 29,
+              "hour": 12,
+              "minute": 30
+            }
+          }
+        ],
+        "max_floor_id": 102,
+        "extra_star_num": 1
+      }
+    },
+    {
+      "kind": "apocalyptic-shadow",
+      "endpoint": "challenge_boss",
+      "period": 2,
+      "data": {
+        "groups": [
+          {
+            "schedule_id": 49,
+            "begin_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end_time": {
+              "year": 2024,
+              "month": 3,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "Running",
+            "name_mi18n": "Synthetic period 1",
+            "upper_boss": {
+              "id": 7001,
+              "name_mi18n": "Synthetic boss 1",
+              "icon": "https://example.invalid/boss.png"
+            },
+            "lower_boss": {
+              "id": 7002,
+              "name_mi18n": "Synthetic boss 2",
+              "icon": "https://example.invalid/boss.png"
+            },
+            "tierce_boss": {
+              "id": 7003,
+              "name_mi18n": "Synthetic boss 3",
+              "icon": "https://example.invalid/boss.png"
+            }
+          },
+          {
+            "schedule_id": 48,
+            "begin_time": {
+              "year": 2024,
+              "month": 1,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "End",
+            "name_mi18n": "Synthetic period 2",
+            "upper_boss": {
+              "id": 7001,
+              "name_mi18n": "Synthetic boss 1",
+              "icon": "https://example.invalid/boss.png"
+            },
+            "lower_boss": {
+              "id": 7002,
+              "name_mi18n": "Synthetic boss 2",
+              "icon": "https://example.invalid/boss.png"
+            },
+            "tierce_boss": {
+              "id": 7003,
+              "name_mi18n": "Synthetic boss 3",
+              "icon": "https://example.invalid/boss.png"
+            }
+          }
+        ],
+        "star_num": 6,
+        "max_floor": "Synthetic floor",
+        "battle_num": 1,
+        "has_data": true,
+        "all_floor_detail": [
+          {
+            "name": "Synthetic Starward floor",
+            "star_num": "4",
+            "node_1": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1010,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1011,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1012,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1013,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ],
+              "score": "4001",
+              "buff": {
+                "id": 5001,
+                "name_mi18n": "Synthetic buff",
+                "desc_mi18n": "Synthetic buff description",
+                "icon": "https://example.invalid/buff.png"
+              },
+              "boss_defeated": true
+            },
+            "node_2": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1020,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1021,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1022,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1023,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ],
+              "score": "4002",
+              "buff": {
+                "id": 5002,
+                "name_mi18n": "Synthetic buff",
+                "desc_mi18n": "Synthetic buff description",
+                "icon": "https://example.invalid/buff.png"
+              },
+              "boss_defeated": true
+            },
+            "maze_id": 202,
+            "is_fast": false,
+            "node_3": {
+              "challenge_time": {
+                "year": 2024,
+                "month": 2,
+                "day": 29,
+                "hour": 12,
+                "minute": 30
+              },
+              "avatars": [
+                {
+                  "id": 1030,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1031,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1032,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                },
+                {
+                  "id": 1033,
+                  "level": 80,
+                  "icon": "https://example.invalid/avatar.png",
+                  "rarity": 5,
+                  "element": "Ice",
+                  "rank": 1,
+                  "is_return_assist": false
+                }
+              ],
+              "score": "4003",
+              "buff": {
+                "id": 5003,
+                "name_mi18n": "Synthetic buff",
+                "desc_mi18n": "Synthetic buff description",
+                "icon": "https://example.invalid/buff.png"
+              },
+              "boss_defeated": true
+            },
+            "extra_star_num": "1",
+            "is_tierce": true,
+            "last_update_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 29,
+              "hour": 12,
+              "minute": 30
+            }
+          },
+          {
+            "name": "Synthetic quick clear",
+            "star_num": "3",
+            "node_1": {
+              "challenge_time": null,
+              "avatars": [],
+              "score": "0",
+              "buff": null,
+              "boss_defeated": false
+            },
+            "node_2": {
+              "challenge_time": null,
+              "avatars": [],
+              "score": "0",
+              "buff": null,
+              "boss_defeated": false
+            },
+            "maze_id": 201,
+            "is_fast": true,
+            "node_3": null,
+            "extra_star_num": "0",
+            "is_tierce": false,
+            "last_update_time": {
+              "year": 2024,
+              "month": 2,
+              "day": 29,
+              "hour": 12,
+              "minute": 30
+            }
+          }
+        ],
+        "max_floor_id": 202,
+        "extra_star_num": 1
+      }
+    }
+  ],
+  "snapshot": {
+    "challenges": [
+      {
+        "kind": "forgotten-hall",
+        "period": 1,
+        "groups": [
+          {
+            "id": 49,
+            "start": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end": {
+              "year": 2024,
+              "month": 3,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "Running",
+            "name": "Synthetic period 1",
+            "upperBoss": null,
+            "lowerBoss": null,
+            "thirdBoss": null
+          },
+          {
+            "id": 48,
+            "start": {
+              "year": 2024,
+              "month": 1,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "End",
+            "name": "Synthetic period 2",
+            "upperBoss": null,
+            "lowerBoss": null,
+            "thirdBoss": null
+          }
+        ],
+        "stars": 6,
+        "extraStars": 1,
+        "maxFloor": "Synthetic floor",
+        "maxFloorId": 102,
+        "battles": 1,
+        "hasData": true,
+        "floors": [
+          {
+            "id": 102,
+            "name": "Synthetic Starward floor",
+            "stars": 4,
+            "extraStars": 1,
+            "fast": false,
+            "starward": true,
+            "nodes": [
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1010,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1011,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1012,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1013,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ]
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1020,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1021,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1022,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1023,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ]
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1030,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1031,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1032,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1033,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ]
+              }
+            ],
+            "rounds": 2,
+            "chaos": true
+          },
+          {
+            "id": 101,
+            "name": "Synthetic quick clear",
+            "stars": 3,
+            "extraStars": 0,
+            "fast": true,
+            "starward": false,
+            "nodes": [
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": []
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": []
+              },
+              null
+            ],
+            "rounds": 0,
+            "chaos": true
+          }
+        ],
+        "id": 49,
+        "start": {
+          "year": 2024,
+          "month": 2,
+          "day": 1,
+          "hour": 12,
+          "minute": 30
+        },
+        "end": {
+          "year": 2024,
+          "month": 3,
+          "day": 1,
+          "hour": 12,
+          "minute": 30
+        }
+      },
+      {
+        "kind": "forgotten-hall",
+        "period": 2,
+        "groups": [
+          {
+            "id": 49,
+            "start": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end": {
+              "year": 2024,
+              "month": 3,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "Running",
+            "name": "Synthetic period 1",
+            "upperBoss": null,
+            "lowerBoss": null,
+            "thirdBoss": null
+          },
+          {
+            "id": 48,
+            "start": {
+              "year": 2024,
+              "month": 1,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "End",
+            "name": "Synthetic period 2",
+            "upperBoss": null,
+            "lowerBoss": null,
+            "thirdBoss": null
+          }
+        ],
+        "stars": 6,
+        "extraStars": 1,
+        "maxFloor": "Synthetic floor",
+        "maxFloorId": 202,
+        "battles": 1,
+        "hasData": true,
+        "floors": [
+          {
+            "id": 202,
+            "name": "Synthetic Starward floor",
+            "stars": 4,
+            "extraStars": 1,
+            "fast": false,
+            "starward": true,
+            "nodes": [
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1010,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1011,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1012,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1013,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ]
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1020,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1021,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1022,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1023,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ]
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1030,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1031,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1032,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1033,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ]
+              }
+            ],
+            "rounds": 2,
+            "chaos": true
+          },
+          {
+            "id": 201,
+            "name": "Synthetic quick clear",
+            "stars": 3,
+            "extraStars": 0,
+            "fast": true,
+            "starward": false,
+            "nodes": [
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": []
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": []
+              },
+              null
+            ],
+            "rounds": 0,
+            "chaos": true
+          }
+        ],
+        "id": 48,
+        "start": {
+          "year": 2024,
+          "month": 1,
+          "day": 1,
+          "hour": 12,
+          "minute": 30
+        },
+        "end": {
+          "year": 2024,
+          "month": 2,
+          "day": 1,
+          "hour": 12,
+          "minute": 30
+        }
+      },
+      {
+        "kind": "pure-fiction",
+        "period": 1,
+        "groups": [
+          {
+            "id": 49,
+            "start": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end": {
+              "year": 2024,
+              "month": 3,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "New",
+            "name": "Synthetic period 1",
+            "upperBoss": null,
+            "lowerBoss": null,
+            "thirdBoss": null
+          },
+          {
+            "id": 48,
+            "start": {
+              "year": 2024,
+              "month": 1,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "End",
+            "name": "Synthetic period 2",
+            "upperBoss": null,
+            "lowerBoss": null,
+            "thirdBoss": null
+          }
+        ],
+        "stars": 6,
+        "extraStars": 1,
+        "maxFloor": "Synthetic floor",
+        "maxFloorId": 102,
+        "battles": 1,
+        "hasData": true,
+        "floors": [
+          {
+            "id": 102,
+            "name": "Synthetic Starward floor",
+            "stars": 4,
+            "extraStars": 1,
+            "fast": false,
+            "starward": true,
+            "nodes": [
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1010,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1011,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1012,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1013,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ],
+                "score": "4001",
+                "buff": {
+                  "id": 5001,
+                  "name": "Synthetic buff",
+                  "description": "Synthetic buff description",
+                  "summary": "Synthetic short description"
+                }
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1020,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1021,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1022,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1023,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ],
+                "score": "4002",
+                "buff": {
+                  "id": 5002,
+                  "name": "Synthetic buff",
+                  "description": "Synthetic buff description",
+                  "summary": "Synthetic short description"
+                }
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1030,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1031,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1032,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1033,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ],
+                "score": "4003",
+                "buff": {
+                  "id": 5003,
+                  "name": "Synthetic buff",
+                  "description": "Synthetic buff description",
+                  "summary": "Synthetic short description"
+                }
+              }
+            ],
+            "rounds": 2
+          },
+          {
+            "id": 101,
+            "name": "Synthetic quick clear",
+            "stars": 3,
+            "extraStars": 0,
+            "fast": true,
+            "starward": false,
+            "nodes": [
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [],
+                "score": "0",
+                "buff": null
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [],
+                "score": "0",
+                "buff": null
+              },
+              null
+            ],
+            "rounds": 0
+          }
+        ]
+      },
+      {
+        "kind": "pure-fiction",
+        "period": 2,
+        "groups": [
+          {
+            "id": 49,
+            "start": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end": {
+              "year": 2024,
+              "month": 3,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "New",
+            "name": "Synthetic period 1",
+            "upperBoss": null,
+            "lowerBoss": null,
+            "thirdBoss": null
+          },
+          {
+            "id": 48,
+            "start": {
+              "year": 2024,
+              "month": 1,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "End",
+            "name": "Synthetic period 2",
+            "upperBoss": null,
+            "lowerBoss": null,
+            "thirdBoss": null
+          }
+        ],
+        "stars": 6,
+        "extraStars": 1,
+        "maxFloor": "Synthetic floor",
+        "maxFloorId": 202,
+        "battles": 1,
+        "hasData": true,
+        "floors": [
+          {
+            "id": 202,
+            "name": "Synthetic Starward floor",
+            "stars": 4,
+            "extraStars": 1,
+            "fast": false,
+            "starward": true,
+            "nodes": [
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1010,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1011,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1012,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1013,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ],
+                "score": "4001",
+                "buff": {
+                  "id": 5001,
+                  "name": "Synthetic buff",
+                  "description": "Synthetic buff description",
+                  "summary": "Synthetic short description"
+                }
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1020,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1021,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1022,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1023,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ],
+                "score": "4002",
+                "buff": {
+                  "id": 5002,
+                  "name": "Synthetic buff",
+                  "description": "Synthetic buff description",
+                  "summary": "Synthetic short description"
+                }
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1030,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1031,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1032,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1033,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ],
+                "score": "4003",
+                "buff": {
+                  "id": 5003,
+                  "name": "Synthetic buff",
+                  "description": "Synthetic buff description",
+                  "summary": "Synthetic short description"
+                }
+              }
+            ],
+            "rounds": 2
+          },
+          {
+            "id": 201,
+            "name": "Synthetic quick clear",
+            "stars": 3,
+            "extraStars": 0,
+            "fast": true,
+            "starward": false,
+            "nodes": [
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [],
+                "score": "0",
+                "buff": null
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [],
+                "score": "0",
+                "buff": null
+              },
+              null
+            ],
+            "rounds": 0
+          }
+        ]
+      },
+      {
+        "kind": "apocalyptic-shadow",
+        "period": 1,
+        "groups": [
+          {
+            "id": 49,
+            "start": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end": {
+              "year": 2024,
+              "month": 3,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "Running",
+            "name": "Synthetic period 1",
+            "upperBoss": {
+              "id": 7001,
+              "name": "Synthetic boss 1"
+            },
+            "lowerBoss": {
+              "id": 7002,
+              "name": "Synthetic boss 2"
+            },
+            "thirdBoss": {
+              "id": 7003,
+              "name": "Synthetic boss 3"
+            }
+          },
+          {
+            "id": 48,
+            "start": {
+              "year": 2024,
+              "month": 1,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "End",
+            "name": "Synthetic period 2",
+            "upperBoss": {
+              "id": 7001,
+              "name": "Synthetic boss 1"
+            },
+            "lowerBoss": {
+              "id": 7002,
+              "name": "Synthetic boss 2"
+            },
+            "thirdBoss": {
+              "id": 7003,
+              "name": "Synthetic boss 3"
+            }
+          }
+        ],
+        "stars": 6,
+        "extraStars": 1,
+        "maxFloor": "Synthetic floor",
+        "maxFloorId": 102,
+        "battles": 1,
+        "hasData": true,
+        "floors": [
+          {
+            "id": 102,
+            "name": "Synthetic Starward floor",
+            "stars": 4,
+            "extraStars": 1,
+            "fast": false,
+            "starward": true,
+            "nodes": [
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1010,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1011,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1012,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1013,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ],
+                "score": "4001",
+                "buff": {
+                  "id": 5001,
+                  "name": "Synthetic buff",
+                  "description": "Synthetic buff description"
+                },
+                "bossDefeated": true
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1020,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1021,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1022,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1023,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ],
+                "score": "4002",
+                "buff": {
+                  "id": 5002,
+                  "name": "Synthetic buff",
+                  "description": "Synthetic buff description"
+                },
+                "bossDefeated": true
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1030,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1031,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1032,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1033,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ],
+                "score": "4003",
+                "buff": {
+                  "id": 5003,
+                  "name": "Synthetic buff",
+                  "description": "Synthetic buff description"
+                },
+                "bossDefeated": true
+              }
+            ],
+            "updatedAt": {
+              "year": 2024,
+              "month": 2,
+              "day": 29,
+              "hour": 12,
+              "minute": 30
+            }
+          },
+          {
+            "id": 101,
+            "name": "Synthetic quick clear",
+            "stars": 3,
+            "extraStars": 0,
+            "fast": true,
+            "starward": false,
+            "nodes": [
+              {
+                "time": null,
+                "avatars": [],
+                "score": "0",
+                "buff": null,
+                "bossDefeated": false
+              },
+              {
+                "time": null,
+                "avatars": [],
+                "score": "0",
+                "buff": null,
+                "bossDefeated": false
+              },
+              null
+            ],
+            "updatedAt": {
+              "year": 2024,
+              "month": 2,
+              "day": 29,
+              "hour": 12,
+              "minute": 30
+            }
+          }
+        ]
+      },
+      {
+        "kind": "apocalyptic-shadow",
+        "period": 2,
+        "groups": [
+          {
+            "id": 49,
+            "start": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end": {
+              "year": 2024,
+              "month": 3,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "Running",
+            "name": "Synthetic period 1",
+            "upperBoss": {
+              "id": 7001,
+              "name": "Synthetic boss 1"
+            },
+            "lowerBoss": {
+              "id": 7002,
+              "name": "Synthetic boss 2"
+            },
+            "thirdBoss": {
+              "id": 7003,
+              "name": "Synthetic boss 3"
+            }
+          },
+          {
+            "id": 48,
+            "start": {
+              "year": 2024,
+              "month": 1,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "end": {
+              "year": 2024,
+              "month": 2,
+              "day": 1,
+              "hour": 12,
+              "minute": 30
+            },
+            "status": "End",
+            "name": "Synthetic period 2",
+            "upperBoss": {
+              "id": 7001,
+              "name": "Synthetic boss 1"
+            },
+            "lowerBoss": {
+              "id": 7002,
+              "name": "Synthetic boss 2"
+            },
+            "thirdBoss": {
+              "id": 7003,
+              "name": "Synthetic boss 3"
+            }
+          }
+        ],
+        "stars": 6,
+        "extraStars": 1,
+        "maxFloor": "Synthetic floor",
+        "maxFloorId": 202,
+        "battles": 1,
+        "hasData": true,
+        "floors": [
+          {
+            "id": 202,
+            "name": "Synthetic Starward floor",
+            "stars": 4,
+            "extraStars": 1,
+            "fast": false,
+            "starward": true,
+            "nodes": [
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1010,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1011,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1012,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1013,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ],
+                "score": "4001",
+                "buff": {
+                  "id": 5001,
+                  "name": "Synthetic buff",
+                  "description": "Synthetic buff description"
+                },
+                "bossDefeated": true
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1020,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1021,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1022,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1023,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ],
+                "score": "4002",
+                "buff": {
+                  "id": 5002,
+                  "name": "Synthetic buff",
+                  "description": "Synthetic buff description"
+                },
+                "bossDefeated": true
+              },
+              {
+                "time": {
+                  "year": 2024,
+                  "month": 2,
+                  "day": 29,
+                  "hour": 12,
+                  "minute": 30
+                },
+                "avatars": [
+                  {
+                    "id": 1030,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1031,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1032,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  },
+                  {
+                    "id": 1033,
+                    "level": 80,
+                    "rarity": 5,
+                    "rank": 1,
+                    "element": "Ice",
+                    "returnAssist": false
+                  }
+                ],
+                "score": "4003",
+                "buff": {
+                  "id": 5003,
+                  "name": "Synthetic buff",
+                  "description": "Synthetic buff description"
+                },
+                "bossDefeated": true
+              }
+            ],
+            "updatedAt": {
+              "year": 2024,
+              "month": 2,
+              "day": 29,
+              "hour": 12,
+              "minute": 30
+            }
+          },
+          {
+            "id": 201,
+            "name": "Synthetic quick clear",
+            "stars": 3,
+            "extraStars": 0,
+            "fast": true,
+            "starward": false,
+            "nodes": [
+              {
+                "time": null,
+                "avatars": [],
+                "score": "0",
+                "buff": null,
+                "bossDefeated": false
+              },
+              {
+                "time": null,
+                "avatars": [],
+                "score": "0",
+                "buff": null,
+                "bossDefeated": false
+              },
+              null
+            ],
+            "updatedAt": {
+              "year": 2024,
+              "month": 2,
+              "day": 29,
+              "hour": 12,
+              "minute": 30
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

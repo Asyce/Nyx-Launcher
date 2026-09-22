@@ -55,6 +55,9 @@
     <None Include="..\..\..\contracts\hoyolab-genshin-abyss-v1.fixture.json"
           Link="Contracts\hoyolab-genshin-abyss-v1.fixture.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\..\contracts\hoyolab-hsr-challenges-v1.fixture.json"
+          Link="Contracts\hoyolab-hsr-challenges-v1.fixture.json"
+          CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\..\contracts\pengo-achievements-v1.fixture.json"
           Link="Contracts\pengo-achievements-v1.fixture.json"
           CopyToOutputDirectory="PreserveNewest" />

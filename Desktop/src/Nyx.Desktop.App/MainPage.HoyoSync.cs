@@ -48,10 +48,15 @@ public sealed partial class MainPage
                 + (PublisherAccountService.GenshinEventsAvailable ? ", event-calendar summaries" : string.Empty)
                 + (PublisherAccountService.GenshinEndgameAvailable ? ", Spiral Abyss records" : string.Empty)
                 + " are shared. Full-bag inventory and housing are not included.";
-        if (gameId == HoyoLabGameBundleRules.GameId && PublisherAccountService.HsrEventsAvailable)
+        if (gameId == HoyoLabGameBundleRules.GameId
+            && (PublisherAccountService.HsrEventsAvailable || PublisherAccountService.HsrEndgameAvailable))
             sharedData = "Remembered resources and achievements"
                 + (PublisherAccountService.HsrBuildsAvailable ? ", characters and equipped builds" : string.Empty)
-                + ", event-calendar summaries are shared. Full-bag inventory and full endgame battle records are not included.";
+                + (PublisherAccountService.HsrEventsAvailable ? ", event-calendar summaries" : string.Empty)
+                + (PublisherAccountService.HsrEndgameAvailable ? ", Forgotten Hall, Pure Fiction and Apocalyptic Shadow records" : string.Empty)
+                + (PublisherAccountService.HsrEndgameAvailable
+                    ? " are shared. Full-bag inventory and other endgame modes are not included."
+                    : " are shared. Full-bag inventory and full endgame battle records are not included.");
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
             pageLease?.CancellationToken ?? CancellationToken.None);
         var token = cancellation.Token;
