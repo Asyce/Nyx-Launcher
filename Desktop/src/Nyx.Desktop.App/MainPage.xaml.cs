@@ -1658,18 +1658,25 @@ public sealed partial class MainPage : Page
                 capabilityPanel.Children.Add(rememberEvents);
                 capabilityPanel.Children.Add(refreshEvents);
             }
-            if (gameId == "gi" && PublisherAccountService.GenshinEndgameAvailable)
+            if ((gameId == "gi" && PublisherAccountService.GenshinEndgameAvailable)
+                || (gameId == "hsr" && PublisherAccountService.HsrEndgameAvailable))
             {
                 rememberEndgame = new ToggleSwitch
                 {
-                    Header = "Remember Spiral Abyss records",
+                    Header = gameId == "gi" ? "Remember Spiral Abyss records" : "Remember Star Rail challenge records",
                     IsEnabled = false,
                     OnContent = "Remember",
                     OffContent = "Do not remember",
                 };
-                AutomationProperties.SetName(rememberEndgame, "Remember Spiral Abyss records for the active HoYoLAB account");
-                AutomationProperties.SetHelpText(rememberEndgame, "Includes current and previous periods, chamber results, teams and skipped-floor markers available from HoYoLAB.");
-                refreshEndgame = CreateHoyoLabManagerButton("Refresh Spiral Abyss", "Refresh Spiral Abyss records for the active HoYoLAB account");
+                AutomationProperties.SetName(rememberEndgame, gameId == "gi"
+                    ? "Remember Spiral Abyss records for the active HoYoLAB account"
+                    : "Remember Star Rail challenge records for the active HoYoLAB account");
+                AutomationProperties.SetHelpText(rememberEndgame, gameId == "gi"
+                    ? "Includes current and previous periods, chamber results, teams and skipped-floor markers available from HoYoLAB."
+                    : "Includes current and previous Forgotten Hall, Pure Fiction and Apocalyptic Shadow periods, all returned floors, Starward teams and quick-clear markers.");
+                refreshEndgame = gameId == "gi"
+                    ? CreateHoyoLabManagerButton("Refresh Spiral Abyss", "Refresh Spiral Abyss records for the active HoYoLAB account")
+                    : CreateHoyoLabManagerButton("Refresh Star Rail challenges", "Refresh Star Rail challenge records for the active HoYoLAB account");
                 capabilityPanel.Children.Add(rememberEndgame);
                 capabilityPanel.Children.Add(refreshEndgame);
             }
@@ -2315,7 +2322,23 @@ public sealed partial class MainPage : Page
                 if (activeSlotId is null || binding is null) return;
                 await RunManagerActionAsync(async cancellationToken =>
                 {
-                    managerStatus.Text = "Refreshing Spiral Abyss from HoYoLAB…";
+                    managerStatus.Text = gameId == "gi" ? "Refreshing Spiral Abyss from HoYoLAB…" : "Refreshing Star Rail challenges from HoYoLAB…";
+                    if (gameId == "hsr")
+                    {
+                        var hsrResult = await publisherAccounts.RefreshHsrEndgameAsync(activeSlotId, binding, cancellationToken);
+                        managerStatus.Text = hsrResult.Status switch
+                        {
+                            HoyoLabHsrEndgameReadStatus.Completed => "Remembered current and previous Forgotten Hall, Pure Fiction and Apocalyptic Shadow periods. Use Sync & My HoYo to share the copy.",
+                            HoyoLabHsrEndgameReadStatus.LoginRequired => "Sign in to HoYoLAB, then refresh again. The previous copy is unchanged.",
+                            HoyoLabHsrEndgameReadStatus.NotEnabled => "Select an active Star Rail region and turn on Remember Star Rail challenge records first.",
+                            HoyoLabHsrEndgameReadStatus.Canceled => "Refresh canceled. No partial challenge copy was saved.",
+                            HoyoLabHsrEndgameReadStatus.TimedOut => "Refresh timed out. Try again; the previous copy is unchanged.",
+                            HoyoLabHsrEndgameReadStatus.TooLarge => "This challenge copy exceeds Nyx's supported size. The previous copy is unchanged.",
+                            HoyoLabHsrEndgameReadStatus.LocalStorageUnavailable => "Nyx could not save the challenge copy. The previous copy is unchanged.",
+                            _ => "Nyx could not complete this refresh. Check the selected HoYoLAB region and try again; the previous copy is unchanged.",
+                        };
+                        return;
+                    }
                     var result = await publisherAccounts.RefreshGenshinEndgameAsync(activeSlotId, binding, cancellationToken);
                     managerStatus.Text = result.Status switch
                     {

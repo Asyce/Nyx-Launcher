@@ -2487,6 +2487,152 @@ public sealed class HoyoLabSyncCoordinatorTests
 
 
     [Fact]
+    public async Task Hsr_endgame_cutoff_blocks_a_newer_local_refresh_before_network_retry()
+    {
+        using var harness = new Harness(HsrBundleWithEndgame(Older));
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(
+                DisplayCode,
+                gameId: HoyoLabGameBundleRules.GameId)).Status);
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            harness.Coordinator.QueueRoleDeletion(
+                FixtureBinding,
+                gameId: HoyoLabGameBundleRules.GameId).Status);
+        using (var pending = LoadState(harness.ManagedSlotRoot))
+            Assert.Equal(Older, Assert.Single(pending.PendingRoleDeletions).KnownEndgameAt);
+
+        SaveBundle(
+            harness.ProtectedRoot,
+            HsrBundleWithEndgame(Newer),
+            HoyoLabGameBundleRules.GameId);
+        harness.Cloud.ClearRequests();
+
+        var result = await harness.Coordinator.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Conflict, result.Status);
+        Assert.Empty(harness.Cloud.Requests);
+        using var after = LoadState(harness.ManagedSlotRoot);
+        Assert.Equal(Older, Assert.Single(after.PendingRoleDeletions).KnownEndgameAt);
+    }
+
+    [Fact]
+    public async Task Hsr_endgame_cutoff_blocks_a_newer_remote_refresh_and_survives_retry()
+    {
+        using var harness = new Harness(HsrBundleWithEndgame(Older));
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(
+                DisplayCode,
+                gameId: HoyoLabGameBundleRules.GameId)).Status);
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            harness.Coordinator.QueueRoleDeletion(
+                FixtureBinding,
+                gameId: HoyoLabGameBundleRules.GameId).Status);
+        using (var pending = LoadState(harness.ManagedSlotRoot))
+            Assert.Equal(Older, Assert.Single(pending.PendingRoleDeletions).KnownEndgameAt);
+
+        harness.Cloud.SeedBundle(
+            Fixture.SyncId,
+            DisplayCode,
+            HsrBundleWithEndgame(Newer),
+            Newer,
+            HoyoLabGameBundleRules.GameId);
+        harness.Cloud.ClearRequests();
+
+        var result = await harness.Coordinator.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Conflict, result.Status);
+        Assert.Equal(["pull"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var after = LoadState(harness.ManagedSlotRoot);
+        Assert.Equal(Older, Assert.Single(after.PendingRoleDeletions).KnownEndgameAt);
+    }
+
+    [Fact]
+    public async Task Hsr_endgame_without_a_known_cutoff_still_blocks_a_newer_remote_refresh()
+    {
+        using var harness = new Harness(HsrBundleWithEndgame(Older));
+        Assert.Equal(
+            HoyoLabManualSyncStatus.Completed,
+            (await harness.Coordinator.ConnectAsync(
+                DisplayCode,
+                gameId: HoyoLabGameBundleRules.GameId)).Status);
+
+        using (var state = LoadState(harness.ManagedSlotRoot))
+        {
+            var credential = Assert.IsType<HoyoLabSyncCredential>(state.CurrentCredential);
+            using var deletion = new HoyoLabPendingRoleDeletion(
+                credential.SyncId,
+                credential.Token,
+                credential.Key,
+                FixtureBinding,
+                "hsr-endgame-no-cutoff",
+                Now,
+                null,
+                null,
+                Now,
+                HoyoLabGameBundleRules.GameId);
+            var stateStore = new HoyoLabSyncStateStore(
+                harness.ManagedSlotRoot,
+                harness.Protector,
+                harness.Files,
+                harness.Clock);
+            Assert.True(stateStore.TryEnqueuePendingRoleDeletion(deletion));
+        }
+        using (var state = LoadState(harness.ManagedSlotRoot))
+            Assert.Null(Assert.Single(state.PendingRoleDeletions).KnownEndgameAt);
+
+        SaveBundle(
+            harness.ProtectedRoot,
+            HoyoLabSyncCoordinator.RemoveRoleAt(
+                HsrBundleWithEndgame(Older),
+                FixtureBinding,
+                Now),
+            HoyoLabGameBundleRules.GameId);
+        harness.Cloud.SeedBundle(
+            Fixture.SyncId,
+            DisplayCode,
+            HsrBundleWithEndgame(Newer),
+            Newer,
+            HoyoLabGameBundleRules.GameId);
+        harness.Cloud.ClearRequests();
+
+        var result = await harness.Coordinator.RetryDeletionsAsync();
+
+        Assert.Equal(HoyoLabManualSyncStatus.Conflict, result.Status);
+        Assert.Equal(["pull"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var after = LoadState(harness.ManagedSlotRoot);
+        Assert.Null(Assert.Single(after.PendingRoleDeletions).KnownEndgameAt);
+    }
+
+    [Fact]
+    public async Task Hsr_endgame_round_trip_through_the_encrypted_wire()
+    {
+        using var harness = new Harness(HsrBundleWithEndgame(Older));
+
+        var result = await harness.Coordinator.ConnectAsync(
+            DisplayCode,
+            gameId: HoyoLabGameBundleRules.GameId);
+
+        Assert.Equal(HoyoLabManualSyncStatus.Completed, result.Status);
+        Assert.Equal(["pull", "push"], harness.Cloud.Requests.Select(static item => item.Action));
+        using var secrets = Secrets(DisplayCode);
+        var pushed = harness.Cloud.GetBundle(
+            Fixture.SyncId,
+            secrets,
+            HoyoLabGameBundleRules.GameId);
+        var pushedRole = Assert.Single(pushed.Roles);
+        Assert.True(pushed.Consents.Endgame);
+        Assert.Equal(Older, pushedRole.Observations.Endgame);
+        Assert.True(HoyoLabHsrEndgameRules.ValuesEqual(
+            HoyoLabHsrEndgameTests.Snapshot(),
+            pushedRole.HsrEndgame));
+    }
+
+
+    [Fact]
     public async Task Genshin_events_round_trip_through_the_encrypted_wire()
     {
         using var harness = new Harness(GenshinBundleWithEvents(Older));
@@ -3073,6 +3219,9 @@ public sealed class HoyoLabSyncCoordinatorTests
         new(false, false, false, false, true, false, false, false),
         [],
         []);
+
+    private static HoyoLabGameBundle HsrBundleWithEndgame(DateTimeOffset observedAt) =>
+        HoyoLabHsrEndgameTests.Bundle(observedAt, FixtureBinding);
 
     private static HoyoLabGameBundle GenshinBundleWithEndgame(DateTimeOffset observedAt) =>
         HoyoLabGenshinEndgameTests.Bundle(observedAt, GenshinBinding);
