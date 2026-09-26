@@ -47,6 +47,7 @@ internal sealed class EndfieldPullApiClient
     internal const string CharteredPool = "chartered";
     internal const string FestJointPool = "fest-joint";
     internal const string ArsenalPool = "arsenal";
+    private const string RerunCharacterPoolType = "E_CharacterGachaPoolType_Rerun";
     private static readonly Uri RoleEndpoint = new("https://u8.gryphline.com/game/role/v1/query_role_list");
     private static readonly Uri CharacterEndpoint = new("https://ef-webview.gryphline.com/api/record/char");
     private static readonly Uri WeaponPoolEndpoint = new("https://ef-webview.gryphline.com/api/record/weapon/pool");
@@ -129,9 +130,22 @@ internal sealed class EndfieldPullApiClient
                 cancellationToken).ConfigureAwait(false);
         }
 
+        // The released history client exposes this category separately. Until its
+        // family/instance and reward contract is qualified, never omit populated rows.
+        await RequireEmptyUnsupportedHistoryAsync(
+            credential, counters, CharacterEndpoint,
+            [new("pool_type", RerunCharacterPoolType)], cancellationToken).ConfigureAwait(false);
+
         var weaponPools = await ReadWeaponPoolsAsync(credential, counters, cancellationToken).ConfigureAwait(false);
         foreach (var pool in weaponPools.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
         {
+            if (pool.Value.RequiresQualification)
+            {
+                await RequireEmptyUnsupportedHistoryAsync(
+                    credential, counters, WeaponEndpoint,
+                    [new("pool_id", pool.Key)], cancellationToken).ConfigureAwait(false);
+                continue;
+            }
             await ReadHistoryAsync(
                 credential,
                 counters,
@@ -139,7 +153,7 @@ internal sealed class EndfieldPullApiClient
                 [new("pool_id", pool.Key)],
                 ArsenalPool,
                 pool.Key,
-                pool.Value,
+                pool.Value.Name,
                 records,
                 characterPools,
                 cancellationToken).ConfigureAwait(false);
@@ -203,7 +217,7 @@ internal sealed class EndfieldPullApiClient
         }
     }
 
-    private async ValueTask<IReadOnlyDictionary<string, string>> ReadWeaponPoolsAsync(
+    private async ValueTask<IReadOnlyDictionary<string, (string Name, bool RequiresQualification)>> ReadWeaponPoolsAsync(
         EndfieldPullCredential credential,
         Counters counters,
         CancellationToken cancellationToken)
@@ -224,19 +238,51 @@ internal sealed class EndfieldPullApiClient
                 || data.ValueKind != JsonValueKind.Array
                 || data.GetArrayLength() is 0 or > 512)
                 throw Invalid();
-            var pools = new Dictionary<string, string>(StringComparer.Ordinal);
+            var pools = new Dictionary<string, (string Name, bool RequiresQualification)>(StringComparer.Ordinal);
             foreach (var value in data.EnumerateArray())
             {
                 var pool = RequireObject(value);
                 if (!pools.TryAdd(
                     RequiredIdentifier(pool, "poolId"),
-                    RequiredText(pool, "poolName", 256)))
+                    (RequiredText(pool, "poolName", 256), HasUnqualifiedPoolSemantics(pool))))
                     throw Invalid();
             }
             return pools;
         }
         finally { Array.Clear(response); }
     }
+
+    private async ValueTask RequireEmptyUnsupportedHistoryAsync(
+        EndfieldPullCredential credential,
+        Counters counters,
+        Uri endpoint,
+        IReadOnlyList<KeyValuePair<string, string>> fixedQuery,
+        CancellationToken cancellationToken)
+    {
+        var response = await SendAsync(
+            HttpMethod.Get, endpoint, CredentialQuery(credential).Concat(fixedQuery).ToList(),
+            null, counters, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            using var document = Parse(response);
+            var root = RequireObject(document.RootElement);
+            RequireZeroCode(root);
+            if (!root.TryGetProperty("data", out var data)) throw Invalid();
+            data = RequireObject(data);
+            if (!data.TryGetProperty("list", out var list) || list.ValueKind != JsonValueKind.Array
+                || !data.TryGetProperty("hasMore", out var more)
+                || more.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                throw Invalid();
+            if (list.GetArrayLength() != 0 || more.GetBoolean())
+                throw new PullExportException(PullExportErrorCodes.UnsupportedHistory);
+        }
+        finally { Array.Clear(response); }
+    }
+
+    // The accepted legacy response has neither discriminator. The public client
+    // now uses poolType="rerun" and poolVersion; unknown values must not be Arsenal.
+    private static bool HasUnqualifiedPoolSemantics(JsonElement value) =>
+        value.TryGetProperty("poolType", out _) || value.TryGetProperty("poolVersion", out _);
 
     private async ValueTask ReadHistoryAsync(
         EndfieldPullCredential credential,
@@ -277,6 +323,8 @@ internal sealed class EndfieldPullApiClient
                 {
                     counters.AddRecord();
                     var record = RequireObject(value);
+                    if (HasUnqualifiedPoolSemantics(record))
+                        throw new PullExportException(PullExportErrorCodes.UnsupportedHistory);
                     var seqId = RequiredIdentifier(record, "seqId");
                     if (!ulong.TryParse(seqId, System.Globalization.NumberStyles.None,
                         System.Globalization.CultureInfo.InvariantCulture, out var sequence)
@@ -435,7 +483,8 @@ internal sealed class EndfieldPullApiClient
             cursorAllowed = true;
             required = ["token", "server_id", "lang", "pool_type"];
             if (!values.TryGetValue("pool_type", out var poolType)
-                || !CharacterPoolTypes.Any(pool => pool.Upstream.Equals(poolType, StringComparison.Ordinal)))
+                || !(CharacterPoolTypes.Any(pool => pool.Upstream.Equals(poolType, StringComparison.Ordinal))
+                    || poolType.Equals(RerunCharacterPoolType, StringComparison.Ordinal)))
                 throw Invalid();
         }
         else if (SameEndpoint(endpoint, WeaponPoolEndpoint))

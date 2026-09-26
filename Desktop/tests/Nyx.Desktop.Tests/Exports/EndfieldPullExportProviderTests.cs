@@ -36,6 +36,7 @@ public sealed class EndfieldPullExportProviderTests
             request => EmptyCharacterHistory(request, "E_CharacterGachaPoolType_Beginner"),
             request => EmptyCharacterHistory(request, "E_CharacterGachaPoolType_Special"),
             request => EmptyCharacterHistory(request, "E_CharacterGachaPoolType_Joint"),
+            request => EmptyCharacterHistory(request, "E_CharacterGachaPoolType_Rerun"),
             request =>
             {
                 Assert.Equal("/api/record/weapon/pool", request.RequestUri!.AbsolutePath);
@@ -57,7 +58,7 @@ public sealed class EndfieldPullExportProviderTests
         EndfieldPullContract.Validate(bytes);
         Assert.Equal(2, artifact.ItemCount);
         Assert.Equal(bytes.Length, artifact.ByteCount);
-        Assert.Equal(7, handler.Calls);
+        Assert.Equal(8, handler.Calls);
         Assert.DoesNotContain(Token, Encoding.UTF8.GetString(bytes), StringComparison.Ordinal);
         Assert.DoesNotContain("Never export this", Encoding.UTF8.GetString(bytes), StringComparison.Ordinal);
         using var document = JsonDocument.Parse(bytes);
@@ -73,6 +74,125 @@ public sealed class EndfieldPullExportProviderTests
         Assert.Contains(records, row => row.GetProperty("recordType").GetString() == "weapon"
             && row.GetProperty("poolType").GetString() == EndfieldPullApiClient.ArsenalPool
             && row.GetProperty("batchId").GetString() == "ISSUE_1");
+    }
+
+    [Theory]
+    [InlineData("""{"code":0,"data":{"list":[{"kind":"draw","poolVersion":1}],"hasMore":false}}""")]
+    [InlineData("""{"code":0,"data":{"list":[],"hasMore":true}}""")]
+    public async Task Rerun_character_history_fails_before_writing_and_does_not_try_an_older_credential(string response)
+    {
+        await AssertUnsupportedHistoryLeavesNoFile(
+            [.. LegacyCharacterSteps(), request =>
+            {
+                AssertQuery(request, "pool_type", "E_CharacterGachaPoolType_Rerun");
+                return Json(response);
+            }]);
+    }
+
+    [Theory]
+    [InlineData("\"poolType\":\"rerun\"", true)]
+    [InlineData("\"poolType\":\"unqualified-future-type\"", true)]
+    [InlineData("\"poolType\":null", true)]
+    [InlineData("\"poolVersion\":1", true)]
+    [InlineData("\"poolType\":\"rerun\"", false)]
+    [InlineData("\"poolType\":\"unqualified-future-type\"", false)]
+    [InlineData("\"poolType\":null", false)]
+    [InlineData("\"poolVersion\":1", false)]
+    public async Task Unqualified_weapon_pool_or_record_is_never_exported_as_arsenal(string field, bool inPool)
+    {
+        var pool = """{"poolId":"ISSUE_1","poolName":"Issue One"}]}""";
+        var metadata = "{\"code\":0,\"data\":[" + (inPool ? pool.Replace("}]}", "," + field + "}]}", StringComparison.Ordinal) : pool);
+        var history = LegacyWeaponHistory;
+        if (!inPool) history = history.Replace("\"seqId\":\"10\"", "\"seqId\":\"10\"," + field, StringComparison.Ordinal);
+        await AssertUnsupportedHistoryLeavesNoFile(
+            [.. LegacyCharacterSteps(),
+                request => EmptyCharacterHistory(request, "E_CharacterGachaPoolType_Rerun"),
+                _ => Json(metadata),
+                request =>
+                {
+                    AssertQuery(request, "pool_id", "ISSUE_1");
+                    return Json(history);
+                }]);
+    }
+
+    [Fact]
+    public async Task Empty_unsupported_weapon_history_keeps_the_supported_legacy_export()
+    {
+        var candidate = Assert.Single(EndfieldPullHistoryLinkReader.ExtractCandidates(HistoryUrl));
+        using var handler = new SequenceHandler(
+            [.. LegacyCharacterSteps(),
+                request => EmptyCharacterHistory(request, "E_CharacterGachaPoolType_Rerun"),
+                _ => Json("""{"code":0,"data":[{"poolId":"ISSUE_1","poolName":"Issue One"},{"poolId":"ISSUE_2","poolName":"Later family","poolType":"rerun"}]}"""),
+                _ => Json(LegacyWeaponHistory),
+                request =>
+                {
+                    AssertQuery(request, "pool_id", "ISSUE_2");
+                    return Json("""{"code":0,"data":{"list":[],"hasMore":false}}""");
+                }]);
+        using var http = new HttpClient(handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
+        var api = new EndfieldPullApiClient(http, new NoWaitPullRequestPacer(), timeProvider: new FixedTimeProvider(Now));
+
+        var archive = await api.DownloadNewestValidAsync([candidate], CancellationToken.None);
+
+        Assert.Equal(2, archive.Records.Count);
+        Assert.Single(archive.Records, record => record.PoolType == EndfieldPullApiClient.ArsenalPool && record.PoolId == "ISSUE_1");
+        Assert.Equal(9, handler.Calls);
+        EndfieldPullContract.Validate(EndfieldPullContract.Serialize(archive, Now));
+    }
+
+    [Theory]
+    [InlineData("""{"code":0,"data":{"list":[]}}""")]
+    [InlineData("""{"code":0,"data":{"hasMore":false}}""")]
+    [InlineData("""{"code":0,"data":{"list":[],"hasMore":"false"}}""")]
+    public async Task Unsupported_history_probe_requires_an_explicit_terminal_empty_page(string response)
+    {
+        var candidate = Assert.Single(EndfieldPullHistoryLinkReader.ExtractCandidates(HistoryUrl));
+        using var handler = new SequenceHandler([.. LegacyCharacterSteps(), _ => Json(response)]);
+        using var http = new HttpClient(handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
+        var api = new EndfieldPullApiClient(http, new NoWaitPullRequestPacer(), timeProvider: new FixedTimeProvider(Now));
+
+        var error = await Assert.ThrowsAsync<PullExportException>(async () =>
+            await api.DownloadNewestValidAsync([candidate], CancellationToken.None));
+
+        Assert.Equal(PullExportErrorCodes.UpstreamInvalid, error.ErrorCode);
+        Assert.Equal(6, handler.Calls);
+    }
+
+    private const string LegacyWeaponHistory = """{"code":0,"data":{"list":[{"poolId":"ISSUE_1","poolName":"Issue One","weaponId":"501","weaponName":"Weapon","weaponType":"Sword","rarity":6,"isNew":false,"kind":"draw","nameText":"Weapon","gachaTs":"1760000000000","seqId":"10"}],"hasMore":false}}""";
+
+    private static Func<HttpRequestMessage, HttpResponseMessage>[] LegacyCharacterSteps() =>
+        [
+            _ => Json("""{"status":0,"data":{"uid":"10001","roles":[{"roleId":"20002","serverId":"2","serverName":"Europe"}]}}"""),
+            request =>
+            {
+                AssertQuery(request, "pool_type", "E_CharacterGachaPoolType_Standard");
+                return Json("""{"code":0,"data":{"list":[{"charId":"101","charName":"Character","gachaTs":"1760000001000","isFree":false,"isNew":true,"kind":"draw","nameText":"Character","poolId":"BASIC","poolName":"Basic","rarity":6,"seqId":"11"}],"hasMore":false}}""");
+            },
+            request => EmptyCharacterHistory(request, "E_CharacterGachaPoolType_Beginner"),
+            request => EmptyCharacterHistory(request, "E_CharacterGachaPoolType_Special"),
+            request => EmptyCharacterHistory(request, "E_CharacterGachaPoolType_Joint"),
+        ];
+
+    private static async Task AssertUnsupportedHistoryLeavesNoFile(Func<HttpRequestMessage, HttpResponseMessage>[] steps)
+    {
+        using var temp = new TemporaryDirectory();
+        var sourcePath = temp.Combine("data_1");
+        File.WriteAllText(sourcePath, "baseline", Encoding.Latin1);
+        using var handler = new SequenceHandler(steps);
+        using var http = new HttpClient(handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
+        using var provider = CreateProvider(temp, sourcePath, http);
+        await using var session = await provider.PrepareAsync("ae", CancellationToken.None);
+        File.AppendAllText(sourcePath,
+            "\n" + HistoryUrl.Replace(Token, "older-synthetic-token", StringComparison.Ordinal) + "\n" + HistoryUrl,
+            Encoding.Latin1);
+
+        var error = await Assert.ThrowsAsync<PullExportException>(async () => await session.ExportAsync(CancellationToken.None));
+
+        Assert.Equal(PullExportErrorCodes.UnsupportedHistory, error.ErrorCode);
+        Assert.Equal(steps.Length, handler.Calls);
+        Assert.DoesNotContain(Token, error.ToString(), StringComparison.Ordinal);
+        Assert.Empty(Directory.EnumerateFiles(temp.Path, "*.json", SearchOption.AllDirectories));
+        Assert.Empty(Directory.EnumerateFiles(temp.Path, "*.tmp", SearchOption.AllDirectories));
     }
 
     [Fact]
