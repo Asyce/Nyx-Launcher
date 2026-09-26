@@ -240,7 +240,7 @@ feature flag, mapping, launcher UI, or production package behavior.
 ## Genshin candidate synthetic item-body qualification
 
 `src/gear_observer/gi_wire.rs` is also reachable only through `cfg(test)`.
-It qualifies command `8132` (`PlayerStoreNotify`) against the candidate used by
+The September 22 preparation qualified command `8132` (`PlayerStoreNotify`) against the candidate used by
 Irminsul `781006e82d76b29b10b21125aa3bc1b79ddf7b3c`: MIT-licensed
 [`konkers/auto-artifactarium`](https://github.com/konkers/auto-artifactarium/tree/4ba25fac64b88970143af6bc2a2ef51338e620d0)
 at `4ba25fac64b88970143af6bc2a2ef51338e620d0`. These immutable upstream raw
@@ -251,6 +251,25 @@ SHA-256 values were checked September 22, 2026:
 | `protos/protos.proto` | `0f0744decd88ad6ff6219e11f351acbe777cd4584bc7423460b2c1af633575fa` |
 | `src/lib.rs` | `e6fb451800c2a21fa0839d5ffd42b937f1351f0c380550d1cbb201f402ffd029` |
 | `LICENSE` | `3f4b674bf182e20916d119c86baa104fe0763dac96cdc555b186967e500eee09` |
+
+September 27 supersedes only that candidate command/root-item pairing with the
+released 7.1 upstream [abbbf7a](https://github.com/konkers/auto-artifactarium/commit/abbbf7a3f58846512250a789a76be2d3cdb115c1):
+command `22160`, repeated item field `6`. The old command and old item field are
+rejected; mixed old/new item fields cannot produce a partial observation. The
+17 Genshin synthetic cases retain the existing bounded/strict item details and
+add explicit cross-version rejection. Upstream's avatar command/list changes
+are not adopted. The source still supplies no full-bag/account proof.
+
+| Current immutable source at `abbbf7a3f58846512250a789a76be2d3cdb115c1` | SHA-256 |
+| --- | --- |
+| `protos/protos.proto` | `278394ca93aa02dfe27e6f43ad07d802c75dbb3cf7b182d876e383cd727114ff` |
+| `src/lib.rs` | `66b75a50143fc6db52a4b488f2392482da9adb24d5edcc2124ff93483ca7d529` |
+| `LICENSE` | `3f4b674bf182e20916d119c86baa104fe0763dac96cdc555b186967e500eee09` |
+
+The current license is byte-identical to the previously checked MIT license.
+Irminsul `49e66bdfc43c4c6e4293e7f1b7e85b6988069ae4` also incorporates this
+candidate and fixes its GOOD `elixirCrafted` spelling. Nyx's existing GOOD v3
+fixture already uses that spelling; no export field or interpretation changed.
 
 The license normalizes to the existing IceDynamix MIT notice
 `61b5493c729fd3f29a72ede2e52bf36e8122fc2b460a5cadbc9446cfda5fa9fe`.
