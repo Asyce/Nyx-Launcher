@@ -10,6 +10,7 @@ public static class PullExportErrorCodes
     public const string InvalidHistoryLink = "pulls-history-link-invalid";
     public const string UpstreamRejected = "pulls-upstream-rejected";
     public const string UpstreamInvalid = "pulls-upstream-invalid";
+    public const string UnsupportedHistory = "pulls-history-unsupported";
     public const string SafetyLimit = "pulls-safety-limit";
     public const string OutputFailed = "pulls-output-failed";
 }
@@ -36,6 +37,7 @@ public sealed class PullExportException : Exception
         PullExportErrorCodes.InvalidHistoryLink or
         PullExportErrorCodes.UpstreamRejected or
         PullExportErrorCodes.UpstreamInvalid or
+        PullExportErrorCodes.UnsupportedHistory or
         PullExportErrorCodes.SafetyLimit or
         PullExportErrorCodes.OutputFailed;
 }

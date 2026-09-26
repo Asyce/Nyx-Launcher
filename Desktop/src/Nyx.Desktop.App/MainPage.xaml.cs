@@ -7068,6 +7068,7 @@ public sealed partial class MainPage : Page
                 ? "Pulls: no fresh history was found. Open Endfield's official Pull History screen once, then try Export again."
                 : "Pulls: no fresh History update. Open Wish or Warp History, then try Export again.",
         PullExportErrorCodes.OutputFailed => "Pulls: Nyx could not create the export file.",
+        PullExportErrorCodes.UnsupportedHistory => "Pulls: This history includes a banner type Nyx does not support yet. No export was created.",
         _ => "Pulls: export failed without blocking the game.",
     };
 
