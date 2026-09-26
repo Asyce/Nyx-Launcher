@@ -1,6 +1,6 @@
 //! Test-only Genshin candidate item-body qualification, not a live decoder.
 //!
-//! Field shapes: konkers/auto-artifactarium 4ba25fac64b88970143af6bc2a2ef51338e620d0
+//! Field shapes: konkers/auto-artifactarium abbbf7a3f58846512250a789a76be2d3cdb115c1
 //! (MIT; source hashes and attribution are in PROVENANCE.md).
 //! No account, complete-bag boundary, equipped location, or mapping is inferred.
 //! Unknown item/equip/reliquary fields and ambiguous/missing details fail closed.
@@ -11,7 +11,7 @@ use super::wire::{WireError, length, require_wire, scalar, skip, tag, uint32};
 use crate::capture::MAX_FRAME_BYTES;
 use protobuf::{CodedInputStream, rt::WireType};
 
-const PLAYER_STORE_NOTIFY: u16 = 8132;
+const PLAYER_STORE_NOTIFY: u16 = 22160;
 
 #[derive(Debug, Default, Eq, PartialEq)]
 struct ItemObservation {
@@ -52,7 +52,7 @@ fn read_body(command: u16, body: &[u8]) -> Result<ItemObservation, WireError> {
     let mut observation = ItemObservation::default();
     while !input.eof()? {
         let (field, wire) = tag(&mut input)?;
-        if field == 5 {
+        if field == 6 {
             if let Some(artifact) = read_item(&mut input, wire)? {
                 if observation.artifacts.len() == MAX_GEAR_ROWS {
                     return Err(WireError::TooManyRows);
@@ -61,8 +61,12 @@ fn read_body(command: u16, body: &[u8]) -> Result<ItemObservation, WireError> {
             } else {
                 observation.other_items += 1;
             }
+        } else if field == 5 {
+            // Reject the previous candidate's item field rather than reporting
+            // its rows as an empty 7.1 observation or silently dropping a mix.
+            return Err(WireError::Malformed);
         } else {
-            // PacketWithItems describes only field 5. Extra root fields are
+            // PacketWithItems describes only field 6. Extra root fields are
             // length-checked and skipped, never treated as completion evidence.
             skip(&mut input, wire)?;
         }
@@ -250,7 +254,7 @@ mod tests {
     }
 
     fn store(items: &[Vec<u8>]) -> Vec<u8> {
-        items.iter().flat_map(|row| nested(5, row)).collect()
+        items.iter().flat_map(|row| nested(6, row)).collect()
     }
 
     fn read(body: &[u8]) -> Result<ItemObservation, WireError> {
@@ -408,7 +412,7 @@ mod tests {
             vec![0x0e],
             vec![0x0b, 0x0c],
             vec![0x0c],
-            scalars(&[(5, 0)]),
+            scalars(&[(6, 0)]),
             store(&[scalars(&[(6, 0)])]),
             store(&[item(1, &nested(6, &scalars(&[(1, 0)])))]),
             store(&[artifact(1, &nested(1, &[]))]),
@@ -429,7 +433,7 @@ mod tests {
         }
         for len in [u64::from(u32::MAX), u64::from(u32::MAX) + 1, u64::MAX] {
             let bad_length = encoded(|output| {
-                output.write_tag(5, WireType::LengthDelimited).unwrap();
+                output.write_tag(6, WireType::LengthDelimited).unwrap();
                 output.write_raw_varint64(len).unwrap();
             });
             assert_eq!(read(&bad_length), Err(WireError::Malformed));
@@ -462,7 +466,7 @@ mod tests {
 
     #[test]
     fn only_the_pinned_command_is_qualified_and_root_metadata_is_not_retained() {
-        for command in [0, 19, 36, 513, 6586, u16::MAX] {
+        for command in [0, 19, 36, 513, 6586, 8132, 27799, u16::MAX] {
             assert_eq!(read_body(command, &[]), Err(WireError::UnsupportedCommand));
         }
         let body = [
@@ -472,6 +476,35 @@ mod tests {
         ]
         .concat();
         assert_eq!(read(&body), read(&store(&[artifact(1, &[])])));
+    }
+
+    #[test]
+    fn released_71_candidate_uses_command_22160_and_item_field_six() {
+        let body = nested(6, &artifact(71, &[]));
+        let observation = read_body(22160, &body).unwrap();
+        assert_eq!(observation.artifacts.len(), 1);
+        assert_eq!(observation.artifacts[0].guid, 71);
+        assert_eq!(read_body(8132, &body), Err(WireError::UnsupportedCommand));
+    }
+
+    #[test]
+    fn old_item_field_cannot_be_misreported_as_an_empty_71_body() {
+        for old in [nested(5, &artifact(70, &[])), nested(5, &[])] {
+            assert_eq!(read_body(22160, &old), Err(WireError::Malformed));
+            assert_eq!(read_body(8132, &old), Err(WireError::UnsupportedCommand));
+        }
+    }
+
+    #[test]
+    fn mixed_candidate_item_fields_fail_without_returning_partial_rows() {
+        let old = nested(5, &artifact(70, &[]));
+        let current = nested(6, &artifact(71, &[]));
+        for body in [
+            [old.clone(), current.clone()].concat(),
+            [current, old].concat(),
+        ] {
+            assert_eq!(read_body(22160, &body), Err(WireError::Malformed));
+        }
     }
 
     #[test]
@@ -489,11 +522,11 @@ mod tests {
 
     #[test]
     fn artifact_limit_is_exact_without_a_minimum_or_a_limit_on_other_items() {
-        let row = nested(5, &artifact(1, &[]));
+        let row = nested(6, &artifact(1, &[]));
         let mut body = row.repeat(MAX_GEAR_ROWS);
         // Repeated synthetic GUIDs must remain visible to the observer.
         assert_eq!(read(&body).unwrap().artifacts.len(), MAX_GEAR_ROWS);
-        body.extend(nested(5, &item(2, &nested(5, &[]))).repeat(MAX_GEAR_ROWS + 1));
+        body.extend(nested(6, &item(2, &nested(5, &[]))).repeat(MAX_GEAR_ROWS + 1));
         assert_eq!(read(&body).unwrap().other_items, MAX_GEAR_ROWS + 1);
         body.extend(&row);
         assert_eq!(read(&body), Err(WireError::TooManyRows));
