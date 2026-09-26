@@ -50,7 +50,9 @@ public sealed record HoyoLabGameBundleRole(
     HoyoLabGenshinEventsSnapshot? GenshinEvents = null,
     HoyoLabHsrEventsSnapshot? HsrEvents = null,
     HoyoLabGenshinEndgameSnapshot? GenshinEndgame = null,
-    HoyoLabHsrEndgameSnapshot? HsrEndgame = null)
+    HoyoLabHsrEndgameSnapshot? HsrEndgame = null,
+    HoyoLabZzzBuildSnapshot? ZzzBuilds = null,
+    HoyoLabZzzEndgameSnapshot? ZzzEndgame = null)
 {
     public override string ToString() => nameof(HoyoLabGameBundleRole);
 }
@@ -93,6 +95,7 @@ public static class HoyoLabGameBundleRules
     public const long MaximumAchievementId = 9_007_199_254_740_991;
     public const string GameId = "hsr";
     public const string GenshinGameId = "gi";
+    public const string ZzzGameId = "zzz";
     public const string Resources = "resources";
     public const string Inventory = "inventory";
     public const string Builds = "builds";
@@ -130,7 +133,8 @@ public static class HoyoLabGameBundleRules
             || bundle.GameId != GenshinGameId && bundle.Consents.Exploration
             || bundle.Consents.Currency)
             return false;
-        if (bundle.GameId == GenshinGameId && bundle.Consents.Achievements)
+        if (bundle.GameId != GameId && bundle.Consents.Achievements
+            || bundle.GameId == ZzzGameId && bundle.Consents.Events)
             return false;
 
         var active = new HashSet<PublisherRoleBinding>();
@@ -198,6 +202,7 @@ public static class HoyoLabGameBundleRules
             if (tombstone.Capability == Builds
                 && (activeRole.GenshinBuilds is not null
                     || activeRole.HsrBuilds is not null
+                    || activeRole.ZzzBuilds is not null
                     || activeRole.Observations.Builds is not null))
                 return false;
             if (tombstone.Capability == Exploration
@@ -205,7 +210,8 @@ public static class HoyoLabGameBundleRules
                     || activeRole.Observations.Exploration is not null))
                 return false;
             if (tombstone.Capability == Endgame
-                && (activeRole.GenshinEndgame is not null || activeRole.HsrEndgame is not null || activeRole.Observations.Endgame is not null))
+                && (activeRole.GenshinEndgame is not null || activeRole.HsrEndgame is not null
+                    || activeRole.ZzzEndgame is not null || activeRole.Observations.Endgame is not null))
                 return false;
             if (tombstone.Capability == Events
                 && (activeRole.GenshinEvents is not null
@@ -235,6 +241,8 @@ public static class HoyoLabGameBundleRules
                 ? null
                 : HoyoLabGenshinEventsRules.Normalize(role.GenshinEvents),
             HsrEndgame = role.HsrEndgame is null ? null : HoyoLabHsrEndgameRules.Normalize(role.HsrEndgame),
+            ZzzBuilds = role.ZzzBuilds is null ? null : HoyoLabZzzBuildRules.Normalize(role.ZzzBuilds),
+            ZzzEndgame = role.ZzzEndgame is null ? null : HoyoLabZzzEndgameRules.Normalize(role.ZzzEndgame),
             GenshinEndgame = role.GenshinEndgame is null
                 ? null
                 : HoyoLabGenshinEndgameRules.Normalize(role.GenshinEndgame),
@@ -246,15 +254,15 @@ public static class HoyoLabGameBundleRules
         RoleTombstones = bundle.RoleTombstones.ToArray(),
     };
 
-    public static bool IsSupportedGame(string? gameId) => gameId is GameId or GenshinGameId;
+    public static bool IsSupportedGame(string? gameId) => gameId is GameId or GenshinGameId or ZzzGameId;
 
-    public static IReadOnlyList<string> SupportedGames { get; } = Array.AsReadOnly<string>([GameId, GenshinGameId]);
+    public static IReadOnlyList<string> SupportedGames { get; } = Array.AsReadOnly<string>([GameId, GenshinGameId, ZzzGameId]);
 
     public static bool SupportsLocalCapability(string gameId, string capability) =>
         IsSupportedGame(gameId)
         && (capability == Resources
             || capability == Builds
-            || capability == Events
+            || gameId != ZzzGameId && capability == Events
             || capability == Endgame
             || (gameId == GenshinGameId && capability == Exploration)
             || (gameId == GameId && capability == Achievements));
@@ -263,6 +271,7 @@ public static class HoyoLabGameBundleRules
     {
         GameId => "Trailblaze Power",
         GenshinGameId => "Original Resin",
+        ZzzGameId => "Battery Charge",
         _ => string.Empty,
     };
 
@@ -305,14 +314,17 @@ public static class HoyoLabGameBundleRules
         {
             if (!consents.Builds
                 || gameId == GenshinGameId
-                    && (role.HsrBuilds is not null
+                    && (role.HsrBuilds is not null || role.ZzzBuilds is not null
                         || !HoyoLabGenshinBuildRules.IsValid(role.GenshinBuilds))
                 || gameId == GameId
-                    && (role.GenshinBuilds is not null
-                        || !HoyoLabHsrBuildRules.IsValid(role.HsrBuilds)))
+                    && (role.GenshinBuilds is not null || role.ZzzBuilds is not null
+                        || !HoyoLabHsrBuildRules.IsValid(role.HsrBuilds))
+                || gameId == ZzzGameId
+                    && (role.GenshinBuilds is not null || role.HsrBuilds is not null
+                        || !HoyoLabZzzBuildRules.IsValid(role.ZzzBuilds)))
                 return false;
         }
-        else if (role.GenshinBuilds is not null || role.HsrBuilds is not null)
+        else if (role.GenshinBuilds is not null || role.HsrBuilds is not null || role.ZzzBuilds is not null)
         {
             return false;
         }
@@ -332,14 +344,15 @@ public static class HoyoLabGameBundleRules
         if (role.Observations.Endgame is not null)
         {
             if (!consents.Endgame
-                || gameId == GenshinGameId && (role.HsrEndgame is not null || !HoyoLabGenshinEndgameRules.IsValid(role.GenshinEndgame))
-                || gameId == GameId && (role.GenshinEndgame is not null || !HoyoLabHsrEndgameRules.IsValid(role.HsrEndgame))) return false;
+                || gameId == GenshinGameId && (role.HsrEndgame is not null || role.ZzzEndgame is not null || !HoyoLabGenshinEndgameRules.IsValid(role.GenshinEndgame))
+                || gameId == GameId && (role.GenshinEndgame is not null || role.ZzzEndgame is not null || !HoyoLabHsrEndgameRules.IsValid(role.HsrEndgame))
+                || gameId == ZzzGameId && (role.GenshinEndgame is not null || role.HsrEndgame is not null || !HoyoLabZzzEndgameRules.IsValid(role.ZzzEndgame))) return false;
         }
-        else if (role.GenshinEndgame is not null || role.HsrEndgame is not null) return false;
+        else if (role.GenshinEndgame is not null || role.HsrEndgame is not null || role.ZzzEndgame is not null) return false;
 
         if (role.Observations.Events is not null)
         {
-            if (!consents.Events
+            if (!consents.Events || gameId == ZzzGameId
                 || gameId == GenshinGameId
                     && (role.HsrEvents is not null || !HoyoLabGenshinEventsRules.IsValid(role.GenshinEvents))
                 || gameId == GameId
@@ -375,7 +388,8 @@ public static class HoyoLabGameBundleRules
     private static bool IsValidTombstoneCapability(string gameId, string capability) =>
         gameId == GameId
             ? Capabilities.Contains(capability, StringComparer.Ordinal)
-            : capability is Resources or Builds or Exploration or Endgame or Events;
+            : gameId == GenshinGameId ? capability is Resources or Builds or Exploration or Endgame or Events
+                : capability is Resources or Builds or Endgame;
 
     private static bool IsValidTimestamp(DateTimeOffset? value, DateTimeOffset utcNow) =>
         value is null || IsValidTimestamp(value.Value, utcNow);

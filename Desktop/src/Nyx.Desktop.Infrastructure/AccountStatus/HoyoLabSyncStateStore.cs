@@ -12,10 +12,11 @@ namespace Nyx.Desktop.Infrastructure.AccountStatus;
 /// </summary>
 public sealed class HoyoLabSyncStateStore
 {
-    public const int SchemaVersion = 4;
+    public const int SchemaVersion = 5;
     public const int MaximumPendingDeletions = 8;
     public const string HsrScope = "hsr";
     public const string GenshinScope = "gi";
+    public const string ZzzScope = "zzz";
     public const string AllHoyoScope = "all-hoyolab";
 
     internal const int MaximumPlaintextBytes = 16 * 1024;
@@ -211,17 +212,7 @@ public sealed class HoyoLabSyncStateStore
                 || enabled && (current.PendingDeletions.Count != 0 || current.PendingRoleDeletions.Count != 0)
                 ? null
                 : current.CloneWith(current.CurrentCredential, current.WorkerRevision, current.PendingDeletions,
-                    automaticSync: gameId == HsrScope
-                        ? current.AutomaticSync with
-                        {
-                            HsrEnabled = enabled,
-                            HsrLastSyncedAt = enabled ? current.AutomaticSync.HsrLastSyncedAt : null,
-                        }
-                        : current.AutomaticSync with
-                        {
-                            GenshinEnabled = enabled,
-                            GenshinLastSyncedAt = enabled ? current.AutomaticSync.GenshinLastSyncedAt : null,
-                        }),
+                    automaticSync: current.AutomaticSync.SetEnabled(gameId, enabled)),
             cancellationToken);
 
     public bool TryRecordSuccessfulSync(
@@ -234,17 +225,8 @@ public sealed class HoyoLabSyncStateStore
                 || current.CurrentCredential is null
                 ? null
                 : current.CloneWith(current.CurrentCredential, workerRevision, current.PendingDeletions,
-                    automaticSync: gameId == HsrScope
-                        ? current.AutomaticSync with
-                        {
-                            HsrLastSyncedAt = current.AutomaticSync.HsrEnabled
-                                ? DateTimeOffset.FromUnixTimeMilliseconds(UtcNow().ToUnixTimeMilliseconds()) : null,
-                        }
-                        : current.AutomaticSync with
-                        {
-                            GenshinLastSyncedAt = current.AutomaticSync.GenshinEnabled
-                                ? DateTimeOffset.FromUnixTimeMilliseconds(UtcNow().ToUnixTimeMilliseconds()) : null,
-                        }),
+                    automaticSync: current.AutomaticSync.RecordSuccessfulSync(gameId,
+                        DateTimeOffset.FromUnixTimeMilliseconds(UtcNow().ToUnixTimeMilliseconds()))),
             cancellationToken);
 
     public bool TryDetachCurrentCredential(
@@ -304,9 +286,7 @@ public sealed class HoyoLabSyncStateStore
             using var prepared = current.CloneWith(credential, null, current.PendingDeletions,
                 current.PendingRoleDeletions.Where(item => item.SyncId != deletion.SyncId
                     || item.GameId != deletion.Scope),
-                automaticSync: deletion.Scope == HsrScope
-                    ? current.AutomaticSync with { HsrEnabled = false, HsrLastSyncedAt = null }
-                    : current.AutomaticSync with { GenshinEnabled = false, GenshinLastSyncedAt = null });
+                automaticSync: current.AutomaticSync.SetEnabled(deletion.Scope, false));
             var enqueued = Enqueue(prepared, deletion);
             return ReferenceEquals(enqueued, prepared) ? prepared.Normalize() : enqueued;
         }, cancellationToken);
@@ -700,8 +680,10 @@ public sealed class HoyoLabSyncStateStore
                 writer.WriteStartObject("automaticSync");
                 writer.WriteBoolean("hsrEnabled", state.AutomaticSync.HsrEnabled);
                 writer.WriteBoolean("genshinEnabled", state.AutomaticSync.GenshinEnabled);
+                writer.WriteBoolean("zzzEnabled", state.AutomaticSync.ZzzEnabled);
                 WriteNullableTimestamp(writer, "hsrLastSyncedAt", state.AutomaticSync.HsrLastSyncedAt);
                 WriteNullableTimestamp(writer, "genshinLastSyncedAt", state.AutomaticSync.GenshinLastSyncedAt);
+                WriteNullableTimestamp(writer, "zzzLastSyncedAt", state.AutomaticSync.ZzzLastSyncedAt);
                 writer.WriteEndObject();
                 writer.WriteStartArray("pendingDeletions");
                 foreach (var deletion in state.PendingDeletions)
@@ -790,7 +772,7 @@ public sealed class HoyoLabSyncStateStore
                     ? !HasExactProperties(root, "schemaVersion", "currentCredential", "workerRevision", "pendingDeletions")
                     : schemaVersion is 2 or 3
                         ? !HasExactProperties(root, "schemaVersion", "currentCredential", "workerRevision", "pendingDeletions", "pendingRoleDeletions")
-                        : schemaVersion != SchemaVersion
+                        : schemaVersion is not (4 or SchemaVersion)
                             || !HasExactProperties(root, "schemaVersion", "currentCredential", "workerRevision", "automaticSync", "pendingDeletions", "pendingRoleDeletions"))
                 || !TryParseCredential(root.GetProperty("currentCredential"), out credential))
                 return false;
@@ -806,17 +788,28 @@ public sealed class HoyoLabSyncStateStore
                 return false;
 
             var automatic = new HoyoLabAutomaticSyncSettings();
-            if (schemaVersion == SchemaVersion)
+            if (schemaVersion >= 4)
             {
                 var settings = root.GetProperty("automaticSync");
-                if (!HasExactProperties(settings, "hsrEnabled", "genshinEnabled", "hsrLastSyncedAt", "genshinLastSyncedAt")
+                if (!(schemaVersion == 4
+                        ? HasExactProperties(settings, "hsrEnabled", "genshinEnabled", "hsrLastSyncedAt", "genshinLastSyncedAt")
+                        : HasExactProperties(settings, "hsrEnabled", "genshinEnabled", "zzzEnabled", "hsrLastSyncedAt", "genshinLastSyncedAt", "zzzLastSyncedAt"))
                     || settings.GetProperty("hsrEnabled").ValueKind is not (JsonValueKind.True or JsonValueKind.False)
                     || settings.GetProperty("genshinEnabled").ValueKind is not (JsonValueKind.True or JsonValueKind.False)
                     || !TryParseNullableTimestamp(settings.GetProperty("hsrLastSyncedAt"), out var hsrLastSyncedAt)
                     || !TryParseNullableTimestamp(settings.GetProperty("genshinLastSyncedAt"), out var genshinLastSyncedAt))
                     return false;
+                DateTimeOffset? zzzLastSyncedAt = null;
+                var zzzEnabled = false;
+                if (schemaVersion >= 5)
+                {
+                    if (settings.GetProperty("zzzEnabled").ValueKind is not (JsonValueKind.True or JsonValueKind.False)
+                        || !TryParseNullableTimestamp(settings.GetProperty("zzzLastSyncedAt"), out zzzLastSyncedAt))
+                        return false;
+                    zzzEnabled = settings.GetProperty("zzzEnabled").GetBoolean();
+                }
                 automatic = new(settings.GetProperty("hsrEnabled").GetBoolean(), settings.GetProperty("genshinEnabled").GetBoolean(),
-                    hsrLastSyncedAt, genshinLastSyncedAt);
+                    hsrLastSyncedAt, genshinLastSyncedAt, zzzEnabled, zzzLastSyncedAt);
             }
             using var candidate = new HoyoLabSyncState(credential, workerRevision, pending, pendingRoles, automatic);
             if (!IsValidState(candidate, utcNow)) return false;
@@ -1022,9 +1015,9 @@ public sealed class HoyoLabSyncStateStore
                         return false;
                     gameId = parsedGame;
                 }
-                if (hasKnownBuildsAt && gameId is not (HsrScope or GenshinScope)) return false;
+                if (hasKnownBuildsAt && !HoyoLabGameBundleRules.IsSupportedGame(gameId)) return false;
                 if (hasKnownExplorationAt && gameId != GenshinScope) return false;
-                if (hasKnownEndgameAt && gameId is not (HsrScope or GenshinScope)) return false;
+                if (hasKnownEndgameAt && !HoyoLabGameBundleRules.IsSupportedGame(gameId)) return false;
                 if (hasKnownEventsAt && gameId is not (HsrScope or GenshinScope)) return false;
                 var binding = item.GetProperty("binding");
                 if (!HasExactProperties(binding, "roleId", "server")
@@ -1075,6 +1068,8 @@ public sealed class HoyoLabSyncStateStore
             || state.CurrentCredential is null && state.AutomaticSync != new HoyoLabAutomaticSyncSettings()
             || !IsValidWorkerRevision(state.AutomaticSync.HsrLastSyncedAt, utcNow)
             || !IsValidWorkerRevision(state.AutomaticSync.GenshinLastSyncedAt, utcNow)
+            || !IsValidWorkerRevision(state.AutomaticSync.ZzzLastSyncedAt, utcNow)
+            || !state.AutomaticSync.ZzzEnabled && state.AutomaticSync.ZzzLastSyncedAt is not null
             || !state.AutomaticSync.HsrEnabled && state.AutomaticSync.HsrLastSyncedAt is not null
             || !state.AutomaticSync.GenshinEnabled && state.AutomaticSync.GenshinLastSyncedAt is not null)
             return false;
@@ -1131,7 +1126,7 @@ public sealed class HoyoLabSyncStateStore
                 && !deletion.IsDisposed
                 && IsLowerHex(deletion.SyncId, SyncIdCharacters)
                 && deletion.Token.Length == TokenBytes
-                && deletion.Scope is HsrScope or GenshinScope or AllHoyoScope
+                && deletion.Scope is HsrScope or GenshinScope or ZzzScope or AllHoyoScope
                 && (!deletion.RemoveLocalSlot || deletion.Scope == AllHoyoScope)
                 && (deletion.RequireRevisionMatch
                     ? deletion.Scope == AllHoyoScope && !deletion.RemoveLocalSlot
@@ -1139,7 +1134,8 @@ public sealed class HoyoLabSyncStateStore
                         && (deletion.ExpectedRevisionsByGame is null
                             || deletion.ExpectedRevision is null
                                 && IsValidWorkerRevision(deletion.ExpectedRevisionsByGame.Hsr, enforceClock ? utcNow : DateTimeOffset.MaxValue)
-                                && IsValidWorkerRevision(deletion.ExpectedRevisionsByGame.Genshin, enforceClock ? utcNow : DateTimeOffset.MaxValue))
+                                && IsValidWorkerRevision(deletion.ExpectedRevisionsByGame.Genshin, enforceClock ? utcNow : DateTimeOffset.MaxValue)
+                                && IsValidWorkerRevision(deletion.ExpectedRevisionsByGame.Zzz, enforceClock ? utcNow : DateTimeOffset.MaxValue))
                     : deletion.ExpectedRevision is null && deletion.ExpectedRevisionsByGame is null)
                 && TryNormalizeOperationId(deletion.OperationId, out _)
                 && IsValidTimestamp(deletion.RequestedAt, enforceClock ? utcNow : DateTimeOffset.MaxValue);
@@ -1164,7 +1160,8 @@ public sealed class HoyoLabSyncStateStore
                 && deletion.Key.Length == KeyBytes
                 && HoyoLabGameBundleRules.IsSupportedGame(deletion.GameId)
                 && PublisherAccountCatalog.IsValidRoleBinding(deletion.GameId, deletion.Binding)
-                && (deletion.GameId != GenshinScope || deletion.KnownAchievementsAt is null)
+                && (deletion.GameId == HsrScope || deletion.KnownAchievementsAt is null)
+                && (deletion.GameId != ZzzScope || deletion.KnownEventsAt is null)
                 && (deletion.GameId == GenshinScope || deletion.KnownExplorationAt is null)
                 && TryNormalizeOperationId(deletion.OperationId, out _)
                 && IsValidTimestamp(deletion.RequestedAt, utcNow)
@@ -1318,11 +1315,13 @@ public sealed class HoyoLabSyncStateStore
     {
         revisions = null;
         if (element.ValueKind == JsonValueKind.Null) return true;
-        if (!HasExactProperties(element, "hsr", "gi")
+        DateTimeOffset? zzz = null;
+        if (!(HasExactProperties(element, "hsr", "gi") || HasExactProperties(element, "hsr", "gi", "zzz"))
+            || element.TryGetProperty("zzz", out var zzzElement) && !TryParseNullableTimestamp(zzzElement, out zzz)
             || !TryParseNullableTimestamp(element.GetProperty("hsr"), out var hsr)
             || !TryParseNullableTimestamp(element.GetProperty("gi"), out var gi))
             return false;
-        revisions = new(hsr, gi);
+        revisions = new(hsr, gi, zzz);
         return true;
     }
 
@@ -1332,6 +1331,7 @@ public sealed class HoyoLabSyncStateStore
         writer.WriteStartObject(name);
         WriteNullableTimestamp(writer, "hsr", revisions.Hsr);
         WriteNullableTimestamp(writer, "gi", revisions.Genshin);
+        WriteNullableTimestamp(writer, "zzz", revisions.Zzz);
         writer.WriteEndObject();
     }
 
@@ -1536,7 +1536,7 @@ public sealed class HoyoLabPendingDeletion : IDisposable
     {
         if (!IsLowerHex(syncId)
             || token.Length != 32
-            || scope is not (HoyoLabSyncStateStore.HsrScope or HoyoLabSyncStateStore.GenshinScope or HoyoLabSyncStateStore.AllHoyoScope)
+            || scope is not (HoyoLabSyncStateStore.HsrScope or HoyoLabSyncStateStore.GenshinScope or HoyoLabSyncStateStore.ZzzScope or HoyoLabSyncStateStore.AllHoyoScope)
             || removeLocalSlot && scope != HoyoLabSyncStateStore.AllHoyoScope
             || requireRevisionMatch && (scope != HoyoLabSyncStateStore.AllHoyoScope || removeLocalSlot)
             || !requireRevisionMatch && (expectedRevision is not null || expectedRevisionsByGame is not null)
@@ -1621,7 +1621,6 @@ public sealed class HoyoLabPendingRoleDeletion : IDisposable
             || !PublisherAccountCatalog.IsValidRoleBinding(gameId, binding)
             || gameId != HoyoLabGameBundleRules.GameId && knownAchievementsAt is not null
             || gameId != HoyoLabGameBundleRules.GenshinGameId && knownExplorationAt is not null
-            || gameId is not (HoyoLabGameBundleRules.GameId or HoyoLabGameBundleRules.GenshinGameId) && knownEndgameAt is not null
             || gameId is not (HoyoLabGameBundleRules.GameId or HoyoLabGameBundleRules.GenshinGameId)
                 && knownEventsAt is not null
             || !HoyoLabSyncStateStore.TryNormalizeOperationId(operationId, out _))
@@ -1665,13 +1664,48 @@ public sealed class HoyoLabPendingRoleDeletion : IDisposable
     public override string ToString() => nameof(HoyoLabPendingRoleDeletion);
 }
 
-public sealed record HoyoLabGameRevisions(DateTimeOffset? Hsr, DateTimeOffset? Genshin);
+public sealed record HoyoLabGameRevisions(DateTimeOffset? Hsr, DateTimeOffset? Genshin, DateTimeOffset? Zzz = null);
 
 public sealed record HoyoLabAutomaticSyncSettings(
     bool HsrEnabled = false,
     bool GenshinEnabled = false,
     DateTimeOffset? HsrLastSyncedAt = null,
-    DateTimeOffset? GenshinLastSyncedAt = null);
+    DateTimeOffset? GenshinLastSyncedAt = null,
+    bool ZzzEnabled = false,
+    DateTimeOffset? ZzzLastSyncedAt = null)
+{
+    public bool IsEnabled(string gameId) => gameId switch
+    {
+        HoyoLabGameBundleRules.GameId => HsrEnabled,
+        HoyoLabGameBundleRules.GenshinGameId => GenshinEnabled,
+        HoyoLabGameBundleRules.ZzzGameId => ZzzEnabled,
+        _ => false,
+    };
+
+    public DateTimeOffset? LastSyncedAt(string gameId) => gameId switch
+    {
+        HoyoLabGameBundleRules.GameId => HsrLastSyncedAt,
+        HoyoLabGameBundleRules.GenshinGameId => GenshinLastSyncedAt,
+        HoyoLabGameBundleRules.ZzzGameId => ZzzLastSyncedAt,
+        _ => null,
+    };
+
+    internal HoyoLabAutomaticSyncSettings SetEnabled(string gameId, bool enabled) => gameId switch
+    {
+        HoyoLabGameBundleRules.GameId => this with { HsrEnabled = enabled, HsrLastSyncedAt = enabled ? HsrLastSyncedAt : null },
+        HoyoLabGameBundleRules.GenshinGameId => this with { GenshinEnabled = enabled, GenshinLastSyncedAt = enabled ? GenshinLastSyncedAt : null },
+        HoyoLabGameBundleRules.ZzzGameId => this with { ZzzEnabled = enabled, ZzzLastSyncedAt = enabled ? ZzzLastSyncedAt : null },
+        _ => throw new ArgumentException("Unsupported HoYo game.", nameof(gameId)),
+    };
+
+    internal HoyoLabAutomaticSyncSettings RecordSuccessfulSync(string gameId, DateTimeOffset observedAt) => gameId switch
+    {
+        HoyoLabGameBundleRules.GameId => this with { HsrLastSyncedAt = HsrEnabled ? observedAt : null },
+        HoyoLabGameBundleRules.GenshinGameId => this with { GenshinLastSyncedAt = GenshinEnabled ? observedAt : null },
+        HoyoLabGameBundleRules.ZzzGameId => this with { ZzzLastSyncedAt = ZzzEnabled ? observedAt : null },
+        _ => throw new ArgumentException("Unsupported HoYo game.", nameof(gameId)),
+    };
+}
 
 public sealed class HoyoLabSyncState : IDisposable
 {

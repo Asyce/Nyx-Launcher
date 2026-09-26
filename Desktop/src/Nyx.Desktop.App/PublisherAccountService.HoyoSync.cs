@@ -13,8 +13,12 @@ public sealed partial class PublisherAccountService
 
     public static bool GenshinManualSyncAvailable => true;
 
+    // Receiver is available; native own-role capture/sync acceptance is still pending.
+    public static bool ZzzManualSyncAvailable => false;
+
     public static bool IsHoyoLabManualSyncAvailable(string gameId) =>
-        HoyoLabManualSyncAvailable && (gameId == "hsr" || gameId == "gi" && GenshinManualSyncAvailable);
+        HoyoLabManualSyncAvailable && (gameId == "hsr" || gameId == "gi" && GenshinManualSyncAvailable
+            || gameId == "zzz" && ZzzManualSyncAvailable);
 
     public async Task<HoyoLabSyncSummary> GetHoyoSyncSummaryAsync(
         string gameId,
@@ -318,7 +322,8 @@ public sealed partial class PublisherAccountService
                 || !new HoyoLabGameBundleStore(root).TryDelete()
                 || !new HoyoLabGameBundleStore(
                     root,
-                    HoyoLabGameBundleRules.GenshinGameId).TryDelete()))
+                    HoyoLabGameBundleRules.GenshinGameId).TryDelete()
+                || !new HoyoLabGameBundleStore(root, HoyoLabGameBundleRules.ZzzGameId).TryDelete()))
             return false;
         if (!hoyoSlots.TryGetSlotContainerPath(target, out var containerPath)
             || !TryDeleteManagedDirectory(containerPath))

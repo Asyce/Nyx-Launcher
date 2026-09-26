@@ -64,8 +64,10 @@ public sealed class HoyoLabSyncClientTests
         }
     }
 
-    [Fact]
-    public async Task Supported_genshin_game_is_sent_and_unknown_games_are_rejected()
+    [Theory]
+    [InlineData("gi")]
+    [InlineData("zzz")]
+    public async Task Supported_game_is_sent_and_unknown_games_are_rejected(string gameId)
     {
         var handler = new FakeHandler((_, _) => Task.FromResult(JsonResponse(
             new { ok = true, updatedAt = UpdatedAt, size = 17 })));
@@ -75,16 +77,35 @@ public sealed class HoyoLabSyncClientTests
         var genshin = await client.PushAsync(
             secrets,
             VectorEnvelope(),
-            gameId: HoyoLabGameBundleRules.GenshinGameId);
-        var unknown = await client.StatusAsync(secrets, gameId: "zzz");
+            gameId: gameId);
+        var unknown = await client.StatusAsync(secrets, gameId: "unknown");
 
         Assert.Equal(HoyoLabSyncFailure.None, genshin.Failure);
         Assert.Equal(HoyoLabSyncFailure.InvalidRequest, unknown.Failure);
         Assert.Single(handler.Requests);
         using var document = JsonDocument.Parse(handler.Requests[0].Body);
         Assert.Equal(
-            HoyoLabGameBundleRules.GenshinGameId,
+            gameId,
             document.RootElement.GetProperty("game").GetString());
+    }
+
+    [Theory]
+    [InlineData("{\"hsr\":null,\"gi\":null}", true)]
+    [InlineData("{\"hsr\":null,\"gi\":null,\"zzz\":null}", true)]
+    [InlineData("{\"hsr\":null,\"gi\":null,\"zzz\":\"2026-08-30T00:00:00.001Z\"}", true)]
+    [InlineData("{\"hsr\":null,\"gi\":null,\"zzz\":1}", false)]
+    [InlineData("{\"hsr\":null,\"zzz\":null}", false)]
+    [InlineData("{\"hsr\":null,\"gi\":null,\"zzz\":null,\"zzz\":null}", false)]
+    [InlineData("{\"hsr\":null,\"gi\":null,\"zzz\":null,\"unknown\":null}", false)]
+    public async Task Account_conflict_accepts_legacy_and_three_game_maps_but_rejects_malformed_conditions(string map, bool valid)
+    {
+        var response = "{\"ok\":false,\"error\":{\"code\":\"stale_write\",\"message\":\"Changed\",\"requestId\":\"req-abc123\"},\"serverUpdatedAtByGame\":" + map + "}";
+        var handler = new FakeHandler((_, _) => Task.FromResult(JsonResponse(HttpStatusCode.Conflict, response)));
+        using var client = CreateClient(handler);
+        using var secrets = Secrets();
+        var result = await client.PushAsync(secrets, VectorEnvelope());
+        Assert.Equal(valid ? HoyoLabSyncFailure.Conflict : HoyoLabSyncFailure.InvalidResponse, result.Failure);
+        Assert.Null(result.ServerUpdatedAt);
     }
 
     [Fact]

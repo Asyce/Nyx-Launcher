@@ -30,8 +30,8 @@ public sealed partial class MainPage
 
     private async Task ShowHoyoLabSyncAsync(string gameId)
     {
-        var gameName = gameId == HoyoLabGameBundleRules.GenshinGameId ? "Genshin" : "Star Rail";
-        var otherGameName = gameId == HoyoLabGameBundleRules.GenshinGameId ? "Star Rail" : "Genshin";
+        var gameName = gameId switch { "gi" => "Genshin", "zzz" => "ZZZ", _ => "Star Rail" };
+        var otherGameName = gameId switch { "gi" => "Star Rail and ZZZ", "zzz" => "Star Rail and Genshin", _ => "Genshin and ZZZ" };
         var sharedData = gameId == HoyoLabGameBundleRules.GameId
             ? PublisherAccountService.HsrBuildsAvailable
                 ? "Only remembered resources, achievements, characters and equipped builds are shared. Full-bag inventory is not included."
@@ -57,6 +57,11 @@ public sealed partial class MainPage
                 + (PublisherAccountService.HsrEndgameAvailable
                     ? " are shared. Full-bag inventory and other endgame modes are not included."
                     : " are shared. Full-bag inventory and full endgame battle records are not included.");
+        if (gameId == HoyoLabGameBundleRules.ZzzGameId)
+            sharedData = "Remembered Battery Charge"
+                + (PublisherAccountService.ZzzBuildsAvailable ? ", Agents and equipped builds" : string.Empty)
+                + (PublisherAccountService.ZzzEndgameAvailable ? ", current and previous Shiyu Defense Fourth/Fifth Frontier records" : string.Empty)
+                + " are shared. Full-bag inventory and other endgame modes are not included.";
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
             pageLease?.CancellationToken ?? CancellationToken.None);
         var token = cancellation.Token;
@@ -116,7 +121,7 @@ public sealed partial class MainPage
         var connect = CreateHoyoLabManagerButton("Enable & sync", $"Enable encrypted manual {gameName} sync");
         var syncNow = CreateHoyoLabManagerButton("Sync now", $"Sync {gameName} now");
         var rotate = CreateHoyoLabManagerButton("Change code…", "Review changing the HoYo recovery code");
-        var stop = CreateHoyoLabManagerButton("Stop syncing here", "Stop syncing both games on this PC; keep local and cloud data");
+        var stop = CreateHoyoLabManagerButton("Stop syncing here", "Stop syncing all HoYo games on this PC; keep local and cloud data");
         var retry = CreateHoyoLabManagerButton("Retry deletion", "Retry already requested HoYo deletions");
         var website = CreateHoyoLabManagerButton("Open My HoYo", "Open My HoYo on Pengo; no recovery code is sent in the link");
         var scope = new ComboBox
@@ -316,8 +321,8 @@ public sealed partial class MainPage
                 await RefreshAsync();
                 if (open && result.RecoveryCode is not null && recoveryCode.Text.Length > 0)
                     message.Text = summary.PendingDeletions > 0
-                        ? "The new code is active. Keep it safe. Deletion of the old Star Rail and Genshin cloud copies is still pending, so the old code may still work. Use Retry deletion; review My HoYo with the old code if a newer copy prevents removal."
-                        : "The new code is active and both Star Rail and Genshin cloud copies were transferred; the old code was retired. Keep the new code safe.";
+                        ? "The new code is active. Keep it safe. Deletion of the old HoYo cloud copies is still pending, so the old code may still work. Use Retry deletion; review My HoYo with the old code if a newer copy prevents removal."
+                        : "The new code is active and all available HoYo game copies were transferred; the old code was retired. Keep the new code safe.";
             }
             catch (OperationCanceledException) { }
             catch (Exception)
@@ -389,7 +394,7 @@ public sealed partial class MainPage
                 return result;
             });
         rotate.Click += (_, _) => Review(
-            $"Create a new recovery code and transfer both Star Rail and Genshin before retiring the old code? Keep the new code for your other devices. A newer saved copy stops old-code removal; ordinary {gameName} sync does not alter {otherGameName} or pull history.",
+            $"Create a new recovery code and transfer all available HoYo game copies before retiring the old code? Keep the new code for your other devices. A newer saved copy stops old-code removal; ordinary {gameName} sync does not alter {otherGameName} or pull history.",
             ct => publisherAccounts.RotateHoyoSyncCodeAsync(gameId, syncSlot!, ct));
         retry.Click += async (_, _) => await RunAsync(publisherAccounts.RetryHoyoLabSyncDeletionsAsync, accountAction: false);
         website.Click += async (_, _) => await OpenFixedDestinationAsync(new Uri("https://pengo.gg/nyx/my-hoyo"), "My HoYo");
@@ -489,7 +494,9 @@ public sealed partial class MainPage
         HoyoLabManualSyncStatus.Deferred => "No resource-only sync is due yet. Sync now is always available.",
         HoyoLabManualSyncStatus.AutomaticSyncPaused => "Paused because data was deleted in the cloud. Local snapshots are unchanged. Review My HoYo before choosing Sync now to merge or restore data, then turn automatic sync back on if wanted.",
         HoyoLabManualSyncStatus.NotEnabled => "Choose a connected HoYoLAB account and enable manual sync first.",
-        HoyoLabManualSyncStatus.NoLocalData => gameId == HoyoLabGameBundleRules.GenshinGameId
+        HoyoLabManualSyncStatus.NoLocalData => gameId == HoyoLabGameBundleRules.ZzzGameId
+            ? "No remembered ZZZ data is available. Select a ZZZ role and refresh its remembered data first."
+            : gameId == HoyoLabGameBundleRules.GenshinGameId
             ? "No remembered Resin is available. Choose a region and enable the data you want to remember in Accounts."
             : "No remembered Star Rail resources or completed achievements are available. Choose a region and enable the data you want to remember in Accounts.",
         HoyoLabManualSyncStatus.InvalidRecoveryCode => "That recovery code is not valid. Check it and try again.",

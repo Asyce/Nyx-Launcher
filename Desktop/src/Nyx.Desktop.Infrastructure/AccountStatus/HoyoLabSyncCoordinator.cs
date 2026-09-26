@@ -211,20 +211,14 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
             return Result(HoyoLabManualSyncStatus.NotEnabled);
         var identity = CheckIdentity(credential.SyncId, rejectOtherCurrent: true);
         if (identity != HoyoLabManualSyncStatus.Completed) return Result(identity);
-        var lastSyncedAt = gameId == HoyoLabGameBundleRules.GameId
-            ? state.AutomaticSync.HsrLastSyncedAt : state.AutomaticSync.GenshinLastSyncedAt;
+        var lastSyncedAt = state.AutomaticSync.LastSyncedAt(gameId);
         if (!fullRefresh && lastSyncedAt is { } previous && UtcNow() - previous < TimeSpan.FromHours(1))
             return Result(HoyoLabManualSyncStatus.Deferred);
         using var secrets = SecretsFor(credential);
         return await SyncCoreAsync(secrets, cancellationToken, gameId, automatic: true).ConfigureAwait(false);
     }
 
-    private static bool AutomaticEnabled(HoyoLabAutomaticSyncSettings settings, string gameId) => gameId switch
-    {
-        HoyoLabGameBundleRules.GameId => settings.HsrEnabled,
-        HoyoLabGameBundleRules.GenshinGameId => settings.GenshinEnabled,
-        _ => false,
-    };
+    private static bool AutomaticEnabled(HoyoLabAutomaticSyncSettings settings, string gameId) => settings.IsEnabled(gameId);
 
     private bool CanContinueAutomatic(HoyoLabSyncCredential credential, string gameId)
     {
@@ -270,7 +264,7 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
         using var oldDeletion = TokenDeletion(
             current, HoyoLabSyncStateStore.AllHoyoScope,
             requireRevisionMatch: true,
-            expectedRevisionsByGame: new(prepared["hsr"].UpdatedAt, prepared["gi"].UpdatedAt));
+            expectedRevisionsByGame: new(prepared["hsr"].UpdatedAt, prepared["gi"].UpdatedAt, prepared["zzz"].UpdatedAt));
         if (!Apply(() => currentStore!.TryEnqueuePendingDeletion(compensation, cancellationToken), cancellationToken))
             return WriteFailure(cancellationToken);
         DateTimeOffset? lastUpdatedAt = null;
@@ -313,7 +307,7 @@ public sealed class HoyoLabSyncCoordinator : IDisposable
         bool removeLocalSlot = false)
     {
         if ((deletionScope is not null
-                && deletionScope is not (HoyoLabSyncStateStore.HsrScope or HoyoLabSyncStateStore.GenshinScope or HoyoLabSyncStateStore.AllHoyoScope))
+                && deletionScope is not (HoyoLabSyncStateStore.HsrScope or HoyoLabSyncStateStore.GenshinScope or HoyoLabSyncStateStore.ZzzScope or HoyoLabSyncStateStore.AllHoyoScope))
             || (removeLocalSlot && deletionScope != HoyoLabSyncStateStore.AllHoyoScope))
             return Result(HoyoLabManualSyncStatus.Conflict);
         if (!IsCurrent(cancellationToken)) return Result(HoyoLabManualSyncStatus.Canceled);
