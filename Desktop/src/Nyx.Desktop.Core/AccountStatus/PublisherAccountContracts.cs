@@ -1486,6 +1486,8 @@ public static class PublisherAccountStatePolicy
 
 public static class PublisherAccountPresentation
 {
+    public const string RestartRequiredGuidance = "Restart Nyx to retry account cleanup.";
+
     public static string? ResourceCaptureGuidance(
         PublisherResourceCaptureDiagnostic diagnostic) => diagnostic switch
         {
