@@ -4,8 +4,8 @@ namespace Nyx_Desktop_App;
 
 public sealed partial class PublisherAccountService
 {
-    // Enabled only after receiver and integrated validation are complete.
-    public static bool HsrEndgameAvailable => false;
+    // Unmerged native-acceptance candidate; public availability still requires runtime evidence.
+    public static bool HsrEndgameAvailable => true;
 
     public async Task<HoyoLabHsrEndgameReadResult> RefreshHsrEndgameAsync(
         string expectedSlotId,

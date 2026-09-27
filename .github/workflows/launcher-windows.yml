@@ -80,7 +80,7 @@ jobs:
       - name: Build development package
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         shell: pwsh
-        run: .\Desktop\packaging\build-development-package.ps1
+        run: .\Desktop\packaging\build-development-package.ps1 -Version 1.8.0.23
 
       - name: Upload sealed package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
