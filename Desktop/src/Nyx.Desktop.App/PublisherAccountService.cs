@@ -579,6 +579,19 @@ public sealed partial class PublisherAccountService : IAsyncDisposable
 
     public bool HasConsent(string provider) => consent.IsEnabled(provider);
 
+    public bool IsProviderQuarantined(string provider)
+    {
+        lock (sync)
+        {
+            return provider switch
+            {
+                "HoYoLAB" => hoyoQuarantined,
+                "SKPORT" => skportQuarantined,
+                _ => false,
+            };
+        }
+    }
+
     public void ApplyPasswordSavingPreference(bool enabled)
     {
         skportPasswordStorage.ApplyPreference(

@@ -6077,6 +6077,7 @@ public sealed partial class MainPage : Page
             ? Visibility.Visible
             : Visibility.Collapsed;
 
+        AutomationProperties.SetHelpText(AccountConnectionButton, string.Empty);
         if (selected.Id == "wuwa")
         {
             RenderWuWaAccountIdentity();
@@ -6106,25 +6107,34 @@ public sealed partial class MainPage : Page
         var summary = publisherAccounts.Current;
         var connection = entry.Provider == "HoYoLAB" ? summary.HoyoLab : summary.Skport;
         var consentEnabled = publisherAccounts.HasConsent(entry.Provider);
+        var restartRequired = publisherAccounts.IsProviderQuarantined(entry.Provider);
         AccountConnectionButton.Content = publisherAccountActionInFlight
             ? "Wait"
-            : !consentEnabled
-                ? "Disconnected"
-                : connection switch
-                {
-                    PublisherConnectionState.Connected => "Connected",
-                    PublisherConnectionState.Connecting => "Wait",
-                    PublisherConnectionState.NeedsReview => "Try Again",
-                    PublisherConnectionState.LoginRequired => "Sign In",
-                    _ => "Sign In",
-                };
+            : restartRequired
+                ? "Restart Nyx"
+                : !consentEnabled
+                    ? "Disconnected"
+                    : connection switch
+                    {
+                        PublisherConnectionState.Connected => "Connected",
+                        PublisherConnectionState.Connecting => "Wait",
+                        PublisherConnectionState.NeedsReview => "Try Again",
+                        PublisherConnectionState.LoginRequired => "Sign In",
+                        _ => "Sign In",
+                    };
         AccountConnectionButton.IsEnabled = !publisherAccountActionInFlight
+            && !restartRequired
             && connection is not (PublisherConnectionState.Connecting or PublisherConnectionState.Connected);
         AutomationProperties.SetName(
             AccountConnectionButton,
-            connection == PublisherConnectionState.Connected
-                ? $"{entry.Provider} connected"
-                : $"{AccountConnectionButton.Content} to {entry.Provider}");
+            restartRequired
+                ? PublisherAccountPresentation.RestartRequiredGuidance
+                : connection == PublisherConnectionState.Connected
+                    ? $"{entry.Provider} connected"
+                    : $"{AccountConnectionButton.Content} to {entry.Provider}");
+        AutomationProperties.SetHelpText(
+            AccountConnectionButton,
+            restartRequired ? PublisherAccountPresentation.RestartRequiredGuidance : string.Empty);
         ChangePublisherAccountButton.Visibility = Visibility.Visible;
         ChangePublisherAccountButton.IsEnabled = !publisherAccountActionInFlight
             && (selected.Id == "ae"
@@ -7876,11 +7886,14 @@ public sealed partial class MainPage : Page
         var summary = publisherAccounts.Current;
         var connection = entry.Provider == "HoYoLAB" ? summary.HoyoLab : summary.Skport;
         var consentEnabled = publisherAccounts.HasConsent(entry.Provider);
+        var restartRequired = publisherAccounts.IsProviderQuarantined(entry.Provider);
         AccountProviderText.Text = entry.Provider == "HoYoLAB" ? "HOYOLAB" : "SKPORT";
         if (gameId == "ae") AccountProviderText.Text = "GRYPHLINE";
-        AccountConnectionWarningText.Text = consentEnabled
-            ? "Nyx-only private browser · disconnect deletes its profile."
-            : "Off by default · allow before Nyx opens publisher account pages.";
+        AccountConnectionWarningText.Text = restartRequired
+            ? PublisherAccountPresentation.RestartRequiredGuidance
+            : consentEnabled
+                ? "Nyx-only private browser · disconnect deletes its profile."
+                : "Off by default · allow before Nyx opens publisher account pages.";
         AutomationProperties.SetHelpText(
             WuWaAccountStatusStrip,
             AccountConnectionWarningText.Text);
@@ -8008,9 +8021,13 @@ public sealed partial class MainPage : Page
             WuWaAccountFreshnessText.Text = dailyLabel ?? resourceLabel;
         }
 
-        var accessibleFreshness = currentCheckIn?.State == DailyCheckInState.CouldNotCheck
-            ? $"{WuWaAccountFreshnessText.Text}. {currentCheckIn.Message}"
-            : WuWaAccountFreshnessText.Text;
+        if (restartRequired && !publisherAccountActionInFlight)
+            WuWaAccountFreshnessText.Text = "OFF · RESTART NYX";
+        var accessibleFreshness = restartRequired && !publisherAccountActionInFlight
+            ? PublisherAccountPresentation.RestartRequiredGuidance
+            : currentCheckIn?.State == DailyCheckInState.CouldNotCheck
+                ? $"{WuWaAccountFreshnessText.Text}. {currentCheckIn.Message}"
+                : WuWaAccountFreshnessText.Text;
         AutomationProperties.SetName(WuWaAccountFreshnessText, accessibleFreshness);
         AutomationProperties.SetHelpText(WuWaAccountFreshnessText, accessibleFreshness);
 
@@ -8022,6 +8039,7 @@ public sealed partial class MainPage : Page
             : Visibility.Collapsed;
         PublisherAccountConnectButton.Content = connection switch
         {
+            _ when restartRequired => "RESTART NYX",
             PublisherConnectionState.Connected => "CONNECTED",
             PublisherConnectionState.Connecting => "WAIT",
             PublisherConnectionState.LoginRequired => "SIGN IN",
@@ -8030,10 +8048,13 @@ public sealed partial class MainPage : Page
         };
         AutomationProperties.SetName(
             PublisherAccountConnectButton,
-            connection == PublisherConnectionState.Connected
-                ? $"Refresh {entry.Provider} account resources"
-                : $"Connect {entry.Provider} in a Nyx-only private browser");
+            restartRequired
+                ? PublisherAccountPresentation.RestartRequiredGuidance
+                : connection == PublisherConnectionState.Connected
+                    ? $"Refresh {entry.Provider} account resources"
+                    : $"Connect {entry.Provider} in a Nyx-only private browser");
         PublisherAccountConnectButton.IsEnabled = consentEnabled
+            && !restartRequired
             && !publisherAccountActionInFlight
             && connection != PublisherConnectionState.Connecting;
         WuWaAccountStatusRefreshButton.Visibility = consentEnabled
