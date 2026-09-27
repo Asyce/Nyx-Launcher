@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
+import { createHash, webcrypto } from 'node:crypto';
 
 const fixture=JSON.parse(fs.readFileSync(new URL('../../../contracts/hoyolab-hsr-challenges-v1.fixture.json',import.meta.url),'utf8'));
 const roleId='123456789',server='prod_official_eur',key='__pengoNyxHsrEndgame_fixture';
@@ -10,11 +11,16 @@ const config={key,roleId,server,roleEndpoint,gameBiz:'hkrpg_global',maximumFloor
 const source=fs.readFileSync(new URL('../../src/Nyx.Desktop.Core/AccountStatus/HoyoLabHsrEndgameCapture.cs',import.meta.url),'utf8');
 const start=source.indexOf('return $$"""')+'return $$"""'.length;
 assert.ok(start>12);
-const script=source.slice(start,source.indexOf('\n        """;',start)).replace('{{configuration}}',JSON.stringify(config));
+const script=source.slice(start,source.indexOf('\n        """;',start))
+  .replace('{{configuration}}',JSON.stringify(config))
+  .replace('{{HoyoLabHsrRequestScript.Signer}}',fs.readFileSync(
+    new URL('../../src/Nyx.Desktop.Core/AccountStatus/HoyoLabHsrRequestScript.cs',import.meta.url),'utf8')
+    .split('// HSR_DS_SIGNER_START')[1].split('// HSR_DS_SIGNER_END')[0]);
 const clone=value=>JSON.parse(JSON.stringify(value));
 
 function scenario(options={}){
-  const context={window:{},AbortController,TextEncoder,TextDecoder,Uint8Array,URL};
+  const context={window:{},AbortController,TextEncoder,TextDecoder,Uint8Array,URL,
+    crypto:Object.hasOwn(options,'crypto')?options.crypto:webcrypto};
   const requests=[],timers=[];
   let roleCalls=0;
   context.setTimeout=(callback,delay)=>{
@@ -61,6 +67,40 @@ test('six complete periods retain third teams, quick clears and exact source sco
   assert.equal(new URL(run.requests.at(-1).url).pathname,new URL(roleEndpoint).pathname);
   for(const {init} of run.requests){assert.equal(init.method,'GET');assert.equal(init.body,undefined);assert.equal(init.credentials,'include');assert.equal(init.redirect,'error');}
   assert.equal(JSON.stringify(output).includes('example.invalid'),false);
+});
+
+test('all six challenge requests are signed while role discovery stays unsigned',async()=>{
+  const run=scenario();
+  assert.equal((await result(run)).status,'done');
+  assert.equal(run.requests.length,8);
+  for(const {url,init} of run.requests){
+    assert.equal(init.headers['x-rpc-language'],'en-us');
+    if(url.startsWith(roleEndpoint)){
+      assert.deepEqual(Object.keys(init.headers),['x-rpc-language']);
+      continue;
+    }
+    assert.equal(init.headers['x-rpc-client_type'],'5');
+    assert.equal(init.headers['x-rpc-app_version'],'1.5.0');
+    assert.match(init.headers.DS,/^[0-9]{10},[a-z]{6},[a-f0-9]{32}$/);
+    const [timestamp,random,digest]=init.headers.DS.split(',');
+    assert.equal(digest,createHash('md5')
+      .update('salt=6s25p5ox5y14umn1p61aqyyvbvvl3lrt&t='+timestamp+'&r='+random).digest('hex'));
+  }
+});
+
+test('missing signing randomness fails before any challenge request',async()=>{
+  const run=scenario({crypto:null});
+  assert.deepEqual(await result(run),{status:'needs-review'});
+  assert.equal(run.requests.length,1);
+  assert.ok(run.requests[0].url.startsWith(roleEndpoint));
+  assert.ok(run.state().failureFrames.every(line=>Number.isInteger(line)&&line>0&&line<=4096));
+});
+
+test('projection failure exposes only bounded line numbers outside the result',async()=>{
+  const run=scenario({mutate(data){delete data.all_floor_detail;}});
+  assert.deepEqual(await result(run),{status:'needs-review'});
+  assert.ok(run.state().failureFrames.length>0&&run.state().failureFrames.length<=3);
+  assert.ok(run.state().failureFrames.every(line=>Number.isInteger(line)&&line>0&&line<=4096));
 });
 for(const [name,mutate] of [
   ['missing required floor',d=>{delete d.all_floor_detail;}],

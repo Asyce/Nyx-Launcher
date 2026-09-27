@@ -492,7 +492,7 @@ public sealed partial class MainPage
     {
         HoyoLabManualSyncStatus.Completed => "Finished. Check the saved status above.",
         HoyoLabManualSyncStatus.Deferred => "No resource-only sync is due yet. Sync now is always available.",
-        HoyoLabManualSyncStatus.AutomaticSyncPaused => "Paused because data was deleted in the cloud. Local snapshots are unchanged. Review My HoYo before choosing Sync now to merge or restore data, then turn automatic sync back on if wanted.",
+        HoyoLabManualSyncStatus.AutomaticSyncPaused => "Paused because this game's cloud copy is missing or contains deletions. Local snapshots are unchanged. Review My HoYo, then choose Sync now to create, merge or restore the copy and turn automatic sync back on if wanted.",
         HoyoLabManualSyncStatus.NotEnabled => "Choose a connected HoYoLAB account and enable manual sync first.",
         HoyoLabManualSyncStatus.NoLocalData => gameId == HoyoLabGameBundleRules.ZzzGameId
             ? "No remembered ZZZ data is available. Select a ZZZ role and refresh its remembered data first."
