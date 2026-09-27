@@ -4582,7 +4582,7 @@ public sealed class PublisherAccountHardeningTests
             StringComparison.Ordinal);
         Assert.True(closeBrowser >= 0 && closeBrowser < armedWait && armedWait < waitForExit);
         Assert.Contains(
-            "BrowserProcessExitTimeout = TimeSpan.FromSeconds(5)",
+            "BrowserProcessExitTimeout = TimeSpan.FromSeconds(30)",
             browser,
             StringComparison.Ordinal);
         Assert.Contains("finally", disposal, StringComparison.Ordinal);
