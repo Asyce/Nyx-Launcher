@@ -17,7 +17,10 @@ public sealed partial class PublisherSessionWindow : Window, IAsyncDisposable
     private const string HsrAchievementRequestTokenHeader = "X-Nyx-Achievement-Request";
     private static readonly Uri WebView2DownloadUri =
         new("https://developer.microsoft.com/en-us/microsoft-edge/webview2/consumer/");
-    private static readonly TimeSpan BrowserProcessExitTimeout = TimeSpan.FromSeconds(5);
+    // A successful refresh can finish before WebView2 releases its profile.
+    // Keep waiting for the actual exit signal; a short five-second deadline
+    // can quarantine an otherwise valid signed-in session during normal exit.
+    private static readonly TimeSpan BrowserProcessExitTimeout = TimeSpan.FromSeconds(30);
     private readonly string profileDirectory;
     private readonly string provider;
     private readonly TimeProvider timeProvider;

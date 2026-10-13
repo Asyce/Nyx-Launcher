@@ -4,8 +4,8 @@ namespace Nyx_Desktop_App;
 
 public sealed partial class PublisherAccountService
 {
-    // Enabled only after receiver and integrated validation are complete.
-    public static bool GenshinEndgameAvailable => false;
+    // Unmerged native-acceptance candidate; public availability still requires runtime evidence.
+    public static bool GenshinEndgameAvailable => true;
 
     public async Task<HoyoLabGenshinEndgameReadResult> RefreshGenshinEndgameAsync(
         string expectedSlotId,

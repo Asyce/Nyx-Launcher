@@ -13,8 +13,8 @@ public sealed partial class PublisherAccountService
 
     public static bool GenshinManualSyncAvailable => true;
 
-    // Receiver is available; native own-role capture/sync acceptance is still pending.
-    public static bool ZzzManualSyncAvailable => false;
+    // Unmerged native-acceptance candidate; public availability still requires runtime evidence.
+    public static bool ZzzManualSyncAvailable => true;
 
     public static bool IsHoyoLabManualSyncAvailable(string gameId) =>
         HoyoLabManualSyncAvailable && (gameId == "hsr" || gameId == "gi" && GenshinManualSyncAvailable

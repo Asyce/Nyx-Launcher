@@ -85,7 +85,6 @@ public sealed partial class MainPage
             Foreground = (Brush)Application.Current.Resources["MoonBrush"],
         };
         var status = Note("Reading saved sync status…");
-        AutomationProperties.SetName(status, $"{gameName} sync status");
         AutomationProperties.SetLiveSetting(status, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
         var message = Note(string.Empty);
         AutomationProperties.SetLiveSetting(message, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
@@ -386,7 +385,7 @@ public sealed partial class MainPage
             await RunAsync(ct => publisherAccounts.SetHoyoAutomaticSyncAsync(gameId, syncSlot!, enabled, ct));
         };
         stop.Click += (_, _) => Review(
-            "Stop syncing both games on this PC and forget this PC's sync key? Local snapshots, cloud copies, and pull history stay. Keep your recovery code to reconnect.",
+            "Stop syncing all HoYo games on this PC and forget this PC's sync key? Local snapshots, cloud copies, and pull history stay. Keep your recovery code to reconnect.",
             async ct =>
             {
                 var result = await publisherAccounts.StopHoyoSyncAsync(gameId, syncSlot!, ct);
@@ -492,7 +491,7 @@ public sealed partial class MainPage
     {
         HoyoLabManualSyncStatus.Completed => "Finished. Check the saved status above.",
         HoyoLabManualSyncStatus.Deferred => "No resource-only sync is due yet. Sync now is always available.",
-        HoyoLabManualSyncStatus.AutomaticSyncPaused => "Paused because data was deleted in the cloud. Local snapshots are unchanged. Review My HoYo before choosing Sync now to merge or restore data, then turn automatic sync back on if wanted.",
+        HoyoLabManualSyncStatus.AutomaticSyncPaused => "Paused because this game's cloud copy is missing or contains deletions. Local snapshots are unchanged. Review My HoYo, then choose Sync now to create, merge or restore the copy and turn automatic sync back on if wanted.",
         HoyoLabManualSyncStatus.NotEnabled => "Choose a connected HoYoLAB account and enable manual sync first.",
         HoyoLabManualSyncStatus.NoLocalData => gameId == HoyoLabGameBundleRules.ZzzGameId
             ? "No remembered ZZZ data is available. Select a ZZZ role and refresh its remembered data first."

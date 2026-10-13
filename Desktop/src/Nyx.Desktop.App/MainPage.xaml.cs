@@ -2381,7 +2381,7 @@ public sealed partial class MainPage : Page
                             HoyoLabHsrEndgameReadStatus.TimedOut => "Refresh timed out. Try again; the previous copy is unchanged.",
                             HoyoLabHsrEndgameReadStatus.TooLarge => "This challenge copy exceeds Nyx's supported size. The previous copy is unchanged.",
                             HoyoLabHsrEndgameReadStatus.LocalStorageUnavailable => "Nyx could not save the challenge copy. The previous copy is unchanged.",
-                            _ => "Nyx could not complete this refresh. Check the selected HoYoLAB region and try again; the previous copy is unchanged.",
+                            _ => $"Nyx could not complete this refresh ({hsrResult.Diagnostic ?? "reader-session"}). The previous copy is unchanged.",
                         };
                         return;
                     }

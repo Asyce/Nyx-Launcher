@@ -1166,14 +1166,14 @@ public sealed class HoyoLiveSessionUiTests
         Assert.Single(Regex.Matches(eventControls, "new ToggleSwitch"));
         Assert.Single(Regex.Matches(endgameControls, "new ToggleSwitch"));
         Assert.Equal(6, Regex.Matches(controls, "new ToggleSwitch").Count);
-        Assert.Contains("GenshinEndgameAvailable => false", ReadAppFile("PublisherAccountService.GenshinEndgame.cs"), StringComparison.Ordinal);
+        Assert.Contains("GenshinEndgameAvailable => true", ReadAppFile("PublisherAccountService.GenshinEndgame.cs"), StringComparison.Ordinal);
         Assert.Contains("Remember Spiral Abyss records", endgameControls, StringComparison.Ordinal);
         Assert.Contains("Remember Star Rail challenge records", endgameControls, StringComparison.Ordinal);
         Assert.Contains("Remember Shiyu Defense records", endgameControls, StringComparison.Ordinal);
-        Assert.Contains("ZzzManualSyncAvailable => false", ReadAppFile("PublisherAccountService.HoyoSync.cs"), StringComparison.Ordinal);
+        Assert.Contains("ZzzManualSyncAvailable => true", ReadAppFile("PublisherAccountService.HoyoSync.cs"), StringComparison.Ordinal);
         Assert.Contains("GetZzzGameBundleSnapshotAsync", reload, StringComparison.Ordinal);
         Assert.Contains("SetZzzCapabilityConsentAsync", setter, StringComparison.Ordinal);
-        Assert.Contains("HsrEndgameAvailable => false", ReadAppFile("PublisherAccountService.HsrEndgame.cs"), StringComparison.Ordinal);
+        Assert.Contains("HsrEndgameAvailable => true", ReadAppFile("PublisherAccountService.HsrEndgame.cs"), StringComparison.Ordinal);
         Assert.Contains("enabled && gameId == \"hsr\" && capability == HoyoLabGameBundleRules.Endgame && !HsrEndgameAvailable", service, StringComparison.Ordinal);
         Assert.Contains("SetCapabilityConsentAsync(rememberEndgame, HoyoLabGameBundleRules.Endgame)", manager, StringComparison.Ordinal);
         Assert.Contains("enabled && gameId == \"gi\" && capability == HoyoLabGameBundleRules.Endgame && !GenshinEndgameAvailable", service, StringComparison.Ordinal);
