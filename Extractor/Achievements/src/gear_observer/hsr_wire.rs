@@ -1,6 +1,6 @@
-//! Test-only HSR 4.5 command-body qualification, not a packet or session decoder.
+//! Test-only HSR 4.6 command-body qualification, not a packet or session decoder.
 //!
-//! Field shapes: IceDynamix/reliquary d5cf3b7e7e66470d2d8efff6676aa18762b21d3b
+//! Field shapes: IceDynamix/reliquary 0b8c1d4f8eb5ae9722b5c3273e36a464b7188a38
 //! (MIT; exact source hashes and attribution are in PROVENANCE.md).
 //! Deliberately stricter than general protobuf: duplicate known scalar fields
 //! and groups are rejected. Omitted scalars retain protobuf zero/false defaults.
@@ -12,9 +12,9 @@ use super::wire::{WireError, length, once, require_wire, scalar, skip, tag, uint
 use crate::capture::MAX_FRAME_BYTES;
 use protobuf::{CodedInputStream, rt::WireType};
 
-const TOKEN: u16 = 19;
-const LOGIN_FINISH: u16 = 36;
-const BAG: u16 = 513;
+const TOKEN: u16 = 16;
+const LOGIN_FINISH: u16 = 63;
+const BAG: u16 = 525;
 
 #[derive(Debug, Eq, PartialEq)]
 enum BodyObservation {
@@ -64,19 +64,17 @@ fn read_body(command: u16, body: &[u8]) -> Result<BodyObservation, WireError> {
     while !input.eof()? {
         let (field, wire) = tag(&mut input)?;
         match (command, field) {
-            (TOKEN, 1) => {
+            (TOKEN, 12) => {
                 // Validate the uint64 field but never keep the session seed.
                 let _ = scalar(&mut input, wire, &mut seen, field)?;
             }
-            (TOKEN, 11) => uid = uint32(&mut input, wire, &mut seen, field)?,
-            (TOKEN | LOGIN_FINISH, 13) | (BAG, 1) => {
+            (TOKEN, 15) => uid = uint32(&mut input, wire, &mut seen, field)?,
+            (TOKEN | BAG, 3) | (LOGIN_FINISH, 8) => {
                 retcode = uint32(&mut input, wire, &mut seen, field)?;
             }
-            (TOKEN, 2 | 12 | 14) => {
+            (TOKEN, 5 | 9 | 10) => {
                 require_wire(wire, WireType::LengthDelimited)?;
-                if field != 12 {
-                    once(&mut seen, field)?;
-                }
+                once(&mut seen, field)?;
                 // Description, BlackInfo and authkey are never copied or decoded.
                 skip(&mut input, wire)?;
             }
@@ -86,11 +84,11 @@ fn read_body(command: u16, body: &[u8]) -> Result<BodyObservation, WireError> {
                 }
                 relics.push(read_relic(&mut input, wire)?);
             }
-            (BAG, 2 | 4 | 6 | 10 | 12 | 14 | 15 | 1996) => {
+            (BAG, 2 | 4 | 6 | 7 | 8 | 10 | 14 | 451 | 899) => {
                 require_wire(wire, WireType::LengthDelimited)?;
                 skip(&mut input, wire)?;
             }
-            (BAG, 3 | 7 | 11 | 13) => {
+            (BAG, 11 | 13 | 15) => {
                 // Unrelated repeated scalars may be packed or unpacked.
                 if !matches!(wire, WireType::Varint | WireType::LengthDelimited) {
                     return Err(WireError::Malformed);
@@ -116,18 +114,18 @@ fn read_relic(input: &mut CodedInputStream<'_>, wire: WireType) -> Result<Relic,
     while !input.eof()? {
         let (field, wire) = tag(input)?;
         match field {
-            1 => row.tid = uint32(input, wire, &mut seen, field)?,
-            2 => row.is_discarded = scalar(input, wire, &mut seen, field)? != 0,
-            3 => row.equip_avatar_id = uint32(input, wire, &mut seen, field)?,
-            4 => row.is_protected = scalar(input, wire, &mut seen, field)? != 0,
+            1 => row.unique_id = uint32(input, wire, &mut seen, field)?,
+            2 => row.equip_avatar_id = uint32(input, wire, &mut seen, field)?,
+            3 => row.sub_affix_list.push(read_affix(input, wire)?),
+            4 => row.level = uint32(input, wire, &mut seen, field)?,
             5 => row.preview_sub_affix_list.push(read_affix(input, wire)?),
-            7 => row.unique_id = uint32(input, wire, &mut seen, field)?,
-            8 => row.exp = uint32(input, wire, &mut seen, field)?,
-            9 => row.level = uint32(input, wire, &mut seen, field)?,
+            6 => row.exp = uint32(input, wire, &mut seen, field)?,
+            7 => row.is_protected = scalar(input, wire, &mut seen, field)? != 0,
+            8 => row.reforge_sub_affix_list.push(read_affix(input, wire)?),
             10 => row.reforge_block_sub_affix_id = uint32(input, wire, &mut seen, field)?,
-            12 => row.reforge_sub_affix_list.push(read_affix(input, wire)?),
-            13 => row.main_affix_id = uint32(input, wire, &mut seen, field)?,
-            14 => row.sub_affix_list.push(read_affix(input, wire)?),
+            11 => row.tid = uint32(input, wire, &mut seen, field)?,
+            14 => row.is_discarded = scalar(input, wire, &mut seen, field)? != 0,
+            15 => row.main_affix_id = uint32(input, wire, &mut seen, field)?,
             _ => skip(input, wire)?,
         }
     }
@@ -201,6 +199,71 @@ mod tests {
     }
 
     #[test]
+    fn released_46_literal_bodies_pin_commands_and_field_meaning() {
+        // Synthetic bytes transcribed from the pinned upstream wire tags, not
+        // generated through the reader's constants or fixture field helpers.
+        let token = [
+            0x18, 0x07, 0x78, 0x2a, 0x60, 0x7f, 0x2a, 0x03, b'a', b'b', b'c', 0x4a, 0x00, 0x52,
+            0x00,
+        ];
+        assert_eq!(
+            read_body(16, &token),
+            Ok(BodyObservation::Token {
+                uid: 42,
+                retcode: 7
+            })
+        );
+        assert_eq!(
+            read_body(63, &[0x40, 0x09]),
+            Ok(BodyObservation::LoginFinish { retcode: 9 })
+        );
+        let body = [
+            0x18, 0x00, 0x4a, 0x28, 0x08, 0x47, 0x10, 0xc8, 0x03, 0x1a, 0x06, 0x08, 0x65, 0x10,
+            0x02, 0x18, 0x03, 0x20, 0x0f, 0x2a, 0x00, 0x30, 0xe7, 0x07, 0x38, 0x01, 0x42, 0x06,
+            0x08, 0x65, 0x10, 0x02, 0x18, 0x03, 0x50, 0x95, 0x06, 0x58, 0x7b, 0x70, 0x01, 0x78,
+            0xc1, 0x02,
+        ];
+        assert_eq!(
+            read_body(525, &body),
+            Ok(BodyObservation::Bag {
+                retcode: 0,
+                relics: vec![Relic {
+                    unique_id: 71,
+                    tid: 123,
+                    equip_avatar_id: 456,
+                    level: 15,
+                    exp: 999,
+                    is_protected: true,
+                    is_discarded: true,
+                    main_affix_id: 321,
+                    reforge_block_sub_affix_id: 789,
+                    preview_sub_affix_list: vec![RelicAffix::default()],
+                    sub_affix_list: vec![RelicAffix {
+                        affix_id: 101,
+                        count: 2,
+                        step: 3
+                    }],
+                    reforge_sub_affix_list: vec![RelicAffix {
+                        affix_id: 101,
+                        count: 2,
+                        step: 3
+                    }],
+                }],
+            })
+        );
+        for (old_command, body) in [
+            (19, token.as_slice()),
+            (36, &[0x68, 0x00]),
+            (513, body.as_slice()),
+        ] {
+            assert_eq!(
+                read_body(old_command, body),
+                Err(WireError::UnsupportedCommand)
+            );
+        }
+    }
+
+    #[test]
     fn exact_commands_preserve_omitted_and_explicit_defaults() {
         assert_eq!(
             read_body(TOKEN, &[]),
@@ -211,25 +274,25 @@ mod tests {
             Ok(BodyObservation::LoginFinish { retcode: 0 })
         );
         assert!(rows(&[]).is_empty());
-        for command in [0, 18, 20, 35, 37, 512, 514, u16::MAX] {
+        for command in [0, 15, 17, 19, 36, 62, 64, 513, 524, 526, u16::MAX] {
             assert_eq!(read_body(command, &[]), Err(WireError::UnsupportedCommand));
         }
         let zero = scalars(&[
             (1, 0),
             (2, 0),
-            (3, 0),
             (4, 0),
+            (6, 0),
             (7, 0),
-            (8, 0),
-            (9, 0),
             (10, 0),
-            (13, 0),
+            (11, 0),
+            (14, 0),
+            (15, 0),
         ]);
         assert_eq!(
             rows(&bag(&[Vec::new(), zero])),
             vec![Relic::default(), Relic::default()]
         );
-        for field in [5, 12, 14] {
+        for field in [3, 5, 8] {
             let row = rows(&nested(9, &nested(field, &[]))).remove(0);
             let lists = [
                 row.preview_sub_affix_list,
@@ -248,18 +311,18 @@ mod tests {
     fn all_relic_fields_and_three_affix_lists_survive_reordering() {
         let affix = scalars(&[(3, 3), (1, 101), (2, 2)]);
         let mut fields = [
-            scalars(&[(1, 123), (2, 1), (3, 456), (4, 2)]),
+            scalars(&[(11, 123), (14, 1), (2, 456), (7, 2)]),
             nested(5, &affix),
             nested(5, &[]),
-            scalars(&[(7, u64::from(u32::MAX)), (8, 999), (9, 0), (10, 789)]),
-            nested(12, &affix),
-            scalars(&[(13, 321)]),
-            nested(14, &affix),
-            nested(14, &affix),
+            scalars(&[(1, u64::from(u32::MAX)), (6, 999), (4, 0), (10, 789)]),
+            nested(8, &affix),
+            scalars(&[(15, 321)]),
+            nested(3, &affix),
+            nested(3, &affix),
         ];
-        let first = rows(&[scalars(&[(1, 0)]), nested(9, &fields.concat())].concat());
+        let first = rows(&[scalars(&[(3, 0)]), nested(9, &fields.concat())].concat());
         fields.reverse();
-        let mut reordered = rows(&[nested(9, &fields.concat()), scalars(&[(1, 0)])].concat());
+        let mut reordered = rows(&[nested(9, &fields.concat()), scalars(&[(3, 0)])].concat());
         // Repeated-field order is meaningful; restore only the deliberately reversed lists.
         reordered[0].preview_sub_affix_list.reverse();
         reordered[0].sub_affix_list.reverse();
@@ -323,12 +386,12 @@ mod tests {
     #[test]
     fn sensitive_and_unrelated_fields_are_skipped_without_retention() {
         let token = encoded(|output| {
-            output.write_bytes(14, b"synthetic-auth-only").unwrap();
-            output.write_uint32(13, 7).unwrap();
-            output.write_bytes(12, &[0xff]).unwrap();
-            output.write_uint64(1, u64::MAX).unwrap();
-            output.write_uint32(11, 42).unwrap();
-            output.write_bytes(2, &[0xff, 0xfe]).unwrap();
+            output.write_bytes(5, b"synthetic-auth-only").unwrap();
+            output.write_uint32(3, 7).unwrap();
+            output.write_bytes(9, &[0xff]).unwrap();
+            output.write_uint64(12, u64::MAX).unwrap();
+            output.write_uint32(15, 42).unwrap();
+            output.write_bytes(10, &[0xff, 0xfe]).unwrap();
         });
         let before = token.clone();
         let observed = read_body(TOKEN, &token).unwrap();
@@ -343,18 +406,18 @@ mod tests {
         );
         assert!(!format!("{observed:?}").contains("synthetic-auth-only"));
         assert_eq!(
-            read_body(TOKEN, &scalars(&[(11, 42), (13, 7), (1, 0)])).unwrap(),
+            read_body(TOKEN, &scalars(&[(15, 42), (3, 7), (12, 0)])).unwrap(),
             observed
         );
         assert_eq!(
-            read_body(LOGIN_FINISH, &scalars(&[(13, 7)])),
+            read_body(LOGIN_FINISH, &scalars(&[(8, 7)])),
             Ok(BodyObservation::LoginFinish { retcode: 7 })
         );
         let unrelated = encoded(|output| {
-            for field in [2, 4, 6, 10, 12, 14, 15, 1996] {
+            for field in [2, 4, 6, 7, 8, 10, 14, 451, 899] {
                 output.write_bytes(field, &[0xff]).unwrap();
             }
-            for field in [3, 7, 11, 13] {
+            for field in [11, 13, 15] {
                 output.write_uint32(field, 1).unwrap();
                 output.write_bytes(field, &[1, 2]).unwrap();
             }
@@ -365,7 +428,7 @@ mod tests {
         });
         assert!(rows(&unrelated).is_empty());
         assert_eq!(
-            read_body(BAG, &scalars(&[(1, 17)])),
+            read_body(BAG, &scalars(&[(3, 17)])),
             Ok(BodyObservation::Bag {
                 retcode: 17,
                 relics: Vec::new()
@@ -393,7 +456,7 @@ mod tests {
             }
         }
         assert_eq!(
-            read_body(TOKEN, &[vec![8], vec![0xff; 10]].concat()),
+            read_body(TOKEN, &[vec![96], vec![0xff; 10]].concat()),
             Err(WireError::Malformed)
         );
         for malformed in [
@@ -405,7 +468,7 @@ mod tests {
         ] {
             assert_eq!(read_body(BAG, &malformed), Err(WireError::Malformed));
         }
-        for field in [5, 12, 14] {
+        for field in [3, 5, 8] {
             for malformed in [vec![8], vec![0], vec![0x80], vec![10, 2, 1]] {
                 assert_eq!(
                     read_body(BAG, &nested(9, &nested(field, &malformed))),
@@ -438,14 +501,14 @@ mod tests {
                 read_body(command, &[])
             );
         }
-        for malformed in [overflow_tag(7), nested(14, &overflow_tag(1))] {
+        for malformed in [overflow_tag(1), nested(3, &overflow_tag(1))] {
             assert_eq!(
                 read_body(BAG, &nested(9, &malformed)),
                 Err(WireError::Malformed)
             );
         }
         // A skipped field must still fit entirely inside its enclosing message.
-        assert_eq!(read_body(TOKEN, &[114, 2, 1]), Err(WireError::Malformed));
+        assert_eq!(read_body(TOKEN, &[42, 2, 1]), Err(WireError::Malformed));
         assert_eq!(
             read_body(BAG, &nested(9, &[0xa2, 6, 2, 1])),
             Err(WireError::Malformed)
@@ -455,9 +518,9 @@ mod tests {
     #[test]
     fn known_fields_reject_wrong_wire_types() {
         for (command, fields) in [
-            (TOKEN, &[1, 11, 13][..]),
-            (LOGIN_FINISH, &[13][..]),
-            (BAG, &[1][..]),
+            (TOKEN, &[3, 12, 15][..]),
+            (LOGIN_FINISH, &[8][..]),
+            (BAG, &[3][..]),
         ] {
             for &field in fields {
                 assert_eq!(
@@ -466,25 +529,25 @@ mod tests {
                 );
             }
         }
-        for field in [2, 12, 14] {
+        for field in [5, 9, 10] {
             assert_eq!(
                 read_body(TOKEN, &scalars(&[(field, 0)])),
                 Err(WireError::Malformed)
             );
         }
-        for field in [2, 4, 6, 9, 10, 12, 14, 15, 1996] {
+        for field in [2, 4, 6, 7, 8, 9, 10, 14, 451, 899] {
             assert_eq!(
                 read_body(BAG, &scalars(&[(field, 0)])),
                 Err(WireError::Malformed)
             );
         }
-        for field in [1, 2, 3, 4, 7, 8, 9, 10, 13] {
+        for field in [1, 2, 4, 6, 7, 10, 11, 14, 15] {
             assert_eq!(
                 read_body(BAG, &nested(9, &nested(field, &[]))),
                 Err(WireError::Malformed)
             );
         }
-        for list in [5, 12, 14] {
+        for list in [3, 5, 8] {
             assert_eq!(
                 read_body(BAG, &nested(9, &scalars(&[(list, 0)]))),
                 Err(WireError::Malformed)
@@ -502,9 +565,9 @@ mod tests {
     fn known_scalars_reject_duplicates_and_uint32_overflow() {
         let overflow = u64::from(u32::MAX) + 1;
         for (command, fields) in [
-            (TOKEN, &[11, 13][..]),
-            (LOGIN_FINISH, &[13][..]),
-            (BAG, &[1][..]),
+            (TOKEN, &[3, 15][..]),
+            (LOGIN_FINISH, &[8][..]),
+            (BAG, &[3][..]),
         ] {
             for &field in fields {
                 assert_eq!(
@@ -518,28 +581,28 @@ mod tests {
             }
         }
         assert_eq!(
-            read_body(TOKEN, &scalars(&[(1, 0), (1, 0)])),
+            read_body(TOKEN, &scalars(&[(12, 0), (12, 0)])),
             Err(WireError::Malformed)
         );
-        for field in [2, 14] {
+        for field in [5, 9, 10] {
             assert_eq!(
                 read_body(TOKEN, &[nested(field, &[]), nested(field, &[])].concat()),
                 Err(WireError::Malformed)
             );
         }
-        for field in [1, 2, 3, 4, 7, 8, 9, 10, 13] {
+        for field in [1, 2, 4, 6, 7, 10, 11, 14, 15] {
             assert_eq!(
                 read_body(BAG, &nested(9, &scalars(&[(field, 0), (field, 0)]))),
                 Err(WireError::Malformed)
             );
-            if !matches!(field, 2 | 4) {
+            if !matches!(field, 7 | 14) {
                 assert_eq!(
                     read_body(BAG, &nested(9, &scalars(&[(field, overflow)]))),
                     Err(WireError::Malformed)
                 );
             }
         }
-        for list in [5, 12, 14] {
+        for list in [3, 5, 8] {
             for field in [1, 2, 3] {
                 for malformed in [
                     scalars(&[(field, overflow)]),
@@ -591,7 +654,7 @@ mod tests {
         };
         let mut observer = GearObserver::new(Game::Hsr);
         observer.begin(context.generation, context.flow);
-        let parsed = rows(&nested(9, &scalars(&[(7, 71)])));
+        let parsed = rows(&nested(9, &scalars(&[(1, 71)])));
         // Synthetic fixture assertion only: no real mapping, writer, or importer is invoked.
         let mapped = [SyntheticGearRow {
             instance_id: u64::from(parsed[0].unique_id),
@@ -615,7 +678,7 @@ mod tests {
             Err(ObserverError::StaleContext)
         );
         // Neither successful token/login parsing nor row count creates an accepted snapshot.
-        read_body(TOKEN, &scalars(&[(11, 3)])).unwrap();
+        read_body(TOKEN, &scalars(&[(15, 3)])).unwrap();
         read_body(LOGIN_FINISH, &[]).unwrap();
         assert_eq!(observer.snapshot(), None);
         let missing_import_proof = Observation::FullSnapshot {
@@ -655,7 +718,7 @@ mod tests {
         ] {
             let decoded = rows(&bag(&ids
                 .iter()
-                .map(|id| scalars(&[(7, *id)]))
+                .map(|id| scalars(&[(1, *id)]))
                 .collect::<Vec<_>>()));
             let mapped = decoded
                 .iter()

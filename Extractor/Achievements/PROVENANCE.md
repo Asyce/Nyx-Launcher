@@ -191,6 +191,9 @@ Any later public packaging requires a separate permission and notice review.
 
 ## HSR 4.5 synthetic command-body qualification
 
+This is the initial September 22 qualification. The October 13 subsection
+below supersedes its command IDs and field mapping for the test-only reader.
+
 `src/gear_observer/hsr_wire.rs` is reachable only through the existing
 `cfg(test)` gear observer. It accepts a command ID and borrowed protobuf body,
 not packets or ciphertext. Its wire shapes are adapted from MIT-licensed
@@ -236,6 +239,37 @@ transport heuristically finds a seed and drops direction/flow from returned
 commands. These remain blockers before any live account attribution or
 complete-bag claim. This slice changes no runtime transport, parser, exporter,
 feature flag, mapping, launcher UI, or production package behavior.
+
+### HSR 4.6 superseding source check, October 13
+
+The HSR test-only reader above now qualifies the released 4.6 field layout
+from MIT-licensed IceDynamix/reliquary 24 at
+[`0b8c1d4f8eb5ae9722b5c3273e36a464b7188a38`](https://github.com/IceDynamix/reliquary/tree/0b8c1d4f8eb5ae9722b5c3273e36a464b7188a38).
+This supersedes the 4.5 command/body mapping only. The token, login-finish,
+and bag commands are now **16, 63, and 525**; the former 19/36/513 commands
+are rejected. The relic-list field remains 9, but most relic scalar/list
+tags and the token/return-code tags changed. BlackInfo is singular and
+duplicate occurrences reject the body, consistently with the reader's
+existing stricter-than-protobuf qualification policy.
+
+| Current immutable source path | SHA-256 |
+| --- | --- |
+| `src/network/command/command_id.rs` | `872112fc26a87bce9a7024adf4e2d96f8d961cff459eb3fffdeb348f2e94e55c` |
+| `src/network/command/proto/PlayerGetTokenScRsp.rs` | `3fe58d0d3c003f88af714c66358e944cbeb975bfd45da4d6acb241d2ee3e6439` |
+| `src/network/command/proto/PlayerLoginFinishScRsp.rs` | `3861d683c312dac5042b3337e53947d1343b600f699f5573503831002405e5ab` |
+| `src/network/command/proto/GetBagScRsp.rs` | `da8255dfe08c47c3f5f6900d2d1b00ece0392e0109bfc2ed711cd18a80af660b` |
+| `src/network/command/proto/Relic.rs` | `35c8e731606f1c609fa7d8a356fa9f5b1a4cad3efe81e12d195892cf0b667d0e` |
+| `src/network/command/proto/RelicAffix.rs` | `51781661a10cd1e3267e5d3a2a5613f9e2feeffc799ae3fea70f19cac5984ebf` |
+| `LICENSE` | `3f4b674bf182e20916d119c86baa104fe0763dac96cdc555b186967e500eee09` |
+
+RelicAffix and the existing MIT attribution remain unchanged. All checks use
+synthetic bytes, including a literal-byte fixture independent of the fixture
+encoder. No private packet, seed, key, account, live capture or output is used.
+The module remains behind `cfg(test)`; runtime dependencies, vendored
+achievement readers and public behavior are unchanged. Command dispatch is
+pinned to 4.6, not a general version detector: a body alone does not prove its
+game version, owning flow/account, completeness, update/delete semantics or
+Fribbels acceptance. Those full-bag gates remain unpassed.
 
 ## Genshin candidate synthetic item-body qualification
 

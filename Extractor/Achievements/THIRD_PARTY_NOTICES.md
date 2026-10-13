@@ -11,7 +11,7 @@ and trailing whitespace are normalized; identical normalized texts share a block
 | --- | --- | --- | --- |
 | auto-artifactarium | `04421c4f8a7ed7e7b65bb5e6e59231d4e98405cf` | Vendored Genshin transport/achievement parser with Pengo hardening. | Listed in the locked dependency table. |
 | auto-reliquary | `bc23b48cb3b1b994a5d4405cefea42eb0e1d3735` | Vendored HSR transport/achievement parser with Pengo hardening. | Listed in the locked dependency table. |
-| Reliquary 23 | `d5cf3b7e7e66470d2d8efff6676aa18762b21d3b` | Test-only HSR 4.5 command-body wire shapes; no runtime transport adoption. Exact source hashes are in `PROVENANCE.md`. | Existing IceDynamix MIT block `61b5493c729fd3f29a72ede2e52bf36e8122fc2b460a5cadbc9446cfda5fa9fe`. |
+| Reliquary 24 | `0b8c1d4f8eb5ae9722b5c3273e36a464b7188a38` (4.6 update; initial pin `d5cf3b7e7e66470d2d8efff6676aa18762b21d3b`) | Test-only HSR command-body wire shapes; no runtime transport adoption. Exact source hashes are in `PROVENANCE.md`. | Existing IceDynamix MIT block `61b5493c729fd3f29a72ede2e52bf36e8122fc2b460a5cadbc9446cfda5fa9fe`. |
 | konkers/auto-artifactarium | `abbbf7a3f58846512250a789a76be2d3cdb115c1` (7.1 update; initial pin `4ba25fac64b88970143af6bc2a2ef51338e620d0`) | Test-only Genshin candidate command/item wire shapes; no runtime transport adoption. Exact source hashes are in `PROVENANCE.md`. | Existing IceDynamix MIT block `61b5493c729fd3f29a72ede2e52bf36e8122fc2b460a5cadbc9446cfda5fa9fe`. |
 | mhy-kcp | `1acf4ba5938ff91f7f2d2a31e16bf1f8d2db9c8f` | Vendored KCP implementation. | Listed as package `kcp` below. |
 | pktmon 0.6.2 | `33d1c0c421ed8610540bae3e34da3c1182cf28a2` | Vendored realtime-only Windows Packet Monitor subset. | Listed as `pengo-pktmon-realtime` below. |

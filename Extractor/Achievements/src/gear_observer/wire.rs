@@ -35,7 +35,7 @@ pub(super) fn require_wire(actual: WireType, expected: WireType) -> Result<(), W
 }
 
 pub(super) fn once(seen: &mut u32, field: u32) -> Result<(), WireError> {
-    // Only explicitly matched scalar fields 1..=14 call this helper.
+    // Only explicitly matched scalar fields 1..=15 call this helper.
     let bit = 1 << field;
     if *seen & bit != 0 {
         return Err(WireError::Malformed);
