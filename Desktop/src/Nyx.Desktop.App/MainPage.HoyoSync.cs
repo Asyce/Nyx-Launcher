@@ -85,7 +85,6 @@ public sealed partial class MainPage
             Foreground = (Brush)Application.Current.Resources["MoonBrush"],
         };
         var status = Note("Reading saved sync status…");
-        AutomationProperties.SetName(status, $"{gameName} sync status");
         AutomationProperties.SetLiveSetting(status, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
         var message = Note(string.Empty);
         AutomationProperties.SetLiveSetting(message, Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Polite);
@@ -386,7 +385,7 @@ public sealed partial class MainPage
             await RunAsync(ct => publisherAccounts.SetHoyoAutomaticSyncAsync(gameId, syncSlot!, enabled, ct));
         };
         stop.Click += (_, _) => Review(
-            "Stop syncing both games on this PC and forget this PC's sync key? Local snapshots, cloud copies, and pull history stay. Keep your recovery code to reconnect.",
+            "Stop syncing all HoYo games on this PC and forget this PC's sync key? Local snapshots, cloud copies, and pull history stay. Keep your recovery code to reconnect.",
             async ct =>
             {
                 var result = await publisherAccounts.StopHoyoSyncAsync(gameId, syncSlot!, ct);
